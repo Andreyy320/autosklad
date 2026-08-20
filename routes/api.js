@@ -1224,6 +1224,7 @@ router.get('/stock_balances', async (req, res) => {
 
         let dateConditionReceipts = '';
         let dateConditionMoves = '';
+        let dateConditionRepairs = '';
 
         // Фильтр по дате: берем всё С выбранной даты и до текущего момента (>=)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
@@ -1231,6 +1232,7 @@ router.get('/stock_balances', async (req, res) => {
             queryParams.push(formattedDate);
             dateConditionReceipts = `AND r.date >= $${paramIndex}::timestamp`;
             dateConditionMoves = `AND m.date >= $${paramIndex}::timestamp`;
+            dateConditionRepairs = `AND rep.doc_date >= $${paramIndex}::timestamp`;
             paramIndex++;
         }
 
@@ -1288,6 +1290,19 @@ router.get('/stock_balances', async (req, res) => {
                 JOIN moves m ON mi.move_id = m.id
                 WHERE m.warehouse_from_id IS NOT NULL ${dateConditionMoves}
                 GROUP BY mi.zaphasti_id, m.warehouse_from_id, m.mol_from_id
+
+                UNION ALL
+
+                -- 4. Расход на списания в ремонт (откуда списали, с выбранной даты)
+                SELECT 
+                    rep_i.zaphast_id AS zaphasti_id,
+                    rep.warehouse_id,
+                    rep.mol_id,
+                    -SUM(rep_i.quantity) as qty
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep.warehouse_id IS NOT NULL ${dateConditionRepairs}
+                GROUP BY rep_i.zaphast_id, rep.warehouse_id, rep.mol_id
             ),
             aggregated_stocks AS (
                 -- Схлопываем всё строго по связке: Товар + Склад + МОЛ
@@ -1331,7 +1346,6 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
