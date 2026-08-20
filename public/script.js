@@ -1533,8 +1533,7 @@ function closeDrawer() {
         backdrop.style.opacity = '0';
         backdrop.style.pointerEvents = 'none';
     }
-}
-// Открытие панели для создания новой или редактирования существующей записи
+}// Открытие панели для создания новой или редактирования существующей записи
 async function openEntityForm(entity, item = null, parentId = null) {
     // ЛОГИРОВАНИЕ ДЛЯ ПРОВЕРКИ ПЕРЕКЛЮЧАТЕЛЯ И КНОПКИ ДОБАВЛЕНИЯ:
     console.log("=== openEntityForm вызван ===");

@@ -1948,315 +1948,103 @@ router.put('/moves/:id/post', async (req, res) => {
 
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
-const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 
-// Секретный ключ (оставляем на всякий случай)
-const SECRET_KEY = 'super_secret_key_change_me';
+// ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
 
-module.exports = (pool) => {
-    
-    // ==========================================
-    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
-    // ==========================================
-    router.post('/login', async (req, res) => {
-        const { login, password } = req.body;
-        
-        console.log('--- ПОПЫТКА ВХОДА ---');
-        console.log('Введенный логин:', login);
+router.post('/:entity', authenticateToken, async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
+    console.log(`[BODY]:`, req.body);
 
-        try {
-            const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
-            
-            if (result.rows.length > 0) {
-                const user = result.rows[0];
-                const match = await bcrypt.compare(password, user.password_hash);
-                
-                if (match) {
-                    const token = jwt.sign(
-                        { id: user.id, login: user.login }, 
-                        SECRET_KEY, 
-                        { expiresIn: '8h' }
-                    );
-                    return res.json({ success: true, token: token, user: user });
-                } else {
-                    return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
-                }
+    try {
+        let { entity } = req.params;
+
+        if (entity === 'brands') { entity = 'car_brands'; }
+        if (entity === 'models') { entity = 'car_models'; }
+        if (entity === 'bodies') { entity = 'kyzov_type'; }
+
+        const allowedTables = [
+            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
+            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
+            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
+            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
+            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
+            'moves', 'move_items', 'statuses', 'tehosmotr', 
+            'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
+            'repair_items', 'repair_works'
+        ];
+
+        if (!allowedTables.includes(entity)) {
+            console.log(`[ERROR] Недопустимая таблица: ${entity}`);
+            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        }
+
+        // --- ИСПРАВЛЕНИЕ ДЛЯ REPAIRS ---
+        if (entity === 'repairs') {
+            if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
+                req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
+            }
+            delete req.body.repair_type;
+
+            if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
+                req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
+            }
+            delete req.body.doc_type;
+        }
+
+        // --- ПРИВЕДЕНИЕ is_posted К BOOLEAN ДЛЯ БД ---
+        if (req.body.is_posted !== undefined) {
+            if (req.body.is_posted === '' || req.body.is_posted === null) {
+                delete req.body.is_posted; 
             } else {
-                return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
             }
-        } catch (err) {
-            console.error('Ошибка сервера:', err.message);
-            return res.status(500).send('Ошибка сервера');
         }
-    });
 
-    // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без токенов)
-    // ==========================================
-    router.get('/users', async (req, res) => {
-        try {
-            const result = await pool.query('SELECT * FROM users');
-            res.json(result.rows);
-        } catch (err) {
-            res.status(500).send(err.message);
-        }
-    });
-
-    // ==========================================
-    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Без токенов)
-    // ==========================================
-    router.post('/users', async (req, res) => {
-        try {
-            const { login, password_hash, name, description } = req.body;
-
-            let finalPasswordHash = null;
-            if (password_hash) {
-                const saltRounds = 10;
-                finalPasswordHash = await bcrypt.hash(password_hash, saltRounds);
-            }
-
-            const newRecord = await pool.query(
-                'INSERT INTO users (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING *',
-                [login, finalPasswordHash, name, description]
-            );
-
-            res.json(newRecord.rows[0]);
-        } catch (err) {
-            console.error(err.message);
-            res.status(500).send('Ошибка сервера');
-        }
-    });
-
-    // ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ (Без токенов) ====================
-    router.post('/:entity', async (req, res) => {
-        console.log(`\n----------------------------------------`);
-        console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
-        console.log(`[BODY]:`, req.body);
-
-        try {
-            let { entity } = req.params;
-
-            if (entity === 'brands') { entity = 'car_brands'; }
-            if (entity === 'models') { entity = 'car_models'; }
-            if (entity === 'bodies') { entity = 'kyzov_type'; }
-
-            const allowedTables = [
-                'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
-                'counterparties', 'postavhik', 'customers', 'counterparty_types', 
-                'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-                'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-                'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-                'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
-                'moves', 'move_items', 'statuses', 'tehosmotr', 
-                'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-                'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-                'repair_items', 'repair_works'
-            ];
-
-            if (!allowedTables.includes(entity)) {
-                console.log(`[ERROR] Недопустимая таблица: ${entity}`);
-                return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
-            }
-
-            // --- ИСПРАВЛЕНИЕ ДЛЯ REPAIRS ---
-            if (entity === 'repairs') {
-                if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
-                    req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
-                }
-                delete req.body.repair_type;
-
-                if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
-                    req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
-                }
-                delete req.body.doc_type;
-            }
-
-            // --- ПРИВЕДЕНИЕ is_posted К BOOLEAN ДЛЯ БД ---
-            if (req.body.is_posted !== undefined) {
-                if (req.body.is_posted === '' || req.body.is_posted === null) {
-                    delete req.body.is_posted; 
-                } else {
-                    req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
-                }
-            }
-
-            // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ, FIFO И receipt_id) ---
-            if (entity === 'repair_items') {
-                const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
-                const requestedQty = Number(quantity) || 0;
-                const numPrice = Number(price) || 0;
-                
-                console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
-                
-                if (repair_id) {
-                    const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
-                    if (repairCheck.rows.length > 0) {
-                        const isPostedVal = repairCheck.rows[0].is_posted;
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
-                            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
-                        }
-                    }
-                }
-
-                // Проверка остатков: считаем приход (из receipt_items по zaphasti_id)
-                const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-                const stockResult = await pool.query(stockQuery, [zaphast_id]);
-                const totalIn = Number(stockResult.rows[0].total_in);
-
-                // Считаем уже списанное в ремонты (из repair_items по zaphast_id)
-                const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1`;
-                const spentResult = await pool.query(spentQuery, [zaphast_id]);
-                const totalSpent = Number(spentResult.rows[0].total_spent);
-
-                const availableStock = totalIn - totalSpent;
-                console.log(`[STOCK DEBUG] Всего пришло: ${totalIn}, уже списано в ремонты: ${totalSpent}, доступно: ${availableStock}`);
-
-                if (requestedQty > availableStock) {
-                    console.log(`[ERROR] Недостаточно остатка! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
-                    return res.status(400).json({ 
-                        error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
-                    });
-                }
-
-                // Автоматический поиск документа прихода (FIFO), если receipt_id не передан
-                let targetReceiptId = receipt_id;
-                if (!targetReceiptId) {
-                    const docQuery = `
-                        SELECT RI.receipt_id 
-                        FROM receipt_items RI
-                        JOIN receipts R ON RI.receipt_id = R.id
-                        WHERE RI.zaphasti_id = $1
-                        ORDER BY R.date ASC, R.id ASC
-                        LIMIT 1
-                    `;
-                    const docResult = await pool.query(docQuery, [zaphast_id]);
-                    if (docResult.rows.length > 0) {
-                        targetReceiptId = docResult.rows[0].receipt_id;
-                    }
-                }
-
-                const totalSum = numPrice * requestedQty;
-
-                const query = `
-                    INSERT INTO "repair_items" 
-                    ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7) 
-                    RETURNING *;
-                `;
-                
-                const values = [
-                    zaphast_id || null, 
-                    numPrice, 
-                    requestedQty, 
-                    description || null, 
-                    repair_id || null, 
-                    totalSum, 
-                    targetReceiptId || null
-                ];
-                
-                const result = await pool.query(query, values);
-                console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${result.rows[0].id}`);
-                return res.status(201).json(result.rows[0]);
-            }
-
-            // --- ЛОГИКА ДЛЯ repair_works (ПРОВЕРКА ПРОВЕДЕННОГО РЕМОНТА) ---
-            if (entity === 'repair_works') {
-                const { repair_id } = req.body;
-                
-                if (repair_id) {
-                    const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
-                    if (repairCheck.rows.length > 0) {
-                        const isPostedVal = repairCheck.rows[0].is_posted;
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
-                            return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
-                        }
+        // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ, FIFO И receipt_id) ---
+        if (entity === 'repair_items') {
+            const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
+            const requestedQty = Number(quantity) || 0;
+            const numPrice = Number(price) || 0;
+            
+            console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
+            
+            if (repair_id) {
+                const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
+                if (repairCheck.rows.length > 0) {
+                    const isPostedVal = repairCheck.rows[0].is_posted;
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
+                        return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                     }
                 }
             }
 
-            // --- ЛОГИКА ДЛЯ receipt_items ---
-            if (entity === 'receipt_items') {
-                const { zaphasti_id, price, currency, quantity, description, receipt_id } = req.body;
-                
-                if (receipt_id) {
-                    const receiptCheck = await pool.query('SELECT is_posted FROM receipts WHERE id = $1', [receipt_id]);
-                    if (receiptCheck.rows.length > 0) {
-                        const isPostedVal = receiptCheck.rows[0].is_posted;
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
-                            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
-                        }
-                    }
-                }
+            // Проверка остатков: считаем приход (из receipt_items по zaphasti_id)
+            const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
+            const stockResult = await pool.query(stockQuery, [zaphast_id]);
+            const totalIn = Number(stockResult.rows[0].total_in);
 
-                const numPrice = Number(price) || 0;
-                const numQty = Number(quantity) || 0;
-                const priceRub = numPrice; 
-                const totalRub = numPrice * numQty;
+            // Считаем уже списанное в ремонты (из repair_items по zaphast_id)
+            const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1`;
+            const spentResult = await pool.query(spentQuery, [zaphast_id]);
+            const totalSpent = Number(spentResult.rows[0].total_spent);
 
-                const query = `
-                    INSERT INTO "receipt_items" 
-                    ("zaphasti_id", "price", "currency", "quantity", "description", "receipt_id", "price_rub", "total_rub") 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-                    RETURNING *;
-                `;
-                
-                const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
-                const result = await pool.query(query, values);
-                console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${result.rows[0].id}`);
-                return res.status(201).json(result.rows[0]);
+            const availableStock = totalIn - totalSpent;
+            console.log(`[STOCK DEBUG] Всего пришло: ${totalIn}, уже списано в ремонты: ${totalSpent}, доступно: ${availableStock}`);
+
+            if (requestedQty > availableStock) {
+                console.log(`[ERROR] Недостаточно остатка! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
+                return res.status(400).json({ 
+                    error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
+                });
             }
 
-            // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
-            if (entity === 'move_items') {
-                const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
-                const requestedQty = Number(quantity) || 0;
-                const numPrice = Number(price) || 0;
-                
-                console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
-
-                if (move_id) {
-                    const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
-                    if (moveCheck.rows.length > 0) {
-                        const isPostedVal = moveCheck.rows[0].is_posted;
-                        const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
-
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
-                            return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
-                        }
-
-                        if (warehouseFromId) {
-                            const balanceQuery = `
-                                SELECT 
-                                    (
-                                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
-                                    ) - 
-                                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) 
-                                AS available_qty
-                            `;
-                            
-                            const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
-                            const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
-
-                            console.log(`[STOCK DEBUG] Склад ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
-
-                            if (requestedQty > availableStock) {
-                                console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
-                                return res.status(400).json({ 
-                                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
-                                });
-                            }
-                        }
-                    }
-                }
-
+            // Автоматический поиск документа прихода (FIFO), если receipt_id не передан
+            let targetReceiptId = receipt_id;
+            if (!targetReceiptId) {
                 const docQuery = `
                     SELECT RI.receipt_id 
                     FROM receipt_items RI
@@ -2265,324 +2053,477 @@ module.exports = (pool) => {
                     ORDER BY R.date ASC, R.id ASC
                     LIMIT 1
                 `;
-                const docResult = await pool.query(docQuery, [zaphasti_id]);
-                const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
-                console.log(`[FIFO DEBUG] Найден документ прихода (receipt_id): ${income_document_id}`);
-
-                const priceRub = numPrice; 
-                const totalRub = requestedQty * priceRub;
-
-                const query = `
-                    INSERT INTO "move_items" 
-                    ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                    RETURNING *;
-                `;
-                
-                const values = [
-                    zaphasti_id, 
-                    numPrice, 
-                    currency || 'Рубль ПМР', 
-                    requestedQty, 
-                    priceRub, 
-                    totalRub, 
-                    description, 
-                    move_id, 
-                    income_document_id 
-                ];
-                
-                const result = await pool.query(query, values);
-                console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${result.rows[0].id}`);
-                return res.status(201).json(result.rows[0]);
-            }
-
-            // --- ЛОГИКА ДЛЯ tehosmotr ---
-            if (entity === 'tehosmotr') {
-                if (!req.body.date) req.body.date = new Date();
-                if (!req.body.to_date) req.body.to_date = new Date();
-
-                if (!req.body.doc_number) {
-                    const countResult = await pool.query('SELECT COUNT(*) FROM tehosmotr');
-                    const nextId = Number(countResult.rows[0].count) + 1;
-                    req.body.doc_number = `ТО-${nextId}`;
-                }
-                
-                if (!req.body.car_id) return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
-                if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                    return res.status(400).json({ error: 'Необходимо указать сумму!' });
+                const docResult = await pool.query(docQuery, [zaphast_id]);
+                if (docResult.rows.length > 0) {
+                    targetReceiptId = docResult.rows[0].receipt_id;
                 }
             }
 
-            // --- ЛОГИКА ДЛЯ autostrahovanie ---
-            if (entity === 'autostrahovanie') {
-                if (!req.body.date) req.body.date = new Date();
-                if (!req.body.insurance_current) req.body.insurance_current = new Date();
-                if (!req.body.insurance_next) req.body.insurance_next = new Date();
+            const totalSum = numPrice * requestedQty;
 
-                if (!req.body.doc_number) {
-                    const countResult = await pool.query('SELECT COUNT(*) FROM autostrahovanie');
-                    const nextId = Number(countResult.rows[0].count) + 1;
-                    req.body.doc_number = `СТРАХ-${nextId}`;
-                }
-                
-                if (!req.body.car_id) return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
-                if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                    return res.status(400).json({ error: 'Необходимо указать сумму!' });
-                }
-            }
-
-            const keys = Object.keys(req.body);
-            const values = Object.values(req.body);
-
-            if (keys.length === 0) {
-                console.log(`[ERROR] Пустое тело запроса`);
-                return res.status(400).json({ error: 'Нет данных для сохранения' });
-            }
-
-            const processedValues = values.map(val => val === '' ? null : val);
-            const columns = keys.map(k => `"${k}"`).join(', ');
-            const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
-            const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
-            const result = await pool.query(query, processedValues);
-            console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${result.rows[0].id}`);
-            res.status(201).json(result.rows[0]);
-
-        } catch (err) {
-            console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
-            console.error(err.stack);
-            res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
-        }
-    });
-
-    // ==================== УНИВЕРСАЛЬНЫЙ PUT (Без токенов) ====================
-    router.put('/:entity/:id', async (req, res) => {
-        const client = await pool.connect();
-        try {
-            let { entity, id } = req.params;
-
-            if (entity === 'brands') entity = 'car_brands';
-            if (entity === 'models') entity = 'car_models';
-            if (entity === 'bodies') entity = 'kyzov_type';
-
-            const allowedTables = [
-                'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
-                'counterparties', 'postavhik', 'customers', 'counterparty_types', 
-                'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-                'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-                'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-                'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
-                'moves', 'move_items', 'statuses', 'tehosmotr',
-                'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-                'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-                'repair_items', 'repair_works'
+            const query = `
+                INSERT INTO "repair_items" 
+                ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                RETURNING *;
+            `;
+            
+            const values = [
+                zaphast_id || null, 
+                numPrice, 
+                requestedQty, 
+                description || null, 
+                repair_id || null, 
+                totalSum, 
+                targetReceiptId || null
             ];
+            
+            const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${result.rows[0].id}`);
+            return res.status(201).json(result.rows[0]);
+        }
 
-            if (!allowedTables.includes(entity)) {
-                return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
-            }
-
-            if (entity === 'accidents' && req.body.car_model !== undefined) {
-                delete req.body.car_model;
-            }
-
-            if (entity === 'repairs') {
-                if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
-                    req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
-                }
-                delete req.body.repair_type;
-
-                if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
-                    req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
-                }
-                delete req.body.doc_type;
-            }
-
-            if (req.body.is_posted !== undefined) {
-                if (req.body.is_posted === '' || req.body.is_posted === null) {
-                    delete req.body.is_posted;
-                } else {
-                    req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
+        // --- ЛОГИКА ДЛЯ repair_works (ПРОВЕРКА ПРОВЕДЕННОГО РЕМОНТА) ---
+        if (entity === 'repair_works') {
+            const { repair_id } = req.body;
+            
+            if (repair_id) {
+                const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
+                if (repairCheck.rows.length > 0) {
+                    const isPostedVal = repairCheck.rows[0].is_posted;
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
+                        return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
+                    }
                 }
             }
+        }
 
-            await client.query('BEGIN');
-
-            const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs'];
-            if (docWithStatusTables.includes(entity)) {
-                const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1`, [id]);
-                if (currentDocRes.rows.length === 0) {
-                    await client.query('ROLLBACK');
-                    return res.status(404).json({ error: 'Запись не найдена' });
-                }
-                const oldDoc = currentDocRes.rows[0];
-                const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
-
-                if (oldIsPosted) {
-                    const allowedKeysForPosted = ['is_posted', 'fact_date'];
-                    const incomingKeys = Object.keys(req.body);
-                    
-                    for (const key of incomingKeys) {
-                        if (!allowedKeysForPosted.includes(key)) {
-                            delete req.body[key];
-                        }
+        // --- ЛОГИКА ДЛЯ receipt_items ---
+        if (entity === 'receipt_items') {
+            const { zaphasti_id, price, currency, quantity, description, receipt_id } = req.body;
+            
+            if (receipt_id) {
+                const receiptCheck = await pool.query('SELECT is_posted FROM receipts WHERE id = $1', [receipt_id]);
+                if (receiptCheck.rows.length > 0) {
+                    const isPostedVal = receiptCheck.rows[0].is_posted;
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
+                        return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
                     }
                 }
             }
 
-            if (entity === 'repair_works') {
-                const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1', [id]);
-                if (oldItemRes.rows.length === 0) {
-                    await client.query('ROLLBACK');
-                    return res.status(404).json({ error: 'Запись не найдена' });
-                }
-                const oldItem = oldItemRes.rows[0];
-                const targetRepairId = req.body.repair_id || oldItem.repair_id;
+            const numPrice = Number(price) || 0;
+            const numQty = Number(quantity) || 0;
+            const priceRub = numPrice; 
+            const totalRub = numPrice * numQty;
 
-                if (targetRepairId) {
-                    const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [targetRepairId]);
-                    if (repairCheck.rows.length > 0) {
-                        const isPostedVal = repairCheck.rows[0].is_posted;
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                            await client.query('ROLLBACK');
-                            return res.status(400).json({ error: 'Нельзя изменять работы в уже проведенном ремонте!' });
-                        }
+            const query = `
+                INSERT INTO "receipt_items" 
+                ("zaphasti_id", "price", "currency", "quantity", "description", "receipt_id", "price_rub", "total_rub") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                RETURNING *;
+            `;
+            
+            const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
+            const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${result.rows[0].id}`);
+            return res.status(201).json(result.rows[0]);
+        }
+
+      // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
+        if (entity === 'move_items') {
+            const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
+            const requestedQty = Number(quantity) || 0;
+            const numPrice = Number(price) || 0;
+            
+            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
+
+            if (move_id) {
+                const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
+                if (moveCheck.rows.length > 0) {
+                    const isPostedVal = moveCheck.rows[0].is_posted;
+                    const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
+
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
+                        return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
                     }
-                }
-            }
 
-            if (entity === 'move_items' || entity === 'receipt_items' || entity === 'repair_items') {
-                if (req.body.quantity !== undefined || req.body.price !== undefined) {
-                    const newQty = Number(req.body.quantity !== undefined ? req.body.quantity : 0);
-                    const newPrice = Number(req.body.price !== undefined ? req.body.price : 0);
-                    
-                    if (newQty < 0) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Количество не может быть отрицательным' });
-                    }
+                    // Если у перемещения указан склад-отправитель, проверяем остаток строго на нем
+                    if (warehouseFromId) {
+                        const balanceQuery = `
+                            SELECT 
+                                (
+                                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
+                                    COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
+                                ) - 
+                                COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) 
+                            AS available_qty
+                        `;
+                        
+                        const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
+                        const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
 
-                    if (entity === 'move_items') {
-                        const oldItemRes = await client.query('SELECT * FROM "move_items" WHERE id = $1', [id]);
-                        if (oldItemRes.rows.length === 0) {
-                            await client.query('ROLLBACK');
-                            return res.status(404).json({ error: 'Запись не найдена' });
-                        }
-                        const oldItem = oldItemRes.rows[0];
-                        const sparePartId = req.body.zaphasti_id || oldItem.zaphasti_id;
+                        console.log(`[STOCK DEBUG] Склад ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
-                        if (oldItem.move_id) {
-                            const moveCheck = await client.query('SELECT is_posted FROM moves WHERE id = $1', [oldItem.move_id]);
-                            if (moveCheck.rows.length > 0) {
-                                const isPostedVal = moveCheck.rows[0].is_posted;
-                                if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                                    await client.query('ROLLBACK');
-                                    return res.status(400).json({ error: 'Нельзя изменять позиции в уже проведенном документе перемещения!' });
-                                }
-                            }
-                        }
-
-                        const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-                        const stockResult = await client.query(stockQuery, [sparePartId]);
-                        const totalIn = Number(stockResult.rows[0].total_in);
-
-                        const movedQuery = `SELECT COALESCE(SUM(quantity), 0) as total_moved FROM move_items WHERE zaphasti_id = $1 AND id != $2`;
-                        const movedResult = await client.query(movedQuery, [sparePartId, id]);
-                        const totalMovedOthers = Number(movedResult.rows[0].total_moved);
-
-                        const availableStock = totalIn - totalMovedOthers;
-
-                        if (newQty > availableStock) {
-                            await client.query('ROLLBACK');
+                        if (requestedQty > availableStock) {
+                            console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                             return res.status(400).json({ 
-                                error: `Недостаточно товара на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
+                                error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
                             });
                         }
-
-                        req.body.total_rub = newQty * newPrice;
-                        if (req.body.price_rub !== undefined) {
-                            req.body.price_rub = newPrice;
-                        }
-                    }
-
-                    if (entity === 'repair_items') {
-                        const oldItemRes = await client.query('SELECT * FROM "repair_items" WHERE id = $1', [id]);
-                        if (oldItemRes.rows.length === 0) {
-                            await client.query('ROLLBACK');
-                            return res.status(404).json({ error: 'Запись не найдена' });
-                        }
-                        const oldItem = oldItemRes.rows[0];
-                        const sparePartId = req.body.zaphast_id || oldItem.zaphast_id;
-
-                        if (oldItem.repair_id) {
-                            const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [oldItem.repair_id]);
-                            if (repairCheck.rows.length > 0) {
-                                const isPostedVal = repairCheck.rows[0].is_posted;
-                                if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                                    await client.query('ROLLBACK');
-                                    return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном ремонте!' });
-                                }
-                            }
-                        }
-
-                        const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-                        const stockResult = await client.query(stockQuery, [sparePartId]);
-                        const totalIn = Number(stockResult.rows[0].total_in);
-
-                        const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1 AND id != $2`;
-                        const spentResult = await client.query(spentQuery, [sparePartId, id]);
-                        const totalSpentOthers = Number(spentResult.rows[0].total_spent);
-
-                        const availableStock = totalIn - totalSpentOthers;
-
-                        if (newQty > availableStock) {
-                            await client.query('ROLLBACK');
-                            return res.status(400).json({ 
-                                error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
-                            });
-                        }
-
-                        req.body.total = newQty * newPrice;
-                    }
-
-                    if (entity === 'receipt_items') {
-                        req.body.total_rub = newQty * newPrice;
-                        req.body.price_rub = newPrice;
                     }
                 }
             }
 
-            const keys = Object.keys(req.body);
-            const values = Object.values(req.body);
+            // Автоматический поиск документа прихода (FIFO)
+            const docQuery = `
+                SELECT RI.receipt_id 
+                FROM receipt_items RI
+                JOIN receipts R ON RI.receipt_id = R.id
+                WHERE RI.zaphasti_id = $1
+                ORDER BY R.date ASC, R.id ASC
+                LIMIT 1
+            `;
+            const docResult = await pool.query(docQuery, [zaphasti_id]);
+            const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
+            console.log(`[FIFO DEBUG] Найден документ прихода (receipt_id): ${income_document_id}`);
 
-            if (keys.length === 0) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Нет данных для обновления или документ защищен от изменений' });
+            const priceRub = numPrice; 
+            const totalRub = requestedQty * priceRub;
+
+            const query = `
+                INSERT INTO "move_items" 
+                ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                RETURNING *;
+            `;
+            
+            const values = [
+                zaphasti_id, 
+                numPrice, 
+                currency || 'Рубль ПМР', 
+                requestedQty, 
+                priceRub, 
+                totalRub, 
+                description, 
+                move_id, 
+                income_document_id 
+            ];
+            
+            const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${result.rows[0].id}`);
+            return res.status(201).json(result.rows[0]);
+        }
+
+        // --- ЛОГИКА ДЛЯ tehosmotr ---
+        if (entity === 'tehosmotr') {
+            if (!req.body.date) {
+                req.body.date = new Date();
+            }
+            if (!req.body.to_date) {
+                req.body.to_date = new Date();
             }
 
-            const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
-            const processedValues = values.map(val => val === '' ? null : val);
+            if (!req.body.doc_number) {
+                const countResult = await pool.query('SELECT COUNT(*) FROM tehosmotr');
+                const nextId = Number(countResult.rows[0].count) + 1;
+                req.body.doc_number = `ТО-${nextId}`;
+            }
+            
+            if (!req.body.car_id) {
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+            }
+            if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
+                return res.status(400).json({ error: 'Необходимо указать сумму!' });
+            }
+        }
 
-            const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
-            const result = await client.query(query, [...processedValues, id]);
+        // --- ЛОГИКА ДЛЯ autostrahovanie ---
+        if (entity === 'autostrahovanie') {
+            if (!req.body.date) {
+                req.body.date = new Date();
+            }
+            if (!req.body.insurance_current) {
+                req.body.insurance_current = new Date();
+            }
+            if (!req.body.insurance_next) {
+                req.body.insurance_next = new Date();
+            }
 
-            if (result.rowCount === 0) {
+            if (!req.body.doc_number) {
+                const countResult = await pool.query('SELECT COUNT(*) FROM autostrahovanie');
+                const nextId = Number(countResult.rows[0].count) + 1;
+                req.body.doc_number = `СТРАХ-${nextId}`;
+            }
+            
+            if (!req.body.car_id) {
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+            }
+            if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
+                return res.status(400).json({ error: 'Необходимо указать сумму!' });
+            }
+        }
+
+        // Стандартная логика для остальных таблиц
+        const keys = Object.keys(req.body);
+        const values = Object.values(req.body);
+
+        if (keys.length === 0) {
+            console.log(`[ERROR] Пустое тело запроса`);
+            return res.status(400).json({ error: 'Нет данных для сохранения' });
+        }
+
+        const processedValues = values.map(val => val === '' ? null : val);
+        const columns = keys.map(k => `"${k}"`).join(', ');
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+
+        const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
+        const result = await pool.query(query, processedValues);
+        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${result.rows[0].id}`);
+        res.status(201).json(result.rows[0]);
+
+    } catch (err) {
+        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
+        console.error(err.stack);
+        res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
+    }
+});// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
+
+router.put('/:entity/:id', authenticateToken, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        let { entity, id } = req.params;
+
+        if (entity === 'brands') entity = 'car_brands';
+        if (entity === 'models') entity = 'car_models';
+        if (entity === 'bodies') entity = 'kyzov_type';
+
+        const allowedTables = [
+            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
+            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
+            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
+            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
+            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
+            'moves', 'move_items', 'statuses', 'tehosmotr',
+            'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
+            'repair_items', 'repair_works'
+        ];
+
+        if (!allowedTables.includes(entity)) {
+            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        }
+
+        // Защита от отправки несуществующих в БД виртуальных полей
+        if (entity === 'accidents' && req.body.car_model !== undefined) {
+            delete req.body.car_model;
+        }
+
+        // --- ТОЧЕЧНАЯ АДАПТАЦИЯ ДЛЯ REPAIRS ---
+        if (entity === 'repairs') {
+            if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
+                req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
+            }
+            delete req.body.repair_type;
+
+            if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
+                req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
+            }
+            delete req.body.doc_type;
+        }
+
+        // --- ПРАВКА: Корректное приведение is_posted к boolean для UPDATE ---
+        if (req.body.is_posted !== undefined) {
+            if (req.body.is_posted === '' || req.body.is_posted === null) {
+                delete req.body.is_posted;
+            } else {
+                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
+            }
+        }
+
+        // Открываем транзакцию
+        await client.query('BEGIN');
+
+        // Проверка для документов: если документ уже проведен, разрешаем менять только is_posted и fact_date
+        const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs'];
+        if (docWithStatusTables.includes(entity)) {
+            const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1`, [id]);
+            if (currentDocRes.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Запись не найдена' });
             }
+            const oldDoc = currentDocRes.rows[0];
+            const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
-            await client.query('COMMIT');
-            res.json(result.rows[0]);
-
-        } catch (err) {
-            await client.query('ROLLBACK');
-            console.error("Ошибка при обновлении в БД:", err.message);
-            res.status(500).json({ error: 'Ошибка сервера при обновлении: ' + err.message });
-        } finally {
-            client.release();
+            if (oldIsPosted) {
+                const allowedKeysForPosted = ['is_posted', 'fact_date'];
+                const incomingKeys = Object.keys(req.body);
+                
+                for (const key of incomingKeys) {
+                    if (!allowedKeysForPosted.includes(key)) {
+                        delete req.body[key];
+                    }
+                }
+            }
         }
-    });
 
-// ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
+        // --- ПРОВЕРКА ДЛЯ repair_works (БЛОКИРОВКА ИЗМЕНЕНИЙ В ПРОВЕДЕННОМ РЕМОНТЕ) ---
+        if (entity === 'repair_works') {
+            const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1', [id]);
+            if (oldItemRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Запись не найдена' });
+            }
+            const oldItem = oldItemRes.rows[0];
+            const targetRepairId = req.body.repair_id || oldItem.repair_id;
+
+            if (targetRepairId) {
+                const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [targetRepairId]);
+                if (repairCheck.rows.length > 0) {
+                    const isPostedVal = repairCheck.rows[0].is_posted;
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ error: 'Нельзя изменять работы в уже проведенном ремонте!' });
+                    }
+                }
+            }
+        }
+
+        // Если это таблица позиций документов, делаем расчет и проверки
+        if (entity === 'move_items' || entity === 'receipt_items' || entity === 'repair_items') {
+            if (req.body.quantity !== undefined || req.body.price !== undefined) {
+                const newQty = Number(req.body.quantity !== undefined ? req.body.quantity : 0);
+                const newPrice = Number(req.body.price !== undefined ? req.body.price : 0);
+                
+                if (newQty < 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Количество не может быть отрицательным' });
+                }
+
+                if (entity === 'move_items') {
+                    const oldItemRes = await client.query('SELECT * FROM "move_items" WHERE id = $1', [id]);
+                    if (oldItemRes.rows.length === 0) {
+                        await client.query('ROLLBACK');
+                        return res.status(404).json({ error: 'Запись не найдена' });
+                    }
+                    const oldItem = oldItemRes.rows[0];
+                    const sparePartId = req.body.zaphasti_id || oldItem.zaphasti_id;
+
+                    if (oldItem.move_id) {
+                        const moveCheck = await client.query('SELECT is_posted FROM moves WHERE id = $1', [oldItem.move_id]);
+                        if (moveCheck.rows.length > 0) {
+                            const isPostedVal = moveCheck.rows[0].is_posted;
+                            if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+                                await client.query('ROLLBACK');
+                                return res.status(400).json({ error: 'Нельзя изменять позиции в уже проведенном документе перемещения!' });
+                            }
+                        }
+                    }
+
+                    const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
+                    const stockResult = await client.query(stockQuery, [sparePartId]);
+                    const totalIn = Number(stockResult.rows[0].total_in);
+
+                    const movedQuery = `SELECT COALESCE(SUM(quantity), 0) as total_moved FROM move_items WHERE zaphasti_id = $1 AND id != $2`;
+                    const movedResult = await client.query(movedQuery, [sparePartId, id]);
+                    const totalMovedOthers = Number(movedResult.rows[0].total_moved);
+
+                    const availableStock = totalIn - totalMovedOthers;
+
+                    if (newQty > availableStock) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ 
+                            error: `Недостаточно товара на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
+                        });
+                    }
+
+                    req.body.total_rub = newQty * newPrice;
+                    if (req.body.price_rub !== undefined) {
+                        req.body.price_rub = newPrice;
+                    }
+                }
+
+                if (entity === 'repair_items') {
+                    const oldItemRes = await client.query('SELECT * FROM "repair_items" WHERE id = $1', [id]);
+                    if (oldItemRes.rows.length === 0) {
+                        await client.query('ROLLBACK');
+                        return res.status(404).json({ error: 'Запись не найдена' });
+                    }
+                    const oldItem = oldItemRes.rows[0];
+                    const sparePartId = req.body.zaphast_id || oldItem.zaphast_id;
+
+                    if (oldItem.repair_id) {
+                        const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [oldItem.repair_id]);
+                        if (repairCheck.rows.length > 0) {
+                            const isPostedVal = repairCheck.rows[0].is_posted;
+                            if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+                                await client.query('ROLLBACK');
+                                return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном ремонте!' });
+                            }
+                        }
+                    }
+
+                    const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
+                    const stockResult = await client.query(stockQuery, [sparePartId]);
+                    const totalIn = Number(stockResult.rows[0].total_in);
+
+                    const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1 AND id != $2`;
+                    const spentResult = await client.query(spentQuery, [sparePartId, id]);
+                    const totalSpentOthers = Number(spentResult.rows[0].total_spent);
+
+                    const availableStock = totalIn - totalSpentOthers;
+
+                    if (newQty > availableStock) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ 
+                            error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
+                        });
+                    }
+
+                    req.body.total = newQty * newPrice;
+                }
+
+                if (entity === 'receipt_items') {
+                    req.body.total_rub = newQty * newPrice;
+                    req.body.price_rub = newPrice;
+                }
+            }
+        }
+
+        const keys = Object.keys(req.body);
+        const values = Object.values(req.body);
+
+        if (keys.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нет данных для обновления или документ защищен от изменений' });
+        }
+
+        const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
+        const processedValues = values.map(val => val === '' ? null : val);
+
+        const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
+        const result = await client.query(query, [...processedValues, id]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при обновлении в БД:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера при обновлении: ' + err.message });
+    } finally {
+        client.release();
+    }
+});// ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
 
 router.delete('/:entity/:id', authenticateToken, async (req, res) => {
     const client = await pool.connect();
