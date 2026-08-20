@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt'); // Библиотека для хеширования паролей
-const jwt = require('jsonwebtoken'); // Библиотека для генерации токенов
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 // Секретный ключ для подписи токенов
 const SECRET_KEY = 'super_secret_key_change_me';
 
-// Проверка токена (охранник для путей)
+// Проверка токена (используется только для защиты добавления)
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -25,6 +25,7 @@ function authenticateToken(req, res, next) {
 }
 
 module.exports = (pool) => {
+    
     // ==========================================
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
     // ==========================================
@@ -61,7 +62,7 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без проверки токена, чтобы список не был пустым)
+    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без проверки токена)
     // ==========================================
     router.get('/users', async (req, res) => {
         try {
@@ -72,15 +73,13 @@ module.exports = (pool) => {
         }
     });
 
-
     // ==========================================
-    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Защищено)
+    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Защищено токеном)
     // ==========================================
     router.post('/users', authenticateToken, async (req, res) => {
         try {
             const { login, password_hash, name, description } = req.body;
 
-            // Если пароль передан, хешируем его перед записью в базу
             let finalPasswordHash = null;
             if (password_hash) {
                 const saltRounds = 10;
@@ -98,6 +97,7 @@ module.exports = (pool) => {
             res.status(500).send('Ошибка сервера');
         }
     });
+
 
 
 
