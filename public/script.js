@@ -1852,6 +1852,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
         });
     }
 
+
+
+
+
+
+
+
+
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -1963,6 +1971,63 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+
+
+
+async function deleteSelectedEntity() {
+    if (!selectedItem) {
+        showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
+        return;
+    }
+
+    showConfirmModal(
+        'Подтверждение удаления',
+        `Вы уверены, что хотите удалить запись с ID: ${selectedItem.id}?`,
+        async () => {
+            try {
+                const response = await fetch(`/api/${currentEntity}/${selectedItem.id}`, {
+                    method: 'DELETE'
+                });
+
+                const resultData = await response.json().catch(() => ({}));
+
+                if (response.ok) {
+                    selectedItem = null;
+                    showAppNotification('Запись успешно удалена', 'success');
+                    
+                    // Учитываем специфику ваших вложенных таблиц (как в вашем примере с drawer)
+                    const specialEntities = [
+                        'receipt_items', 'move_items', 'accident_invoices', 
+                        'accident_payments', 'accident_events', 'accident_items', 
+                        'repair_items', 'repair_works'
+                    ];
+
+                    if (specialEntities.includes(currentEntity) && typeof parentId !== 'undefined' && parentId) {
+                        loadDetailData(currentEntity, parentId);
+                    } else {
+                        refreshData();
+                    }
+                } else {
+                    showAppNotification(resultData.error || 'Ошибка при удалении записи', 'error');
+                }
+            } catch (err) {
+                console.error('Ошибка соединения при удалении:', err);
+                showAppNotification('Ошибка соединения с сервером', 'error');
+            }
+        }
+    );
+}
+
+// И функция изменения тоже чтобы была под рукой:
+function editSelectedEntity() {
+    if (!selectedItem) {
+        showAppNotification('Пожалуйста, выберите строку для изменения (кликните один раз на строку в таблице).', 'warning');
+        return;
+    }
+    openEntityForm(currentEntity, selectedItem);
+}
+
 
 
 document.getElementById('login-form').addEventListener('submit', async function(e) {
