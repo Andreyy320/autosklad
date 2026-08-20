@@ -1939,12 +1939,9 @@ router.put('/moves/:id/post', async (req, res) => {
 });
 
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
 
-// ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
-
-router.post('/:entity', authenticateToken, async (req, res) => {
+router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
     console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
     console.log(`[BODY]:`, req.body);
@@ -2125,7 +2122,7 @@ router.post('/:entity', authenticateToken, async (req, res) => {
             return res.status(201).json(result.rows[0]);
         }
 
-      // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
+        // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
         if (entity === 'move_items') {
             const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
             const requestedQty = Number(quantity) || 0;
@@ -2283,9 +2280,11 @@ router.post('/:entity', authenticateToken, async (req, res) => {
         console.error(err.stack);
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
-});// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
+});
 
-router.put('/:entity/:id', authenticateToken, async (req, res) => {
+// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
+
+router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
     try {
         let { entity, id } = req.params;
@@ -2355,7 +2354,7 @@ router.put('/:entity/:id', authenticateToken, async (req, res) => {
             if (oldIsPosted) {
                 const allowedKeysForPosted = ['is_posted', 'fact_date'];
                 const incomingKeys = Object.keys(req.body);
-                
+
                 for (const key of incomingKeys) {
                     if (!allowedKeysForPosted.includes(key)) {
                         delete req.body[key];
@@ -2391,7 +2390,7 @@ router.put('/:entity/:id', authenticateToken, async (req, res) => {
             if (req.body.quantity !== undefined || req.body.price !== undefined) {
                 const newQty = Number(req.body.quantity !== undefined ? req.body.quantity : 0);
                 const newPrice = Number(req.body.price !== undefined ? req.body.price : 0);
-                
+
                 if (newQty < 0) {
                     await client.query('ROLLBACK');
                     return res.status(400).json({ error: 'Количество не может быть отрицательным' });
@@ -2516,9 +2515,10 @@ router.put('/:entity/:id', authenticateToken, async (req, res) => {
     } finally {
         client.release();
     }
-});// ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
+});
+// ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
 
-router.delete('/:entity/:id', authenticateToken, async (req, res) => {
+router.delete('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
     try {
         let { entity, id } = req.params;

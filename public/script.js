@@ -9,6 +9,7 @@ let selectedItem = null;
 
 // Кэш для справочников (связанных таблиц)
 const referenceDataCache = {};
+
 // Функция всегда берет актуальные данные с сервера в реальном времени без кэша
 async function fetchReferenceData(refEntity) {
     try {
@@ -1533,7 +1534,9 @@ function closeDrawer() {
         backdrop.style.opacity = '0';
         backdrop.style.pointerEvents = 'none';
     }
-}// Открытие панели для создания новой или редактирования существующей записи
+}
+
+// Открытие панели для создания новой или редактирования существующей записи
 async function openEntityForm(entity, item = null, parentId = null) {
     // ЛОГИРОВАНИЕ ДЛЯ ПРОВЕРКИ ПЕРЕКЛЮЧАТЕЛЯ И КНОПКИ ДОБАВЛЕНИЯ:
     console.log("=== openEntityForm вызван ===");
@@ -1552,9 +1555,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-    // Достаем токен для запросов с авторизацией
-    const token = localStorage.getItem('token');
 
     // Автогенерация номера документа и подстановка текущей даты для новой записи
     if (!item || !item.id) {
@@ -1577,9 +1577,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         try {
             console.log(`Запрос для автонумерации по адресу: /api/${entity}`);
-            const response = await fetch(`/api/${entity}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch(`/api/${entity}`);
             console.log(`Ответ автонумерации для ${entity}: статус`, response.status);
             if (response.ok) {
                 const records = await response.json();
@@ -1734,7 +1732,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else {
-            // Если это поле пароля, используем type="password" для безопасности ввода
             const inputType = (col.field === 'password_hash') ? 'password' : 'text';
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
@@ -1794,12 +1791,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol', {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        }),
-                        fetch('/api/users', {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        })
+                        fetch('/api/mol'),
+                        fetch('/api/users')
                     ]);
 
                     if (!molRes.ok) {
@@ -1855,8 +1848,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     console.log(`Удаление записи ${entity} с ID: ${item.id}`);
                     try {
                         const response = await fetch(`/api/${entity}/${item.id}`, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${token}` }
+                            method: 'DELETE'
                         });
                         console.log(`Ответ удаления, статус:`, response.status);
 
@@ -1927,8 +1919,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const response = await fetch(url, {
                 method: method,
                 headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(data)
             });
@@ -1958,6 +1949,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -2440,14 +2432,10 @@ async function loadData(entity, title) {
             url += `?${params.toString()}`;
         }
 
-        // Достаем токен авторизации из памяти браузера
-        const token = localStorage.getItem('token');
-
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` // Передаем пропуск серверу
+                'Content-Type': 'application/json'
             }
         });
 
@@ -2800,14 +2788,10 @@ async function deleteDetailItem() {
             const detailEntity = getCurrentDetailEntity();
 
             try {
-                // Достаем токен авторизации из памяти браузера
-                const token = localStorage.getItem('token');
-
                 const response = await fetch(`/api/${detailEntity}/${selectedDetailItem.id}`, {
                     method: 'DELETE',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     }
                 });
 
@@ -2867,12 +2851,10 @@ function showPostConfirmModal(title, text, onConfirm) {
 // 1. Проведение техосмотра (у него изначально не было confirm, оставляем как было, но с тостами)
 async function postTehosmotr(id) {
     try {
-        const token = localStorage.getItem('token');
         const response = await fetch(`/api/tehosmotr/${id}/post`, {
             method: 'PATCH',
             headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
             }
         });
 
@@ -2897,13 +2879,11 @@ async function postAutostrahovanie(id) {
         'Вы действительно хотите провести этот документ страхования?',
         async () => {
             try {
-                const token = localStorage.getItem('token');
                 // Отправляем запрос на ваш универсальный PUT /:entity/:id
                 const response = await fetch(`/api/autostrahovanie/${id}`, {
                     method: 'PUT',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ 
                         is_posted: true, 
@@ -2935,12 +2915,10 @@ async function postMove(moveId) {
         'Вы действительно хотите провести это перемещение?',
         async () => {
             try {
-                const token = localStorage.getItem('token');
                 const response = await fetch(`/api/moves/${moveId}/post`, {
                     method: 'PUT',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ is_posted: true })
                 });
@@ -2965,12 +2943,10 @@ async function postReceipt(receiptId) {
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
-                const token = localStorage.getItem('token');
                 const response = await fetch(`/api/receipts/${receiptId}`, {
                     method: 'PUT',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ is_posted: true })
                 });
@@ -3261,7 +3237,8 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); // Двойной клик открывает форму редактирования строки спецификации
         }
     });
-}// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЕЙ (НИЖНЯЯ ТАБЛИЦА) ====================
+}
+// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЕЙ (НИЖНЯЯ ТАБЛИЦА) ====================
 async function loadDetailData(entity, parentId) {
     // 📌 Управление видимостью панели кнопок: скрываем для отчетов, остатков и движений
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -3381,14 +3358,10 @@ async function loadDetailData(entity, parentId) {
     }
 
     try {
-        // Достаем сохраненный токен авторизации
-        const token = localStorage.getItem('token');
-
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` // Передаем токен для доступа к деталям
+                'Content-Type': 'application/json'
             }
         });
 
