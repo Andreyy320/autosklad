@@ -1549,7 +1549,6 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 }
-
 // Открытие панели для создания новой или редактирования существующей записи
 async function openEntityForm(entity, item = null, parentId = null) {
     // ЛОГИРОВАНИЕ ДЛЯ ПРОВЕРКИ ПЕРЕКЛЮЧАТЕЛЯ И КНОПКИ ДОБАВЛЕНИЯ:
@@ -1804,9 +1803,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 console.log(`Фильтрация МОЛ для склада ID: ${selectedWarehouseId}`);
 
                 try {
+                    // ИСПРАВЛЕНИЕ: запрашиваем /api/mol_users вместо старого /api/users
                     const [molRes, usersRes] = await Promise.all([
                         fetch('/api/mol'),
-                        fetch('/api/users')
+                        fetch('/api/mol_users')
                     ]);
 
                     if (!molRes.ok) {
@@ -3538,6 +3538,7 @@ const navMap = {
     'Общая': 'car_general',
     'Остатки запчастей': 'stock_balances', // Добавили экран остатков
     'Остатки партии':'stock_batches',
+    'Пользователи2':'mol_users',
     'Движение запчастей':'stock_movement',
     'Детали двжиения': 'part_movement_details'
     // Добавили общую сводную вкладку
