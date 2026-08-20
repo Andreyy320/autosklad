@@ -1349,7 +1349,7 @@ router.get('/stock_batches', async (req, res) => {
         let query = '';
         let queryParams = [];
 
-        // Если выбран склад, показываем историю операций ТОЛЬКО для него (включая списания в ремонты)
+        // Если выбран склад, показываем историю операций ТОЛЬКО для него
         if (hasWarehouse) {
             query = `
                 SELECT 
@@ -1414,7 +1414,7 @@ router.get('/stock_batches', async (req, res) => {
                     SELECT 
                         rep_i.zaphast_id AS zaphasti_id,
                         CONCAT('Списание в ремонт №', rep.id) AS document_name,
-                        COALESCE(rep.date, NOW()) AS doc_date,
+                        COALESCE(rep.doc_date, NOW()) AS doc_date,
                         rep_i.description,
                         (-1 * rep_i.quantity) AS qty,
                         rep_i.price,
@@ -1428,7 +1428,7 @@ router.get('/stock_batches', async (req, res) => {
             `;
             queryParams = [zaphasti_id, warehouse_id];
         } else {
-            // Если склад не выбран, общая история товара по всем складам (включая все списания в ремонты)
+            // Если склад не выбран, общая история товара по всем складам
             query = `
                 SELECT 
                     z.article AS artikul,
@@ -1443,20 +1443,17 @@ router.get('/stock_batches', async (req, res) => {
                     ROUND(all_docs.price * 1.3, 2) AS retail_price, 
                     COALESCE(all_docs.currency, 'Рубль ПМР') AS currency
                 FROM (
-                    -- Приходы
                     SELECT ri.zaphasti_id, CONCAT('Приход ПР', r.doc_number) AS document_name, r.date AS doc_date, ri.description, ri.quantity AS qty, ri.price, ri.currency
                     FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1
                     
                     UNION ALL
                     
-                    -- Перемещения
                     SELECT mi.zaphasti_id, CONCAT('Перемещение №', m.id) AS document_name, m.date AS doc_date, mi.description, mi.quantity AS qty, mi.price, mi.currency
                     FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE mi.zaphasti_id = $1
                     
                     UNION ALL
                     
-                    -- Списания в ремонт (общие по всем складам)
-                    SELECT rep_i.zaphast_id AS zaphasti_id, CONCAT('Списание в ремонт №', rep.id) AS document_name, COALESCE(rep.date, NOW()) AS doc_date, rep_i.description, (-1 * rep_i.quantity) AS qty, rep_i.price, 'Рубль ПМР' AS currency
+                    SELECT rep_i.zaphast_id AS zaphasti_id, CONCAT('Списание в ремонт №', rep.id) AS document_name, COALESCE(rep.doc_date, NOW()) AS doc_date, rep_i.description, (-1 * rep_i.quantity) AS qty, rep_i.price, 'Рубль ПМР' AS currency
                     FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1
                 ) all_docs
                 JOIN zaphasti z ON all_docs.zaphasti_id = z.id
