@@ -11,12 +11,24 @@ let selectedItem = null;
 const referenceDataCache = {};
 
 async function fetchReferenceData(refEntity) {
-    if (!refEntity) return []; // Защита от передачи пустого названия справочника!
+    if (!refEntity) return [];
+    
+    // Достаем тот самый токен, который записался при входе
+    const token = localStorage.getItem('token');
+    
     try {
-        const response = await fetch(`/api/${refEntity}`);
+        const response = await fetch(`/api/${refEntity}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                // Передаем токен в заголовке, чтобы сервер точно знал, что вы авторизованы
+                'Authorization': token ? `Bearer ${token}` : '' 
+            }
+        });
+        
         if (response.ok) {
             const data = await response.json();
-            return data;
+            return data; // Свежие данные с бэкенда!
         } else {
             console.warn(`Справочник ${refEntity} вернул статус:`, response.status);
         }
@@ -1688,10 +1700,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             `;
         } else if (col.ref || col.field === 'receipt_id') {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
-// Правильно: берем имя справочника из конфигурации колонки
-const refName = col.ref; 
-const refItems = refName ? await fetchReferenceData(refName) : [];       
-     let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            const refItems = await fetchReferenceData(referenceName);
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
                 let displayName = '';
