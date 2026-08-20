@@ -1811,7 +1811,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works') && parentId) {
+                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts') && parentId) {
                                 loadDetailData(entity, parentId);
                             } else {
                                 refreshData();
@@ -1859,6 +1859,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.dtp_id = parentId;
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
             data.repair_id = parentId;
+        } else if (entity === 'entity_contacts' && parentId) {
+            data.entity_id = parentId; // Автоматически проставляем ID родительской сущности для контакта
+            if (!data.entity_type) {
+                data.entity_type = entity;
+            }
         }
 
 
@@ -1882,7 +1887,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works') && parentId) {
+                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts') && parentId) {
                     loadDetailData(entity, parentId);
                 } else {
                     refreshData();
@@ -1902,7 +1907,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 
 async function deleteSelectedEntity() {
