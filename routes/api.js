@@ -175,24 +175,38 @@ router.get('/postavhik_contacts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка получения контактов поставщика' });
     }
 });
-
-// Для контрагентов
-router.get('/counterparty_contacts', async (req, res) => {
-    console.log('📥 [GET /counterparty_contacts] Query params:', req.query);
-    const { parent_id } = req.query;
+router.post('/counterparty_contacts', async (req, res) => {
     try {
-        const id = parent_id || req.query.counterparty_id;
-        console.log('🔍 Искомый counterparty_id:', id);
-        
+        // Проверяем все возможные наименования ID
+        const counterparty_id = req.body.counterparty_id || req.body.parent_id || req.body.entity_id;
+
+        if (!counterparty_id) {
+            return res.status(400).json({ 
+                error: 'Не передан ID контрагента (counterparty_id)' 
+            });
+        }
+
+        const { contact_person, phone, email, position, note } = req.body;
+
         const result = await pool.query(
-            `SELECT * FROM counterparty_contacts WHERE counterparty_id = $1 ORDER BY id DESC`,
-            [id]
+            `INSERT INTO counterparty_contacts 
+                (counterparty_id, contact_person, phone, email, position, note) 
+             VALUES ($1, $2, $3, $4, $5, $6) 
+             RETURNING *`,
+            [
+                counterparty_id, 
+                contact_person || '', 
+                phone || '', 
+                email || '', 
+                position || '', 
+                note || ''
+            ]
         );
-        console.log(`✅ Найдено строк: ${result.rows.length}`);
-        res.json(result.rows);
+
+        res.json(result.rows[0]);
     } catch (err) {
-        console.error('❌ Ошибка в /counterparty_contacts:', err);
-        res.status(500).json({ error: 'Ошибка получения контактов контрагента' });
+        console.error('❌ Ошибка сохранения контакта:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
