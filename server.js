@@ -18,9 +18,13 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Подключение к БД через DATABASE_URL из .env файла
+// Подключение к БД напрямую (без использования поврежденного .env)
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
+    user: 'postgres',
+    host: 'localhost',
+    database: 'auto_sklad2',
+    password: 'martyn999',
+    port: 5432,
 });
 
 // Подключаем наш отдельный файл с API
