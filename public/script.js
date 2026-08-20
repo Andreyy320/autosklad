@@ -10,14 +10,15 @@ let selectedItem = null;
 // Кэш для справочников (связанных таблиц)
 const referenceDataCache = {};
 
-// Функция всегда берет актуальные данные с сервера в реальном времени без кэша
 async function fetchReferenceData(refEntity) {
+    if (!refEntity) return []; // Защита от передачи пустого названия справочника!
     try {
         const response = await fetch(`/api/${refEntity}`);
-        
         if (response.ok) {
             const data = await response.json();
-            return data; // Свежие данные с бэкенда!
+            return data;
+        } else {
+            console.warn(`Справочник ${refEntity} вернул статус:`, response.status);
         }
     } catch (err) {
         console.error(`Ошибка загрузки справочника ${refEntity}:`, err);
