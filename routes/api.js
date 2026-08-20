@@ -153,24 +153,45 @@ router.get('/counterparties', async (req, res) => {
     }
 });
 
-
-// ПОЛУЧЕНИЕ КОНТАКТОВ для конкретной записи (поставщика, покупателя или контрагента)
+// ПОЛУЧЕНИЕ КОНТАКТОВ
 router.get('/entity_contacts', async (req, res) => {
     try {
         const { entity_type, entity_id } = req.query;
-        const query = `
-            SELECT * FROM entity_contacts 
-            WHERE entity_type = $1 AND entity_id = $2 
-            ORDER BY id ASC
-        `;
-        const result = await pool.query(query, [entity_type, entity_id]);
+
+        // Валидация: если ID не передан, нельзя искать
+        if (!entity_id) {
+            return res.status(400).json({ error: "Не указан entity_id" });
+        }
+
+        // Если entity_type не передан, ищем только по entity_id (защита от пустых результатов)
+        // Если передан - ищем строго по паре
+        let query = '';
+        let params = [];
+
+        if (entity_type && entity_type !== 'undefined' && entity_type !== '') {
+            query = `
+                SELECT * FROM entity_contacts 
+                WHERE entity_type = $1 AND entity_id = $2 
+                ORDER BY id ASC
+            `;
+            params = [entity_type, entity_id];
+        } else {
+            // Резервный вариант, если фронтенд пока не прокинул тип
+            query = `
+                SELECT * FROM entity_contacts 
+                WHERE entity_id = $1 
+                ORDER BY id ASC
+            `;
+            params = [entity_id];
+        }
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
-        console.error(err.message);
+        console.error('Ошибка в /api/entity_contacts:', err.message);
         res.status(500).send('Ошибка при получении контактов');
     }
 });
-
 
 
 
