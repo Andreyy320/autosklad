@@ -2001,7 +2001,6 @@ function logout() {
 }
 
 async function refreshData() {
-    // 1. Получаем название текущего активного раздела
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
     
