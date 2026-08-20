@@ -1,15 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-
-// Секретный ключ (оставляем на всякий случай, если где-то еще используется)
-const SECRET_KEY = 'super_secret_key_change_me';
 
 module.exports = (pool) => {
     
     // ==========================================
-    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
+    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ (Без токенов)
     // ==========================================
     router.post('/login', async (req, res) => {
         const { login, password } = req.body;
@@ -25,12 +21,8 @@ module.exports = (pool) => {
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                 if (match) {
-                    const token = jwt.sign(
-                        { id: user.id, login: user.login }, 
-                        SECRET_KEY, 
-                        { expiresIn: '8h' }
-                    );
-                    return res.json({ success: true, token: token, user: user });
+                    // Больше никаких токенов, просто возвращаем успех
+                    return res.json({ success: true, user: user });
                 } else {
                     return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
                 }
@@ -44,7 +36,7 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без токенов)
+    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
     // ==========================================
     router.get('/users', async (req, res) => {
         try {
@@ -56,7 +48,7 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Без токенов)
+    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
     // ==========================================
     router.post('/users', async (req, res) => {
         try {
@@ -79,6 +71,7 @@ module.exports = (pool) => {
             res.status(500).send('Ошибка сервера');
         }
     });
+
 
 
 
