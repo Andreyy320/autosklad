@@ -1973,9 +1973,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         const result = await response.json();
 
         if (response.ok) {
-            // СОХРАНЯЕМ ТОКЕН В БРАУЗЕРЕ
-            localStorage.setItem('token', result.token);
-
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
             loadData('users', 'Пользователи');
@@ -1990,11 +1987,8 @@ document.getElementById('login-form').addEventListener('submit', async function(
 });
 
 function logout() {
-    // ОЧИЩАЕМ ТОКЕН ПРИ ВЫХОДЕ
-    localStorage.removeItem('token');
     location.reload();
 }
-
 
 async function refreshData() {
     // 1. Получаем название текущего активного раздела
