@@ -3,26 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// Секретный ключ для подписи токенов
+// Секретный ключ (оставляем на всякий случай, если где-то еще используется)
 const SECRET_KEY = 'super_secret_key_change_me';
-
-// Проверка токена (используется только для защиты добавления)
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'Нет доступа. Требуется авторизация.' });
-    }
-
-    jwt.verify(token, SECRET_KEY, (err, user) => {
-        if (err) {
-            return res.status(403).json({ success: false, message: 'Недействительный или просроченный токен.' });
-        }
-        req.user = user;
-        next();
-    });
-}
 
 module.exports = (pool) => {
     
@@ -62,7 +44,7 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без проверки токена)
+    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без токенов)
     // ==========================================
     router.get('/users', async (req, res) => {
         try {
@@ -74,9 +56,9 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Защищено токеном)
+    // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ (Без токенов)
     // ==========================================
-    router.post('/users', authenticateToken, async (req, res) => {
+    router.post('/users', async (req, res) => {
         try {
             const { login, password_hash, name, description } = req.body;
 
@@ -97,7 +79,6 @@ module.exports = (pool) => {
             res.status(500).send('Ошибка сервера');
         }
     });
-
 
 
 

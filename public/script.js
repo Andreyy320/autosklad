@@ -9,17 +9,10 @@ let selectedItem = null;
 
 // Кэш для справочников (связанных таблиц)
 const referenceDataCache = {};
-
 // Функция всегда берет актуальные данные с сервера в реальном времени без кэша
 async function fetchReferenceData(refEntity) {
     try {
-        const token = localStorage.getItem('token'); // Берем токен, который сохранился при входе
-        
-        const response = await fetch(`/api/${refEntity}`, {
-            headers: {
-                'Authorization': `Bearer ${token}` // Передаем токен для авторизации
-            }
-        });
+        const response = await fetch(`/api/${refEntity}`);
         
         if (response.ok) {
             const data = await response.json();
