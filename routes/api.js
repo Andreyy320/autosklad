@@ -4,15 +4,9 @@ const bcrypt = require('bcrypt');
 
 module.exports = (pool) => {
     
-    // ==========================================
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
-    // ==========================================
     router.post('/login', async (req, res) => {
         const { login, password } = req.body;
-        
-        console.log('--- ПОПЫТКА ВХОДА ---');
-        console.log('Введенный логин:', login);
-
         try {
             const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
             
@@ -21,14 +15,11 @@ module.exports = (pool) => {
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                 if (match) {
-                    console.log('Успешный вход для:', login);
                     return res.json({ success: true, user: user });
                 } else {
-                    console.log('Неверный пароль для:', login);
                     return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
                 }
             } else {
-                console.log('Пользователь не найден:', login);
                 return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
             }
         } catch (err) {
@@ -37,18 +28,11 @@ module.exports = (pool) => {
         }
     });
 
-    // ==========================================
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
-    // ==========================================
     router.get('/users', async (req, res) => {
-        console.log('----------------------------------------');
-        console.log('>>> [API] Сработал запрос на GET /users');
-        console.log('>>> Headers от клиента:', req.headers);
-        console.log('----------------------------------------');
-        
+       
         try {
             const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
-            console.log(`>>> [API] Успешно получено пользователей из БД: ${result.rows.length}`);
             return res.json(result.rows);
         } catch (err) {
             console.error('>>> [API ОШИБКА] в /users:', err.message);
@@ -57,18 +41,11 @@ module.exports = (pool) => {
     });
 
 
-
-// ==========================================
     // ПОЛУЧЕНИЕ СПИСКА МОЛ (mol_users)
-    // ==========================================
     router.get('/mol_users', async (req, res) => {
-        console.log('----------------------------------------');
-        console.log('>>> [API] Сработал запрос на GET /mol_users');
-        console.log('----------------------------------------');
         
         try {
             const result = await pool.query('SELECT * FROM mol_users ORDER BY id ASC');
-            console.log(`>>> [API] Успешно получено записей mol_users: ${result.rows.length}`);
             return res.json(result.rows);
         } catch (err) {
             console.error('>>> [API ОШИБКА] в /mol_users:', err.message);
@@ -77,10 +54,7 @@ module.exports = (pool) => {
     });
 
 
-
-    // ==========================================
     // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
-    // ==========================================
     router.post('/users', async (req, res) => {
         try {
             const { login, password_hash, name, description } = req.body;
@@ -105,7 +79,6 @@ module.exports = (pool) => {
 
 
 
-
     // Получение списка запчастей
     router.get('/parts', async (req, res) => {
         try {
@@ -126,7 +99,6 @@ module.exports = (pool) => {
             res.status(500).send('Ошибка при получении брендов');
         }
     });
-
 
 
 // ПОЛУЧЕНИЕ СПИСКА ТИПОВ КУЗОВА (из таблицы kyzov_type)
@@ -178,6 +150,24 @@ router.get('/counterparties', async (req, res) => {
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Ошибка при получении контрагентов');
+    }
+});
+
+
+// ПОЛУЧЕНИЕ КОНТАКТОВ для конкретной записи (поставщика, покупателя или контрагента)
+router.get('/entity-contacts', async (req, res) => {
+    try {
+        const { entity_type, entity_id } = req.query;
+        const query = `
+            SELECT * FROM entity_contacts 
+            WHERE entity_type = $1 AND entity_id = $2 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [entity_type, entity_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов');
     }
 });
 
@@ -344,14 +334,9 @@ router.get('/repair_types', async (req, res) => {
 
 
 
-// ==========================================
 // ПОЛУЧЕНИЕ СПИСКА МОЛ (с JOIN для mol_users и складов)
-// ==========================================
 router.get('/mol', async (req, res) => {
-    console.log('----------------------------------------');
-    console.log('>>> [API] Сработал запрос на GET /mol');
-    console.log('----------------------------------------');
-    
+ 
     try {
         const query = `
             SELECT m.*, mu.name AS user_fio, s.name AS warehouse_name 
@@ -361,7 +346,6 @@ router.get('/mol', async (req, res) => {
             ORDER BY m.id ASC
         `;
         const result = await pool.query(query);
-        console.log(`>>> [API] Успешно получено записей МОЛ: ${result.rows.length}`);
         return res.json(result.rows);
     } catch (err) {
         console.error('>>> [API ОШИБКА] в /mol:', err.message);
@@ -393,15 +377,6 @@ router.post('/mol', async (req, res) => {
     }
 });
 
-
-
-
-
-
-
-
-//
-// ==================== ТОПЛИВО ====================
 
 // Получить список всех видов топлива
 router.get('/toplivo', async (req, res) => {
@@ -448,12 +423,6 @@ router.post('/toplivo', async (req, res) => {
 });
 
 
-
-
-
-
-// ==================== ЕДИНИЦЫ ИЗМЕРЕНИЯ ====================
-
 // Получить список всех единиц измерения
 router.get('/ed_izmereniya', async (req, res) => {
     try {
@@ -482,14 +451,6 @@ router.post('/ed_izmereniya', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при добавлении единицы измерения' });
     }
 });
-
-
-
-
-
-
-
-
 
 
 // 1. Получение списка Групп цен
@@ -619,10 +580,7 @@ router.get('/receipt_items', async (req, res) => {
 
         const result = await pool.query(query, params);
         
-        // 👉 ЛОГ НА БЭКЕНДЕ: посмотрим на первую строку, что вообще отдает база
-        console.log("📦 Бэкенд /receipt_items отправляет строк:", result.rows.length);
         if (result.rows.length > 0) {
-            console.log("🔍 Пример первой строки из базы:", result.rows[0]);
         }
 
         res.json(result.rows);
@@ -1105,7 +1063,6 @@ router.get('/repair_works', async (req, res) => {
 
         const result = await pool.query(query, params);
         
-        console.log(`🛠️ Бэкенд /repair_works для ремонта ${repair_id || 'всех'} отправляет строк:`, result.rows.length);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении работ для ремонта:', err);
@@ -1346,12 +1303,11 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
         let { zaphasti_id, warehouse_id } = req.query;
-
-        console.log("📡 [Server] Запрос истории движений /stock_batches получен:", { zaphasti_id, warehouse_id });
 
         if (!zaphasti_id) {
             return res.status(400).json({ error: 'Не указан zaphasti_id' });
@@ -1477,7 +1433,6 @@ router.get('/stock_batches', async (req, res) => {
 
         const result = await pool.query(query, queryParams);
         
-        console.log(`📥 [Server] История операций успешно получена. Всего записей: ${result.rows.length}`);
         res.json(result.rows);
 
     } catch (err) {
@@ -1485,6 +1440,8 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1769,6 +1726,8 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
@@ -1909,11 +1868,6 @@ router.get('/accidents', async (req, res) => {
     }
 });
 
-
-
-
-
-
 router.get('/accident_invoices', async (req, res) => {
     try {
         const parentId = req.query.dtp_id || req.query.accident_id;
@@ -1937,8 +1891,6 @@ router.get('/accident_invoices', async (req, res) => {
 router.get('/accident_payments', async (req, res) => {
     try {
         const { dtp_id } = req.query;
-        // Если у вас таблица payment_types имеет поля id и name (или title), 
-        // можно сделать JOIN, чтобы сразу отдавать текст названия:
         const query = `
             SELECT ap.*, 
                    COALESCE(pt.name, ap.payment_type) AS payment_type_name
@@ -1954,10 +1906,6 @@ router.get('/accident_payments', async (req, res) => {
         res.status(500).send('Ошибка при получении оплат по ДТП');
     }
 });
-
-
-
-
 
 
 // ==================== СОБЫТИЯ ДТП (для нижней таблицы) ====================
@@ -1977,14 +1925,6 @@ router.get('/accident_events', async (req, res) => {
         res.status(500).send('Ошибка при получении событий ДТП');
     }
 });
-
-
-
-
-
-
-
-
 
 
 // Получить все статусы ДТП (для выпадающих списков)
@@ -2030,12 +1970,10 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
-// ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
 
+
+// ==================== УНИВЕРСАЛЬНЫЙ POST  ====================
 router.post('/:entity', async (req, res) => {
-    console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
-    console.log(`[BODY]:`, req.body);
 
     try {
         let { entity } = req.params;
@@ -2058,11 +1996,9 @@ router.post('/:entity', async (req, res) => {
         ];
 
         if (!allowedTables.includes(entity)) {
-            console.log(`[ERROR] Недопустимая таблица: ${entity}`);
             return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
         }
 
-        // --- ИСПРАВЛЕНИЕ ДЛЯ REPAIRS ---
         if (entity === 'repairs') {
             if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
                 req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
@@ -2075,7 +2011,6 @@ router.post('/:entity', async (req, res) => {
             delete req.body.doc_type;
         }
 
-        // --- ПРИВЕДЕНИЕ is_posted К BOOLEAN ДЛЯ БД ---
         if (req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted; 
@@ -2084,14 +2019,11 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ РЕМОНТА, FIFO И receipt_id) ---
         if (entity === 'repair_items') {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
-            
-            console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
-            
+                        
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
@@ -2099,11 +2031,9 @@ router.post('/:entity', async (req, res) => {
                     const warehouseId = repairCheck.rows[0].warehouse_id;
 
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                     }
 
-                    // Если у ремонта указан склад, проверяем остаток строго на нем
                     if (warehouseId) {
                         const balanceQuery = `
                             SELECT 
@@ -2121,10 +2051,8 @@ router.post('/:entity', async (req, res) => {
                         const balanceRes = await pool.query(balanceQuery, [zaphast_id, warehouseId]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
 
-                        console.log(`[STOCK DEBUG] Склад ремонта ID=${warehouseId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                         if (requestedQty > availableStock) {
-                            console.log(`[ERROR] Недостаточно остатка на складе ремонта! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                             return res.status(400).json({ 
                                 error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
                             });
@@ -2151,7 +2079,6 @@ router.post('/:entity', async (req, res) => {
             }
 
             const totalSum = numPrice * requestedQty;
-
             const query = `
                 INSERT INTO "repair_items" 
                 ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
@@ -2170,11 +2097,9 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
-        // --- ЛОГИКА ДЛЯ repair_works (ПРОВЕРКА ПРОВЕДЕННОГО РЕМОНТА) ---
         if (entity === 'repair_works') {
             const { repair_id } = req.body;
             
@@ -2183,14 +2108,12 @@ router.post('/:entity', async (req, res) => {
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
                     }
                 }
             }
         }
 
-        // --- ЛОГИКА ДЛЯ receipt_items ---
         if (entity === 'receipt_items') {
             const { zaphasti_id, price, currency, quantity, description, receipt_id } = req.body;
             
@@ -2199,7 +2122,6 @@ router.post('/:entity', async (req, res) => {
                 if (receiptCheck.rows.length > 0) {
                     const isPostedVal = receiptCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
                     }
                 }
@@ -2219,17 +2141,14 @@ router.post('/:entity', async (req, res) => {
             
             const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
-        // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
         if (entity === 'move_items') {
             const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
-            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
 
             if (move_id) {
                 const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
@@ -2238,11 +2157,9 @@ router.post('/:entity', async (req, res) => {
                     const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
 
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
                     }
 
-                    // Если у перемещения указан склад-отправитель, проверяем остаток строго на нем
                     if (warehouseFromId) {
                         const balanceQuery = `
                             SELECT 
@@ -2257,10 +2174,8 @@ router.post('/:entity', async (req, res) => {
                         const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
 
-                        console.log(`[STOCK DEBUG] Склад ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                         if (requestedQty > availableStock) {
-                            console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                             return res.status(400).json({ 
                                 error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
                             });
@@ -2269,7 +2184,6 @@ router.post('/:entity', async (req, res) => {
                 }
             }
 
-            // Автоматический поиск документа прихода (FIFO)
             const docQuery = `
                 SELECT RI.receipt_id 
                 FROM receipt_items RI
@@ -2280,7 +2194,6 @@ router.post('/:entity', async (req, res) => {
             `;
             const docResult = await pool.query(docQuery, [zaphasti_id]);
             const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
-            console.log(`[FIFO DEBUG] Найден документ прихода (receipt_id): ${income_document_id}`);
 
             const priceRub = numPrice; 
             const totalRub = requestedQty * priceRub;
@@ -2305,11 +2218,9 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
-        // --- ЛОГИКА ДЛЯ tehosmotr ---
         if (entity === 'tehosmotr') {
             if (!req.body.date) {
                 req.body.date = new Date();
@@ -2332,7 +2243,6 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // --- ЛОГИКА ДЛЯ autostrahovanie ---
         if (entity === 'autostrahovanie') {
             if (!req.body.date) {
                 req.body.date = new Date();
@@ -2358,12 +2268,10 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // Стандартная логика для остальных таблиц
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
         if (keys.length === 0) {
-            console.log(`[ERROR] Пустое тело запроса`);
             return res.status(400).json({ error: 'Нет данных для сохранения' });
         }
 
@@ -2373,17 +2281,16 @@ router.post('/:entity', async (req, res) => {
 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
         const result = await pool.query(query, processedValues);
-        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${result.rows[0].id}`);
         res.status(201).json(result.rows[0]);
 
     } catch (err) {
-        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
         console.error(err.stack);
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 
+
+// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -2410,12 +2317,10 @@ router.put('/:entity/:id', async (req, res) => {
             return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
         }
 
-        // Защита от отправки несуществующих в БД виртуальных полей
         if (entity === 'accidents' && req.body.car_model !== undefined) {
             delete req.body.car_model;
         }
 
-        // --- ТОЧЕЧНАЯ АДАПТАЦИЯ ДЛЯ REPAIRS ---
         if (entity === 'repairs') {
             if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
                 req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
@@ -2428,7 +2333,6 @@ router.put('/:entity/:id', async (req, res) => {
             delete req.body.doc_type;
         }
 
-        // --- ПРАВКА: Корректное приведение is_posted к boolean для UPDATE ---
         if (req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted;
@@ -2437,10 +2341,8 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
-        // Открываем транзакцию
         await client.query('BEGIN');
 
-        // Проверка для документов: если документ уже проведен, разрешаем менять только is_posted и fact_date
         const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs'];
         if (docWithStatusTables.includes(entity)) {
             const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1`, [id]);
@@ -2463,7 +2365,6 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
-        // --- ПРОВЕРКА ДЛЯ repair_works (БЛОКИРОВКА ИЗМЕНЕНИЙ В ПРОВЕДЕННОМ РЕМОНТЕ) ---
         if (entity === 'repair_works') {
             const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1', [id]);
             if (oldItemRes.rows.length === 0) {
@@ -2485,7 +2386,6 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
-        // Если это таблица позиций документов, делаем расчет и проверки
         if (entity === 'move_items' || entity === 'receipt_items' || entity === 'repair_items') {
             if (req.body.quantity !== undefined || req.body.price !== undefined) {
                 const newQty = Number(req.body.quantity !== undefined ? req.body.quantity : 0);
@@ -2616,6 +2516,8 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
 
 router.delete('/:entity/:id', async (req, res) => {
@@ -2646,7 +2548,6 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Проверяем блокировку удаления для проведенных документов
         if (entity === 'receipts' || entity === 'moves' || entity === 'tehosmotr' || entity === 'autostrahovanie' || entity === 'accidents' || entity === 'repairs') {
             const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1`, [id]);
             if (docCheck.rows.length === 0) {
@@ -2660,7 +2561,6 @@ router.delete('/:entity/:id', async (req, res) => {
             }
         }
 
-        // 2. Проверяем блокировку удаления позиций проведенных документов
         if (entity === 'receipt_items') {
             const itemRes = await client.query('SELECT receipt_id FROM receipt_items WHERE id = $1', [id]);
             if (itemRes.rows.length > 0 && itemRes.rows[0].receipt_id) {
@@ -2717,7 +2617,6 @@ router.delete('/:entity/:id', async (req, res) => {
             }
         }
 
-        // 3. Каскадное удаление дочерних элементов
         if (entity === 'receipts') {
             await client.query('DELETE FROM receipt_items WHERE receipt_id = $1', [id]);
         } else if (entity === 'moves') {
@@ -2731,7 +2630,6 @@ router.delete('/:entity/:id', async (req, res) => {
             await client.query('DELETE FROM accident_events WHERE dtp_id = $1', [id]);
         }
 
-        // 4. Основное удаление записи
         const query = `DELETE FROM "${entity}" WHERE id = $1 RETURNING *;`;
         const result = await client.query(query, [id]);
 

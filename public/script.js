@@ -140,6 +140,26 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
+
+entity_contacts: {
+        title: 'Контакты',
+        columns: [
+            { field: 'name', label: 'Имя', width: '180px' },
+            { field: 'position', label: 'Должность', width: '150px' },
+            { field: 'phone', label: 'Телефон', width: '150px' },
+            { field: 'address', label: 'Адрес', width: '200px' },
+            { field: 'description', label: 'Описание' },
+        ],
+        render: (item) => `
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.position || ''}</td>
+            <td>${item.phone || ''}</td>
+            <td>${item.address || ''}</td>
+            <td>${item.description || ''}</td>
+        `
+    },
+
+
    counterparty_types: {
     title: 'Тип контрагента',
     columns: [
@@ -1420,6 +1440,8 @@ car_general: {
 
 
 
+
+
 function getConfig(entity) {
     if (tableConfig[entity]) {
         return tableConfig[entity];
@@ -2284,7 +2306,6 @@ async function applyMovementFilters() {
     }
 }
 
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2332,11 +2353,13 @@ async function loadData(entity, title) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement') {
+        // Добавили наши новые разделы в условие отображения нижней панели (детализации)
+        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
+                // Для контактов тулбар внизу можно скрыть или оставить (скрываем, так как там своя логика)
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -2463,6 +2486,9 @@ async function loadData(entity, title) {
                     loadDetailData('receipt_items', item.id);
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
+                } else if (entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+                    // При клике на строку в этих разделах подгружаем контакты в нижнюю таблицу
+                    loadDetailData('entity_contacts', { entity_type: entity, entity_id: item.id });
                 }
             };
 
@@ -2555,6 +2581,16 @@ async function loadData(entity, title) {
                 } else {
                     emptyDetailBody();
                 }
+            } else if (entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+                carTabsBar.style.display = 'none';
+                
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    // Автоматически загружаем контакты для первой строки при открытии раздела
+                    loadDetailData('entity_contacts', { entity_type: entity, entity_id: currentItems[0].id });
+                } else {
+                    emptyDetailBody();
+                }
             } else {
                 carTabsBar.style.display = 'none';
                 
@@ -2627,7 +2663,6 @@ function filterTable() {
 let selectedDetailItem = null;
 let currentDetailItems = []; 
 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -2640,6 +2675,9 @@ function getCurrentDetailEntity() {
     }
     if (currentEntity === 'stock_movement') {
         return 'part_movement_details'; 
+    }
+    if (currentEntity === 'postavhik' || currentEntity === 'counterparties' || currentEntity === 'customers') {
+        return 'entity_contacts'; 
     }
     if (currentEntity === 'accidents') {
         if (typeof currentAccidentSubTab !== 'undefined' && currentAccidentSubTab) return currentAccidentSubTab;
@@ -2683,7 +2721,6 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
-
 
 function openDetailForm(mode) {
     if (!selectedItem) {
@@ -2990,6 +3027,8 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
+            } else if (currentEntity === 'postavhik' || currentEntity === 'counterparties' || currentEntity === 'customers') {
+                loadDetailData('entity_contacts', { entity_type: currentEntity, entity_id: selectedItem.id });
             }
         }
     }
@@ -3134,7 +3173,6 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3167,7 +3205,6 @@ async function loadDetailData(entity, parentId) {
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
         queryParamName = 'dtp_id'; 
     } else if (entity === 'stock_batches') {
-      
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
         
@@ -3178,7 +3215,6 @@ async function loadDetailData(entity, parentId) {
         }
         fetchUrl = `/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}`;
     } else if (entity === 'part_movement_details') {
-        
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
         
@@ -3192,6 +3228,10 @@ async function loadDetailData(entity, parentId) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
+    } else if (entity === 'entity_contacts') {
+        let eType = parentId && typeof parentId === 'object' ? parentId.entity_type : '';
+        let eId = parentId && typeof parentId === 'object' ? parentId.entity_id : parentId;
+        fetchUrl = `/api/entity_contacts?entity_type=${eType}&entity_id=${eId}`;
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
         queryParamName = 'car_id';
     }
@@ -3254,7 +3294,6 @@ async function loadDetailData(entity, parentId) {
         
         const items = await response.json();
         
-
         currentDetailItems = items; 
         selectedDetailItem = null;  
         
@@ -3266,7 +3305,8 @@ async function loadDetailData(entity, parentId) {
             repair_items: 'Список запчастей',
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
-            move_items: 'Спецификация перемещения'
+            move_items: 'Спецификация перемещения',
+            entity_contacts: 'Контакты'
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
 
@@ -3284,6 +3324,8 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `Детальная история движения запчасти | Операций: ${items.length}`;
             } else if (entity === 'stock_balances') {
                 titleElement.innerText = `Остатки запчастей на складах | Позиций: ${items.length}`;
+            } else if (entity === 'entity_contacts') {
+                titleElement.innerText = `Контакты контрагента | Записей: ${items.length}`;
             } else {
                 titleElement.innerText = `${prettyEntityName} (Документ №${parentId}) | Позиций: ${items.length}`;
             }
@@ -3401,7 +3443,8 @@ const navMap = {
     'Остатки партии':'stock_batches',
     'Пользователи2':'mol_users',
     'Движение запчастей':'stock_movement',
-    'Детали двжиения': 'part_movement_details'
+    'Детали двжиения': 'part_movement_details',
+    'Контактная информация':'entity_contacts'
 };
 
 function updateFilterPanels(entity) {
@@ -3419,7 +3462,6 @@ function updateFilterPanels(entity) {
         movementFilter.style.display = 'flex';
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -3448,7 +3490,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
             if (carTabsBar) carTabsBar.style.display = 'flex';
@@ -3471,7 +3513,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
