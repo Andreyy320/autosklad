@@ -24,6 +24,8 @@ async function fetchReferenceData(refEntity) {
     }
     return [];
 }
+
+
 // 1. Конфигурация колонок и шаблонов строк для всех таблиц
 const tableConfig = {
     users: {
