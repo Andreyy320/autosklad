@@ -2347,6 +2347,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2980,6 +2981,8 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
+
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
