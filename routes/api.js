@@ -30,46 +30,36 @@ module.exports = (pool) => {
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
     // ==========================================
     router.post('/login', async (req, res) => {
-    const { login, password } = req.body;
-    
-    console.log('--- ПОПЫТКА ВХОДА ---');
-    console.log('Введенный логин:', login);
-    console.log('Введенный пароль (чистый текст):', password);
-
-    try {
-        const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
+        const { login, password } = req.body;
         
-        if (result.rows.length > 0) {
-            const user = result.rows[0];
-            console.log('Найден пользователь в БД:', user.login);
-            console.log('Хэш пароля из БД:', user.password_hash);
-            
-            // Сравниваем введенный пароль с хэшем
-            const match = await bcrypt.compare(password, user.password_hash);
-            console.log('Результат сравнения (true/false):', match);
-            
-            if (match) {
-                // Создаем JWT-токен на 8 часов
-                const token = jwt.sign(
-                    { id: user.id, login: user.login }, 
-                    SECRET_KEY, 
-                    { expiresIn: '8h' }
-                );
+        console.log('--- ПОПЫТКА ВХОДА ---');
+        console.log('Введенный логин:', login);
 
-                // Возвращаем токен вместе с пользователем
-                res.json({ success: true, token: token, user: user });
+        try {
+            const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
+            
+            if (result.rows.length > 0) {
+                const user = result.rows[0];
+                const match = await bcrypt.compare(password, user.password_hash);
+                
+                if (match) {
+                    const token = jwt.sign(
+                        { id: user.id, login: user.login }, 
+                        SECRET_KEY, 
+                        { expiresIn: '8h' }
+                    );
+                    return res.json({ success: true, token: token, user: user });
+                } else {
+                    return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+                }
             } else {
-                res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+                return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
             }
-        } else {
-            console.log('Пользователь с таким логином не найден в БД');
-            res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+        } catch (err) {
+            console.error('Ошибка сервера:', err.message);
+            return res.status(500).send('Ошибка сервера');
         }
-    } catch (err) {
-        console.error('Ошибка сервера:', err.message);
-        res.status(500).send('Ошибка сервера');
-    }
-});
+    });
 
     // ==========================================
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Защищено)
