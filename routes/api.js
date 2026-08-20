@@ -153,38 +153,21 @@ router.get('/counterparties', async (req, res) => {
     }
 });
 
-// ПОЛУЧЕНИЕ КОНТАКТОВ
 router.get('/entity_contacts', async (req, res) => {
     try {
-        let { entity_type, entity_id } = req.query;
+        const { entity_type, entity_id } = req.query;
 
         if (!entity_id) {
             return res.json([]);
         }
 
-        let query = '';
-        let params = [];
-
-        // Если тип нормальный (не пустой и не заглушка) — ищем строго по паре
-        if (entity_type && entity_type !== 'undefined' && entity_type !== 'entity_contacts' && entity_type !== 'null') {
-            query = `
-                SELECT * FROM entity_contacts 
-                WHERE entity_type = $1 AND entity_id = $2 
-                ORDER BY id ASC
-            `;
-            params = [entity_type, entity_id];
-        } else {
-            // Если фронтенд прислал мусор или заглушку — ищем по ID и дополнительно 
-            // проверяем, чтобы не отдавать чужое, либо отдаем по ID (для совместимости)
-            query = `
-                SELECT * FROM entity_contacts 
-                WHERE entity_id = $1 
-                ORDER BY id ASC
-            `;
-            params = [entity_id];
-        }
-
-        const result = await pool.query(query, params);
+        const query = `
+            SELECT * FROM entity_contacts 
+            WHERE entity_type = $1 AND entity_id = $2 
+            ORDER BY id ASC
+        `;
+        
+        const result = await pool.query(query, [entity_type, entity_id]);
         res.json(result.rows);
     } catch (err) {
         console.error('❌ Ошибка в /api/entity_contacts:', err.message);
