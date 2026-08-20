@@ -2347,7 +2347,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2981,8 +2980,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
-
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
@@ -3240,7 +3237,6 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {

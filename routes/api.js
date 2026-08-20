@@ -135,56 +135,66 @@ module.exports = (pool) => {
         }
     });
 
-
-// ПОЛУЧЕНИЕ СПИСКА КОНТРАГЕНТОВ (с JOIN для получения названия типа)
-router.get('/counterparties', async (req, res) => {
-    try {
-        const query = `
-            SELECT c.*, ct.name AS counterparty_type_name 
-            FROM counterparties c
-            LEFT JOIN counterparty_types ct ON c.counterparty_type_id = ct.id
-            ORDER BY c.id ASC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении контрагентов');
-    }
-});
-
-
 // ==========================================
-// API ДЛЯ КОНТАКТОВ КОНТРАГЕНТОВ (counterparty_contacts)
+// API ДЛЯ КОНТАКТОВ (С ЛОГИРОВАНИЕМ)
 // ==========================================
+
 // Для поставщиков
 router.get('/postavhik_contacts', async (req, res) => {
+    console.log('📥 [GET /postavhik_contacts] Query params:', req.query);
     const { parent_id } = req.query;
     try {
         const id = parent_id || req.query.postavhik_id;
+        console.log('🔍 Искомый postavhik_id:', id);
+        
         const result = await pool.query(
             `SELECT * FROM postavhik_contacts WHERE postavhik_id = $1 ORDER BY id DESC`,
             [id]
         );
+        console.log(`✅ Найдено строк: ${result.rows.length}`);
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error('❌ Ошибка в /postavhik_contacts:', err);
         res.status(500).json({ error: 'Ошибка получения контактов поставщика' });
+    }
+});
+
+// Для контрагентов
+router.get('/counterparty_contacts', async (req, res) => {
+    console.log('📥 [GET /counterparty_contacts] Query params:', req.query);
+    const { parent_id } = req.query;
+    try {
+        const id = parent_id || req.query.counterparty_id;
+        console.log('🔍 Искомый counterparty_id:', id);
+        
+        const result = await pool.query(
+            `SELECT * FROM counterparty_contacts WHERE counterparty_id = $1 ORDER BY id DESC`,
+            [id]
+        );
+        console.log(`✅ Найдено строк: ${result.rows.length}`);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка в /counterparty_contacts:', err);
+        res.status(500).json({ error: 'Ошибка получения контактов контрагента' });
     }
 });
 
 // Для покупателей/клиентов
 router.get('/customer_contacts', async (req, res) => {
+    console.log('📥 [GET /customer_contacts] Query params:', req.query);
     const { parent_id } = req.query;
     try {
         const id = parent_id || req.query.customer_id;
+        console.log('🔍 Искомый customer_id:', id);
+        
         const result = await pool.query(
             `SELECT * FROM customer_contacts WHERE customer_id = $1 ORDER BY id DESC`,
             [id]
         );
+        console.log(`✅ Найдено строк: ${result.rows.length}`);
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error('❌ Ошибка в /customer_contacts:', err);
         res.status(500).json({ error: 'Ошибка получения контактов клиента' });
     }
 });
