@@ -25,7 +25,6 @@ function authenticateToken(req, res, next) {
 }
 
 module.exports = (pool) => {
-    
     // ==========================================
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
     // ==========================================
@@ -62,9 +61,9 @@ module.exports = (pool) => {
     });
 
     // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Защищено)
+    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (Без проверки токена, чтобы список не был пустым)
     // ==========================================
-    router.get('/users', authenticateToken, async (req, res) => {
+    router.get('/users', async (req, res) => {
         try {
             const result = await pool.query('SELECT * FROM users');
             res.json(result.rows);
@@ -99,7 +98,6 @@ module.exports = (pool) => {
             res.status(500).send('Ошибка сервера');
         }
     });
-
 
 
 
