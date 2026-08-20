@@ -13,7 +13,7 @@ const referenceDataCache = {};
 async function fetchReferenceData(refEntity) {
     if (!refEntity) return [];
     
-    // Достаем тот самый токен, который записался при входе
+    // Достаем токен авторизации из памяти браузера
     const token = localStorage.getItem('token');
     
     try {
@@ -21,14 +21,14 @@ async function fetchReferenceData(refEntity) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                // Передаем токен в заголовке, чтобы сервер точно знал, что вы авторизованы
-                'Authorization': token ? `Bearer ${token}` : '' 
+                // Передаем токен в заголовке авторизации
+                'Authorization': token ? `Bearer ${token}` : ''
             }
         });
         
         if (response.ok) {
             const data = await response.json();
-            return data; // Свежие данные с бэкенда!
+            return data;
         } else {
             console.warn(`Справочник ${refEntity} вернул статус:`, response.status);
         }
@@ -37,7 +37,6 @@ async function fetchReferenceData(refEntity) {
     }
     return [];
 }
-
 
 // 1. Конфигурация колонок и шаблонов строк для всех таблиц
 const tableConfig = {
