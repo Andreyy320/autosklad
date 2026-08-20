@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 module.exports = (pool) => {
     
     // ==========================================
-    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ (Без токенов)
+    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
     // ==========================================
     router.post('/login', async (req, res) => {
         const { login, password } = req.body;
@@ -21,33 +21,42 @@ module.exports = (pool) => {
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                 if (match) {
-                    // Больше никаких токенов, просто возвращаем успех
+                    console.log('Успешный вход для:', login);
                     return res.json({ success: true, user: user });
                 } else {
+                    console.log('Неверный пароль для:', login);
                     return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
                 }
             } else {
+                console.log('Пользователь не найден:', login);
                 return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
             }
         } catch (err) {
-            console.error('Ошибка сервера:', err.message);
+            console.error('Ошибка сервера при логине:', err.message);
             return res.status(500).send('Ошибка сервера');
         }
     });
 
     // ==========================================
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
+    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
     // ==========================================
-   router.get('/users', async (req, res) => {
-    console.log('>>> Сработал запрос на /users. Headers:', req.headers); // <-- Посмотрим, что приходит
-    try {
-        const result = await pool.query('SELECT * FROM users');
-        res.json(result.rows);
-    } catch (err) {
-        console.error('>>> Ошибка в /users:', err.message);
-        res.status(500).send(err.message);
-    }
-});
+    router.get('/users', async (req, res) => {
+        console.log('----------------------------------------');
+        console.log('>>> [API] Сработал запрос на GET /users');
+        console.log('>>> Headers от клиента:', req.headers);
+        console.log('----------------------------------------');
+        
+        try {
+            const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
+            console.log(`>>> [API] Успешно получено пользователей из БД: ${result.rows.length}`);
+            return res.json(result.rows);
+        } catch (err) {
+            console.error('>>> [API ОШИБКА] в /users:', err.message);
+            return res.status(500).send(err.message);
+        }
+    });
+
+
 
     // ==========================================
     // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
