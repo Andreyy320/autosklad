@@ -23,11 +23,9 @@ const pool = new Pool({
     user: 'postgres',
     host: 'localhost',
     database: 'autosklad',
-    password: '1',
     port: 5432,
 });
 
-// Подключаем наш отдельный файл с API
 const apiRoutes = require('./routes/api')(pool);
 app.use('/api', apiRoutes); // Теперь все запросы будут идти через /api/users, /api/parts и т.д.
 
