@@ -1513,7 +1513,6 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1859,13 +1858,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.dtp_id = parentId;
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
             data.repair_id = parentId;
-        } else if (entity === 'entity_contacts' && parentId) {
-            data.entity_id = parentId; // Автоматически проставляем ID родительской сущности для контакта
-            if (!data.entity_type) {
-                data.entity_type = entity;
+        } else if (entity === 'entity_contacts') {
+            // Безопасно определяем ID и реальный тип родителя
+            if (parentId && typeof parentId === 'object') {
+                data.entity_id = parentId.entity_id || parentId.id;
+                data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
+            } else if (parentId) {
+                data.entity_id = parentId;
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+            }
+            
+            // Защита от мусора
+            if (!data.entity_type || data.entity_type === 'entity_contacts') {
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
             }
         }
-
 
         try {
             const isEdit = item && item.id;
@@ -1882,7 +1889,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 },
                 body: JSON.stringify(data)
             });
-
 
             if (response.ok) {
                 closeDrawer();
@@ -1907,7 +1913,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 async function deleteSelectedEntity() {
     if (!selectedItem) {
@@ -3367,6 +3372,9 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
+
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
