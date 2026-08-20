@@ -2305,7 +2305,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2338,6 +2337,7 @@ async function loadData(entity, title) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
+        // Убрали поставщиков/контрагентов/покупателей из скрытия, теперь кнопки для них будут активны
         if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
@@ -2353,13 +2353,12 @@ async function loadData(entity, title) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        // Добавили наши новые разделы в условие отображения нижней панели (детализации)
         if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                // Для контактов тулбар внизу можно скрыть или оставить (скрываем, так как там своя логика)
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+                // Для поставщиков/контрагентов/покупателей тулбар деталей оставляем видимым, скрываем только для безкнопочных отчетов
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -2487,7 +2486,6 @@ async function loadData(entity, title) {
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
                 } else if (entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
-                    // При клике на строку в этих разделах подгружаем контакты в нижнюю таблицу
                     loadDetailData('entity_contacts', { entity_type: entity, entity_id: item.id });
                 }
             };
@@ -2586,7 +2584,6 @@ async function loadData(entity, title) {
                 
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    // Автоматически загружаем контакты для первой строки при открытии раздела
                     loadDetailData('entity_contacts', { entity_type: entity, entity_id: currentItems[0].id });
                 } else {
                     emptyDetailBody();
@@ -2611,7 +2608,6 @@ async function loadData(entity, title) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 function emptyDetailBody() {
     const detailBody = document.getElementById('detail-body');
     if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
