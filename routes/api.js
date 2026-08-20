@@ -58,6 +58,26 @@ module.exports = (pool) => {
 
 
 
+// ==========================================
+    // ПОЛУЧЕНИЕ СПИСКА МОЛ (mol_users)
+    // ==========================================
+    router.get('/mol_users', async (req, res) => {
+        console.log('----------------------------------------');
+        console.log('>>> [API] Сработал запрос на GET /mol_users');
+        console.log('----------------------------------------');
+        
+        try {
+            const result = await pool.query('SELECT * FROM mol_users ORDER BY id ASC');
+            console.log(`>>> [API] Успешно получено записей mol_users: ${result.rows.length}`);
+            return res.json(result.rows);
+        } catch (err) {
+            console.error('>>> [API ОШИБКА] в /mol_users:', err.message);
+            return res.status(500).send(err.message);
+        }
+    });
+
+
+
     // ==========================================
     // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
     // ==========================================
@@ -324,22 +344,28 @@ router.get('/repair_types', async (req, res) => {
 
 
 
-
-// ПОЛУЧЕНИЕ СПИСКА МОЛ (с JOIN для пользователей и складов)
+// ==========================================
+// ПОЛУЧЕНИЕ СПИСКА МОЛ (с JOIN для mol_users и складов)
+// ==========================================
 router.get('/mol', async (req, res) => {
+    console.log('----------------------------------------');
+    console.log('>>> [API] Сработал запрос на GET /mol');
+    console.log('----------------------------------------');
+    
     try {
         const query = `
-            SELECT m.*, u.name AS user_fio, s.name AS warehouse_name 
+            SELECT m.*, mu.name AS user_fio, s.name AS warehouse_name 
             FROM mol m
-            LEFT JOIN users u ON m.user_id = u.id
+            LEFT JOIN mol_users mu ON m.user_id = mu.id
             LEFT JOIN skladi s ON m.warehouse_id = s.id
             ORDER BY m.id ASC
         `;
         const result = await pool.query(query);
-        res.json(result.rows);
+        console.log(`>>> [API] Успешно получено записей МОЛ: ${result.rows.length}`);
+        return res.json(result.rows);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении списка МОЛ');
+        console.error('>>> [API ОШИБКА] в /mol:', err.message);
+        return res.status(500).send('Ошибка при получении списка МОЛ');
     }
 });
 
@@ -1974,7 +2000,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2314,7 +2340,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2548,7 +2574,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {

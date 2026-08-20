@@ -257,10 +257,10 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
-    mol: {
+   mol: {
         title: 'МОЛ',
         columns: [
-            { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'users' },
+            { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
             { field: 'warehouse_id', label: 'Склад', ref: 'skladi' },
             { field: 'date_assigned', label: 'Дата назнач.', type: 'datetime-local', width: '160px' },
             { field: 'date_removed', label: 'Дата снятия', type: 'datetime-local', width: '160px' },
