@@ -158,25 +158,25 @@ router.get('/entity_contacts', async (req, res) => {
     try {
         const { entity_type, entity_id } = req.query;
 
-        // Валидация: если ID не передан, нельзя искать
+        // Если вообще не передали ID — возвращаем пустой массив вместо ошибки, 
+        // чтобы интерфейс не ломался
         if (!entity_id) {
-            return res.status(400).json({ error: "Не указан entity_id" });
+            return res.json([]);
         }
 
-        // Если entity_type не передан, ищем только по entity_id (защита от пустых результатов)
-        // Если передан - ищем строго по паре
         let query = '';
         let params = [];
 
-        if (entity_type && entity_type !== 'undefined' && entity_type !== '') {
+        // Если тип указан и это не дефолтный мусор вроде "entity_contacts", ищем по паре
+        if (entity_type && entity_type !== 'entity_contacts' && entity_type !== 'undefined' && entity_type !== '') {
             query = `
                 SELECT * FROM entity_contacts 
-                WHERE entity_type = $1 AND entity_id = $2 
+                WHERE (entity_type = $1 OR entity_type = 'entity_contacts') AND entity_id = $2 
                 ORDER BY id ASC
             `;
             params = [entity_type, entity_id];
         } else {
-            // Резервный вариант, если фронтенд пока не прокинул тип
+            // Если типа нет или там старый мусор — ищем просто по ID записи
             query = `
                 SELECT * FROM entity_contacts 
                 WHERE entity_id = $1 
