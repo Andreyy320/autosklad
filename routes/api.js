@@ -1035,6 +1035,8 @@ router.get('/repairs', async (req, res) => {
     }
 });
 
+
+
 router.get('/repair_items', async (req, res) => {
     try {
         const { repair_id } = req.query;
@@ -1074,6 +1076,9 @@ router.get('/repair_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+
+
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
@@ -1588,6 +1593,9 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+
 // ==================== ДЕТАЛЬНОЕ ДВИЖЕНИЕ КОНКРЕТНОЙ ЗАПЧАСТИ ====================
 router.get('/part_movement_details', async (req, res) => {
     try {
@@ -1974,8 +1982,6 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
-
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
 
 router.post('/:entity', async (req, res) => {
@@ -2030,7 +2036,7 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ, FIFO И receipt_id) ---
+        // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ РЕМОНТА, FIFO И receipt_id) ---
         if (entity === 'repair_items') {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
@@ -2039,34 +2045,44 @@ router.post('/:entity', async (req, res) => {
             console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
             
             if (repair_id) {
-                const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
+                const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
+                    const warehouseId = repairCheck.rows[0].warehouse_id;
+
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
                         console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                     }
+
+                    // Если у ремонта указан склад, проверяем остаток строго на нем
+                    if (warehouseId) {
+                        const balanceQuery = `
+                            SELECT 
+                                (
+                                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
+                                    COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
+                                ) - 
+                                (
+                                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2), 0) +
+                                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
+                                ) 
+                            AS available_qty
+                        `;
+                        
+                        const balanceRes = await pool.query(balanceQuery, [zaphast_id, warehouseId]);
+                        const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
+
+                        console.log(`[STOCK DEBUG] Склад ремонта ID=${warehouseId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+
+                        if (requestedQty > availableStock) {
+                            console.log(`[ERROR] Недостаточно остатка на складе ремонта! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
+                            return res.status(400).json({ 
+                                error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
+                            });
+                        }
+                    }
                 }
-            }
-
-            // Проверка остатков: считаем приход (из receipt_items по zaphasti_id)
-            const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-            const stockResult = await pool.query(stockQuery, [zaphast_id]);
-            const totalIn = Number(stockResult.rows[0].total_in);
-
-            // Считаем уже списанное в ремонты (из repair_items по zaphast_id)
-            const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1`;
-            const spentResult = await pool.query(spentQuery, [zaphast_id]);
-            const totalSpent = Number(spentResult.rows[0].total_spent);
-
-            const availableStock = totalIn - totalSpent;
-            console.log(`[STOCK DEBUG] Всего пришло: ${totalIn}, уже списано в ремонты: ${totalSpent}, доступно: ${availableStock}`);
-
-            if (requestedQty > availableStock) {
-                console.log(`[ERROR] Недостаточно остатка! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
-                return res.status(400).json({ 
-                    error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
-                });
             }
 
             // Автоматический поиск документа прихода (FIFO), если receipt_id не передан
@@ -2318,7 +2334,6 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-
 // ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 
 router.put('/:entity/:id', async (req, res) => {
