@@ -155,7 +155,7 @@ router.get('/counterparties', async (req, res) => {
 
 
 // ПОЛУЧЕНИЕ КОНТАКТОВ для конкретной записи (поставщика, покупателя или контрагента)
-router.get('/entity-contacts', async (req, res) => {
+router.get('/entity_contacts', async (req, res) => {
     try {
         const { entity_type, entity_id } = req.query;
         const query = `
