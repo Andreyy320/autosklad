@@ -41,6 +41,19 @@ module.exports = (pool) => {
     });
 
 
+
+
+    // Получение списка контрагентов
+router.get('/counterparties', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM counterparties ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения контрагентов:', err);
+        res.status(500).json({ error: 'Ошибка сервера при получении контрагентов' });
+    }
+});
+
     // ПОЛУЧЕНИЕ СПИСКА МОЛ (mol_users)
     router.get('/mol_users', async (req, res) => {
         
