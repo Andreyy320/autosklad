@@ -38,14 +38,16 @@ module.exports = (pool) => {
     // ==========================================
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
     // ==========================================
-    router.get('/users', async (req, res) => {
-        try {
-            const result = await pool.query('SELECT * FROM users');
-            res.json(result.rows);
-        } catch (err) {
-            res.status(500).send(err.message);
-        }
-    });
+   router.get('/users', async (req, res) => {
+    console.log('>>> Сработал запрос на /users. Headers:', req.headers); // <-- Посмотрим, что приходит
+    try {
+        const result = await pool.query('SELECT * FROM users');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('>>> Ошибка в /users:', err.message);
+        res.status(500).send(err.message);
+    }
+});
 
     // ==========================================
     // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
