@@ -3170,8 +3170,7 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}
-async function loadDetailData(entity, parentId) {
+}async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3227,8 +3226,13 @@ async function loadDetailData(entity, parentId) {
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'entity_contacts') {
-        let eType = parentId && typeof parentId === 'object' ? parentId.entity_type : '';
-        let eId = parentId && typeof parentId === 'object' ? parentId.entity_id : parentId;
+        let eType = 'entity_contacts';
+        let eId = parentId;
+        
+        if (parentId && typeof parentId === 'object') {
+            eType = parentId.entity_type || 'entity_contacts';
+            eId = parentId.entity_id || parentId.id;
+        }
         fetchUrl = `/api/entity_contacts?entity_type=${eType}&entity_id=${eId}`;
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
         queryParamName = 'car_id';
@@ -3360,7 +3364,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
