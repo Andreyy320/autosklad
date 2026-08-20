@@ -1965,7 +1965,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 }
 
 
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -1996,6 +1995,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
+
 function logout() {
     location.reload();
 }
