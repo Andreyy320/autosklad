@@ -1992,7 +1992,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users'
+            'repair_items', 'repair_works','mol_users','entity_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2310,7 +2310,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users'
+            'repair_items', 'repair_works','mol_users','entity_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2539,7 +2539,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users'
+            'repair_items', 'repair_works','mol_users','entity_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {

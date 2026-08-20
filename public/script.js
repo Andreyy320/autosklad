@@ -2023,8 +2023,6 @@ async function refreshData() {
     }
 }
 
-
-
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -2051,7 +2049,7 @@ function showAppNotification(message, type = 'info') {
     `;
     toast.innerText = message;
     container.appendChild(toast);
-x``
+
     setTimeout(() => toast.style.opacity = '1', 10);
     setTimeout(() => {
         toast.style.opacity = '0';
