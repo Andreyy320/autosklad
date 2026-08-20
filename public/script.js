@@ -3170,7 +3170,10 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+
+
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3226,11 +3229,11 @@ function switchRepairTab(tabName, btnElement) {
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'entity_contacts') {
-        let eType = 'entity_contacts';
+        let eType = window.currentEntity || window.activeEntity || 'customers';
         let eId = parentId;
         
         if (parentId && typeof parentId === 'object') {
-            eType = parentId.entity_type || 'entity_contacts';
+            eType = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
             eId = parentId.entity_id || parentId.id;
         }
         fetchUrl = `/api/entity_contacts?entity_type=${eType}&entity_id=${eId}`;
@@ -3364,7 +3367,6 @@ function switchRepairTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
