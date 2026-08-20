@@ -1,0 +1,418 @@
+/* ========================================================================== */
+/* ПРОФЕССИОНАЛЬНЫЙ ERP СТИЛЬ (ЧЕТКИЙ И СТРОГИЙ ДИЗАЙН БЕЗ ЖИРНОГО ШРИФТА)      */
+/* ========================================================================== */
+
+:root {
+    --primary: #2563eb;         /* Фирменный синий акцент */
+    --primary-hover: #1d4ed8;
+    --bg-app: #f1f5f9;          /* Мягкий серый фон приложения */
+    --bg-card: #ffffff;
+    --border: #b0bec5;          /* Четкие внешние границы */
+    --border-light: #e0e0e0;    /* Тонкие линии сетки ячеек */
+    --text-main: #212121;       /* Стандартный текст данных (обычный вес) */
+    --text-header: #37474f;     /* Цвет текста в шапке */
+    --accent-light: #e3f2fd;    /* Подсветка выбранной строки */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Tahoma, sans-serif;
+    font-size: 12px;
+    color: var(--text-main);
+    font-weight: 400;           /* ВЕЗДЕ ПО УМОЛЧАНИЮ ОБЫЧНЫЙ ВЕС ТЕКСТА */
+}
+
+body, html {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--bg-app);
+}
+
+/* --- ЭКРАН АВТОРИЗАЦИИ --- */
+#login-screen {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #e2e8f0;
+}
+
+.login-window {
+    background: var(--bg-card);
+    padding: 24px;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    width: 340px;
+    border: 1px solid var(--border);
+}
+
+.login-window h3 {
+    margin-bottom: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.login-window label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: var(--text-header);
+}
+
+.login-window input {
+    width: 100%;
+    padding: 6px 8px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 12px;
+    background: #ffffff;
+}
+
+.login-window input:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.login-window button {
+    width: 100%;
+    padding: 7px;
+    background: var(--primary);
+    border: none;
+    color: white;
+    font-weight: 600;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.login-window button:hover {
+    background: var(--primary-hover);
+}
+
+.error {
+    color: #d32f2f;
+    margin-bottom: 8px;
+    font-size: 11px;
+    text-align: center;
+    background: #ffebee;
+    padding: 4px;
+    border-radius: 3px;
+    border: 1px solid #ffcdd2;
+}
+
+/* --- ГЛАВНОЕ ОКНО ПРИЛОЖЕНИЯ --- */
+#app-screen {
+    width: 100%;
+    height: calc(100vh - 24px);
+    display: flex;
+    flex-direction: column;
+}
+
+.main-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* --- ЛЕВОЕ МЕНЮ (САЙДБАР) С ПОЛНЫМ СКРОЛЛОМ --- */
+.sidebar {
+    width: 220px;
+    background: #ffffff;
+    overflow-y: auto;           /* Вертикальный скролл для длинного меню */
+    overflow-x: hidden;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+}
+
+.accordion-header {
+    padding: 6px 10px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-weight: 600;           /* Заголовки аккордеона остаются аккуратно полужирными */
+    border-bottom: 1px solid var(--border-light);
+    user-select: none;
+    display: flex;
+    align-items: center;
+}
+
+.accordion-header:hover {
+    background: #eeeeee;
+}
+
+.accordion-header span {
+    color: var(--text-header);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+
+.accordion-content {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+}
+
+.nav-link {
+    padding: 5px 10px 5px 16px;
+    color: #455a64;
+    text-decoration: none;
+    display: block;
+    font-size: 12px;
+    border-bottom: 1px solid #f9f9f9;
+    border-left: 3px solid transparent;
+}
+
+.nav-link:hover {
+    color: var(--primary);
+    background: #f5f5f5;
+}
+
+.nav-link.active {
+    background: #e3f2fd;
+    color: var(--primary);
+    font-weight: 600;           /* Активная ссылка в меню подсвечена полужирным для акцента */
+    border-left-color: var(--primary);
+}
+
+/* --- ПРАВАЯ РАБОЧАЯ ОБЛАСТЬ --- */
+.content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-card);
+}
+
+/* Верхняя панель инструментов */
+.toolbar {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.tool-btn {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-main);
+    transition: all 0.15s ease;
+}
+
+.tool-btn:hover {
+    background: #f5f5f5;
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.separator {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    margin: 0 3px;
+}
+
+/* Панели фильтров */
+#parts-filter-panel, #movement-filter-panel {
+    background: #fafafa !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 4px 8px !important;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+#parts-filter-panel input, #parts-filter-panel select,
+#movement-filter-panel input, #movement-filter-panel select {
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 11px;
+    background: #ffffff;
+}
+
+/* --- ВЕРХНЯЯ ТАБЛИЦА (С ДВОЙНЫМ СКРОЛЛОМ: ВЕРТИКАЛЬ И ГОРИЗОНТАЛЬ) --- */
+.content-area > div[style*="overflow-y: auto"] {
+    flex: 1;
+    width: 100%;
+    overflow-y: auto;           /* Вертикальная прокрутка списка */
+    overflow-x: auto;           /* Горизонтальная прокрутка при большом числе колонок */
+    background: #ffffff;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    table-layout: auto;
+}
+
+th {
+    background: #eceff1;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    font-weight: 600;           /* ШАПКА ТАБЛИЦЫ СТРОГО ПОЛУЖИРНАЯ */
+    color: var(--text-header);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    text-align: left;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+td {
+    padding: 4px 8px;           /* КОМПАКТНЫЕ И АККУРАТНЫЕ ЯЧЕЙКИ */
+    border-bottom: 1px solid var(--border-light);
+    border-right: 1px solid var(--border-light);
+    border-left: 1px solid var(--border-light);
+    color: var(--text-main);
+    font-size: 12px;
+    background-color: #ffffff;
+    font-weight: 400;           /* ОБЫЧНЫЙ ТЕКСТ БЕЗ ЖИРНОСТИ */
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Зебра строк (четные строки чуть светлее для читаемости) */
+tr:nth-child(even) td {
+    background-color: #fafafa;
+}
+
+tr:hover td {
+    background-color: #f1f5f9 !important;
+}
+
+/* Выделенная активная строка */
+tr.selected td, 
+tr[aria-selected="true"] td,
+#data-table tbody tr:active td,
+#table-body tr td:focus {
+    background-color: var(--accent-light) !important;
+    color: #1565c0 !important;
+    border-color: #90caf9 !important;
+    font-weight: 500;           /* Слегка выделяем только активную строку */
+}
+
+tr.selected-row {
+    background-color: #cfe2ff !important; /* Насыщенный голубой цвет */
+    outline: 2px solid #0d6efd !important; /* Аккуратная рамка вокруг всей строки */
+}
+
+/* --- НИЖНЯЯ ПАНЕЛЬ И ДЕТАЛИЗАЦИЯ (СВЕРХУ ВКЛАДКИ, ВНИЗУ ТАБЛИЦА СО СКРОЛЛОМ) --- */
+#detail-container {
+    width: 100%;
+    max-height: 38%;
+    border-top: 1px solid var(--border);
+    background: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* Блок контейнера таблицы деталей со скроллами в обе стороны */
+#detail-container div[style*="flex: 1"] {
+    flex: 1;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+}
+
+.car-tabs-bar {
+    display: flex;
+    background: #eceff1;
+    padding: 4px 6px 0 6px;
+    border-bottom: 1px solid var(--border);
+    gap: 2px;
+    overflow-x: auto;           /* Горизонтальный скролл для вкладок, если их станет слишком много */
+    flex-shrink: 0;
+}
+
+.car-tab-btn, 
+.accident-tab-btn, 
+.repair-tab-btn {
+    background: #cfd8dc;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #37474f;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.car-tab-btn:hover, 
+.accident-tab-btn:hover, 
+.repair-tab-btn:hover {
+    background: #e0e0e0;
+}
+
+.car-tab-btn.active, 
+.accident-tab-btn.active, 
+.repair-tab-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    font-weight: 600;
+    border-color: var(--border);
+    border-bottom: 2px solid #ffffff;
+    position: relative;
+    top: 1px;
+}
+
+#detail-toolbar {
+    background: #ffffff !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 3px 8px !important;
+    flex-shrink: 0;
+}
+
+/* --- БОКОВАЯ ПАНЕЛЬ ФОРМЫ (DRAWER) С УДОБНЫМ СКРОЛЛОМ --- */
+#entity-drawer {
+    overflow-y: auto !important;  /* Жестко гарантируем вертикальный скролл для полей ввода */
+    overflow-x: hidden;
+}
+
+/* --- СТАТУСНАЯ СТРОКА СНИЗУ --- */
+.status-bar {
+    height: 22px;
+    background: #eceff1;
+    color: #455a64;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 10px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+    border-top: 1px solid var(--border);
+}
+
+.status-bar span {
+    color: #455a64;
+    font-size: 10px;
+}
