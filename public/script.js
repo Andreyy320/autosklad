@@ -1963,6 +1963,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+
+
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -1978,7 +1981,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         const result = await response.json();
 
         if (response.ok && result.success) {
-            // ЗАПОМИНАЕМ В ПАМЯТИ БРАУЗЕРА, ЧТО МЫ АВТОРИЗОВАНЫ
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
 
