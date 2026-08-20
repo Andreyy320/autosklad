@@ -41,23 +41,6 @@ module.exports = (pool) => {
     });
 
 
-// Получение списка контрагентов с их типами
-router.get('/counterparties', async (req, res) => {
-    try {
-        const query = `
-            SELECT c.*, t.name AS counterparty_type_name 
-            FROM counterparties c
-            LEFT JOIN counterparty_types t ON c.counterparty_type_id = t.id
-            ORDER BY c.id DESC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('❌ Ошибка получения контрагентов:', err);
-        res.status(500).json({ error: 'Ошибка сервера при получении контрагентов' });
-    }
-});
-
     // ПОЛУЧЕНИЕ СПИСКА МОЛ (mol_users)
     router.get('/mol_users', async (req, res) => {
         
@@ -152,85 +135,43 @@ router.get('/counterparties', async (req, res) => {
         }
     });
 
-// ==========================================
-// API ДЛЯ КОНТАКТОВ (С ЛОГИРОВАНИЕМ)
-// ==========================================
 
-// Для поставщиков
-router.get('/postavhik_contacts', async (req, res) => {
-    console.log('📥 [GET /postavhik_contacts] Query params:', req.query);
-    const { parent_id } = req.query;
+// ПОЛУЧЕНИЕ СПИСКА КОНТРАГЕНТОВ (с JOIN для получения названия типа)
+router.get('/counterparties', async (req, res) => {
     try {
-        const id = parent_id || req.query.postavhik_id;
-        console.log('🔍 Искомый postavhik_id:', id);
-        
-        const result = await pool.query(
-            `SELECT * FROM postavhik_contacts WHERE postavhik_id = $1 ORDER BY id DESC`,
-            [id]
-        );
-        console.log(`✅ Найдено строк: ${result.rows.length}`);
+        const query = `
+            SELECT c.*, ct.name AS counterparty_type_name 
+            FROM counterparties c
+            LEFT JOIN counterparty_types ct ON c.counterparty_type_id = ct.id
+            ORDER BY c.id ASC
+        `;
+        const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка в /postavhik_contacts:', err);
-        res.status(500).json({ error: 'Ошибка получения контактов поставщика' });
-    }
-});
-router.post('/counterparty_contacts', async (req, res) => {
-    try {
-        // Проверяем все возможные наименования ID
-        const counterparty_id = req.body.counterparty_id || req.body.parent_id || req.body.entity_id;
-
-        if (!counterparty_id) {
-            return res.status(400).json({ 
-                error: 'Не передан ID контрагента (counterparty_id)' 
-            });
-        }
-
-        const { contact_person, phone, email, position, note } = req.body;
-
-        const result = await pool.query(
-            `INSERT INTO counterparty_contacts 
-                (counterparty_id, contact_person, phone, email, position, note) 
-             VALUES ($1, $2, $3, $4, $5, $6) 
-             RETURNING *`,
-            [
-                counterparty_id, 
-                contact_person || '', 
-                phone || '', 
-                email || '', 
-                position || '', 
-                note || ''
-            ]
-        );
-
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('❌ Ошибка сохранения контакта:', err);
-        res.status(500).json({ error: err.message });
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контрагентов');
     }
 });
 
-// Для покупателей/клиентов
-router.get('/customer_contacts', async (req, res) => {
-    console.log('📥 [GET /customer_contacts] Query params:', req.query);
-    const { parent_id } = req.query;
+
+
+
+// Роут получения поставщиков с JOIN
+router.get('/postavhik', async (req, res) => {
     try {
-        const id = parent_id || req.query.customer_id;
-        console.log('🔍 Искомый customer_id:', id);
-        
-        const result = await pool.query(
-            `SELECT * FROM customer_contacts WHERE customer_id = $1 ORDER BY id DESC`,
-            [id]
-        );
-        console.log(`✅ Найдено строк: ${result.rows.length}`);
+        const query = `
+            SELECT p.*, t.name AS type_name 
+            FROM postavhik p 
+            LEFT JOIN counterparty_types t ON p.type_id = t.id 
+            ORDER BY p.id ASC
+        `;
+        const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка в /customer_contacts:', err);
-        res.status(500).json({ error: 'Ошибка получения контактов клиента' });
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении поставщиков');
     }
 });
-
-
 
 // ПОЛУЧЕНИЕ СПИСКА ПОКУПАТЕЛЕЙ (из таблицы customers)
   router.get('/customers', async (req, res) => {
@@ -2012,6 +1953,7 @@ router.put('/moves/:id/post', async (req, res) => {
     }
 });
 
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST  ====================
 router.post('/:entity', async (req, res) => {
 
@@ -2032,19 +1974,11 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','entity_contacts','counterparty_contacts'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
             return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
-        }
-
-        // Автоматически проставляем entity_type для контактной информации, если он не передан
-        if (entity === 'entity_contacts' && !req.body.entity_type) {
-            // Если вы передаете базовую сущность в параметрах (например, со страницы контрагентов)
-            req.body.entity_type = req.query.source_entity || req.body.source_entity || entity;
-            // Если на клиенте в entity_type уже приходит нужное имя — оно останется, 
-            // а если пустое, подставится текущая сущность или параметр.
         }
 
         if (entity === 'repairs') {
@@ -2071,7 +2005,7 @@ router.post('/:entity', async (req, res) => {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
-                    
+                        
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
@@ -2098,6 +2032,7 @@ router.post('/:entity', async (req, res) => {
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphast_id, warehouseId]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
+
 
                         if (requestedQty > availableStock) {
                             return res.status(400).json({ 
@@ -2196,6 +2131,7 @@ router.post('/:entity', async (req, res) => {
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
+
             if (move_id) {
                 const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
                 if (moveCheck.rows.length > 0) {
@@ -2219,6 +2155,7 @@ router.post('/:entity', async (req, res) => {
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
+
 
                         if (requestedQty > availableStock) {
                             return res.status(400).json({ 
@@ -2334,6 +2271,7 @@ router.post('/:entity', async (req, res) => {
     }
 });
 
+
 // ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
@@ -2354,7 +2292,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','entity_contacts','counterparty_contacts'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2583,7 +2521,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','entity_contacts','counterparty_contacts'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
