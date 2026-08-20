@@ -41,12 +41,16 @@ module.exports = (pool) => {
     });
 
 
-
-
-    // Получение списка контрагентов
+// Получение списка контрагентов с их типами
 router.get('/counterparties', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM counterparties ORDER BY id DESC');
+        const query = `
+            SELECT c.*, t.name AS counterparty_type_name 
+            FROM counterparties c
+            LEFT JOIN counterparty_types t ON c.counterparty_type_id = t.id
+            ORDER BY c.id DESC
+        `;
+        const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
         console.error('❌ Ошибка получения контрагентов:', err);
