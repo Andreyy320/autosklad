@@ -140,20 +140,55 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
-
-entity_contacts: {
-        title: 'Контакты',
+customer_contacts: {
+        title: 'Контакты покупателей',
         columns: [
             { field: 'name', label: 'Имя', width: '180px' },
-            { field: 'position', label: 'Должность', width: '150px' },
             { field: 'phone', label: 'Телефон', width: '150px' },
+            { field: 'position', label: 'Должность', width: '150px' },
             { field: 'address', label: 'Адрес', width: '200px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
-            <td>${item.position || ''}</td>
             <td>${item.phone || ''}</td>
+            <td>${item.position || ''}</td>
+            <td>${item.address || ''}</td>
+            <td>${item.description || ''}</td>
+        `
+    },
+
+    postavhik_contacts: {
+        title: 'Контакты поставщиков',
+        columns: [
+            { field: 'name', label: 'Имя', width: '180px' },
+            { field: 'phone', label: 'Телефон', width: '150px' },
+            { field: 'position', label: 'Должность', width: '150px' },
+            { field: 'address', label: 'Адрес', width: '200px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.phone || ''}</td>
+            <td>${item.position || ''}</td>
+            <td>${item.address || ''}</td>
+            <td>${item.description || ''}</td>
+        `
+    },
+
+    counterparty_contacts: {
+        title: 'Контакты контрагентов',
+        columns: [
+            { field: 'name', label: 'Имя', width: '180px' },
+            { field: 'phone', label: 'Телефон', width: '150px' },
+            { field: 'position', label: 'Должность', width: '150px' },
+            { field: 'address', label: 'Адрес', width: '200px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.phone || ''}</td>
+            <td>${item.position || ''}</td>
             <td>${item.address || ''}</td>
             <td>${item.description || ''}</td>
         `
@@ -2312,6 +2347,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2344,7 +2380,6 @@ async function loadData(entity, title) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        // Убрали поставщиков/контрагентов/покупателей из скрытия, теперь кнопки для них будут активны
         if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
@@ -2364,7 +2399,6 @@ async function loadData(entity, title) {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                // Для поставщиков/контрагентов/покупателей тулбар деталей оставляем видимым, скрываем только для безкнопочных отчетов
                 if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
                     detailToolbar.style.display = 'none';
                 } else {
@@ -2492,8 +2526,12 @@ async function loadData(entity, title) {
                     loadDetailData('receipt_items', item.id);
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
-                } else if (entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
-                    loadDetailData('entity_contacts', { entity_type: entity, entity_id: item.id });
+                } else if (entity === 'postavhik') {
+                    loadDetailData('postavhik_contacts', item.id);
+                } else if (entity === 'counterparties') {
+                    loadDetailData('counterparty_contacts', item.id);
+                } else if (entity === 'customers') {
+                    loadDetailData('customer_contacts', item.id);
                 }
             };
 
@@ -2586,12 +2624,27 @@ async function loadData(entity, title) {
                 } else {
                     emptyDetailBody();
                 }
-            } else if (entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+            } else if (entity === 'postavhik') {
                 carTabsBar.style.display = 'none';
-                
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    loadDetailData('entity_contacts', { entity_type: entity, entity_id: currentItems[0].id });
+                    loadDetailData('postavhik_contacts', currentItems[0].id);
+                } else {
+                    emptyDetailBody();
+                }
+            } else if (entity === 'counterparties') {
+                carTabsBar.style.display = 'none';
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    loadDetailData('counterparty_contacts', currentItems[0].id);
+                } else {
+                    emptyDetailBody();
+                }
+            } else if (entity === 'customers') {
+                carTabsBar.style.display = 'none';
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    loadDetailData('customer_contacts', currentItems[0].id);
                 } else {
                     emptyDetailBody();
                 }
@@ -2615,6 +2668,8 @@ async function loadData(entity, title) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
+
+
 function emptyDetailBody() {
     const detailBody = document.getElementById('detail-body');
     if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
@@ -2665,7 +2720,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -2679,8 +2733,14 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'stock_movement') {
         return 'part_movement_details'; 
     }
-    if (currentEntity === 'postavhik' || currentEntity === 'counterparties' || currentEntity === 'customers') {
-        return 'entity_contacts'; 
+    if (currentEntity === 'postavhik') {
+        return 'postavhik_contacts'; 
+    }
+    if (currentEntity === 'counterparties') {
+        return 'counterparty_contacts'; 
+    }
+    if (currentEntity === 'customers') {
+        return 'customer_contacts'; 
     }
     if (currentEntity === 'accidents') {
         if (typeof currentAccidentSubTab !== 'undefined' && currentAccidentSubTab) return currentAccidentSubTab;
@@ -3030,8 +3090,12 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
-            } else if (currentEntity === 'postavhik' || currentEntity === 'counterparties' || currentEntity === 'customers') {
-                loadDetailData('entity_contacts', { entity_type: currentEntity, entity_id: selectedItem.id });
+            } else if (currentEntity === 'postavhik') {
+                loadDetailData('postavhik_contacts', selectedItem.id);
+            } else if (currentEntity === 'counterparties') {
+                loadDetailData('counterparty_contacts', selectedItem.id);
+            } else if (currentEntity === 'customers') {
+                loadDetailData('customer_contacts', selectedItem.id);
             }
         }
     }
@@ -3177,7 +3241,6 @@ function switchRepairTab(tabName, btnElement) {
     });
 }
 
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3233,15 +3296,12 @@ async function loadDetailData(entity, parentId) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'entity_contacts') {
-        let eType = window.currentEntity || window.activeEntity || 'customers';
-        let eId = parentId;
-        
-        if (parentId && typeof parentId === 'object') {
-            eType = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
-            eId = parentId.entity_id || parentId.id;
-        }
-        fetchUrl = `/api/entity_contacts?entity_type=${eType}&entity_id=${eId}`;
+    } else if (entity === 'postavhik_contacts') {
+        queryParamName = 'postavhik_id';
+    } else if (entity === 'counterparty_contacts') {
+        queryParamName = 'counterparty_id';
+    } else if (entity === 'customer_contacts') {
+        queryParamName = 'customer_id';
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
         queryParamName = 'car_id';
     }
@@ -3316,7 +3376,9 @@ async function loadDetailData(entity, parentId) {
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
             move_items: 'Спецификация перемещения',
-            entity_contacts: 'Контакты'
+            postavhik_contacts: 'Контакты поставщика',
+            counterparty_contacts: 'Контакты контрагента',
+            customer_contacts: 'Контакты клиента'
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
 
@@ -3334,8 +3396,8 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `Детальная история движения запчасти | Операций: ${items.length}`;
             } else if (entity === 'stock_balances') {
                 titleElement.innerText = `Остатки запчастей на складах | Позиций: ${items.length}`;
-            } else if (entity === 'entity_contacts') {
-                titleElement.innerText = `Контакты контрагента | Записей: ${items.length}`;
+            } else if (entity === 'postavhik_contacts' || entity === 'counterparty_contacts' || entity === 'customer_contacts') {
+                titleElement.innerText = `${prettyEntityName} | Записей: ${items.length}`;
             } else {
                 titleElement.innerText = `${prettyEntityName} (Документ №${parentId}) | Позиций: ${items.length}`;
             }
@@ -3372,8 +3434,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
@@ -3455,7 +3515,9 @@ const navMap = {
     'Пользователи2':'mol_users',
     'Движение запчастей':'stock_movement',
     'Детали двжиения': 'part_movement_details',
-    'Контактная информация':'entity_contacts'
+    'Контакты покупателей': 'customer_contacts',
+    'Контакты поставщиков': 'postavhik_contacts',
+    'Контакты контрагентов': 'counterparty_contacts'
 };
 
 function updateFilterPanels(entity) {
