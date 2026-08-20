@@ -153,46 +153,36 @@ router.get('/counterparties', async (req, res) => {
     }
 });
 
-// ПОЛУЧЕНИЕ КОНТАКТОВ
+// ПОЛУЧЕНИЕ КОНТАКТОВ ДЛЯ КОНКРЕТНОЙ ТАБЛИЦЫ И ЗАПИСИ
 router.get('/entity_contacts', async (req, res) => {
     try {
         const { entity_type, entity_id } = req.query;
 
-        // Если вообще не передали ID — возвращаем пустой массив вместо ошибки, 
-        // чтобы интерфейс не ломался
+        // Если не передан ID записи — возвращаем пустой массив
         if (!entity_id) {
             return res.json([]);
         }
 
-        let query = '';
-        let params = [];
-
-        // Если тип указан и это не дефолтный мусор вроде "entity_contacts", ищем по паре
-        if (entity_type && entity_type !== 'entity_contacts' && entity_type !== 'undefined' && entity_type !== '') {
-            query = `
-                SELECT * FROM entity_contacts 
-                WHERE (entity_type = $1 OR entity_type = 'entity_contacts') AND entity_id = $2 
-                ORDER BY id ASC
-            `;
-            params = [entity_type, entity_id];
-        } else {
-            // Если типа нет или там старый мусор — ищем просто по ID записи
-            query = `
-                SELECT * FROM entity_contacts 
-                WHERE entity_id = $1 
-                ORDER BY id ASC
-            `;
-            params = [entity_id];
+        // Если тип не указан или пустой, не отдаем чужие данные, возвращаем пустоту
+        if (!entity_type || entity_type === 'undefined' || entity_type === 'entity_contacts') {
+            console.warn(`⚠️ Запрос контактов без корректного entity_type (передано: ${entity_type}), ID: ${entity_id}`);
+            return res.json([]);
         }
 
-        const result = await pool.query(query, params);
+        // Строгий запрос: ТОЛЬКО точное совпадение таблицы и ID записи
+        const query = `
+            SELECT * FROM entity_contacts 
+            WHERE entity_type = $1 AND entity_id = $2 
+            ORDER BY id ASC
+        `;
+        
+        const result = await pool.query(query, [entity_type, entity_id]);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка в /api/entity_contacts:', err.message);
+        console.error('❌ Ошибка в /api/entity_contacts:', err.message);
         res.status(500).send('Ошибка при получении контактов');
     }
 });
-
 
 
 // Роут получения поставщиков с JOIN
