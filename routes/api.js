@@ -153,45 +153,43 @@ router.get('/counterparties', async (req, res) => {
     }
 });
 
-router.get('/entity_contacts', async (req, res) => {
+
+// ==========================================
+// API ДЛЯ КОНТАКТОВ КОНТРАГЕНТОВ (counterparty_contacts)
+// ==========================================
+// Для поставщиков
+router.get('/postavhik_contacts', async (req, res) => {
+    const { parent_id } = req.query;
     try {
-        const { entity_type, entity_id } = req.query;
-
-        if (!entity_id) {
-            return res.json([]);
-        }
-
-        const query = `
-            SELECT * FROM entity_contacts 
-            WHERE entity_type = $1 AND entity_id = $2 
-            ORDER BY id ASC
-        `;
-        
-        const result = await pool.query(query, [entity_type, entity_id]);
+        const id = parent_id || req.query.postavhik_id;
+        const result = await pool.query(
+            `SELECT * FROM postavhik_contacts WHERE postavhik_id = $1 ORDER BY id DESC`,
+            [id]
+        );
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка в /api/entity_contacts:', err.message);
-        res.status(500).send('Ошибка при получении контактов');
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка получения контактов поставщика' });
+    }
+});
+
+// Для покупателей/клиентов
+router.get('/customer_contacts', async (req, res) => {
+    const { parent_id } = req.query;
+    try {
+        const id = parent_id || req.query.customer_id;
+        const result = await pool.query(
+            `SELECT * FROM customer_contacts WHERE customer_id = $1 ORDER BY id DESC`,
+            [id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка получения контактов клиента' });
     }
 });
 
 
-// Роут получения поставщиков с JOIN
-router.get('/postavhik', async (req, res) => {
-    try {
-        const query = `
-            SELECT p.*, t.name AS type_name 
-            FROM postavhik p 
-            LEFT JOIN counterparty_types t ON p.type_id = t.id 
-            ORDER BY p.id ASC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении поставщиков');
-    }
-});
 
 // ПОЛУЧЕНИЕ СПИСКА ПОКУПАТЕЛЕЙ (из таблицы customers)
   router.get('/customers', async (req, res) => {
