@@ -13,7 +13,7 @@ const referenceDataCache = {};
 // Функция всегда берет актуальные данные с сервера в реальном времени без кэша
 async function fetchReferenceData(refEntity) {
     try {
-        const response = await fetch(`http://localhost:5000/api/${refEntity}`);
+        const response = await fetch(`/api/${refEntity}`);
         if (response.ok) {
             const data = await response.json();
             return data; // Всегда свежие данные с бэкенда!
@@ -1535,7 +1535,6 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 }
-
 // Открытие панели для создания новой или редактирования существующей записи
 async function openEntityForm(entity, item = null, parentId = null) {
     // ЛОГИРОВАНИЕ ДЛЯ ПРОВЕРКИ ПЕРЕКЛЮЧАТЕЛЯ И КНОПКИ ДОБАВЛЕНИЯ:
@@ -1579,8 +1578,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
         try {
-            console.log(`Запрос для автонумерации по адресу: http://localhost:5000/api/${entity}`);
-            const response = await fetch(`http://localhost:5000/api/${entity}`, {
+            console.log(`Запрос для автонумерации по адресу: /api/${entity}`);
+            const response = await fetch(`/api/${entity}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             console.log(`Ответ автонумерации для ${entity}: статус`, response.status);
@@ -1797,10 +1796,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
-                        fetch('http://localhost:5000/api/mol', {
+                        fetch('/api/mol', {
                             headers: { 'Authorization': `Bearer ${token}` }
                         }),
-                        fetch('http://localhost:5000/api/users', {
+                        fetch('/api/users', {
                             headers: { 'Authorization': `Bearer ${token}` }
                         })
                     ]);
@@ -1857,7 +1856,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 async () => {
                     console.log(`Удаление записи ${entity} с ID: ${item.id}`);
                     try {
-                        const response = await fetch(`http://localhost:5000/api/${entity}/${item.id}`, {
+                        const response = await fetch(`/api/${entity}/${item.id}`, {
                             method: 'DELETE',
                             headers: { 'Authorization': `Bearer ${token}` }
                         });
@@ -1921,8 +1920,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         try {
             const isEdit = item && item.id;
             const url = isEdit 
-                ? `http://localhost:5000/api/${entity}/${item.id}` 
-                : `http://localhost:5000/api/${entity}`;
+                ? `/api/${entity}/${item.id}` 
+                : `/api/${entity}`;
             
             const method = isEdit ? 'PUT' : 'POST';
             console.log(`Отправка запроса [${method}] на адрес: ${url}`);
@@ -1931,7 +1930,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 method: method,
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` // <--- Передаем токен для прохождения проверки verifyToken
+                    'Authorization': `Bearer ${token}` 
                 },
                 body: JSON.stringify(data)
             });
@@ -1961,52 +1960,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-// ==================== РЕДАКТИРОВАНИЕ ВЫБРАННОЙ СУЩНОСТИ ====================
-function editSelectedEntity() {
-    if (!selectedItem) {
-        // Используем красивое уведомление вместо стандартного alert
-        showAppNotification('Пожалуйста, выберите строку для изменения (кликните на строку в таблице).', 'warning');
-        return;
-    }
-    openEntityForm(currentEntity, selectedItem);
-}
-
-// ==================== УДАЛЕНИЕ ВЫБРАННОЙ СУЩНОСТИ ====================
-async function deleteSelectedEntity() {
-    if (!selectedItem) {
-        showAppNotification('Пожалуйста, выберите строку для удаления (кликните на строку в таблице).', 'warning');
-        return;
-    }
-
-    // Показываем красивое модальное окно подтверждения вместо стандартного confirm()
-    showConfirmModal(
-        'Подтверждение удаления', 
-        `Вы действительно хотите удалить запись с ID: ${selectedItem.id}?`, 
-        async () => {
-            try {
-                const response = await fetch(`http://localhost:5000/api/${currentEntity}/${selectedItem.id}`, {
-                    method: 'DELETE'
-                });
-
-                // Читаем JSON-ответ сервера при любом исходе
-                const resultData = await response.json().catch(() => ({}));
-
-                if (response.ok) {
-                    selectedItem = null;
-                    showAppNotification('Запись успешно удалена', 'success');
-                    refreshData();
-                } else {
-                    // Отображаем причину ошибки от бэкенда в красивом уведомлении
-                    showAppNotification(resultData.error || 'Ошибка при удалении записи', 'error');
-                }
-            } catch (err) {
-                console.error('Ошибка соединения:', err);
-                showAppNotification('Ошибка соединения с сервером', 'error');
-            }
-        }
-    );
-}
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -2014,7 +1967,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
     const errorDiv = document.getElementById('error-msg');
 
     try {
-        const response = await fetch('http://localhost:5000/api/login', {
+        const response = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ login, password })
@@ -2043,6 +1996,7 @@ function logout() {
     localStorage.removeItem('token');
     location.reload();
 }
+
 
 async function refreshData() {
     // 1. Получаем название текущего активного раздела
@@ -2171,7 +2125,6 @@ function showConfirmModal(title, text, onConfirm) {
 
 
 
-
 // ==================== ЗАГРУЗКА СКЛАДОВ В ФИЛЬТР ====================
 async function loadWarehousesForFilter() {
     try {
@@ -2182,7 +2135,7 @@ async function loadWarehousesForFilter() {
         if (select.options.length > 1) return;
 
         // Используем эндпоинт для складов
-        const response = await fetch('http://localhost:5000/api/skladi');
+        const response = await fetch('/api/skladi');
         if (!response.ok) throw new Error('Ошибка загрузки складов');
         
         const warehouses = await response.json();
@@ -2203,8 +2156,6 @@ async function loadWarehousesForFilter() {
         console.error('Не удалось загрузить список складов для фильтра:', err);
     }
 }
-
-
 // ==================== ЗАГРУЗКА МОЛОВ В ФИЛЬТР ====================
 async function loadMolsForFilter() {
     try {
@@ -2215,7 +2166,7 @@ async function loadMolsForFilter() {
         if (select.options.length > 1) return;
 
         // Эндпоинт для МОЛов исправлен на /api/mol (соответствует твоему роутеру)
-        const response = await fetch('http://localhost:5000/api/mol');
+        const response = await fetch('/api/mol');
         if (!response.ok) throw new Error('Ошибка загрузки МОЛ');
         
         const mols = await response.json();
@@ -2236,8 +2187,6 @@ async function loadMolsForFilter() {
         console.error('Не удалось загрузить список МОЛ для фильтра:', err);
     }
 }
-
-
 // ==================== ФУНКЦИЯ ПРИМЕНЕНИЯ ФИЛЬТРОВ ====================
 async function applyFilters() {
     if (currentEntity !== 'stock_balances') return;
@@ -2253,7 +2202,7 @@ async function applyFilters() {
     if (molId) params.append('mol_id', molId);
 
     try {
-        const response = await fetch(`http://localhost:5000/api/stock_balances?${params.toString()}`);
+        const response = await fetch(`/api/stock_balances?${params.toString()}`);
         if (!response.ok) throw new Error('Ошибка фильтрации');
 
         currentItems = await response.json();
@@ -2299,8 +2248,6 @@ async function applyFilters() {
         console.error('Ошибка применения фильтров:', err);
     }
 }
-
-
 // ==================== ЗАГРУЗКА СКЛАДОВ ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ ====================
 async function loadWarehousesForMovement() {
     try {
@@ -2308,7 +2255,7 @@ async function loadWarehousesForMovement() {
         if (!select) return;
         if (select.options.length > 1) return;
 
-        const response = await fetch('http://localhost:5000/api/skladi');
+        const response = await fetch('/api/skladi');
         if (!response.ok) throw new Error('Ошибка загрузки складов');
         
         const warehouses = await response.json();
@@ -2324,7 +2271,6 @@ async function loadWarehousesForMovement() {
         console.error('Не удалось загрузить список складов для движения:', err);
     }
 }
-
 // ==================== ЗАГРУЗКА МОЛОВ ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ ====================
 async function loadMolsForMovement() {
     try {
@@ -2332,7 +2278,7 @@ async function loadMolsForMovement() {
         if (!select) return;
         if (select.options.length > 1) return;
 
-        const response = await fetch('http://localhost:5000/api/mol');
+        const response = await fetch('/api/mol');
         if (!response.ok) throw new Error('Ошибка загрузки МОЛ');
         
         const mols = await response.json();
@@ -2348,7 +2294,6 @@ async function loadMolsForMovement() {
         console.error('Не удалось загрузить список МОЛ для движения:', err);
     }
 }
-
 // ==================== ФУНКЦИЯ ПРИМЕНЕНИЯ ФИЛЬТРОВ ДВИЖЕНИЯ ====================
 async function applyMovementFilters() {
     if (currentEntity !== 'stock_movement') return;
@@ -2365,7 +2310,7 @@ async function applyMovementFilters() {
     if (molId) params.append('mol_id', molId);
 
     try {
-        let url = `http://localhost:5000/api/stock_movement`;
+        let url = `/api/stock_movement`;
         if (params.toString()) {
             url += `?${params.toString()}`;
         }
@@ -2474,7 +2419,7 @@ async function loadData(entity, title) {
 
     try {
         // СОБИРАЕМ ПАРАМЕТРЫ ИЗ ФИЛЬТРОВ В ЗАВИСИМОСТИ ОТ РАЗДЕЛА
-        let url = `http://localhost:5000/api/${entity}`;
+        let url = `/api/${entity}`;
         const params = new URLSearchParams();
 
         if (entity === 'stock_balances') {
@@ -2848,7 +2793,6 @@ function openDetailForm(mode) {
     
     openEntityForm(detailEntity, itemToEdit, selectedItem.id);
 }
-
 // ==================== УДАЛЕНИЕ СТРОКИ СПЕЦИФИКАЦИИ ====================
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
@@ -2864,8 +2808,15 @@ async function deleteDetailItem() {
             const detailEntity = getCurrentDetailEntity();
 
             try {
-                const response = await fetch(`http://localhost:5000/api/${detailEntity}/${selectedDetailItem.id}`, {
-                    method: 'DELETE'
+                // Достаем токен авторизации из памяти браузера
+                const token = localStorage.getItem('token');
+
+                const response = await fetch(`/api/${detailEntity}/${selectedDetailItem.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
 
                 // Пытаемся прочитать JSON ответа для возможного вывода ошибки бэкенда
@@ -2921,13 +2872,16 @@ function showPostConfirmModal(title, text, onConfirm) {
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 }
 
-
 // 1. Проведение техосмотра (у него изначально не было confirm, оставляем как было, но с тостами)
 async function postTehosmotr(id) {
     try {
-        const response = await fetch(`http://localhost:5000/api/tehosmotr/${id}/post`, {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/tehosmotr/${id}/post`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
         });
 
         if (response.ok) {
@@ -2951,10 +2905,14 @@ async function postAutostrahovanie(id) {
         'Вы действительно хотите провести этот документ страхования?',
         async () => {
             try {
+                const token = localStorage.getItem('token');
                 // Отправляем запрос на ваш универсальный PUT /:entity/:id
-                const response = await fetch(`http://localhost:5000/api/autostrahovanie/${id}`, {
+                const response = await fetch(`/api/autostrahovanie/${id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ 
                         is_posted: true, 
                         fact_date: new Date().toISOString() // Записываем текущую дату факта
@@ -2985,9 +2943,13 @@ async function postMove(moveId) {
         'Вы действительно хотите провести это перемещение?',
         async () => {
             try {
-                const response = await fetch(`http://localhost:5000/api/moves/${moveId}/post`, {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/moves/${moveId}/post`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ is_posted: true })
                 });
 
@@ -3004,7 +2966,6 @@ async function postMove(moveId) {
     );
 }
 
-
 // 4. Проведение прихода
 async function postReceipt(receiptId) {
     showPostConfirmModal(
@@ -3012,9 +2973,13 @@ async function postReceipt(receiptId) {
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
-                const response = await fetch(`http://localhost:5000/api/receipts/${receiptId}`, {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/receipts/${receiptId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ is_posted: true })
                 });
 
@@ -3030,7 +2995,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 
 
 // ==================== ОБРАБОТЧИКИ КЛИКОВ ПО ВЕРХНЕЙ ТАБЛИЦЕ ====================
@@ -3305,8 +3269,7 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); // Двойной клик открывает форму редактирования строки спецификации
         }
     });
-}
-/// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЕЙ (НИЖНЯЯ ТАБЛИЦА) ====================
+}// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЕЙ (НИЖНЯЯ ТАБЛИЦА) ====================
 async function loadDetailData(entity, parentId) {
     // 📌 Управление видимостью панели кнопок: скрываем для отчетов, остатков и движений
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -3350,7 +3313,7 @@ async function loadDetailData(entity, parentId) {
             zId = parts[0];
             wId = parts[1];
         }
-        fetchUrl = `http://localhost:5000/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}`;
+        fetchUrl = `/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}`;
     } else if (entity === 'part_movement_details') {
         // 📌 ДЛЯ ДЕТАЛИЗАЦИИ ДВИЖЕНИЯ ЗАПЧАСТЕЙ: берем zaphasti_id, warehouse_id и фильтры дат из шапки движения
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
@@ -3366,14 +3329,14 @@ async function loadDetailData(entity, parentId) {
         const startDate = document.getElementById('movement-start-date')?.value || '';
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
-        fetchUrl = `http://localhost:5000/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
+        fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
         queryParamName = 'car_id';
     }
 
     // Если URL не был сформирован индивидуально выше, формируем стандартный
     if (!fetchUrl) {
-        fetchUrl = `http://localhost:5000/api/${entity}?${queryParamName}=${parentId}`;
+        fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
     }
     
     // 🔍 ЛОГИРУЕМ ПЕРЕД ОТПРАВКОЙ ЗАПРОСА
@@ -3514,7 +3477,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 // ==================== НАДЕЖНЫЙ ПОИСК ПО НИЖНЕЙ ТАБЛИЦЕ ====================
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
