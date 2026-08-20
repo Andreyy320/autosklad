@@ -1963,7 +1963,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -1978,7 +1977,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
         });
         const result = await response.json();
 
-        if (response.ok) {
+        if (response.ok && result.success) {
+            // ЗАПОМИНАЕМ В ПАМЯТИ БРАУЗЕРА, ЧТО МЫ АВТОРИЗОВАНЫ
+            localStorage.setItem('isLoggedIn', 'true');
+            localStorage.setItem('currentUser', login);
+
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
             loadData('users', 'Пользователи');
@@ -1991,7 +1994,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
-
 function logout() {
     location.reload();
 }
