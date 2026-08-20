@@ -7,8 +7,11 @@ require('dotenv').config(); // Загружаем переменные окру�
 
 const app = express();
 
-// Базовая безопасность
-app.use(helmet());
+// Базовая безопасность (отключаем принудительный HTTPS и CSP для работы по IP без домена)
+app.use(helmet({
+    contentSecurityPolicy: false,
+    strictTransportSecurity: false
+}));
 app.disable('x-powered-by');
 
 app.use(express.json());
