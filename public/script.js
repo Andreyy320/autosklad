@@ -1688,8 +1688,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
             `;
         } else if (col.ref || col.field === 'receipt_id') {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
-            const refItems = await fetchReferenceData(referenceName);
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+// Правильно: берем имя справочника из конфигурации колонки
+const refName = col.ref; 
+const refItems = refName ? await fetchReferenceData(refName) : [];       
+     let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
                 let displayName = '';
