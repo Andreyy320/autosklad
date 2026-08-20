@@ -13,17 +13,23 @@ const referenceDataCache = {};
 // Функция всегда берет актуальные данные с сервера в реальном времени без кэша
 async function fetchReferenceData(refEntity) {
     try {
-        const response = await fetch(`/api/${refEntity}`);
+        const token = localStorage.getItem('token'); // Берем токен, который сохранился при входе
+        
+        const response = await fetch(`/api/${refEntity}`, {
+            headers: {
+                'Authorization': `Bearer ${token}` // Передаем токен для авторизации
+            }
+        });
+        
         if (response.ok) {
             const data = await response.json();
-            return data; // Всегда свежие данные с бэкенда!
+            return data; // Свежие данные с бэкенда!
         }
     } catch (err) {
         console.error(`Ошибка загрузки справочника ${refEntity}:`, err);
     }
     return [];
 }
-
 // 1. Конфигурация колонок и шаблонов строк для всех таблиц
 const tableConfig = {
     users: {
