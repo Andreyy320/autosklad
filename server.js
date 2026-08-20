@@ -3,11 +3,10 @@ const helmet = require('helmet');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config(); // Загружаем переменные окружения из .env файла
+require('dotenv').config();
 
 const app = express();
 
-// Базовая безопасность (отключаем принудительный HTTPS и CSP для работы по IP без домена)
 app.use(helmet({
     contentSecurityPolicy: false,
     strictTransportSecurity: false
@@ -18,7 +17,6 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Подключение к БД напрямую (без использования поврежденного .env)
 const pool = new Pool({
     user: 'postgres',
     host: 'localhost',
@@ -28,7 +26,7 @@ const pool = new Pool({
 });
 
 const apiRoutes = require('./routes/api')(pool);
-app.use('/api', apiRoutes); // Теперь все запросы будут идти через /api/users, /api/parts и т.д.
+app.use('/api', apiRoutes); 
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<!-- ЭКРАН АВТОРИЗАЦИИ -->
 <div id="login-screen">
     <div class="login-window">
         <h3>Авторизация AutoSklad</h3>
@@ -24,12 +23,9 @@
     </div>
 </div>
 
-<!-- ЭКРАН ПРИЛОЖЕНИЯ -->
 <div id="app-screen" style="display: none;">
     
-    <!-- Основная сетка -->
     <div class="main-container">
-        <!-- Меню слева -->
         <div class="sidebar">
             <div class="accordion-header"><span>▲ Администрирование</span></div>
             <div class="accordion-content">
@@ -82,10 +78,8 @@
             </div>
         </div>
 
-        <!-- Правая часть: Панель инструментов + Таблицы (Верхняя и Нижняя) -->
         <div class="content-area" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box; overflow: hidden;">
             
-            <!-- Панель инструментов -->
             <div class="toolbar" style="flex-shrink: 0;">
                 <button id="btn-add" class="tool-btn" onclick="openEntityForm(currentEntity, null)"><i class="fas fa-file-circle-plus" style="color: green;"></i> Добавить</button>
                 <button id="btn-edit" class="tool-btn" onclick="editSelectedEntity()"><i class="fas fa-pen-to-square" style="color: #0055ea;"></i> Изменить</button>
@@ -96,7 +90,6 @@
                 <button class="tool-btn" onclick="logout()" style="margin-left: auto;"><i class="fas fa-right-from-bracket" style="color: #c00;"></i> Выйти</button>
             </div>
 
-            <!-- ПАНЕЛЬ ФИЛЬТРАЦИИ (Остатки запчастей - если нужно) -->
         <div id="parts-filter-panel" style="display: none; align-items: center; padding: 6px 10px; background: #f8f9fa; border-bottom: 1px solid #ccc; gap: 15px; flex-shrink: 0; font-size: 12px;">
         <div style="display: flex; align-items: center; gap: 5px;">
             <span style="font-weight: bold; color: #333;">Дата :</span>
@@ -119,39 +112,32 @@
                 </button>
             </div>
 
-            <!-- НОВАЯ ПАНЕЛЬ ФИЛЬТРАЦИИ (Только для Движения запчастей) -->
             <div id="movement-filter-panel" style="display: none; align-items: center; padding: 6px 10px; background: #f8f9fa; border-bottom: 1px solid #ccc; gap: 15px; flex-shrink: 0; font-size: 12px;">
-                <!-- Дата начала -->
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <span style="font-weight: bold; color: #333;">Дата начала :</span>
                     <input type="datetime-local" id="movement-start-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 160px;">
                 </div>
-                <!-- Дата окончания -->
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <span style="font-weight: bold; color: #333;">Дата окончания :</span>
                     <input type="datetime-local" id="movement-end-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 160px;">
                 </div>
-                <!-- Склад -->
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <span style="font-weight: bold; color: #333;">Склад :</span>
                     <select id="movement-warehouse" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 150px;">
                         <option value="">-- Все склады --</option>
                     </select>
                 </div>
-                <!-- МОЛ -->
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <span style="font-weight: bold; color: #333;">МОЛ :</span>
                     <select id="movement-mol" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 150px;">
                         <option value="">-- Все МОЛ --</option>
                     </select>
                 </div>
-                <!-- Кнопка Найти -->
                 <button type="button" onclick="applyMovementFilters()" style="padding: 3px 12px; background: #eef2f5; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold;">
                     <i class="fas fa-search" style="color: #0078d7;"></i> Найти
                 </button>
             </div>
 
-            <!-- Верхняя таблица (Основная) -->
             <div style="flex: 1; overflow-y: auto; min-height: 150px;">
                 <table id="data-table" style="width: 100%; border-collapse: collapse;">
                     <thead>
@@ -164,18 +150,14 @@
                       </tr>
                     </thead>
                     <tbody id="table-body">
-                        <!-- Данные подгружаются динамически -->
                     </tbody>
                 </table>
             </div>
 
-            <!-- НИЖНЯЯ ПАНЕЛЬ ДЕТАЛИЗАЦИИ С КНОПКАМИ УПРАВЛЕНИЯ И ВКЛАДКАМИ -->
             <div id="detail-container" style="display: none; height: 260px; border-top: 4px solid #ccc; flex-direction: column; background: #fafafa; flex-shrink: 0;">
                 
-                <!-- Панель вкладок (разделена на блок для авто, блок для ДТП и блок для Ремонта) -->
                 <div id="car-tabs-bar" class="car-tabs-bar" style="display: none;">
                     
-                    <!-- Вкладки для Карточки авто -->
                     <div id="tabs-for-cars" style="display: none; gap: 2px;">
                         <button class="car-tab-btn" data-tab="car_general" onclick="switchCarTab('car_general', this)">Общая</button>
                         <button class="car-tab-btn" data-tab="repair_history" onclick="switchCarTab('repair_history', this)">Ремонт</button>
@@ -184,14 +166,12 @@
                         <button class="car-tab-btn" data-tab="dtp_history" onclick="switchCarTab('dtp_history', this)">ДТП</button>
                     </div>
 
-                    <!-- Вкладки для ДТП -->
                     <div id="tabs-for-accidents" style="display: none; gap: 2px;">
                         <button class="accident-tab-btn" data-tab="accident_invoices" onclick="switchAccidentTab('accident_invoices', this)">Выставить счет</button>
                         <button class="accident-tab-btn" data-tab="accident_payments" onclick="switchAccidentTab('accident_payments', this)">Оплатить счет</button>
                         <button class="accident-tab-btn" data-tab="accident_events" onclick="switchAccidentTab('accident_events', this)">События</button>
                     </div>
 
-                    <!-- Вкладки для Ремонта (База / Сервис) -->
                     <div id="tabs-for-repairs" style="display: none; gap: 2px;">
                         <button class="repair-tab-btn active" data-tab="repair_items" onclick="switchRepairTab('repair_items', this)">Запчасти</button>
                         <button class="repair-tab-btn" data-tab="repair_works" onclick="switchRepairTab('repair_works', this)">Работы</button>
@@ -199,7 +179,6 @@
 
                 </div>
 
-                <!-- Панель инструментов для спецификации / деталей -->
                 <div id="detail-toolbar" style="padding: 4px 10px; background: #eef2f5; display: flex; align-items: center; border-bottom: 1px solid #ddd; gap: 5px;">
                     <span id="detail-title" style="font-size: 13px; font-weight: bold; color: #333; margin-right: auto;">Спецификация</span>
                     <button class="tool-btn" onclick="openDetailForm('add')" style="padding: 2px 8px; font-size: 12px;"><i class="fas fa-plus" style="color: green;"></i> Добавить</button>
@@ -234,22 +213,18 @@
     </div>
 </div>
 
-<!-- Статусная строка снизу -->
 <div class="status-bar">
     <span id="row-count">Готово</span>
     <span>AutoSklad Enterprise v1.0</span>
 </div>
 
-<!-- БОКОВАЯ ПАНЕЛЬ (DRAWER) УПРАВЛЕНИЯ ЗАПИСЯМИ -->
 <div id="entity-drawer" style="
     position: fixed; top: 0; right: -420px; width: 400px; height: 100%;
     background: #fff; box-shadow: -5px 0 15px rgba(0,0,0,0.1); z-index: 1000;
     transition: right 0.3s ease; display: flex; flex-direction: column; padding: 20px;
     box-sizing: border-box; overflow-y: auto;">
-    <!-- Содержимое панели генерируется скриптом -->
 </div>
 
-<!-- Подключаем ваш JavaScript-файл -->
 <script src="/script.js"></script>
 </body>
 </html>

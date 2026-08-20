@@ -1,17 +1,14 @@
-/* ========================================================================== */
-/* ПРОФЕССИОНАЛЬНЫЙ ERP СТИЛЬ (ЧЕТКИЙ И СТРОГИЙ ДИЗАЙН БЕЗ ЖИРНОГО ШРИФТА)      */
-/* ========================================================================== */
 
 :root {
-    --primary: #2563eb;         /* Фирменный синий акцент */
+    --primary: #2563eb;         
     --primary-hover: #1d4ed8;
-    --bg-app: #f1f5f9;          /* Мягкий серый фон приложения */
+    --bg-app: #f1f5f9;          
     --bg-card: #ffffff;
-    --border: #b0bec5;          /* Четкие внешние границы */
-    --border-light: #e0e0e0;    /* Тонкие линии сетки ячеек */
-    --text-main: #212121;       /* Стандартный текст данных (обычный вес) */
-    --text-header: #37474f;     /* Цвет текста в шапке */
-    --accent-light: #e3f2fd;    /* Подсветка выбранной строки */
+    --border: #b0bec5;          
+    --border-light: #e0e0e0;   
+    --text-main: #212121;       
+    --text-header: #37474f;    
+    --accent-light: #e3f2fd;    
 }
 
 * {
@@ -21,7 +18,7 @@
     font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Tahoma, sans-serif;
     font-size: 12px;
     color: var(--text-main);
-    font-weight: 400;           /* ВЕЗДЕ ПО УМОЛЧАНИЮ ОБЫЧНЫЙ ВЕС ТЕКСТА */
+    font-weight: 400;          
 }
 
 body, html {
@@ -31,7 +28,7 @@ body, html {
     background-color: var(--bg-app);
 }
 
-/* --- ЭКРАН АВТОРИЗАЦИИ --- */
+
 #login-screen {
     width: 100%;
     height: 100vh;
@@ -105,7 +102,6 @@ body, html {
     border: 1px solid #ffcdd2;
 }
 
-/* --- ГЛАВНОЕ ОКНО ПРИЛОЖЕНИЯ --- */
 #app-screen {
     width: 100%;
     height: calc(100vh - 24px);
@@ -120,11 +116,10 @@ body, html {
     overflow: hidden;
 }
 
-/* --- ЛЕВОЕ МЕНЮ (САЙДБАР) С ПОЛНЫМ СКРОЛЛОМ --- */
 .sidebar {
     width: 220px;
     background: #ffffff;
-    overflow-y: auto;           /* Вертикальный скролл для длинного меню */
+    overflow-y: auto;           
     overflow-x: hidden;
     flex-shrink: 0;
     border-right: 1px solid var(--border);
@@ -134,7 +129,7 @@ body, html {
     padding: 6px 10px;
     background: #f5f5f5;
     cursor: pointer;
-    font-weight: 600;           /* Заголовки аккордеона остаются аккуратно полужирными */
+    font-weight: 600;           
     border-bottom: 1px solid var(--border-light);
     user-select: none;
     display: flex;
@@ -177,11 +172,11 @@ body, html {
 .nav-link.active {
     background: #e3f2fd;
     color: var(--primary);
-    font-weight: 600;           /* Активная ссылка в меню подсвечена полужирным для акцента */
+    font-weight: 600;           
     border-left-color: var(--primary);
 }
 
-/* --- ПРАВАЯ РАБОЧАЯ ОБЛАСТЬ --- */
+
 .content-area {
     flex: 1;
     display: flex;
@@ -191,7 +186,6 @@ body, html {
     background-color: var(--bg-card);
 }
 
-/* Верхняя панель инструментов */
 .toolbar {
     display: flex;
     align-items: center;
@@ -230,7 +224,6 @@ body, html {
     margin: 0 3px;
 }
 
-/* Панели фильтров */
 #parts-filter-panel, #movement-filter-panel {
     background: #fafafa !important;
     border-bottom: 1px solid var(--border) !important;
@@ -249,12 +242,12 @@ body, html {
     background: #ffffff;
 }
 
-/* --- ВЕРХНЯЯ ТАБЛИЦА (С ДВОЙНЫМ СКРОЛЛОМ: ВЕРТИКАЛЬ И ГОРИЗОНТАЛЬ) --- */
+
 .content-area > div[style*="overflow-y: auto"] {
     flex: 1;
     width: 100%;
-    overflow-y: auto;           /* Вертикальная прокрутка списка */
-    overflow-x: auto;           /* Горизонтальная прокрутка при большом числе колонок */
+    overflow-y: auto;           
+    overflow-x: auto;           
     background: #ffffff;
 }
 
@@ -270,7 +263,7 @@ th {
     position: sticky;
     top: 0;
     z-index: 10;
-    font-weight: 600;           /* ШАПКА ТАБЛИЦЫ СТРОГО ПОЛУЖИРНАЯ */
+    font-weight: 600;           
     color: var(--text-header);
     border: 1px solid var(--border);
     padding: 5px 8px;
@@ -280,21 +273,21 @@ th {
 }
 
 td {
-    padding: 4px 8px;           /* КОМПАКТНЫЕ И АККУРАТНЫЕ ЯЧЕЙКИ */
+    padding: 4px 8px;          
     border-bottom: 1px solid var(--border-light);
     border-right: 1px solid var(--border-light);
     border-left: 1px solid var(--border-light);
     color: var(--text-main);
     font-size: 12px;
     background-color: #ffffff;
-    font-weight: 400;           /* ОБЫЧНЫЙ ТЕКСТ БЕЗ ЖИРНОСТИ */
+    font-weight: 400;         
     max-width: 250px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* Зебра строк (четные строки чуть светлее для читаемости) */
+
 tr:nth-child(even) td {
     background-color: #fafafa;
 }
@@ -303,7 +296,7 @@ tr:hover td {
     background-color: #f1f5f9 !important;
 }
 
-/* Выделенная активная строка */
+
 tr.selected td, 
 tr[aria-selected="true"] td,
 #data-table tbody tr:active td,
@@ -311,15 +304,14 @@ tr[aria-selected="true"] td,
     background-color: var(--accent-light) !important;
     color: #1565c0 !important;
     border-color: #90caf9 !important;
-    font-weight: 500;           /* Слегка выделяем только активную строку */
+    font-weight: 500;          
 }
 
 tr.selected-row {
-    background-color: #cfe2ff !important; /* Насыщенный голубой цвет */
-    outline: 2px solid #0d6efd !important; /* Аккуратная рамка вокруг всей строки */
+    background-color: #cfe2ff !important; 
+    outline: 2px solid #0d6efd !important; 
 }
 
-/* --- НИЖНЯЯ ПАНЕЛЬ И ДЕТАЛИЗАЦИЯ (СВЕРХУ ВКЛАДКИ, ВНИЗУ ТАБЛИЦА СО СКРОЛЛОМ) --- */
 #detail-container {
     width: 100%;
     max-height: 38%;
@@ -330,7 +322,6 @@ tr.selected-row {
     flex-shrink: 0;
 }
 
-/* Блок контейнера таблицы деталей со скроллами в обе стороны */
 #detail-container div[style*="flex: 1"] {
     flex: 1;
     overflow-y: auto !important;
@@ -343,7 +334,7 @@ tr.selected-row {
     padding: 4px 6px 0 6px;
     border-bottom: 1px solid var(--border);
     gap: 2px;
-    overflow-x: auto;           /* Горизонтальный скролл для вкладок, если их станет слишком много */
+    overflow-x: auto;           
     flex-shrink: 0;
 }
 
@@ -388,13 +379,12 @@ tr.selected-row {
     flex-shrink: 0;
 }
 
-/* --- БОКОВАЯ ПАНЕЛЬ ФОРМЫ (DRAWER) С УДОБНЫМ СКРОЛЛОМ --- */
 #entity-drawer {
-    overflow-y: auto !important;  /* Жестко гарантируем вертикальный скролл для полей ввода */
+    overflow-y: auto !important;  
     overflow-x: hidden;
 }
 
-/* --- СТАТУСНАЯ СТРОКА СНИЗУ --- */
+
 .status-bar {
     height: 22px;
     background: #eceff1;

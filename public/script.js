@@ -1,19 +1,12 @@
 let currentEntity = 'users';
-
-
-// Сохранение загруженных элементов текущей таблицы в памяти
 let currentItems = [];
-
-// Выбранный в данный момент элемент (для работы кнопок «Изменить» / «Удалить»)
 let selectedItem = null;
 
-// Кэш для справочников (связанных таблиц)
 const referenceDataCache = {};
 
 async function fetchReferenceData(refEntity) {
     if (!refEntity) return [];
     
-    // Достаем токен авторизации из памяти браузера
     const token = localStorage.getItem('token');
     
     try {
@@ -21,7 +14,6 @@ async function fetchReferenceData(refEntity) {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                // Передаем токен в заголовке авторизации
                 'Authorization': token ? `Bearer ${token}` : ''
             }
         });
@@ -38,7 +30,6 @@ async function fetchReferenceData(refEntity) {
     return [];
 }
 
-// 1. Конфигурация колонок и шаблонов строк для всех таблиц
 const tableConfig = {
     users: {
         title: 'Пользователи',
@@ -419,7 +410,6 @@ receipts: {
         const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
         const isPostedColor = isPosted ? 'green' : 'gray';
 
-        // Если документ не проведен, показываем кнопку "Провести"
         const actionButton = !isPosted 
             ? `<button onclick="event.stopPropagation(); postReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
@@ -483,7 +473,6 @@ moves: {
         { field: 'mol_to_id', label: 'МОЛ кому', width: '150px', ref: 'mol' },
         { field: 'description', label: 'Описание' },
 
-        // Служебные поля (sum_rub остается только для чтения, а fact_date и is_posted теперь доступны в форме)
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
         { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses' }
@@ -503,7 +492,6 @@ moves: {
 
         const sumRub = Number(item.sum_rub || 0).toFixed(2);
         
-        // Генерация статуса с кнопкой быстрой проводки
         const isPostedHtml = item.is_posted 
             ? `<span style="color: green; font-weight: bold;">Проведен</span>` 
             : `<span style="color: gray;">Не проведен</span> <button onclick="event.stopPropagation(); postMove(${item.id})" style="background: #28a745; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-left: 5px;">Провести</button>`;
@@ -574,7 +562,6 @@ tehosmotr: {
         { field: 'sum', label: 'Сумма', width: '100px' },
         { field: 'description', label: 'Описание' },
 
-        // Служебные поля
         { field: 'fact_date', label: 'Дата факт', width: '160px', insert: false, readonly: true },
         { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses', insert: false }
     ],
@@ -594,7 +581,6 @@ tehosmotr: {
 
         const sumVal = Number(item.sum || 0).toFixed(2);
         
-        // Красиво объединяем Гос номер и Модель в одну ячейку, чтобы не ломать верстку
         let carDisplay = '—';
         if (item.car_number && item.car_model) {
             carDisplay = `<b>${item.car_number}</b> <span style="color: #666; font-size: 0.9em;">(${item.car_model})</span>`;
@@ -604,7 +590,6 @@ tehosmotr: {
             carDisplay = item.car_model;
         }
 
-        // Кнопка быстрой проводки
         const isPostedHtml = item.is_posted 
             ? `<span style="color: green; font-weight: bold;">Проведен</span>` 
             : `<span style="color: gray;">Не проведен</span> <button onclick="event.stopPropagation(); postTehosmotr(${item.id})" style="background: #28a745; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-left: 5px;">Провести</button>`;
@@ -634,20 +619,15 @@ tehosmotr: {
         { field: 'sum', label: 'Сумма', width: '100px' },
         { field: 'description', label: 'Описание' },
 
-        // Служебные поля
         { field: 'fact_date', label: 'Дата факт', width: '160px', insert: false, readonly: true },
         { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses', insert: false }
     ],
     render: (item) => {
         const formatDT = (dateStr, includeTime = true) => {
             if (!dateStr) return '—';
-            // Исправление: если строка содержит время (например, '2026-08-19T14:35'), 
-            // парсим напрямую или извлекаем с сохранением часов, избегая сброса в 00:00
             let d = new Date(dateStr);
             if (isNaN(d)) return '—';
 
-            // Если в исходной строке есть время, но стандартный Date сдвинул его/обнулил, 
-            // используем локальные компоненты даты:
             const day = String(d.getDate()).padStart(2, '0');
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const year = d.getFullYear();
@@ -661,7 +641,6 @@ tehosmotr: {
 
         const sumVal = Number(item.sum || 0).toFixed(2);
         
-        // Красиво объединяем Гос номер и Модель в одну ячейку
         let carDisplay = '—';
         if (item.car_number && item.car_model) {
             carDisplay = `<b>${item.car_number}</b> <span style="color: #666; font-size: 0.9em;">(${item.car_model})</span>`;
@@ -671,7 +650,6 @@ tehosmotr: {
             carDisplay = item.car_model;
         }
 
-        // Кнопка быстрой проводки для автострахования
         const isPostedHtml = item.is_posted 
             ? `<span style="color: green; font-weight: bold;">Проведен</span>` 
             : `<span style="color: gray;">Не проведен</span> <button onclick="event.stopPropagation(); postAutostrahovanie(${item.id})" style="background: #28a745; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-left: 5px;">Провести</button>`;
@@ -692,7 +670,7 @@ tehosmotr: {
 },
 car_cards: {
     title: 'Карточка авто',
-    readonly: true, // <--- Добавляем этот флаг
+    readonly: true, 
     columns: [
         { field: 'gos_number', label: 'Гос. номер', width: '100px' },
         { field: 'car_model_name', label: 'Модель', width: '200px' },
@@ -708,7 +686,6 @@ car_cards: {
         { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
-        // Удобная функция для отображения даты (только день.месяц.год)
         const formatDate = (dateStr) => {
             if (!dateStr) return '—';
             const d = new Date(dateStr);
@@ -748,12 +725,10 @@ stock_balances: {
         { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' }
     ],
-    // Если твой движок поддерживает атрибуты строки, передаем ID через них:
     rowAttributes: (item) => {
         return `data-zaphasti-id="${item.id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
     },
     render: (item) => {
-        // Защита, если вдруг пришел пустой элемент
         if (!item) return '';
 
         return `
@@ -786,7 +761,6 @@ part_movement_details: {
     ],
     render: (item) => {
         if (!item) return '';
-        // Форматируем дату красиво, если она приходит из БД
         let formattedDate = item.op_date ? item.op_date.replace('T', ' ').substring(0, 19) : '';
         
         return `
@@ -803,8 +777,6 @@ part_movement_details: {
     }
 },
 
-// 2. Конфигурация для нижней таблицы партий (обязательно нужна, чтобы нижняя таблица не падала)
-// ==================== Конфигурация для нижней таблицы партий ====================
 stock_batches: {
     title: 'Партии товара',
     columns: [
@@ -821,7 +793,6 @@ stock_batches: {
     ],
     render: (item) => {
         if (!item) return '';
-        // Форматируем дату, если она приходит из бд
         let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
         return `
             <td>${item.artikul || ''}</td>
@@ -846,16 +817,12 @@ stock_movement: {
         { field: 'name', label: 'Наименование', width: '280px' },
         { field: 'manufacturer', label: 'Производитель', width: '130px' },
         { field: 'unit', label: 'Ед.изм', width: '60px', align: 'center' },
-        // Приход
         { field: 'income_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'income_sum', label: 'Сумма', width: '80px', align: 'right' },
-        // Расход
         { field: 'outcome_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'outcome_sum', label: 'Сумма', width: '80px', align: 'right' },
-        // Остаток на конец
         { field: 'end_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'end_sum', label: 'Сумма', width: '80px', align: 'right' },
-        // Описание
         { field: 'description', label: 'Описание' }
     ],
     rowAttributes: (item) => {
@@ -899,7 +866,6 @@ car_tehosmotr: {
         { field: 'doc_number', label: 'Документ ТО', width: '200px' }
     ],
     render: (item) => {
-        // Функция форматирования даты в ДД.ММ.ГГГГ
         const formatOnlyDate = (dateStr) => {
             if (!dateStr) return '';
             const d = new Date(dateStr);
@@ -908,7 +874,6 @@ car_tehosmotr: {
 
         const sumVal = Number(item.sum || 0).toFixed(2);
         
-        // Формируем красивую строку «Техосмотр ТО2104 от 10.01.2026»
         const formattedDate = formatOnlyDate(item.date);
         const docText = item.doc_number ? `Техосмотр ${item.doc_number}` : 'Техосмотр';
         const docDisplay = formattedDate ? `${docText} от ${formattedDate}` : docText;
@@ -942,7 +907,6 @@ car_autostrahovanie: {
 
         const sumVal = Number(item.sum || 0).toFixed(2);
         
-        // Формируем красивую строку «Автострахование AC3546 от 05.03.2026»
         const formattedDate = formatDT(item.date);
         const docText = item.doc_number ? `Автострахование ${item.doc_number}` : 'Автострахование';
         const docDisplay = formattedDate ? `${docText} от ${formattedDate}` : docText;
@@ -961,7 +925,6 @@ accidents: {
     title: 'ДТП',
     columns: [
         { label: "№", field: "doc_number", width: "120px" },
-        // Принудительная подстановка текущей даты и времени через стандартный генератор строки
         { 
             label: "Дата", 
             field: "doc_date", 
@@ -1005,7 +968,6 @@ accidents: {
         const paidNum = Number(item.paid_amount || 0);
         const paidVal = paidNum.toFixed(2);
 
-        // Проверяем: если Счет больше Выплачено, подсвечиваем ячейку «Выплачено» красным
         const isUnderpaid = accountNum > paidNum;
         const paidStyle = isUnderpaid 
             ? 'text-align: right; color: #d9534f; font-weight: bold;' 
@@ -1162,7 +1124,6 @@ repairs: {
         { field: 'warehouse_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
         { field: 'description', label: 'Описание' },
-        // Исправлено с total_sum на sum в соответствии с вашей структурой БД
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '110px', type: 'datetime-local' },
         { field: 'is_posted', label: 'Проведен', width: '90px' }
@@ -1208,7 +1169,6 @@ repairs: {
         { field: 'description', label: 'Описание', width: '150px', insert: true, table: true },
         { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: true, table: true },
         
-        // В самом конце, с флагом скрытия для таблицы
     ],
     render: (item) => {
         const price = Number(item.price) || 0;
@@ -1274,7 +1234,6 @@ repair_works: {
             const mileage = repair.mileage ? ` | ${repair.mileage} км` : '';
             const groupId = `repair-group-${repair.id || index}`;
             
-            // Считаем общую сумму по всем вложенным элементам (запчастям и работам)
             let calculatedTotal = 0;
             if (repair.items && repair.items.length > 0) {
                 repair.items.forEach(item => {
@@ -1286,7 +1245,6 @@ repair_works: {
             }
             const costVal = calculatedTotal.toFixed(2);
             
-            // 1. Красивая и аккуратная строка-шапка группы (в едином стиле с вкладкой "Общая")
             html += `
                 <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleRepairGroup('${groupId}', this)">
                     <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
@@ -1300,7 +1258,6 @@ repair_works: {
                 </tr>
             `;
 
-            // 2. Вложенные строки
             if (repair.items && repair.items.length > 0) {
                 repair.items.forEach(item => {
                     const price = Number(item.price || 0).toFixed(2);
@@ -1333,7 +1290,6 @@ repair_works: {
             }
         });
 
-        // Глобальная функция сворачивания
         if (typeof window.toggleRepairGroup === 'undefined') {
             window.toggleRepairGroup = function(groupId, headerRow) {
                 const rows = document.querySelectorAll(`.${groupId}`);
@@ -1375,7 +1331,6 @@ car_general: {
             return `<tr><td colspan="8" style="text-align: center; color: #888; padding: 20px;">Нет общих данных по машине</td></tr>`;
         }
 
-        // Группируем элементы по месяцам и годам
         const monthsMap = {};
         const monthNames = [
             'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
@@ -1386,7 +1341,7 @@ car_general: {
             const dateObj = new Date(item.operational_date || Date.now());
             const monthName = monthNames[dateObj.getMonth()];
             const year = dateObj.getFullYear();
-            const groupKey = `${monthName} ${year}`; // Например: "августа 2026"
+            const groupKey = `${monthName} ${year}`; 
 
             if (!monthsMap[groupKey]) {
                 monthsMap[groupKey] = { items: [], totalSum: 0 };
@@ -1400,13 +1355,11 @@ car_general: {
         let html = '';
         let groupIndex = 0;
 
-        // Рендерим сгруппированные данные
         Object.keys(monthsMap).forEach(monthKey => {
             const group = monthsMap[monthKey];
             const groupId = `general-group-${groupIndex++}`;
             const monthTotal = group.totalSum.toFixed(2);
 
-            // 1. Аккуратная, чистая плажка месяца (гармонирует с интерфейсом и отлично читается)
             html += `
                 <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleGeneralGroup('${groupId}', this)">
                     <td colspan="8" style="padding: 7px 10px; color: #333333; font-size: 13px; text-transform: none;">
@@ -1418,7 +1371,6 @@ car_general: {
                 </tr>
             `;
 
-            // 2. Строки записей внутри этого месяца
             group.items.forEach(item => {
                 const itemDate = item.operational_date ? new Date(item.operational_date).toLocaleDateString('ru-RU') : '';
                 const price = item.price ? Number(item.price).toFixed(2) : '';
@@ -1440,7 +1392,6 @@ car_general: {
             });
         });
 
-        // Глобальная функция сворачивания для вкладки "Общая"
         if (typeof window.toggleGeneralGroup === 'undefined') {
             window.toggleGeneralGroup = function(groupId, headerRow) {
                 const rows = document.querySelectorAll(`.${groupId}`);
@@ -1469,11 +1420,6 @@ car_general: {
 
 
 
-
-
-
-
-// Функция безопасного получения конфига
 function getConfig(entity) {
     if (tableConfig[entity]) {
         return tableConfig[entity];
@@ -1489,12 +1435,10 @@ function getConfig(entity) {
     };
 }
 
-// ==================== УПРАВЛЕНИЕ БОКОВОЙ ПАНЕЛЬЮ (DRAWER) ====================
 function getOrCreateDrawer() {
     let drawer = document.getElementById('entity-drawer');
     let backdrop = document.getElementById('entity-drawer-backdrop');
 
-    // Создаем полупрозрачную подложку (backdrop) для затемнения фона, если её еще нет
     if (!backdrop) {
         backdrop = document.createElement('div');
         backdrop.id = 'entity-drawer-backdrop';
@@ -1504,7 +1448,7 @@ function getOrCreateDrawer() {
             z-index: 999; opacity: 0; transition: opacity 0.3s ease;
             pointer-events: none;
         `;
-        backdrop.onclick = closeDrawer; // Клик по фону закрывает панель
+        backdrop.onclick = closeDrawer; 
         document.body.appendChild(backdrop);
     }
 
@@ -1528,7 +1472,6 @@ function openDrawer() {
     const drawer = getOrCreateDrawer();
     const backdrop = document.getElementById('entity-drawer-backdrop');
     
-    // Плавное появление
     drawer.style.right = '0px';
     if (backdrop) {
         backdrop.style.opacity = '1';
@@ -1540,7 +1483,6 @@ function closeDrawer() {
     const drawer = document.getElementById('entity-drawer');
     const backdrop = document.getElementById('entity-drawer-backdrop');
     
-    // Плавное скрытие
     if (drawer) {
         drawer.style.right = '-440px';
     }
@@ -1549,18 +1491,12 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 }
-// Открытие панели для создания новой или редактирования существующей записи
-async function openEntityForm(entity, item = null, parentId = null) {
-    // ЛОГИРОВАНИЕ ДЛЯ ПРОВЕРКИ ПЕРЕКЛЮЧАТЕЛЯ И КНОПКИ ДОБАВЛЕНИЯ:
-    console.log("=== openEntityForm вызван ===");
-    console.log("Переданная сущность (entity):", entity);
-    console.log("Переданный parentId:", parentId);
-    console.log("Переданный объект item:", item);
 
+async function openEntityForm(entity, item = null, parentId = null) {
+    
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
     
-    // Текущая дата и время для автозаполнения
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -1569,7 +1505,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    // Автогенерация номера документа и подстановка текущей даты для новой записи
     if (!item || !item.id) {
         let nextId = 1;
         let prefix = 'ДОК-';
@@ -1589,12 +1524,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
         try {
-            console.log(`Запрос для автонумерации по адресу: /api/${entity}`);
             const response = await fetch(`/api/${entity}`);
-            console.log(`Ответ автонумерации для ${entity}: статус`, response.status);
             if (response.ok) {
                 const records = await response.json();
-                console.log(`Получено записей для ${entity}:`, records.length);
                 if (records.length > 0) {
                     const maxId = Math.max(...records.map(r => r.id || 0));
                     nextId = maxId + 1;
@@ -1606,28 +1538,23 @@ async function openEntityForm(entity, item = null, parentId = null) {
             console.error('Не удалось получить список для автонумерации', e);
         }
 
-        // Базовый объект с номером и статусом проведения
         item = { 
             doc_number: `${prefix}${nextId}`,
-            is_posted: false // Новые документы по умолчанию не проведены
+            is_posted: false 
         };
 
-        // ДИНАМИЧЕСКИ заполняем текущей датой ВСЕ поля, которые содержат 'date' или '_at' либо имеют тип datetime-local
         config.columns.forEach(col => {
             if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
             }
         });
 
-        // Если это техосмотр, сразу прописываем автосервис по умолчанию
         if (entity === 'tehosmotr') {
             item.autoservice = 'Евроавтотест';
         }
     }
 
-    // Проверяем, проведен ли документ (если это редактирование)
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
-    console.log("Статус проведения документа (isPosted):", isPosted);
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -1642,10 +1569,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
-        // СКРЫВАЕМ поле «Документ прихода» (receipt_id) при добавлении/редактировании в repair_items
         if (entity === 'repair_items' && col.field === 'receipt_id') continue;
 
-        // СКРЫВАЕМ поле пароля (password_hash) при РЕДАКТИРОВАНИИ существующего пользователя
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
         
         let val = '';
@@ -1681,7 +1606,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        // Специальная обработка для поля статуса проведения (is_posted)
         if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -1778,7 +1702,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     
     if (isPostedSelect && factDateInput) {
         isPostedSelect.addEventListener('change', () => {
-            console.log("Изменился статус проведения (is_posted):", isPostedSelect.value);
             if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
                 factDateInput.value = currentDateTime;
             } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
@@ -1800,10 +1723,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
-                console.log(`Фильтрация МОЛ для склада ID: ${selectedWarehouseId}`);
 
                 try {
-                    // ИСПРАВЛЕНИЕ: запрашиваем /api/mol_users вместо старого /api/users
                     const [molRes, usersRes] = await Promise.all([
                         fetch('/api/mol'),
                         fetch('/api/mol_users')
@@ -1853,13 +1774,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     }
 
 
-
-
-
-
-
-
-
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -1867,12 +1781,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 'Подтверждение удаления',
                 'Вы уверены, что хотите удалить эту запись?',
                 async () => {
-                    console.log(`Удаление записи ${entity} с ID: ${item.id}`);
                     try {
                         const response = await fetch(`/api/${entity}/${item.id}`, {
                             method: 'DELETE'
                         });
-                        console.log(`Ответ удаления, статус:`, response.status);
 
                         if (response.ok) {
                             closeDrawer();
@@ -1927,7 +1839,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.repair_id = parentId;
         }
 
-        console.log("Что отправляем на бэкенд:", data);
 
         try {
             const isEdit = item && item.id;
@@ -1936,7 +1847,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 : `/api/${entity}`;
             
             const method = isEdit ? 'PUT' : 'POST';
-            console.log(`Отправка запроса [${method}] на адрес: ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -1946,7 +1856,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 body: JSON.stringify(data)
             });
 
-            console.log(`Ответ сервера при сохранении, статус:`, response.status);
 
             if (response.ok) {
                 closeDrawer();
@@ -1974,7 +1883,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
 
 
-
 async function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
@@ -1996,7 +1904,6 @@ async function deleteSelectedEntity() {
                     selectedItem = null;
                     showAppNotification('Запись успешно удалена', 'success');
                     
-                    // Учитываем специфику ваших вложенных таблиц (как в вашем примере с drawer)
                     const specialEntities = [
                         'receipt_items', 'move_items', 'accident_invoices', 
                         'accident_payments', 'accident_events', 'accident_items', 
@@ -2019,7 +1926,6 @@ async function deleteSelectedEntity() {
     );
 }
 
-// И функция изменения тоже чтобы была под рукой:
 function editSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для изменения (кликните один раз на строку в таблице).', 'warning');
@@ -2069,23 +1975,17 @@ async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
     
-    // 2. Перезагружаем верхнюю таблицу
     await loadData(currentEntity, title);
 
-    // 3. ЕСЛИ ЕСТЬ ВЫБРАННАЯ СТРОКА И НИЖНЯЯ ТАБЛИЦА (СПЕЦИФИКАЦИЯ) — ОБНОВЛЯЕМ И ЕЁ ТОЖЕ!
     if (selectedItem) {
-        // Проверяем, какой тип сущности сейчас открыт внизу и подтягиваем свежие детали
         if (currentEntity === 'receipts' && selectedItem.id) {
             loadDetailData('receipt_items', selectedItem.id);
         } else if (currentEntity === 'moves' && selectedItem.id) {
             loadDetailData('move_items', selectedItem.id);
         } else if (currentEntity === 'car_cards' && selectedItem.id) {
-            // Если внизу открыты вкладки машины, обновляем активную вкладку (например, техосмотр или запчасти)
             const activeTabBtn = document.querySelector('#tabs-for-cars button.active');
             if (activeTabBtn) {
-                // Определяем какую вкладку перезагрузить по её классу или атрибуту
-                // Или просто вызываем функцию обновления текущих деталей по ID машины
-                loadDetailData('tehosmotr', selectedItem.id); // замените на вашу логику активной вкладки
+                loadDetailData('tehosmotr', selectedItem.id); 
             }
         } else if (currentEntity === 'accidents' && selectedItem.id) {
             loadDetailData('accident_invoices', selectedItem.id);
@@ -2099,18 +1999,11 @@ async function refreshData() {
             loadDetailData('part_movement_details', selectedItem);
         }
     }
-
-    console.log("Данные успешно обновлены без перезагрузки страницы!");
 }
 
 
 
-
-
-
-// Функция для всплывающих уведомлений (вместо alert)
 function showAppNotification(message, type = 'info') {
-    // Проверяем, есть ли готовый контейнер для тостов/уведомлений, если нет — создаем на лету
     let container = document.getElementById('app-notifications-container');
     if (!container) {
         container = document.createElement('div');
@@ -2136,7 +2029,7 @@ function showAppNotification(message, type = 'info') {
     `;
     toast.innerText = message;
     container.appendChild(toast);
-
+x``
     setTimeout(() => toast.style.opacity = '1', 10);
     setTimeout(() => {
         toast.style.opacity = '0';
@@ -2144,9 +2037,7 @@ function showAppNotification(message, type = 'info') {
     }, 3500);
 }
 
-// Функция для красивого подтверждения действия (вместо confirm)
 function showConfirmModal(title, text, onConfirm) {
-    // Удаляем старое модальное окно, если оно есть
     const existingModal = document.getElementById('custom-confirm-modal');
     if (existingModal) existingModal.remove();
 
@@ -2180,41 +2071,23 @@ function showConfirmModal(title, text, onConfirm) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-// ==================== ЗАГРУЗКА СКЛАДОВ В ФИЛЬТР ====================
 async function loadWarehousesForFilter() {
     try {
         const select = document.getElementById('filter-warehouse');
         if (!select) return;
 
-        // Если склады уже загружены (есть больше одного пункта), не запрашиваем повторно
         if (select.options.length > 1) return;
 
-        // Используем эндпоинт для складов
         const response = await fetch('/api/skladi');
         if (!response.ok) throw new Error('Ошибка загрузки складов');
         
         const warehouses = await response.json();
 
-        // Очищаем и оставляем дефолтный пункт
         select.innerHTML = '<option value="">-- Все склады --</option>';
 
-        // Заполняем список
         warehouses.forEach(wh => {
             const option = document.createElement('option');
-            // ID склада (пробуем разные варианты полей, которые могут быть в базе)
             option.value = wh.id || wh.warehouse_id || wh.sklad_id;
-            // Название склада
             option.textContent = wh.name || wh.title || wh.sklad_name;
             select.appendChild(option);
         });
@@ -2222,30 +2095,25 @@ async function loadWarehousesForFilter() {
         console.error('Не удалось загрузить список складов для фильтра:', err);
     }
 }
-// ==================== ЗАГРУЗКА МОЛОВ В ФИЛЬТР ====================
+
+
 async function loadMolsForFilter() {
     try {
         const select = document.getElementById('filter-mol');
         if (!select) return;
 
-        // Если МОЛы уже загружены (есть больше одного пункта), не запрашиваем повторно
         if (select.options.length > 1) return;
 
-        // Эндпоинт для МОЛов исправлен на /api/mol (соответствует твоему роутеру)
         const response = await fetch('/api/mol');
         if (!response.ok) throw new Error('Ошибка загрузки МОЛ');
         
         const mols = await response.json();
 
-        // Очищаем и оставляем дефолтный пункт
         select.innerHTML = '<option value="">-- Все МОЛ --</option>';
 
-        // Заполняем список
         mols.forEach(mol => {
             const option = document.createElement('option');
-            // ID МОЛ
             option.value = mol.id || mol.mol_id;
-            // ФИО или название МОЛ (с учетом JOIN из бэкенда: user_fio или name)
             option.textContent = mol.user_fio || mol.name || mol.fio || mol.title;
             select.appendChild(option);
         });
@@ -2253,7 +2121,8 @@ async function loadMolsForFilter() {
         console.error('Не удалось загрузить список МОЛ для фильтра:', err);
     }
 }
-// ==================== ФУНКЦИЯ ПРИМЕНЕНИЯ ФИЛЬТРОВ ====================
+
+
 async function applyFilters() {
     if (currentEntity !== 'stock_balances') return;
 
@@ -2261,7 +2130,6 @@ async function applyFilters() {
     const warehouseId = document.getElementById('filter-warehouse')?.value || '';
     const molId = document.getElementById('filter-mol')?.value || '';
 
-    // Формируем query-строку для отправки на сервер
     const params = new URLSearchParams();
     if (dateVal) params.append('date', dateVal);
     if (warehouseId) params.append('warehouse_id', warehouseId);
@@ -2274,7 +2142,6 @@ async function applyFilters() {
         currentItems = await response.json();
         const config = getConfig('stock_balances');
         
-        // Перерисовываем таблицу с новыми данными
         const tbody = document.getElementById('table-body');
         tbody.innerHTML = '';
 
@@ -2287,7 +2154,6 @@ async function applyFilters() {
             tr.onclick = () => {
                 selectedItem = item;
                 const zId = item.zaphasti_id || item.id;
-                // Поддерживаем все варианты полей складов из твоего кода
                 const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
                 loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId });
             };
@@ -2296,7 +2162,6 @@ async function applyFilters() {
 
         document.getElementById('row-count').innerText = `Раздел: Остатки запчастей | Найдено строк: ${currentItems.length}`;
 
-        // Обновляем нижнюю табличку (партии) для первой строки отфильтрованного списка
         if (currentItems.length > 0) {
             selectedItem = currentItems[0];
             const zId = currentItems[0].zaphasti_id || currentItems[0].id;
@@ -2314,7 +2179,8 @@ async function applyFilters() {
         console.error('Ошибка применения фильтров:', err);
     }
 }
-// ==================== ЗАГРУЗКА СКЛАДОВ ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ ====================
+
+
 async function loadWarehousesForMovement() {
     try {
         const select = document.getElementById('movement-warehouse');
@@ -2337,7 +2203,8 @@ async function loadWarehousesForMovement() {
         console.error('Не удалось загрузить список складов для движения:', err);
     }
 }
-// ==================== ЗАГРУЗКА МОЛОВ ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ ====================
+
+
 async function loadMolsForMovement() {
     try {
         const select = document.getElementById('movement-mol');
@@ -2360,7 +2227,8 @@ async function loadMolsForMovement() {
         console.error('Не удалось загрузить список МОЛ для движения:', err);
     }
 }
-// ==================== ФУНКЦИЯ ПРИМЕНЕНИЯ ФИЛЬТРОВ ДВИЖЕНИЯ ====================
+
+
 async function applyMovementFilters() {
     if (currentEntity !== 'stock_movement') return;
 
@@ -2415,37 +2283,35 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ====================
+
+
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
 
-    // --- УПРАВЛЕНИЕ ВИДИМОСТЬЮ ПАНЕЛИ ФИЛЬТРОВ ДЛЯ ОСТАТКОВ ---
     const filterPanel = document.getElementById('parts-filter-panel');
     if (filterPanel) {
         if (entity === 'stock_balances') {
             filterPanel.style.display = 'flex';
-            loadWarehousesForFilter(); // Автоматически загружает склады для остатков
-            loadMolsForFilter();      // Автоматически загружает МОЛы для остатков
+            loadWarehousesForFilter(); 
+            loadMolsForFilter();      
         } else {
             filterPanel.style.display = 'none';
         }
     }
 
-    // --- УПРАВЛЕНИЕ ВИДИМОСТЬЮ НОВОЙ ПАНЕЛИ ФИЛЬТРОВ ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ ---
     const movementFilterPanel = document.getElementById('movement-filter-panel');
     if (movementFilterPanel) {
         if (entity === 'stock_movement') {
             movementFilterPanel.style.display = 'flex';
-            loadWarehousesForMovement(); // Автоматически загружает склады для движения
-            loadMolsForMovement();      // Автоматически загружает МОЛы для движения
+            loadWarehousesForMovement(); 
+            loadMolsForMovement();      
         } else {
             movementFilterPanel.style.display = 'none';
         }
     }
 
-    // --- НАДЕЖНОЕ СКРЫТИЕ ВЕРХНИХ КНОПОК ПО ID ---
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
@@ -2462,7 +2328,6 @@ async function loadData(entity, title) {
         }
     }
  
-    // --- УПРАВЛЕНИЕ ВИДИМОСТЬЮ НИЖНЕЙ ПАНЕЛИ И КНОПОК СПЕЦИФИКАЦИИ ---
     const detailContainer = document.getElementById('detail-container');
     const detailToolbar = document.getElementById('detail-toolbar');
 
@@ -2470,7 +2335,6 @@ async function loadData(entity, title) {
         if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement') {
             detailContainer.style.display = 'flex'; 
 
-            // Скрываем нижние кнопки для car_cards, stock_balances и stock_movement
             if (detailToolbar) {
                 if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
                     detailToolbar.style.display = 'none';
@@ -2484,7 +2348,6 @@ async function loadData(entity, title) {
     }
 
     try {
-        // СОБИРАЕМ ПАРАМЕТРЫ ИЗ ФИЛЬТРОВ В ЗАВИСИМОСТИ ОТ РАЗДЕЛА
         let url = `/api/${entity}`;
         const params = new URLSearchParams();
 
@@ -2531,7 +2394,6 @@ async function loadData(entity, title) {
         
         const thead = headerTr.closest('thead');
         
-        // 1. Создаем или находим строку для поиска НАВЕРХУ (перед заголовками)
         let filterRow = document.getElementById('table-filter-row');
         
         if (entity === 'car_cards') {
@@ -2567,7 +2429,6 @@ async function loadData(entity, title) {
 
         const visibleColumns = config.columns.filter(col => col.table !== false);
 
-        // 2. Формируем строку названий колонок
         let headersHtml = visibleColumns.map(col => {
             let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
             let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
@@ -2576,7 +2437,6 @@ async function loadData(entity, title) {
 
         headerTr.innerHTML = headersHtml;
 
-        // Рендерим строки данных
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
             tr.dataset.id = item.id || '';
@@ -2586,7 +2446,6 @@ async function loadData(entity, title) {
             tr.onclick = () => {
                 selectedItem = item;
 
-                // 📌 Убираем подсветку со всех остальных строк и подсвечиваем текущую
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
@@ -2599,7 +2458,6 @@ async function loadData(entity, title) {
                         warehouse_id: wId 
                     });
                 } else if (entity === 'stock_movement') {
-                    // 📌 ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ: передаем объект выбранной строки целиком
                     loadDetailData('part_movement_details', item);
                 } else if (entity === 'receipts') {
                     loadDetailData('receipt_items', item.id);
@@ -2613,7 +2471,6 @@ async function loadData(entity, title) {
 
         document.getElementById('row-count').innerText = `Раздел: ${title} | Всего строк: ${currentItems.length}`;
 
-        // Управление вкладками внизу
         const carTabsBar = document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
@@ -2694,7 +2551,6 @@ async function loadData(entity, title) {
                 
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    // 📌 ДЛЯ ДВИЖЕНИЯ ЗАПЧАСТЕЙ передаем объект первой строки целиком
                     loadDetailData('part_movement_details', selectedItem);
                 } else {
                     emptyDetailBody();
@@ -2725,7 +2581,6 @@ function emptyDetailBody() {
     if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
 }
 
-// ==================== ФУНКЦИЯ ФИЛЬТРАЦИИ ТАБЛИЦЫ ====================
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
     const filters = {};
@@ -2769,12 +2624,10 @@ function filterTable() {
     });
 }
 
-// Глобальная переменная для хранения выбранной строки в спецификации снизу
 let selectedDetailItem = null;
-let currentDetailItems = []; // Массив для хранения элементов нижней таблицы
+let currentDetailItems = []; 
 
-// Функции для управления элементами спецификации в нижней таблице
-// Определяем, какая дочерняя сущность соответствует текущему документу
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -2783,32 +2636,28 @@ function getCurrentDetailEntity() {
         return 'receipt_items';
     }
     if (currentEntity === 'stock_balances') {
-        return 'stock_batches'; // Для остатков запчастей нижняя таблица показывает партии
+        return 'stock_batches'; 
     }
     if (currentEntity === 'stock_movement') {
-        return 'part_movement_details'; // Для движения запчастей нижняя таблица показывает детальную историю
+        return 'part_movement_details'; 
     }
     if (currentEntity === 'accidents') {
-        // Сначала проверяем глобальное состояние
         if (typeof currentAccidentSubTab !== 'undefined' && currentAccidentSubTab) return currentAccidentSubTab;
 
-        // Определяем активную вкладку для ДТП
         const activeTab = document.querySelector('#tabs-for-accidents button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            // Извлекаем название сущности из вызова loadDetailData или switchAccidentTab
             const match = onclickAttr.match(/(?:loadDetailData|switchAccidentTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
         }
-        return 'accident_invoices'; // по умолчанию для ДТП
+        return 'accident_invoices'; 
     }
     if (currentEntity === 'repairs') {
-        // Сначала проверяем глобальное состояние для ремонта
+    
         if (typeof currentRepairSubTab !== 'undefined' && currentRepairSubTab) return currentRepairSubTab;
 
-        // Определяем активную вкладку для Ремонта
         const activeTab = document.querySelector('#tabs-for-repairs button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
@@ -2817,13 +2666,11 @@ function getCurrentDetailEntity() {
                 return match[1];
             }
         }
-        return 'repair_items'; // по умолчанию для ремонта (запчасти / товары)
+        return 'repair_items'; 
     }
     if (currentEntity === 'car_cards') {
-        // Сначала проверяем глобальное состояние для машин
         if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) return currentCarSubTab;
 
-        // Определяем активную вкладку для Машин
         const activeTab = document.querySelector('#tabs-for-cars button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
@@ -2832,13 +2679,12 @@ function getCurrentDetailEntity() {
                 return match[1];
             }
         }
-        return 'tehosmotr'; // по умолчанию для машин
+        return 'tehosmotr';
     }
     return 'receipt_items';
 }
 
 
-// ==================== УПРАВЛЕНИЕ ФОРМОЙ ДЕТАЛЕЙ (СПЕЦИФИКАЦИИ) ====================
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
@@ -2855,14 +2701,13 @@ function openDetailForm(mode) {
     
     openEntityForm(detailEntity, itemToEdit, selectedItem.id);
 }
-// ==================== УДАЛЕНИЕ СТРОКИ СПЕЦИФИКАЦИИ ====================
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
         return;
     }
 
-    // Красивое модальное окно подтверждения вместо стандартного confirm()
     showConfirmModal(
         'Подтверждение удаления',
         'Вы уверены, что хотите удалить эту позицию?',
@@ -2877,11 +2722,10 @@ async function deleteDetailItem() {
                     }
                 });
 
-                // Пытаемся прочитать JSON ответа для возможного вывода ошибки бэкенда
                 const resultData = await response.json().catch(() => ({}));
 
                 if (response.ok) {
-                    selectedDetailItem = null; // Сбрасываем выбор после удаления
+                    selectedDetailItem = null; 
                     showAppNotification('Позиция успешно удалена', 'success');
                     loadDetailData(detailEntity, selectedItem.id);
                 } else {
@@ -2896,7 +2740,6 @@ async function deleteDetailItem() {
 }
 
 
-// Специальная модалка подтверждения именно для проведения документов (с синей кнопкой «Провести»)
 function showPostConfirmModal(title, text, onConfirm) {
     const existingModal = document.getElementById('custom-post-confirm-modal');
     if (existingModal) existingModal.remove();
@@ -2930,7 +2773,7 @@ function showPostConfirmModal(title, text, onConfirm) {
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 }
 
-// 1. Проведение техосмотра (у него изначально не было confirm, оставляем как было, но с тостами)
+
 async function postTehosmotr(id) {
     try {
         const response = await fetch(`/api/tehosmotr/${id}/post`, {
@@ -2954,14 +2797,12 @@ async function postTehosmotr(id) {
 }
 
 
-// 2. Проведение автострахования
 async function postAutostrahovanie(id) {
     showPostConfirmModal(
         'Проведение документа',
         'Вы действительно хотите провести этот документ страхования?',
         async () => {
             try {
-                // Отправляем запрос на ваш универсальный PUT /:entity/:id
                 const response = await fetch(`/api/autostrahovanie/${id}`, {
                     method: 'PUT',
                     headers: { 
@@ -2969,7 +2810,7 @@ async function postAutostrahovanie(id) {
                     },
                     body: JSON.stringify({ 
                         is_posted: true, 
-                        fact_date: new Date().toISOString() // Записываем текущую дату факта
+                        fact_date: new Date().toISOString() 
                     })
                 });
 
@@ -2979,7 +2820,6 @@ async function postAutostrahovanie(id) {
                 }
 
                 showAppNotification('Документ страхования успешно проведен', 'success');
-                // Перезагружаем таблицу автострахования на экране (через refreshData для надежности)
                 refreshData();
             } catch (err) {
                 console.error(err);
@@ -2990,7 +2830,6 @@ async function postAutostrahovanie(id) {
 }
 
 
-// 3. Проведение перемещения
 async function postMove(moveId) {
     showPostConfirmModal(
         'Проведение документа',
@@ -3008,7 +2847,6 @@ async function postMove(moveId) {
                 if (!response.ok) throw new Error('Ошибка при проведении перемещения');
 
                 showAppNotification('Перемещение успешно проведено', 'success');
-                // Перезагружаем таблицу перемещений
                 refreshData();
             } catch (err) {
                 console.error(err);
@@ -3018,7 +2856,6 @@ async function postMove(moveId) {
     );
 }
 
-// 4. Проведение прихода
 async function postReceipt(receiptId) {
     showPostConfirmModal(
         'Проведение документа',
@@ -3036,7 +2873,6 @@ async function postReceipt(receiptId) {
                 if (!response.ok) throw new Error('Ошибка при проведении документа');
 
                 showAppNotification('Документ прихода успешно проведен', 'success');
-                // Перезагружаем данные таблицы прихода, чтобы обновить экран
                 refreshData();
             } catch (err) {
                 console.error(err);
@@ -3047,7 +2883,6 @@ async function postReceipt(receiptId) {
 }
 
 
-// ==================== ОБРАБОТЧИКИ КЛИКОВ ПО ВЕРХНЕЙ ТАБЛИЦЕ ====================
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
@@ -3059,16 +2894,14 @@ tableBody.addEventListener('click', async (e) => {
 
     const id = tr.getAttribute('data-id');
     selectedItem = currentItems.find(i => i.id == id);
-    selectedDetailItem = null; // Сбрасываем выбор внизу при смене строки
+    selectedDetailItem = null; 
 
-    // Управление отображением вкладок нижней панели
     const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
     const tabsForCars = document.getElementById('tabs-for-cars');
     const tabsForAccidents = document.getElementById('tabs-for-accidents');
     const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
     const detailContainer = document.getElementById('detail-container');
 
-    // 📌 Скрываем/показываем верхние кнопки «Добавить/Изменить/Удалить» для отчетов и нередактируемых разделов
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         if (
@@ -3089,7 +2922,6 @@ tableBody.addEventListener('click', async (e) => {
 
     if (selectedItem) {
         if (currentEntity === 'cars' || currentEntity === 'car_card' || currentEntity === 'car_cards') {
-            // Если это карточка автомобиля — показываем общую панель и вкладки авто
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'flex';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -3105,7 +2937,6 @@ tableBody.addEventListener('click', async (e) => {
                 }
             }
         } else if (currentEntity === 'accidents') {
-            // Если это ДТП — показываем панель и вкладки для ДТП
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
@@ -3128,7 +2959,6 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('accident_invoices', selectedItem.id);
             }
         } else if (currentEntity === 'repairs') {
-            // Если это Ремонт — показываем панель и вкладки для Ремонта
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -3151,13 +2981,11 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('repair_items', selectedItem.id);
             }
         } else {
-            // Скрываем панели специфичных подвкладок для обычных документов/справочников
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (carTabsPanel) carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves') ? 'flex' : 'none';
 
-            // Подгружаем состав в нижнюю таблицу в зависимости от текущего раздела
             if (currentEntity === 'receipts') {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
@@ -3167,27 +2995,22 @@ tableBody.addEventListener('click', async (e) => {
     }
 });
 
-// ==================== ОБРАБОТЧИКИ КЛИКОВ ПО ТАБЛИЦАМ ====================
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
 
-    // 📌 ЖЕЛЕЗНАЯ ЗАЩИТА: Блокируем двойной клик, если:
-    // 1. Это любая строка с colspan (шапка месяца, шапка ремонта, сообщения "нет данных")
     if (tr.querySelector('td[colspan]')) {
         return;
     }
 
-    // 2. Клик произошел внутри нижней панели автомобиля / отчетов / историй
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
                            e.target.closest('#car-tabs-bar');
     
     if (isInsideDetail) {
-        return; // Нижние вкладки (Общая, Ремонт машины, Техосмотр и т.д.) теперь полностью нередактируемые!
+        return; 
     }
 
-    // 3. Текущая сущность входит в список запрещенных для редактирования
     if (
         currentEntity === 'stock_remains' || 
         currentEntity === 'stock' || 
@@ -3214,14 +3037,12 @@ tableBody.addEventListener('dblclick', (e) => {
     }
 });
 
-// ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК В КАРТОЧКЕ АВТОМОБИЛЯ
 function switchCarTab(tabName, btnElement) {
     document.querySelectorAll('.car-tab-btn').forEach(btn => btn.classList.remove('active'));
     if (btnElement) {
         btnElement.classList.add('active');
     }
 
-    // СКРЫВАЕМ КНОПКИ ВНИЗУ В РЕЖИМЕ КАРТОЧКИ АВТО (согласно старой логике)
     const detailToolbar = document.getElementById('detail-toolbar');
     if (detailToolbar) {
         detailToolbar.style.display = 'none';
@@ -3232,13 +3053,10 @@ function switchCarTab(tabName, btnElement) {
     }
 }
 
-// Переменная для хранения текущей вкладки ремонта (по аналогии с ДТП)
 let currentRepairSubTab = 'repair_items';
 
 
-
 function switchAccidentTab(tabName, btnElement) {
-    // ЗАПОМИНАЕМ ТЕКУЩУЮ СУЩНОСТЬ ВКЛАДКИ
     currentAccidentSubTab = tabName;
 
     const container = document.getElementById('tabs-for-accidents');
@@ -3264,9 +3082,8 @@ function switchAccidentTab(tabName, btnElement) {
     }
 }
 
-// Функция переключения вкладок ремонта (поправлена по аналогии с ДТП)
 function switchRepairTab(tabName, btnElement) {
-    currentRepairSubTab = tabName; // Запоминаем текущую вкладку ремонта
+    currentRepairSubTab = tabName; 
 
     const container = document.getElementById('tabs-for-repairs');
     if (container) {
@@ -3291,9 +3108,6 @@ function switchRepairTab(tabName, btnElement) {
     }
 }
 
-
-
-    // РЕАЛИЗАЦИЯ ДЛЯ НИЖНЕЙ ТАБЛИЦЫ: Выделение одним кликом и редактирование двойным кликом
     const detailBody = document.getElementById('detail-body');
 
     if (detailBody) {
@@ -3316,13 +3130,12 @@ function switchRepairTab(tabName, btnElement) {
         const item = currentDetailItems.find(i => i.id == id);
         if (item) {
             selectedDetailItem = item;
-            openDetailForm('edit'); // Двойной клик открывает форму редактирования строки спецификации
+            openDetailForm('edit'); 
         }
     });
 }
-// ==================== ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЕЙ (НИЖНЯЯ ТАБЛИЦА) ====================
+
 async function loadDetailData(entity, parentId) {
-    // 📌 Управление видимостью панели кнопок: скрываем для отчетов, остатков и движений
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3342,20 +3155,19 @@ async function loadDetailData(entity, parentId) {
 
     const config = getConfig(entity); 
     const tbody = document.getElementById('detail-body');
-    const headerTr = document.getElementById('detail-headers'); // Шапка нижней таблицы
+    const headerTr = document.getElementById('detail-headers'); 
     
-    // Определяем правильное имя параметра для запроса в зависимости от сущности
     let queryParamName = 'receipt_id';
     let fetchUrl = '';
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
-        queryParamName = 'repair_id'; // Для запчастей и работ ремонта передаем ID ремонта
+        queryParamName = 'repair_id'; 
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
-        queryParamName = 'dtp_id'; // Для дочерних таблиц ДТП передаем ID конкретного ДТП
+        queryParamName = 'dtp_id'; 
     } else if (entity === 'stock_batches') {
-        // 📌 ДЛЯ ПАРТИЙ ОСТАТКОВ ЗАПЧАСТЕЙ: берем ID запчасти и подстраховываемся со всеми вариантами склада
+      
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
         
@@ -3366,7 +3178,7 @@ async function loadDetailData(entity, parentId) {
         }
         fetchUrl = `/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}`;
     } else if (entity === 'part_movement_details') {
-        // 📌 ДЛЯ ДЕТАЛИЗАЦИИ ДВИЖЕНИЯ ЗАПЧАСТЕЙ: берем zaphasti_id, warehouse_id и фильтры дат из шапки движения
+        
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
         
@@ -3376,7 +3188,6 @@ async function loadDetailData(entity, parentId) {
             wId = parts[1];
         }
 
-        // Берём даты из фильтров раздела «Движение запчастей»
         const startDate = document.getElementById('movement-start-date')?.value || '';
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
@@ -3385,21 +3196,15 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'car_id';
     }
 
-    // Если URL не был сформирован индивидуально выше, формируем стандартный
     if (!fetchUrl) {
         fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
     }
-    
-    // 🔍 ЛОГИРУЕМ ПЕРЕД ОТПРАВКОЙ ЗАПРОСА
-    console.log(`📡 [loadDetailData] Запрос сущности: "${entity}"`, { parentId, queryParamName, fetchUrl });
-    
+        
     const thead = headerTr ? headerTr.closest('thead') : null;
     let filterRow = document.getElementById('detail-filter-row');
 
-    // Фильтруем колонки, исключая те, у которых table: false
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
 
-    // 📌 ПОИСК ДЛЯ МАШИН, ДТП И РЕМОНТОВ
     if (queryParamName === 'car_id' || queryParamName === 'dtp_id' || queryParamName === 'repair_id') {
         if (thead && visibleColumns.length > 0) {
             if (!filterRow) {
@@ -3410,7 +3215,7 @@ async function loadDetailData(entity, parentId) {
                 thead.insertBefore(filterRow, headerTr);
             }
 
-            filterRow.style.display = ''; // Показываем строку поиска
+            filterRow.style.display = ''; 
             filterRow.innerHTML = visibleColumns.map(col => {
                 let widthStyle = col.width ? `width: ${col.width};` : '';
                 return `
@@ -3424,13 +3229,11 @@ async function loadDetailData(entity, parentId) {
             }).join('');
         }
     } else {
-        // Если это Приход, Перемещение, Партии остатков или Движение запчастей — скрываем строку поиска внизу
         if (filterRow) {
             filterRow.style.display = 'none';
         }
     }
 
-    // 📌 УПРАВЛЕНИЕ ШАПКОЙ ТАБЛИЦЫ (ДИНАМИЧЕСКАЯ ИЛИ ВОЗВРАТ К СТАНДАРТНОЙ)
     if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
@@ -3451,13 +3254,10 @@ async function loadDetailData(entity, parentId) {
         
         const items = await response.json();
         
-        // 🔍 ЛОГИРУЕМ УСПЕШНЫЙ ОТВЕТ С СЕРВЕРА
-        console.log(`📥 [loadDetailData] Успешный ответ для "${entity}":`, items);
 
         currentDetailItems = items; 
         selectedDetailItem = null;  
         
-        // 📌 Карта красивых названий подразделов для аккуратного отображения пользователю
         const entityTitles = {
             accident_invoices: 'Счета / Расходы',
             accident_payments: 'Выплаты',
@@ -3470,7 +3270,6 @@ async function loadDetailData(entity, parentId) {
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
 
-        // Динамический заголовок в зависимости от раздела (красивый и понятный)
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
             if (queryParamName === 'car_id') {
@@ -3495,11 +3294,9 @@ async function loadDetailData(entity, parentId) {
             return;
         }
 
-        // 📌 Рендеринг с поддержкой кастомной структуры (для истории ремонта и общей вкладки)
         if ((entity === 'repair_history' || entity === 'car_general') && typeof config.render === 'function') {
             tbody.innerHTML = config.render(items);
         } else {
-            // Очищаем и заполняем нижнюю таблицу с добавлением обработчика клика и подсветки
             tbody.innerHTML = '';
             items.forEach(item => {
                 const tr = document.createElement('tr');
@@ -3510,7 +3307,6 @@ async function loadDetailData(entity, parentId) {
                 tr.onclick = () => {
                     selectedDetailItem = item;
 
-                    // 📌 Снимаем подсветку со всех строк нижней таблицы и подсвечиваем текущую кликнутую
                     tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
                 };
@@ -3524,22 +3320,21 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-// ==================== НАДЕЖНЫЙ ПОИСК ПО НИЖНЕЙ ТАБЛИЦЕ ====================
+
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
 
     rows.forEach(row => {
-        // Пропускаем строки-заглушки (если нет данных)
         if (row.cells.length <= 1) return;
 
         let isVisible = true;
 
         filterInputs.forEach((input, index) => {
             const searchText = input.value.trim().toLowerCase();
-            if (!searchText) return; // Если в инпуте пусто — не фильтруем по нему
+            if (!searchText) return; 
 
-            // Берем ячейку по её порядковому номеру в строке
             const cell = row.cells[index];
             if (cell) {
                 const cellText = cell.textContent.toLowerCase();
@@ -3597,34 +3392,27 @@ const navMap = {
     'Оплатить счет': 'accident_payments',
     'События': 'accident_events',
     'Ремонт': 'repairs',
-    'История ремонта': 'repair_history', // Добавили для вкладки repair_history
-    'Запчасти ремонта': 'repair_items', // Добавь эту строку
-    'Работы ремонта': 'repair_works', // Добавили работы
+    'История ремонта': 'repair_history', 
+    'Запчасти ремонта': 'repair_items', 
+    'Работы ремонта': 'repair_works', 
     'Тип документа':'doc_types',
     'Общая': 'car_general',
-    'Остатки запчастей': 'stock_balances', // Добавили экран остатков
+    'Остатки запчастей': 'stock_balances', 
     'Остатки партии':'stock_batches',
     'Пользователи2':'mol_users',
     'Движение запчастей':'stock_movement',
     'Детали двжиения': 'part_movement_details'
-    // Добавили общую сводную вкладку
 };
 
-
-// ==========================================
-// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ФИЛЬТРОВ
-// ==========================================
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
 
     if (!partsFilter || !movementFilter) return;
 
-    // Сбрасываем обе панели по умолчанию
     partsFilter.style.display = 'none';
     movementFilter.style.display = 'none';
 
-    // Включаем нужную в зависимости от сущности
     if (entity === 'stock_balances') {
         partsFilter.style.display = 'flex';
     } else if (entity === 'stock_movement') {
@@ -3632,9 +3420,6 @@ function updateFilterPanels(entity) {
     }
 }
 
-// ==========================================
-// ОСНОВНОЙ КОД НАВИГАЦИИ И СОБЫТИЙ
-// ==========================================
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -3645,34 +3430,27 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const text = link.innerText.trim();
         const entity = navMap[text] || text.toLowerCase();
         
-        // Управление панелями фильтров (Остатки / Движение запчастей)
         updateFilterPanels(entity);
 
-        // Управление видимостью нижней панели
         const detailContainer = document.getElementById('detail-container');
-        const carTabsBar = document.getElementById('car-tabs-bar'); // Панель вкладок внизу
+        const carTabsBar = document.getElementById('car-tabs-bar'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
 
-        // 📌 Управляем видимостью кнопок действий в нижней панели (Добавить / Изменить / Удалить)
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
-            // Сущности, для которых в главном меню или внизу не нужны кнопки управления
             const readOnlyMainEntities = ['stock_balances', 'stock_movement'];
             
             if (readOnlyMainEntities.includes(entity)) {
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
             } else {
-                // Для receipts, moves, car_cards, accidents возвращаем показ (если это не специфическая вкладка)
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
             }
         }
 
-        // Условие отображения нижней панели и её вкладок
         if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
-            // Управляем отображением самой панели и переключаем наборы кнопок в зависимости от сущности
             if (carTabsBar) carTabsBar.style.display = 'flex';
 
             if (entity === 'car_cards') {
@@ -3682,7 +3460,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
             } else {
-                // Для receipts, moves, stock_balances и stock_movement нижняя панель есть, но кастомные подвкладки не нужны
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             }
@@ -3695,24 +3472,18 @@ document.querySelectorAll('.nav-link').forEach(link => {
     });
 });
 
-// ==========================================
-// КЛАССИЧЕСКИЙ АККОРДЕОН (один открыт, остальные закрываются)
-// ==========================================
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
         if (!content) return;
 
-        // Проверяем, открыт ли текущий раздел в данный момент
         const isOpen = content.style.display === 'flex';
 
-        // 1. Сначала скрываем/закрываем абсолютно все разделы меню
         document.querySelectorAll('.accordion-content').forEach(item => {
             item.style.display = 'none';
         });
 
-        // 2. Если нажатый раздел был закрыт, открываем его. 
-        // (Если был открыт — он закроется, оставляя всё меню свернутым, что и создает правильный эффект аккордеона)
         if (!isOpen) {
             content.style.display = 'flex';
         }
