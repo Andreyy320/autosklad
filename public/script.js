@@ -1547,8 +1547,7 @@ function closeDrawer() {
         backdrop.style.opacity = '0';
         backdrop.style.pointerEvents = 'none';
     }
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1621,7 +1620,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     `;
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
@@ -1845,7 +1844,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts') && parentId) {
+                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts') && parentId) {
                                 loadDetailData(entity, parentId);
                             } else {
                                 refreshData();
@@ -1893,8 +1892,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.dtp_id = parentId;
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
             data.repair_id = parentId;
+        } else if (entity === 'counterparty_contacts' && parentId) {
+            // Привязка ID контрагента для контактов контрагентов
+            data.counterparty_id = parentId;
         } else if (entity === 'entity_contacts') {
-            // Безопасно определяем ID и реальный тип родителя
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
                 data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
@@ -1903,7 +1904,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 data.entity_type = window.currentEntity || window.activeEntity || 'customers';
             }
             
-            // Защита от мусора
             if (!data.entity_type || data.entity_type === 'entity_contacts') {
                 data.entity_type = window.currentEntity || window.activeEntity || 'customers';
             }
@@ -1928,7 +1928,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts') && parentId) {
+                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts') && parentId) {
                     loadDetailData(entity, parentId);
                 } else {
                     refreshData();
