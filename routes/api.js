@@ -2120,6 +2120,8 @@ router.post('/:entity', async (req, res) => {
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
                     
+            console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
+
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
@@ -2127,6 +2129,7 @@ router.post('/:entity', async (req, res) => {
                     const warehouseId = repairCheck.rows[0].warehouse_id;
 
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                     }
 
@@ -2147,7 +2150,10 @@ router.post('/:entity', async (req, res) => {
                         const balanceRes = await pool.query(balanceQuery, [zaphast_id, warehouseId]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
 
+                        console.log(`[STOCK DEBUG] Склад ремонта ID=${warehouseId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+
                         if (requestedQty > availableStock) {
+                            console.log(`[ERROR] Недостаточно остатка на складе ремонта! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                             return res.status(400).json({ 
                                 error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
                             });
@@ -2243,6 +2249,8 @@ router.post('/:entity', async (req, res) => {
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
+            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
+
             if (move_id) {
                 const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
                 if (moveCheck.rows.length > 0) {
@@ -2254,7 +2262,7 @@ router.post('/:entity', async (req, res) => {
                     }
 
                     if (warehouseFromId) {
-                        // Полный расчет остатка на складе-источнике: Приходы + Перемещения туда - Перемещения оттуда - Ремонты
+                        // Полный расчет остатка с учетом текущего перемещения (исключая текущий документ через m_from.id != $3)
                         const balanceQuery = `
                             SELECT 
                                 (
@@ -2270,6 +2278,8 @@ router.post('/:entity', async (req, res) => {
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
+
+                        console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                         if (requestedQty > availableStock) {
                             return res.status(400).json({ 
@@ -2384,7 +2394,6 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-
 // ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
