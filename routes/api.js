@@ -154,6 +154,24 @@ router.get('/counterparties', async (req, res) => {
 });
 
 
+// ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО КОНТРАГЕНТА
+router.get('/counterparty_contacts/:counterparty_id', async (req, res) => {
+    try {
+        const { counterparty_id } = req.params;
+        const query = `
+            SELECT * FROM counterparty_contacts 
+            WHERE counterparty_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [counterparty_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов контрагента');
+    }
+});
+
+
 
 
 // Роут получения поставщиков с JOIN
@@ -189,6 +207,9 @@ router.get('/postavhik', async (req, res) => {
         res.status(500).send('Ошибка при получении покупателей');
     }
 });
+
+
+
 
     // ПОЛУЧЕНИЕ СПИСКА ТИПОВ КОНТРАГЕНТОВ (из таблицы counterparty_types)
     router.get('/counterparty_types', async (req, res) => {

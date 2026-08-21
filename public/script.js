@@ -2347,7 +2347,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2669,7 +2668,6 @@ async function loadData(entity, title) {
     }
 }
 
-
 function emptyDetailBody() {
     const detailBody = document.getElementById('detail-body');
     if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
@@ -2717,9 +2715,9 @@ function filterTable() {
         row.style.display = isVisible ? '' : 'none';
     });
 }
-
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -2756,7 +2754,6 @@ function getCurrentDetailEntity() {
         return 'accident_invoices'; 
     }
     if (currentEntity === 'repairs') {
-    
         if (typeof currentRepairSubTab !== 'undefined' && currentRepairSubTab) return currentRepairSubTab;
 
         const activeTab = document.querySelector('#tabs-for-repairs button.active');
@@ -2981,7 +2978,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 
 const tableBody = document.getElementById('table-body');
 
@@ -3239,8 +3235,7 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}
-async function loadDetailData(entity, parentId) {
+}async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
