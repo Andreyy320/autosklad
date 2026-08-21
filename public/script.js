@@ -1550,7 +1550,6 @@ function closeDrawer() {
     }
 }
 
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1623,13 +1622,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    // Добавляем скрытое поле для postavhik_id, чтобы FormData видела parentId при отправке
+    // Добавляем скрытые поля для связи с родителем в зависимости от сущности
     if (entity === 'postavhik_contacts' && parentId) {
         html += `<input type="hidden" name="postavhik_id" value="${parentId}">`;
+    } else if (entity === 'customer_contacts' && parentId) {
+        html += `<input type="hidden" name="customer_id" value="${parentId}">`;
     }
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
@@ -1836,7 +1837,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         });
     }
 
-
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -1852,7 +1852,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts' || entity === 'postavhik_contacts') && parentId) {
+                            const detailEntities = [
+                                'receipt_items', 'move_items', 'accident_invoices', 
+                                'accident_payments', 'accident_events', 'accident_items', 
+                                'repair_items', 'repair_works', 'entity_contacts', 
+                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                            ];
+                            if (detailEntities.includes(entity) && parentId) {
                                 loadDetailData(entity, parentId);
                             } else {
                                 refreshData();
@@ -1903,7 +1909,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
         } else if (entity === 'counterparty_contacts' && parentId) {
             data.counterparty_id = parentId;
         } else if (entity === 'postavhik_contacts' && parentId) {
-            data.postavhik_id = parentId; // Привязка ID поставщика
+            data.postavhik_id = parentId;
+        } else if (entity === 'customer_contacts' && parentId) {
+            data.customer_id = parentId; // Привязка ID покупателя
         } else if (entity === 'entity_contacts') {
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
@@ -1937,7 +1945,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts' || entity === 'postavhik_contacts') && parentId) {
+                const detailEntities = [
+                    'receipt_items', 'move_items', 'accident_invoices', 
+                    'accident_payments', 'accident_events', 'accident_items', 
+                    'repair_items', 'repair_works', 'entity_contacts', 
+                    'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                ];
+                if (detailEntities.includes(entity) && parentId) {
                     loadDetailData(entity, parentId);
                 } else {
                     refreshData();
@@ -1957,7 +1971,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 async function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');

@@ -241,8 +241,9 @@ router.get('/postavhik_contacts/:postavhik_id', async (req, res) => {
     }
 });
 
-// ПОЛУЧЕНИЕ СПИСКА ПОКУПАТЕЛЕЙ (из таблицы customers)
-  router.get('/customers', async (req, res) => {
+
+// Роут получения покупателей с JOIN
+router.get('/customers', async (req, res) => {
     try {
         const query = `
             SELECT c.*, t.name AS type_name 
@@ -258,6 +259,39 @@ router.get('/postavhik_contacts/:postavhik_id', async (req, res) => {
     }
 });
 
+// ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО ПОКУПАТЕЛЯ (поддерживает и /api/customer_contacts/1, и /api/customer_contacts?customer_id=1)
+router.get('/customer_contacts', async (req, res) => {
+    try {
+        const customer_id = req.params.customer_id || req.query.customer_id;
+        const query = `
+            SELECT * FROM customer_contacts 
+            WHERE customer_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [customer_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов покупателя');
+    }
+});
+
+// Оставляем роут со слэшем на случай вызова с ID в параметрах пути
+router.get('/customer_contacts/:customer_id', async (req, res) => {
+    try {
+        const { customer_id } = req.params;
+        const query = `
+            SELECT * FROM customer_contacts 
+            WHERE customer_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [customer_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов покупателя');
+    }
+});
 
 
 
@@ -2033,9 +2067,14 @@ router.post('/:entity', async (req, res) => {
         if (entity === 'models') { entity = 'car_models'; }
         if (entity === 'bodies') { entity = 'kyzov_type'; }
         
-        // Добавили обработку для поставщиков точно так же, как для контрагентов
+        // Добавили обработку для поставщиков
         if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
             entity = 'postavhik_contacts'; 
+        }
+
+        // Добавили обработку для покупателей (аналогично контрагентам и поставщикам)
+        if (entity === 'customer-contacts' || entity === 'customer_ contacts') { 
+            entity = 'customer_contacts'; 
         }
 
         const allowedTables = [
@@ -2048,7 +2087,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 'postavhik_contacts'
+            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2116,7 +2155,6 @@ router.post('/:entity', async (req, res) => {
                 }
             }
 
-            // Автоматический поиск документа прихода (FIFO), если receipt_id не передан
             let targetReceiptId = receipt_id;
             if (!targetReceiptId) {
                 const docQuery = `
@@ -2362,7 +2400,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2591,7 +2629,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
