@@ -206,6 +206,41 @@ router.get('/postavhik', async (req, res) => {
     }
 });
 
+
+// ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО ПОСТАВЩИКА (поддерживает и /api/postavhik_contacts/1, и /api/postavhik_contacts?postavhik_id=1)
+router.get('/postavhik_contacts', async (req, res) => {
+    try {
+        const postavhik_id = req.params.postavhik_id || req.query.postavhik_id;
+        const query = `
+            SELECT * FROM postavhik_contacts 
+            WHERE postavhik_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [postavhik_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов поставщика');
+    }
+});
+
+// Оставляем старый роут на всякий случай, если вызывается со слэшем
+router.get('/postavhik_contacts/:postavhik_id', async (req, res) => {
+    try {
+        const { postavhik_id } = req.params;
+        const query = `
+            SELECT * FROM postavhik_contacts 
+            WHERE postavhik_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [postavhik_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов поставщика');
+    }
+});
+
 // ПОЛУЧЕНИЕ СПИСКА ПОКУПАТЕЛЕЙ (из таблицы customers)
   router.get('/customers', async (req, res) => {
     try {

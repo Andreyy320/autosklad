@@ -1620,12 +1620,11 @@ function closeDrawer() {
     `;
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
         if (entity === 'repair_items' && col.field === 'receipt_id') continue;
-
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
         
         let val = '';
@@ -1844,7 +1843,7 @@ function closeDrawer() {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts') && parentId) {
+                            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts' || entity === 'postavhik_contacts') && parentId) {
                                 loadDetailData(entity, parentId);
                             } else {
                                 refreshData();
@@ -1893,8 +1892,9 @@ function closeDrawer() {
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
             data.repair_id = parentId;
         } else if (entity === 'counterparty_contacts' && parentId) {
-            // Привязка ID контрагента для контактов контрагентов
             data.counterparty_id = parentId;
+        } else if (entity === 'postavhik_contacts' && parentId) {
+            data.postavhik_id = parentId; // Привязка ID поставщика
         } else if (entity === 'entity_contacts') {
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
@@ -1928,7 +1928,7 @@ function closeDrawer() {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts') && parentId) {
+                if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items' || entity === 'repair_items' || entity === 'repair_works' || entity === 'entity_contacts' || entity === 'counterparty_contacts' || entity === 'postavhik_contacts') && parentId) {
                     loadDetailData(entity, parentId);
                 } else {
                     refreshData();
