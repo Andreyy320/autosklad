@@ -2023,8 +2023,6 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
-
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST  ====================
 router.post('/:entity', async (req, res) => {
 
@@ -2034,6 +2032,11 @@ router.post('/:entity', async (req, res) => {
         if (entity === 'brands') { entity = 'car_brands'; }
         if (entity === 'models') { entity = 'car_models'; }
         if (entity === 'bodies') { entity = 'kyzov_type'; }
+        
+        // Добавили обработку для поставщиков точно так же, как для контрагентов
+        if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
+            entity = 'postavhik_contacts'; 
+        }
 
         const allowedTables = [
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
@@ -2045,7 +2048,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts'
+            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 'postavhik_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2076,7 +2079,7 @@ router.post('/:entity', async (req, res) => {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
-                        
+                    
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
@@ -2103,7 +2106,6 @@ router.post('/:entity', async (req, res) => {
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphast_id, warehouseId]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
-
 
                         if (requestedQty > availableStock) {
                             return res.status(400).json({ 
@@ -2202,7 +2204,6 @@ router.post('/:entity', async (req, res) => {
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
-
             if (move_id) {
                 const moveCheck = await pool.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1', [move_id]);
                 if (moveCheck.rows.length > 0) {
@@ -2226,7 +2227,6 @@ router.post('/:entity', async (req, res) => {
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
-
 
                         if (requestedQty > availableStock) {
                             return res.status(400).json({ 
@@ -2342,7 +2342,6 @@ router.post('/:entity', async (req, res) => {
     }
 });
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
 router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
@@ -2363,7 +2362,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2592,7 +2591,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
