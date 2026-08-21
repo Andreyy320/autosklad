@@ -153,8 +153,24 @@ router.get('/counterparties', async (req, res) => {
     }
 });
 
+// ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО КОНТРАГЕНТА (поддерживает и /api/counterparty_contacts/1, и /api/counterparty_contacts?counterparty_id=1)
+router.get('/counterparty_contacts', async (req, res) => {
+    try {
+        const counterparty_id = req.params.counterparty_id || req.query.counterparty_id;
+        const query = `
+            SELECT * FROM counterparty_contacts 
+            WHERE counterparty_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [counterparty_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении контактов контрагента');
+    }
+});
 
-// ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО КОНТРАГЕНТА
+// Оставляем старый роут на всякий случай, если где-то еще вызывается со слэшем
 router.get('/counterparty_contacts/:counterparty_id', async (req, res) => {
     try {
         const { counterparty_id } = req.params;
@@ -170,7 +186,6 @@ router.get('/counterparty_contacts/:counterparty_id', async (req, res) => {
         res.status(500).send('Ошибка при получении контактов контрагента');
     }
 });
-
 
 
 
