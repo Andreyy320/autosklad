@@ -140,6 +140,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
+
 customer_contacts: {
         title: 'Контакты покупателей',
         columns: [
@@ -1547,7 +1548,10 @@ function closeDrawer() {
         backdrop.style.opacity = '0';
         backdrop.style.pointerEvents = 'none';
     }
-}async function openEntityForm(entity, item = null, parentId = null) {
+}
+
+
+async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1618,6 +1622,11 @@ function closeDrawer() {
         </div>
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
+
+    // Добавляем скрытое поле для postavhik_id, чтобы FormData видела parentId при отправке
+    if (entity === 'postavhik_contacts' && parentId) {
+        html += `<input type="hidden" name="postavhik_id" value="${parentId}">`;
+    }
 
     for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
@@ -3235,7 +3244,9 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
