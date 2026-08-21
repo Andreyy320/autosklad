@@ -1259,6 +1259,7 @@ router.get('/repair_history', async (req, res) => {
 
 
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (СУММАРНО ПО СКЛАДАМ) ====================
+// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (СУММАРНО ПО СКЛАДАМ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1390,11 +1391,12 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
         let { zaphasti_id, warehouse_id } = req.query;
+
+        console.log("📡 [Server] Запрос истории движений /stock_batches получен:", { zaphasti_id, warehouse_id });
 
         if (!zaphasti_id) {
             return res.status(400).json({ error: 'Не указан zaphasti_id' });
@@ -1520,6 +1522,7 @@ router.get('/stock_batches', async (req, res) => {
 
         const result = await pool.query(query, queryParams);
         
+        console.log(`📥 [Server] История операций успешно получена. Всего записей: ${result.rows.length}`);
         res.json(result.rows);
 
     } catch (err) {
@@ -1527,7 +1530,6 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
@@ -2057,9 +2059,12 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
+// ==================== УНИВЕРСАЛЬНЫЙ POST С ПОДРОБНЫМИ ЛОГАМИ ====================
 
-// ==================== УНИВЕРСАЛЬНЫЙ POST  ====================
 router.post('/:entity', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
+    console.log(`[BODY]:`, req.body);
 
     try {
         let { entity } = req.params;
@@ -2067,16 +2072,6 @@ router.post('/:entity', async (req, res) => {
         if (entity === 'brands') { entity = 'car_brands'; }
         if (entity === 'models') { entity = 'car_models'; }
         if (entity === 'bodies') { entity = 'kyzov_type'; }
-        
-        // Добавили обработку для поставщиков
-        if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
-            entity = 'postavhik_contacts'; 
-        }
-
-        // Добавили обработку для покупателей (аналогично контрагентам и поставщикам)
-        if (entity === 'customer-contacts' || entity === 'customer_ contacts') { 
-            entity = 'customer_contacts'; 
-        }
 
         const allowedTables = [
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
@@ -2088,13 +2083,15 @@ router.post('/:entity', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+            'repair_items', 'repair_works','mol_users'
         ];
 
         if (!allowedTables.includes(entity)) {
+            console.log(`[ERROR] Недопустимая таблица: ${entity}`);
             return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
         }
 
+        // --- ИСПРАВЛЕНИЕ ДЛЯ REPAIRS ---
         if (entity === 'repairs') {
             if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
                 req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
@@ -2107,6 +2104,7 @@ router.post('/:entity', async (req, res) => {
             delete req.body.doc_type;
         }
 
+        // --- ПРИВЕДЕНИЕ is_posted К BOOLEAN ДЛЯ БД ---
         if (req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted; 
@@ -2115,13 +2113,14 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
+        // --- ЛОГИКА ДЛЯ repair_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ РЕМОНТА, FIFO И receipt_id) ---
         if (entity === 'repair_items') {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
-                    
+            
             console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
-
+            
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
@@ -2133,6 +2132,7 @@ router.post('/:entity', async (req, res) => {
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                     }
 
+                    // Если у ремонта указан склад, проверяем остаток строго на нем
                     if (warehouseId) {
                         const balanceQuery = `
                             SELECT 
@@ -2162,6 +2162,7 @@ router.post('/:entity', async (req, res) => {
                 }
             }
 
+            // Автоматический поиск документа прихода (FIFO), если receipt_id не передан
             let targetReceiptId = receipt_id;
             if (!targetReceiptId) {
                 const docQuery = `
@@ -2179,6 +2180,7 @@ router.post('/:entity', async (req, res) => {
             }
 
             const totalSum = numPrice * requestedQty;
+
             const query = `
                 INSERT INTO "repair_items" 
                 ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
@@ -2197,9 +2199,11 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
+        // --- ЛОГИКА ДЛЯ repair_works (ПРОВЕРКА ПРОВЕДЕННОГО РЕМОНТА) ---
         if (entity === 'repair_works') {
             const { repair_id } = req.body;
             
@@ -2208,12 +2212,14 @@ router.post('/:entity', async (req, res) => {
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
                     }
                 }
             }
         }
 
+        // --- ЛОГИКА ДЛЯ receipt_items ---
         if (entity === 'receipt_items') {
             const { zaphasti_id, price, currency, quantity, description, receipt_id } = req.body;
             
@@ -2222,6 +2228,7 @@ router.post('/:entity', async (req, res) => {
                 if (receiptCheck.rows.length > 0) {
                     const isPostedVal = receiptCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
                     }
                 }
@@ -2241,9 +2248,11 @@ router.post('/:entity', async (req, res) => {
             
             const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
             const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
+        // --- ЛОГИКА ДЛЯ move_items (С ПРОВЕРКОЙ ОСТАТКОВ ПО СКЛАДУ-ОТПРАВИТЕЛЮ) ---
         if (entity === 'move_items') {
             const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
             const requestedQty = Number(quantity) || 0;
@@ -2258,30 +2267,29 @@ router.post('/:entity', async (req, res) => {
                     const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
 
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
                     }
 
+                    // Если у перемещения указан склад-отправитель, проверяем остаток строго на нем
                     if (warehouseFromId) {
-                        // Полный расчет остатка с учетом текущего перемещения (исключая текущий документ через m_from.id != $3)
                         const balanceQuery = `
                             SELECT 
                                 (
                                     COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
                                     COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
                                 ) - 
-                                (
-                                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) +
-                                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                                ) 
+                                COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) 
                             AS available_qty
                         `;
                         
                         const balanceRes = await pool.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                         const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
 
-                        console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+                        console.log(`[STOCK DEBUG] Склад ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                         if (requestedQty > availableStock) {
+                            console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                             return res.status(400).json({ 
                                 error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
                             });
@@ -2290,6 +2298,7 @@ router.post('/:entity', async (req, res) => {
                 }
             }
 
+            // Автоматический поиск документа прихода (FIFO)
             const docQuery = `
                 SELECT RI.receipt_id 
                 FROM receipt_items RI
@@ -2300,6 +2309,7 @@ router.post('/:entity', async (req, res) => {
             `;
             const docResult = await pool.query(docQuery, [zaphasti_id]);
             const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
+            console.log(`[FIFO DEBUG] Найден документ прихода (receipt_id): ${income_document_id}`);
 
             const priceRub = numPrice; 
             const totalRub = requestedQty * priceRub;
@@ -2324,9 +2334,11 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
+            console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${result.rows[0].id}`);
             return res.status(201).json(result.rows[0]);
         }
 
+        // --- ЛОГИКА ДЛЯ tehosmotr ---
         if (entity === 'tehosmotr') {
             if (!req.body.date) {
                 req.body.date = new Date();
@@ -2349,6 +2361,7 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
+        // --- ЛОГИКА ДЛЯ autostrahovanie ---
         if (entity === 'autostrahovanie') {
             if (!req.body.date) {
                 req.body.date = new Date();
@@ -2374,10 +2387,12 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
+        // Стандартная логика для остальных таблиц
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
         if (keys.length === 0) {
+            console.log(`[ERROR] Пустое тело запроса`);
             return res.status(400).json({ error: 'Нет данных для сохранения' });
         }
 
@@ -2387,9 +2402,11 @@ router.post('/:entity', async (req, res) => {
 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
         const result = await pool.query(query, processedValues);
+        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${result.rows[0].id}`);
         res.status(201).json(result.rows[0]);
 
     } catch (err) {
+        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
         console.error(err.stack);
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
