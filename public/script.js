@@ -485,8 +485,7 @@ receipts: {
             </td>
         `;
     }
-},
-receipt_items: {
+},receipt_items: {
     title: 'Спецификация документа',
     columns: [
         { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', width: '250px', insert: true, table: false },
@@ -1549,7 +1548,6 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1601,6 +1599,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
+        // Автоматически подставляем Рубль ПМР для новых строк прихода или перемещения
+        if (entity === 'receipt_items' || entity === 'move_items') {
+            item.currency = 'Рубль ПМР';
+        }
+
         config.columns.forEach(col => {
             if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
@@ -1609,6 +1612,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         if (entity === 'tehosmotr') {
             item.autoservice = 'Евроавтотест';
+        }
+    } else {
+        // Если форма открыта на редактирование, но поле валюты пустое — тоже подставим по умолчанию
+        if ((entity === 'receipt_items' || entity === 'move_items') && !item.currency) {
+            item.currency = 'Рубль ПМР';
         }
     }
 
@@ -1657,6 +1665,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (val && typeof val === 'object' && val.id !== undefined) {
                 val = val.id;
             }
+        }
+
+        // Если это поле валюты для прихода или перемещения и значение пустое, форсируем Рубль ПМР
+        if ((entity === 'receipt_items' || entity === 'move_items') && col.field === 'currency' && !val) {
+            val = 'Рубль ПМР';
         }
 
         let inputHtml = '';
@@ -1747,7 +1760,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     html += `
             <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">✔️ Сохранить</button>
+                <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
                 ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                 <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
             </div>
@@ -1911,7 +1924,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         } else if (entity === 'postavhik_contacts' && parentId) {
             data.postavhik_id = parentId;
         } else if (entity === 'customer_contacts' && parentId) {
-            data.customer_id = parentId; // Привязка ID покупателя
+            data.customer_id = parentId; 
         } else if (entity === 'entity_contacts') {
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
