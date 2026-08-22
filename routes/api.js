@@ -30,30 +30,28 @@ module.exports = (pool) => {
         }
     });
 
-
-// Получение списка логов для таблицы (GET)
-    router.get('/get-logs', async (req, res) => {
-        try {
-            const result = await pool.query(`
-                SELECT 
-                    audit_logs.id, 
-                    users.login AS user_name, 
-                    audit_logs.entity,
-                    audit_logs.action, 
-                    audit_logs.record_id,
-                    audit_logs.details, 
-                    audit_logs.created_at 
-                FROM audit_logs 
-                LEFT JOIN users ON audit_logs.user_id = users.id 
-                ORDER BY audit_logs.created_at DESC
-            `);
-            res.json(result.rows);
-        } catch (err) {
-            console.error('Ошибка получения логов:', err.message);
-            res.status(500).send('Ошибка сервера');
-        }
-    });
-
+// 1. Получение списка логов для таблицы (GET)
+router.get('/get-logs', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                audit_logs.id, 
+                users.login AS user_name, 
+                audit_logs.entity,
+                audit_logs.action, 
+                audit_logs.record_id,
+                audit_logs.details, 
+                audit_logs.created_at 
+            FROM audit_logs 
+            LEFT JOIN users ON audit_logs.user_id = users.id 
+            ORDER BY audit_logs.created_at DESC
+        `);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения логов:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
     // Открытие самой страницы logs.html по адресу /logs (GET)
     router.get('/logs', (req, res) => {
         res.sendFile(path.join(__dirname, '../logs.html'));
@@ -2092,22 +2090,20 @@ router.put('/moves/:id/post', async (req, res) => {
 });
 
 
-
-
-// Запись лога (POST)
-    router.post('/logs', async (req, res) => {
-        const { userId, action, details } = req.body;
-        try {
-            await pool.query(
-                `INSERT INTO audit_logs (user_id, action, details) VALUES ($1, $2, $3)`,
-                [userId || null, action, details || '']
-            );
-            res.json({ success: true });
-        } catch (err) {
-            console.error('Ошибка записи лога:', err.message);
-            res.status(500).send('Ошибка сервера');
-        }
-    });
+// 2. Запись лога (POST)
+router.post('/logs', async (req, res) => {
+    const { userId, entity, action, recordId, details } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO audit_logs (user_id, entity, action, record_id, details) VALUES ($1, $2, $3, $4, $5)`,
+            [userId || null, entity || null, action, recordId || null, details || '']
+        );
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Ошибка записи лога:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
