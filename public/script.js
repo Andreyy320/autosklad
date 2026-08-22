@@ -1845,49 +1845,55 @@ function closeDrawer() {
         });
     }
 
-    const deleteBtn = drawer.querySelector('#delete-btn');
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', async () => {
-            showConfirmModal(
-                'Подтверждение удаления',
-                'Вы уверены, что хотите удалить эту запись?',
-                async () => {
-                    try {
-                        const response = await fetch(`/api/${entity}/${item.id}`, {
-                            method: 'DELETE'
-                        });
+  const deleteBtn = drawer.querySelector('#delete-btn');
+if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+        showConfirmModal(
+            'Подтверждение удаления',
+            'Вы уверены, что хотите удалить эту запись?',
+            async () => {
+                // Достаем ID текущего пользователя из localStorage
+                const currentUserId = localStorage.getItem('currentUserId') || '';
 
-                        if (response.ok) {
-                            closeDrawer();
-                            showAppNotification('Запись успешно удалена', 'success');
-
-                            // Логируем удаление
-                            await sendLog(entity, 'DELETE', item.id, { info: `Удалена запись #${item.id}` });
-
-                            const detailEntities = [
-                                'receipt_items', 'move_items', 'accident_invoices', 
-                                'accident_payments', 'accident_events', 'accident_items', 
-                                'repair_items', 'repair_works', 'entity_contacts', 
-                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
-                            ];
-                            if (detailEntities.includes(entity) && parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
-                                refreshData();
-                            }
-                        } else {
-                            const errData = await response.json().catch(() => ({}));
-                            console.error('Ошибка при удалении на сервере:', errData);
-                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                try {
+                    const response = await fetch(`/api/${entity}/${item.id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ ДЛЯ АВТОМАТИЧЕСКОГО ЛОГА
                         }
-                    } catch (err) {
-                        console.error('Ошибка соединения при удалении:', err);
-                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    });
+
+                    if (response.ok) {
+                        closeDrawer();
+                        showAppNotification('Запись успешно удалена', 'success');
+
+                        // (Строчку ручного sendLog убрали, так как бэкенд теперь сам пишет лог в базу при DELETE)
+
+                        const detailEntities = [
+                            'receipt_items', 'move_items', 'accident_invoices', 
+                            'accident_payments', 'accident_events', 'accident_items', 
+                            'repair_items', 'repair_works', 'entity_contacts', 
+                            'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                        ];
+                        if (detailEntities.includes(entity) && parentId) {
+                            loadDetailData(entity, parentId);
+                        } else {
+                            refreshData();
+                        }
+                    } else {
+                        const errData = await response.json().catch(() => ({}));
+                        console.error('Ошибка при удалении на сервере:', errData);
+                        showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
                     }
+                } catch (err) {
+                    console.error('Ошибка соединения при удалении:', err);
+                    showAppNotification('Ошибка соединения с сервером', 'error');
                 }
-            );
-        });
-    }
+            }
+        );
+    });
+}
 
     let isSubmitting = false;
 
@@ -2024,9 +2030,7 @@ async function sendLog(entity, action, recordId, detailsData) {
     } catch (err) {
         console.error('Не удалось отправить лог:', err);
     }
-}
-
-async function deleteSelectedEntity() {
+}async function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
         return;
@@ -2036,9 +2040,16 @@ async function deleteSelectedEntity() {
         'Подтверждение удаления',
         `Вы уверены, что хотите удалить запись с ID: ${selectedItem.id}?`,
         async () => {
+            // Достаем ID текущего пользователя из localStorage
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
             try {
                 const response = await fetch(`/api/${currentEntity}/${selectedItem.id}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ ДЛЯ ЛОГОВ
+                    }
                 });
 
                 const resultData = await response.json().catch(() => ({}));
@@ -2889,6 +2900,7 @@ function openDetailForm(mode) {
     openEntityForm(detailEntity, itemToEdit, selectedItem.id);
 }
 
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
@@ -2901,11 +2913,15 @@ async function deleteDetailItem() {
         async () => {
             const detailEntity = getCurrentDetailEntity();
 
+            // Достаем ID текущего пользователя из localStorage
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
             try {
                 const response = await fetch(`/api/${detailEntity}/${selectedDetailItem.id}`, {
                     method: 'DELETE',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ В ЗАГОЛОВКЕ
                     }
                 });
 
