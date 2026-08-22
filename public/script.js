@@ -2054,6 +2054,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
         if (response.ok && result.success) {
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
+            
+            // Сохраняем ID зашедшего пользователя, если сервер его передал
+            if (result.user && result.user.id) {
+                localStorage.setItem('currentUserId', result.user.id);
+            }
 
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
