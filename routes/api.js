@@ -28,6 +28,24 @@ module.exports = (pool) => {
         }
     });
 
+
+// Роут для приема и сохранения логов
+    router.post('/logs', async (req, res) => {
+        const { userId, action, details } = req.body;
+        try {
+            await pool.query(
+                `INSERT INTO audit_logs (user_id, action, details) VALUES ($1, $2, $3)`,
+                [userId || null, action, details || '']
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Ошибка записи лога:', err.message);
+            res.status(500).send('Ошибка сервера');
+        }
+    });
+
+
+
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
     router.get('/users', async (req, res) => {
        
