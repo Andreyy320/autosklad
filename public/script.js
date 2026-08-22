@@ -1547,6 +1547,7 @@ function closeDrawer() {
         backdrop.style.opacity = '0';
         backdrop.style.pointerEvents = 'none';
     }
+
 }
 async function openEntityForm(entity, item = null, parentId = null) {
     
@@ -1956,6 +1957,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
+                // Получаем ответ от сервера (например, созданный ID записи)
+                const responseData = await response.json().catch(() => ({}));
+                const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
+                const actionType = isEdit ? 'UPDATE' : 'INSERT';
+
+                // Отправляем лог в систему аудита
+                await sendLog(entity, actionType, savedId, data);
+
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
                 const detailEntities = [
