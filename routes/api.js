@@ -2105,8 +2105,6 @@ router.put('/moves/:id/post', async (req, res) => {
         }
     });
 
-
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2251,8 +2249,24 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${result.rows[0].id}`);
-            return res.status(201).json(result.rows[0]);
+            const newRecord = result.rows[0];
+
+            // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (repair_items) ====================
+            try {
+                const userId = req.headers['user-id'] || req.body.user_id || null;
+                const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+                await pool.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [userId, 'INSERT', 'repair_items', newRecord.id, JSON.stringify(req.body), clientIp]
+                );
+            } catch (logErr) {
+                console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+            // =========================================================================
+
+            console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${newRecord.id}`);
+            return res.status(201).json(newRecord);
         }
 
         if (entity === 'repair_works') {
@@ -2298,8 +2312,24 @@ router.post('/:entity', async (req, res) => {
             
             const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${result.rows[0].id}`);
-            return res.status(201).json(result.rows[0]);
+            const newRecord = result.rows[0];
+
+            // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (receipt_items) ====================
+            try {
+                const userId = req.headers['user-id'] || req.body.user_id || null;
+                const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+                await pool.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [userId, 'INSERT', 'receipt_items', newRecord.id, JSON.stringify(req.body), clientIp]
+                );
+            } catch (logErr) {
+                console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+            // =========================================================================
+
+            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${newRecord.id}`);
+            return res.status(201).json(newRecord);
         }
 
         if (entity === 'move_items') {
@@ -2383,8 +2413,24 @@ router.post('/:entity', async (req, res) => {
             ];
             
             const result = await pool.query(query, values);
-            console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${result.rows[0].id}`);
-            return res.status(201).json(result.rows[0]);
+            const newRecord = result.rows[0];
+
+            // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (move_items) ====================
+            try {
+                const userId = req.headers['user-id'] || req.body.user_id || null;
+                const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+                await pool.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify(req.body), clientIp]
+                );
+            } catch (logErr) {
+                console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+            // =========================================================================
+
+            console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id}`);
+            return res.status(201).json(newRecord);
         }
 
         if (entity === 'tehosmotr') {
@@ -2448,9 +2494,32 @@ router.post('/:entity', async (req, res) => {
 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
         const result = await pool.query(query, processedValues);
-        
-        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${result.rows[0].id}`);
-        res.status(201).json(result.rows[0]);
+        const newRecord = result.rows[0];
+
+        // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            
+            await pool.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    userId,
+                    'INSERT',
+                    entity,
+                    newRecord.id || null,
+                    JSON.stringify(req.body),
+                    clientIp
+                ]
+            );
+        } catch (logErr) {
+            console.error('❌ [AUDIT ERROR] Не удалось записать лог:', logErr.message);
+        }
+        // ======================================================================================
+
+        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
+        res.status(201).json(newRecord);
 
     } catch (err) {
         console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
