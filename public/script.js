@@ -2063,8 +2063,7 @@ function editSelectedEntity() {
         return;
     }
     openEntityForm(currentEntity, selectedItem);
-}
-document.getElementById('login-form').addEventListener('submit', async function(e) {
+}document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
     const password = document.getElementById('password').value;
@@ -2090,8 +2089,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
-            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ ---
-            await sendLog('LOGIN', `Пользователь ${login} вошел в систему`);
+            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ (ИСПРАВЛЕНО) ---
+            // Параметры: entity ('auth'), action ('LOGIN'), recordId (null), details (текст)
+            await sendLog('auth', 'LOGIN', null, { 
+                info: `Пользователь ${login} вошел в систему` 
+            });
             // ----------------------------------------------------
 
             loadData('users', 'Пользователи');
