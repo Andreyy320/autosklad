@@ -2527,8 +2527,9 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-
-// ==================== УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ПРОВЕРКОЙ ОСТАТКОВ И ЗАЩИТОЙ ПРОВЕДЕННЫХ ДОКУМЕНТОВ) ====================
+// ==========================================
+// УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
+// ==========================================
 router.put('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -2548,7 +2549,8 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts'
+            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
+            'postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2743,6 +2745,23 @@ router.put('/:entity/:id', async (req, res) => {
             return res.status(404).json({ error: 'Запись не найдена' });
         }
 
+        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE) ====================
+        try {
+            // Пытаемся достать userId из заголовков (если фронтенд его передает) или через body
+            const userId = req.headers['x-user-id'] || req.body.user_id || null;
+            const detailsStr = Object.entries(req.body)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, entity, action, record_id, details) VALUES ($1, $2, $3, $4, $5)`,
+                [userId, entity, 'UPDATE', id, detailsStr || 'Обновление записи']
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога (не критично):', logErr.message);
+        }
+        // ============================================================================
+
         await client.query('COMMIT');
         res.json(result.rows[0]);
 
@@ -2754,9 +2773,9 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
-
-
-// ==================== УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ) ====================
+// ==========================================
+// УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
+// ==========================================
 
 router.delete('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
@@ -2876,6 +2895,23 @@ router.delete('/:entity/:id', async (req, res) => {
             return res.status(404).json({ error: 'Запись с таким ID не найдена' });
         }
 
+        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (DELETE) ====================
+        try {
+            const userId = req.headers['x-user-id'] || req.body.user_id || null;
+            const deletedData = result.rows[0];
+            const detailsStr = Object.entries(deletedData)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, entity, action, record_id, details) VALUES ($1, $2, $3, $4, $5)`,
+                [userId, entity, 'DELETE', id, `Удалена запись. Данные: ${detailsStr}`]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога удаления (не критично):', logErr.message);
+        }
+        // ============================================================================
+
         await client.query('COMMIT');
         res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
 
@@ -2887,10 +2923,6 @@ router.delete('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
-
-
-
-
 
 return router;
 };
