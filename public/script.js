@@ -1990,19 +1990,31 @@ function closeDrawer() {
         }
     });
 }
-
-// Вспомогательная функция отправки логов на бэкенд, если ее еще нет в скриптах:
+// Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
     try {
-        // Превращаем объект с полями формы в читаемый текст детализации
-        let detailsStr = typeof detailsData === 'object' 
-            ? Object.entries(detailsData).map(([k, v]) => `${k}: ${v}`).join(', ') 
-            : String(detailsData);
+        let detailsStr = '';
+        
+        if (typeof detailsData === 'object' && detailsData !== null) {
+            // Если передан объект с полем info (как при логине), берем чистый текст.
+            // Иначе форматируем все поля ключ: значение.
+            if (detailsData.info) {
+                detailsStr = detailsData.info;
+            } else {
+                detailsStr = Object.entries(detailsData).map(([k, v]) => `${k}: ${v}`).join(', ');
+            }
+        } else {
+            detailsStr = String(detailsData || '');
+        }
+
+        // Автоматически подтягиваем ID текущего пользователя из localStorage
+        const userId = localStorage.getItem('currentUserId') || null;
 
         await fetch('/api/logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                userId: userId,
                 entity: entity,
                 action: action,
                 recordId: recordId,
@@ -2063,7 +2075,10 @@ function editSelectedEntity() {
         return;
     }
     openEntityForm(currentEntity, selectedItem);
-}document.getElementById('login-form').addEventListener('submit', async function(e) {
+}
+
+
+document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
     const password = document.getElementById('password').value;
@@ -2089,8 +2104,7 @@ function editSelectedEntity() {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
-            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ (ИСПРАВЛЕНО) ---
-            // Параметры: entity ('auth'), action ('LOGIN'), recordId (null), details (текст)
+            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ ---
             await sendLog('auth', 'LOGIN', null, { 
                 info: `Пользователь ${login} вошел в систему` 
             });
