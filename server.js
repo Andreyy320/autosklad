@@ -24,9 +24,13 @@ const pool = new Pool({
     password: 'martyn999',
     port: 5432,
 });
-
 const apiRoutes = require('./routes/api')(pool);
 app.use('/api', apiRoutes); 
+
+// ВОТ СЮДА ДОБАВЬ:
+app.get('/logs', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'logs.html'));
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
