@@ -2034,9 +2034,6 @@ function editSelectedEntity() {
     }
     openEntityForm(currentEntity, selectedItem);
 }
-
-
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -2062,6 +2059,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
+
+            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ ---
+            await sendLog('LOGIN', `Пользователь ${login} вошел в систему`);
+            // ----------------------------------------------------
+
             loadData('users', 'Пользователи');
         } else {
             errorDiv.style.display = 'block';
@@ -2074,8 +2076,28 @@ document.getElementById('login-form').addEventListener('submit', async function(
 });
 
 function logout() {
+    localStorage.clear(); // Очищаем всё при выходе
     location.reload();
 }
+
+// Универсальная функция для отправки логов
+async function sendLog(action, details) {
+    try {
+        const userId = localStorage.getItem('currentUserId') || null;
+        await fetch('/api/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId ? Number(userId) : null,
+                action: action,
+                details: details || ''
+            })
+        });
+    } catch (err) {
+        console.error('Ошибка отправки лога:', err);
+    }
+}
+
 
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
