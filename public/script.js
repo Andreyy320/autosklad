@@ -1548,8 +1548,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1600,7 +1599,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
-        // Автоматически подставляем Рубль ПМР для новых строк прихода или перемещения
         if (entity === 'receipt_items' || entity === 'move_items') {
             item.currency = 'Рубль ПМР';
         }
@@ -1615,7 +1613,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             item.autoservice = 'Евроавтотест';
         }
     } else {
-        // Если форма открыта на редактирование, но поле валюты пустое — тоже подставим по умолчанию
         if ((entity === 'receipt_items' || entity === 'move_items') && !item.currency) {
             item.currency = 'Рубль ПМР';
         }
@@ -1631,7 +1628,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    // Добавляем скрытые поля для связи с родителем в зависимости от сущности
     if (entity === 'postavhik_contacts' && parentId) {
         html += `<input type="hidden" name="postavhik_id" value="${parentId}">`;
     } else if (entity === 'customer_contacts' && parentId) {
@@ -1668,13 +1664,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        // Если это поле валюты для прихода или перемещения и значение пустое, форсируем Рубль ПМР
         if ((entity === 'receipt_items' || entity === 'move_items') && col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
 
         let inputHtml = '';
-        
         let fieldReadonly = col.readonly;
         if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
             fieldReadonly = true;
@@ -1866,6 +1860,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
+
+                            // Логируем удаление
+                            await sendLog(entity, 'DELETE', item.id, { info: `Удалена запись #${item.id}` });
+
                             const detailEntities = [
                                 'receipt_items', 'move_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
@@ -1957,12 +1955,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
-                // Получаем ответ от сервера (например, созданный ID записи)
                 const responseData = await response.json().catch(() => ({}));
                 const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
                 const actionType = isEdit ? 'UPDATE' : 'INSERT';
 
-                // Отправляем лог в систему аудита
+                // Отправляем лог в систему аудита (с красивым преобразованием объекта в строку деталей)
                 await sendLog(entity, actionType, savedId, data);
 
                 closeDrawer();
@@ -1993,6 +1990,30 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+// Вспомогательная функция отправки логов на бэкенд, если ее еще нет в скриптах:
+async function sendLog(entity, action, recordId, detailsData) {
+    try {
+        // Превращаем объект с полями формы в читаемый текст детализации
+        let detailsStr = typeof detailsData === 'object' 
+            ? Object.entries(detailsData).map(([k, v]) => `${k}: ${v}`).join(', ') 
+            : String(detailsData);
+
+        await fetch('/api/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                entity: entity,
+                action: action,
+                recordId: recordId,
+                details: detailsStr
+            })
+        });
+    } catch (err) {
+        console.error('Не удалось отправить лог:', err);
+    }
+}
+
 async function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
@@ -2087,24 +2108,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
 function logout() {
     localStorage.clear(); // Очищаем всё при выходе
     location.reload();
-}
-
-// Универсальная функция для отправки логов
-async function sendLog(action, details) {
-    try {
-        const userId = localStorage.getItem('currentUserId') || null;
-        await fetch('/api/logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: userId ? Number(userId) : null,
-                action: action,
-                details: details || ''
-            })
-        });
-    } catch (err) {
-        console.error('Ошибка отправки лога:', err);
-    }
 }
 
 

@@ -31,12 +31,18 @@ module.exports = (pool) => {
     });
 
 
-
-    // Получение списка логов для таблицы (GET)
+// Получение списка логов для таблицы (GET)
     router.get('/get-logs', async (req, res) => {
         try {
             const result = await pool.query(`
-                SELECT audit_logs.id, users.login AS user_name, audit_logs.action, audit_logs.details, audit_logs.created_at 
+                SELECT 
+                    audit_logs.id, 
+                    users.login AS user_name, 
+                    audit_logs.entity,
+                    audit_logs.action, 
+                    audit_logs.record_id,
+                    audit_logs.details, 
+                    audit_logs.created_at 
                 FROM audit_logs 
                 LEFT JOIN users ON audit_logs.user_id = users.id 
                 ORDER BY audit_logs.created_at DESC
@@ -50,10 +56,8 @@ module.exports = (pool) => {
 
     // Открытие самой страницы logs.html по адресу /logs (GET)
     router.get('/logs', (req, res) => {
-        res.sendFile(path.join(__dirname, '../logs.html')); // Замени путь на актуальный, если файл лежит в другой папке
+        res.sendFile(path.join(__dirname, '../logs.html'));
     });
-
-
 
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
     router.get('/users', async (req, res) => {

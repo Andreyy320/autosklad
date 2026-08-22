@@ -5,14 +5,19 @@
     <title>Журнал логов и действий</title>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007bff; color: white; }
         tr:hover { background-color: #f1f1f1; }
         .back-btn { display: inline-block; margin-bottom: 15px; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; }
         .back-btn:hover { background: #5a6268; }
+        .badge { background: #e2e8f0; color: #1e293b; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .action-insert { color: #16a34a; font-weight: bold; }
+        .action-update { color: #2563eb; font-weight: bold; }
+        .action-delete { color: #dc2626; font-weight: bold; }
+        .action-login { color: #9333ea; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -26,13 +31,15 @@
             <tr>
                 <th>ID</th>
                 <th>Пользователь</th>
+                <th>Раздел / Документ</th>
                 <th>Действие</th>
-                <th>Детали</th>
+                <th>ID записи</th>
+                <th>Детали (что изменили, сколько штук)</th>
                 <th>Время</th>
             </tr>
         </thead>
         <tbody id="logs-table-body">
-            <tr><td colspan="5" style="text-align: center;">Загрузка логов...</td></tr>
+            <tr><td colspan="7" style="text-align: center;">Загрузка логов...</td></tr>
         </tbody>
     </table>
 </div>
@@ -47,16 +54,27 @@
             tbody.innerHTML = '';
 
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Логов пока нет</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Логов пока нет</td></tr>';
                 return;
             }
 
             logs.forEach(log => {
                 const tr = document.createElement('tr');
+                
+                // Красивое оформление цвета для разных действий
+                let actionClass = '';
+                const act = (log.action || '').toUpperCase();
+                if (act.includes('INSERT')) actionClass = 'action-insert';
+                else if (act.includes('UPDATE')) actionClass = 'action-update';
+                else if (act.includes('DELETE')) actionClass = 'action-delete';
+                else if (act.includes('LOGIN')) actionClass = 'action-login';
+
                 tr.innerHTML = `
                     <td>${log.id}</td>
                     <td><strong>${log.user_name || 'Неизвестный'}</strong></td>
-                    <td><span style="color: #007bff; font-weight: bold;">${log.action}</span></td>
+                    <td><span class="badge">${log.entity || '-'}</span></td>
+                    <td><span class="${actionClass}">${log.action}</span></td>
+                    <td>${log.record_id || '-'}</td>
                     <td>${log.details || ''}</td>
                     <td>${new Date(log.created_at).toLocaleString()}</td>
                 `;
@@ -64,7 +82,7 @@
             });
         } catch (err) {
             console.error('Ошибка загрузки логов:', err);
-            document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Ошибка загрузки данных</td></tr>';
+            document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Ошибка загрузки данных</td></tr>';
         }
     }
 
