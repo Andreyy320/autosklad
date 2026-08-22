@@ -1548,7 +1548,8 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}async function openEntityForm(entity, item = null, parentId = null) {
+}
+async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1845,55 +1846,52 @@ function closeDrawer() {
         });
     }
 
-  const deleteBtn = drawer.querySelector('#delete-btn');
-if (deleteBtn) {
-    deleteBtn.addEventListener('click', async () => {
-        showConfirmModal(
-            'Подтверждение удаления',
-            'Вы уверены, что хотите удалить эту запись?',
-            async () => {
-                // Достаем ID текущего пользователя из localStorage
-                const currentUserId = localStorage.getItem('currentUserId') || '';
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить эту запись?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
 
-                try {
-                    const response = await fetch(`/api/${entity}/${item.id}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ ДЛЯ АВТОМАТИЧЕСКОГО ЛОГА
-                        }
-                    });
+                    try {
+                        const response = await fetch(`/api/${entity}/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
 
-                    if (response.ok) {
-                        closeDrawer();
-                        showAppNotification('Запись успешно удалена', 'success');
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Запись успешно удалена', 'success');
 
-                        // (Строчку ручного sendLog убрали, так как бэкенд теперь сам пишет лог в базу при DELETE)
-
-                        const detailEntities = [
-                            'receipt_items', 'move_items', 'accident_invoices', 
-                            'accident_payments', 'accident_events', 'accident_items', 
-                            'repair_items', 'repair_works', 'entity_contacts', 
-                            'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
-                        ];
-                        if (detailEntities.includes(entity) && parentId) {
-                            loadDetailData(entity, parentId);
+                            const detailEntities = [
+                                'receipt_items', 'move_items', 'accident_invoices', 
+                                'accident_payments', 'accident_events', 'accident_items', 
+                                'repair_items', 'repair_works', 'entity_contacts', 
+                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                            ];
+                            if (detailEntities.includes(entity) && parentId) {
+                                loadDetailData(entity, parentId);
+                            } else {
+                                refreshData();
+                            }
                         } else {
-                            refreshData();
+                            const errData = await response.json().catch(() => ({}));
+                            console.error('Ошибка при удалении на сервере:', errData);
+                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
                         }
-                    } else {
-                        const errData = await response.json().catch(() => ({}));
-                        console.error('Ошибка при удалении на сервере:', errData);
-                        showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                    } catch (err) {
+                        console.error('Ошибка соединения при удалении:', err);
+                        showAppNotification('Ошибка соединения с сервером', 'error');
                     }
-                } catch (err) {
-                    console.error('Ошибка соединения при удалении:', err);
-                    showAppNotification('Ошибка соединения с сервером', 'error');
                 }
-            }
-        );
-    });
-}
+            );
+        });
+    }
 
     let isSubmitting = false;
 
@@ -1951,11 +1949,13 @@ if (deleteBtn) {
                 : `/api/${entity}`;
             
             const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
 
             const response = await fetch(url, {
                 method: method,
                 headers: { 
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
                 },
                 body: JSON.stringify(data)
             });
@@ -1965,7 +1965,6 @@ if (deleteBtn) {
                 const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
                 const actionType = isEdit ? 'UPDATE' : 'INSERT';
 
-                // Отправляем лог в систему аудита (с красивым преобразованием объекта в строку деталей)
                 await sendLog(entity, actionType, savedId, data);
 
                 closeDrawer();
@@ -2899,6 +2898,7 @@ function openDetailForm(mode) {
     
     openEntityForm(detailEntity, itemToEdit, selectedItem.id);
 }
+
 
 
 async function deleteDetailItem() {
