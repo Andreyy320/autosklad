@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Журнал логов и действий</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .back-btn { display: inline-block; margin-bottom: 15px; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; }
+        .back-btn:hover { background: #5a6268; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="back-btn">← На главную в склад</a>
+    <h1>📜 Журнал действий пользователей</h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Пользователь</th>
+                <th>Действие</th>
+                <th>Детали</th>
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody id="logs-table-body">
+            <tr><td colspan="5" style="text-align: center;">Загрузка логов...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadLogs() {
+        try {
+            const response = await fetch('/api/get-logs');
+            const logs = await response.json();
+            
+            const tbody = document.getElementById('logs-table-body');
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Логов пока нет</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.id}</td>
+                    <td><strong>${log.user_name || 'Неизвестный'}</strong></td>
+                    <td><span style="color: #007bff; font-weight: bold;">${log.action}</span></td>
+                    <td>${log.details || ''}</td>
+                    <td>${new Date(log.created_at).toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Ошибка загрузки логов:', err);
+            document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Ошибка загрузки данных</td></tr>';
+        }
+    }
+
+    loadLogs();
+</script>
+
+</body>
+</html>

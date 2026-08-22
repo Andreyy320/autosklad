@@ -28,8 +28,7 @@ module.exports = (pool) => {
         }
     });
 
-
-// Роут для приема и сохранения логов
+// Запись лога (POST)
     router.post('/logs', async (req, res) => {
         const { userId, action, details } = req.body;
         try {
@@ -42,6 +41,27 @@ module.exports = (pool) => {
             console.error('Ошибка записи лога:', err.message);
             res.status(500).send('Ошибка сервера');
         }
+    });
+
+    // Получение списка логов для таблицы (GET)
+    router.get('/get-logs', async (req, res) => {
+        try {
+            const result = await pool.query(`
+                SELECT audit_logs.id, users.login AS user_name, audit_logs.action, audit_logs.details, audit_logs.created_at 
+                FROM audit_logs 
+                LEFT JOIN users ON audit_logs.user_id = users.id 
+                ORDER BY audit_logs.created_at DESC
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error('Ошибка получения логов:', err.message);
+            res.status(500).send('Ошибка сервера');
+        }
+    });
+
+    // Открытие самой страницы logs.html по адресу /logs (GET)
+    router.get('/logs', (req, res) => {
+        res.sendFile(path.join(__dirname, '../logs.html')); // Замени путь на актуальный, если файл лежит в другой папке
     });
 
 
@@ -2077,6 +2097,12 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
+
+
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
