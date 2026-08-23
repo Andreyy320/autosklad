@@ -3129,7 +3129,6 @@ async function postReceipt(receiptId) {
     );
 }
 const tableBody = document.getElementById('table-body');
-
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -3186,9 +3185,9 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('car_details', selectedItem.id);
             }
         } else if (currentEntity === 'cars') {
-            // Логика для отдельной таблицы cars (если у нее свои вкладки или своя специфика)
-            if (carTabsPanel) carTabsPanel.style.display = 'flex';
-            if (tabsForCars) tabsForCars.style.display = 'flex';
+            // Скрываем панели с кнопками-переключателями для cars, оставляя только чистую таблицу деталей
+            if (carTabsPanel) carTabsPanel.style.display = 'none';
+            if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (detailContainer) detailContainer.style.display = 'flex';
@@ -3253,12 +3252,11 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'counterparties') {
                 loadDetailData('counterparty_contacts', selectedItem.id);
             } else if (currentEntity === 'customers') {
-                loadDetailData/('customer_contacts', selectedItem.id);
+                loadDetailData('customer_contacts', selectedItem.id);
             }
         }
     }
 });
-
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
