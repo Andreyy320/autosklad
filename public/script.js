@@ -2022,6 +2022,38 @@ async function openEntityForm(entity, item = null, parentId = null) {
 }
 
 
+// Автоматически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
+document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.closest('td')) {
+        const img = e.target;
+        if (img.src) {
+            // Проверяем, создано ли уже модальное окно, если нет — создаем
+            let modal = document.getElementById('image-viewer-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'image-viewer-modal';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; cursor: pointer;';
+                modal.innerHTML = `
+                    <div style="position: relative; max-width: 90%; max-height: 90%;">
+                        <img id="modal-image-content" style="width: 100%; height: auto; max-height: 90vh; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                        <span style="position: absolute; top: -40px; right: 0; color: white; font-size: 32px; font-weight: bold; cursor: pointer;">&times;</span>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                // Закрытие по клику на фон или крестик
+                modal.addEventListener('click', () => {
+                    modal.style.display = 'none';
+                });
+            }
+
+            // Подставляем картинку и показываем модальное окно
+            const modalImg = modal.querySelector('#modal-image-content');
+            modalImg.src = img.src;
+            modal.style.display = 'flex';
+        }
+    }
+});
 
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
@@ -3895,16 +3927,3 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 });
 
 
-
-// Автоматически делает все картинки в таблицах кликабельными
-document.addEventListener('click', function(e) {
-    // Если кликнули на картинку внутри ячейки таблицы
-    if (e.target.tagName === 'IMG' && e.target.closest('td')) {
-        const img = e.target;
-        // Проверяем, есть ли у неё путь (src)
-        if (img.src && !img.closest('a')) {
-            // Открываем картинку в новой вкладке в полном размере
-            window.open(img.src, '_blank');
-        }
-    }
-});
