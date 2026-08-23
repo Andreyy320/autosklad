@@ -389,12 +389,12 @@ router.get('/customer_contacts/:customer_id', async (req, res) => {
         res.status(500).send('Ошибка при получении автомобилей');
     }
 });
-
-
-// 1. Получение всех деталей автомобилей (включая путь к фото photo_url)
+// 1. Получение деталей автомобилей (с фильтрацией по car_id, если он передан)
     router.get('/car_details', async (req, res) => {
         try {
-            const query = `
+            const { car_id } = req.query;
+            
+            let query = `
                 SELECT 
                     cd.*, 
                     c.gos_number AS car_gos_number,
@@ -402,9 +402,19 @@ router.get('/customer_contacts/:customer_id', async (req, res) => {
                 FROM car_details cd
                 LEFT JOIN cars c ON cd.car_id = c.id
                 LEFT JOIN car_models m ON c.model_id = m.id
-                ORDER BY cd.id ASC
             `;
-            const result = await pool.query(query);
+            
+            const values = [];
+            
+            // Если передан car_id — фильтруем по нему
+            if (car_id) {
+                query += ` WHERE cd.car_id = $1 `;
+                values.push(car_id);
+            }
+            
+            query += ` ORDER BY cd.id ASC `;
+
+            const result = await pool.query(query, values);
             res.json(result.rows);
         } catch (err) {
             console.error(err.message);
