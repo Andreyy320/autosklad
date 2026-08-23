@@ -3712,10 +3712,16 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
-            if (carTabsBar) carTabsBar.style.display = 'flex';
+            if (carTabsBar) {
+                if (entity === 'car_cards' || entity === 'accidents') {
+                    carTabsBar.style.display = 'flex';
+                } else {
+                    carTabsBar.style.display = 'none';
+                }
+            }
 
             if (entity === 'car_cards') {
                 if (tabsForCars) tabsForCars.style.display = 'flex';
@@ -3735,7 +3741,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
