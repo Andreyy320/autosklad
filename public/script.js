@@ -1646,19 +1646,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}" enctype="multipart/form-data">
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
     if (entity === 'postavhik_contacts' && parentId) {
         html += `<input type="hidden" name="postavhik_id" value="${parentId}">`;
     } else if (entity === 'customer_contacts' && parentId) {
         html += `<input type="hidden" name="customer_id" value="${parentId}">`;
-    } else if (entity === 'car_details' && parentId) {
-        html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id' || col.field === 'car_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
@@ -1763,13 +1761,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
-        } else if (col.type === 'image' || col.field === 'photo_url') {
-            inputHtml = `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${val ? `<div style="font-size: 11px; color: #64748b;">Текущий файл: <a href="${val}" target="_blank">${val}</a></div>` : ''}
-                    <input type="file" name="photo" accept="image/*" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle} padding: 6px;">
-                </div>
-            `;
         } else {
             const inputType = (col.field === 'password_hash') ? 'password' : 'text';
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
@@ -1901,8 +1892,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                                 'receipt_items', 'move_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'repair_items', 'repair_works', 'entity_contacts', 
-                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
-                                'car_details'
+                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
                             ];
                             if (detailEntities.includes(entity) && parentId) {
                                 loadDetailData(entity, parentId);
@@ -1938,35 +1928,38 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
 
-        if (entity === 'receipt_items' && parentId) {
-            formData.set('receipt_id', parentId);
-        } else if (entity === 'move_items' && parentId) {
-            formData.set('move_id', parentId); 
-        } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
-            formData.set('dtp_id', parentId);
-        } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
-            formData.set('repair_id', parentId);
-        } else if (entity === 'counterparty_contacts' && parentId) {
-            formData.set('counterparty_id', parentId);
-        } else if (entity === 'postavhik_contacts' && parentId) {
-            formData.set('postavhik_id', parentId);
-        } else if (entity === 'customer_contacts' && parentId) {
-            formData.set('customer_id', parentId); 
-        } else if (entity === 'car_details' && parentId) {
-            formData.set('car_id', parentId);
-        } else if (entity === 'entity_contacts') {
-            let entityIdVal = parentId;
-            if (parentId && typeof parentId === 'object') {
-                entityIdVal = parentId.entity_id || parentId.id;
-            }
-            formData.set('entity_id', entityIdVal);
-            formData.set('entity_type', window.currentEntity || window.activeEntity || 'customers');
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        const isPostedVal = formData.get('is_posted');
-        if (isPostedVal !== null && isPostedVal !== '') {
-            formData.set('is_posted', isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1);
+        if (entity === 'receipt_items' && parentId) {
+            data.receipt_id = parentId;
+        } else if (entity === 'move_items' && parentId) {
+            data.move_id = parentId; 
+        } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
+            data.dtp_id = parentId;
+        } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
+            data.repair_id = parentId;
+        } else if (entity === 'counterparty_contacts' && parentId) {
+            data.counterparty_id = parentId;
+        } else if (entity === 'postavhik_contacts' && parentId) {
+            data.postavhik_id = parentId;
+        } else if (entity === 'customer_contacts' && parentId) {
+            data.customer_id = parentId; 
+        } else if (entity === 'entity_contacts') {
+            if (parentId && typeof parentId === 'object') {
+                data.entity_id = parentId.entity_id || parentId.id;
+                data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
+            } else if (parentId) {
+                data.entity_id = parentId;
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+            }
+            
+            if (!data.entity_type || data.entity_type === 'entity_contacts') {
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+            }
         }
 
         try {
@@ -1978,23 +1971,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            const fetchOptions = {
+            const response = await fetch(url, {
                 method: method,
                 headers: { 
+                    'Content-Type': 'application/json',
                     'x-user-id': currentUserId
                 },
-                body: formData
-            };
-
-            const response = await fetch(url, fetchOptions);
+                body: JSON.stringify(data)
+            });
 
             if (response.ok) {
                 const responseData = await response.json().catch(() => ({}));
                 const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
                 const actionType = isEdit ? 'UPDATE' : 'INSERT';
 
-                const plainData = Object.fromEntries(formData.entries());
-                await sendLog(entity, actionType, savedId, plainData);
+                await sendLog(entity, actionType, savedId, data);
 
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
@@ -2002,8 +1993,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     'receipt_items', 'move_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'repair_items', 'repair_works', 'entity_contacts', 
-                    'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
-                    'car_details'
+                    'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
                 ];
                 if (detailEntities.includes(entity) && parentId) {
                     loadDetailData(entity, parentId);
@@ -2063,6 +2053,7 @@ async function sendLog(entity, action, recordId, detailsData) {
     }
 }
 
+
 async function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
@@ -2094,8 +2085,7 @@ async function deleteSelectedEntity() {
                     const specialEntities = [
                         'receipt_items', 'move_items', 'accident_invoices', 
                         'accident_payments', 'accident_events', 'accident_items', 
-                        'repair_items', 'repair_works', 'car_details',
-                        'entity_contacts', 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                        'repair_items', 'repair_works'
                     ];
 
                     if (specialEntities.includes(currentEntity) && typeof parentId !== 'undefined' && parentId) {
@@ -2171,6 +2161,7 @@ function logout() {
     location.reload();
 }
 
+
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -2185,11 +2176,7 @@ async function refreshData() {
         } else if (currentEntity === 'car_cards' && selectedItem.id) {
             const activeTabBtn = document.querySelector('#tabs-for-cars button.active');
             if (activeTabBtn) {
-                // Поддержка проверки активной вкладки или дефолтной детализации (например, car_details)
-                const targetDetailEntity = activeTabBtn.getAttribute('data-entity') || 'tehosmotr';
-                loadDetailData(targetDetailEntity, selectedItem.id); 
-            } else {
-                loadDetailData('car_details', selectedItem.id);
+                loadDetailData('tehosmotr', selectedItem.id); 
             }
         } else if (currentEntity === 'accidents' && selectedItem.id) {
             loadDetailData('accident_invoices', selectedItem.id);
@@ -2855,6 +2842,7 @@ function filterTable() {
 }
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -2883,7 +2871,7 @@ function getCurrentDetailEntity() {
         const activeTab = document.querySelector('#tabs-for-accidents button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            const match = onclickAttr.match(/(?:loadDetailData|switchAccidentSubTab)\(['"]([^'"]+)['"]/);
+            const match = onclickAttr.match(/(?:loadDetailData|switchAccidentTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
@@ -2914,16 +2902,10 @@ function getCurrentDetailEntity() {
                 return match[1];
             }
         }
-        return 'car_details';
-    }
-    if (currentEntity === 'cars') {
-        // Логика для отдельной таблицы cars, если требуется
-        if (typeof currentCarsSubTab !== 'undefined' && currentCarsSubTab) return currentCarsSubTab;
-        return 'car_details'; // Либо другая нужная детальная таблица для cars
+        return 'tehosmotr';
     }
     return 'receipt_items';
 }
-
 
 function openDetailForm(mode) {
     if (!selectedItem) {
@@ -3127,7 +3109,9 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
 const tableBody = document.getElementById('table-body');
+
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -3164,7 +3148,7 @@ tableBody.addEventListener('click', async (e) => {
     }
 
     if (selectedItem) {
-        if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
+        if (currentEntity === 'cars' || currentEntity === 'car_card' || currentEntity === 'car_cards') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'flex';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -3177,21 +3161,8 @@ tableBody.addEventListener('click', async (e) => {
                 const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
                 if (match && match[1]) {
                     loadDetailData(match[1], selectedItem.id);
-                } else {
-                    loadDetailData('car_details', selectedItem.id);
                 }
-            } else {
-                loadDetailData('car_details', selectedItem.id);
             }
-        } else if (currentEntity === 'cars') {
-            // Скрываем панели с кнопками-переключателями для cars, оставляя только чистую таблицу деталей
-            if (carTabsPanel) carTabsPanel.style.display = 'none';
-            if (tabsForCars) tabsForCars.style.display = 'none';
-            if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-            if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-            if (detailContainer) detailContainer.style.display = 'flex';
-
-            loadDetailData('car_details', selectedItem.id);
         } else if (currentEntity === 'accidents') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -3256,6 +3227,7 @@ tableBody.addEventListener('click', async (e) => {
         }
     }
 });
+
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -3395,6 +3367,7 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3456,8 +3429,6 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts') {
         queryParamName = 'customer_id';
-    } else if (entity === 'car_details') {
-        queryParamName = 'car_id';
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
         queryParamName = 'car_id';
     }
@@ -3534,8 +3505,7 @@ async function loadDetailData(entity, parentId) {
             move_items: 'Спецификация перемещения',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
-            customer_contacts: 'Контакты клиента',
-            car_details: 'Детали автомобиля'
+            customer_contacts: 'Контакты клиента'
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
 
@@ -3591,7 +3561,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
@@ -3710,7 +3679,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const carTabsBar = document.getElementById('car-tabs-bar'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
-        const tabsForRepairs = document.getElementById('tabs-for-repairs');
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
@@ -3723,31 +3691,20 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'cars' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
-            // Для автомобилей скрываем общую панель вкладок (carTabsBar), чтобы кнопки пропали
-            if (entity === 'car_cards' || entity === 'cars') {
-                if (carTabsBar) carTabsBar.style.display = 'none'; // <--- Скрыли панель с кнопками
-                if (tabsForCars) tabsForCars.style.display = 'none'; // <--- Скрыли сами кнопки авто
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-            } else {
-                if (carTabsBar) carTabsBar.style.display = 'flex';
+            if (carTabsBar) carTabsBar.style.display = 'flex';
 
-                if (entity === 'accidents') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                } else if (entity === 'repairs') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                } else {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                }
+            if (entity === 'car_cards') {
+                if (tabsForCars) tabsForCars.style.display = 'flex';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+            } else if (entity === 'accidents') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+            } else {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             }
         } else {
             if (detailContainer) detailContainer.style.display = 'none';
@@ -3757,6 +3714,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
