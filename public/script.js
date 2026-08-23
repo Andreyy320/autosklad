@@ -259,19 +259,17 @@ customer_contacts: {
 car_details: {
         title: 'Детали и фото автомобиля',
         columns: [
-            { field: 'car_id', label: 'Автомобиль', ref: 'cars' },
             { field: 'date', label: 'Дата', type: 'date' },
             { field: 'title', label: 'Наименование' },
             { field: 'description', label: 'Описание' },
             { field: 'photo_url', label: 'Изображение', type: 'image' }
         ],
         render: (item) => `
-            <td><b>${item.car_gos_number || item.car_id || '—'}</b></td>
             <td>${item.date ? new Date(item.date).toLocaleDateString() : ''}</td>
             <td><b>${item.title || ''}</b></td>
             <td>${item.description || ''}</td>
             <td>
-                ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />` : '—'}
+                ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" />` : '—'}
             </td>
         `
     },
