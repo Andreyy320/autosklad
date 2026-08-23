@@ -1741,6 +1741,8 @@ function closeDrawer() {
                     ${optionsHtml}
                 </select>
             `;
+        } else if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || (entity === 'car_details' && (col.field.includes('file') || col.field.includes('photo')))) {
+            inputHtml = `<input type="file" name="${col.field}" style="${controlStyle}">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -1770,6 +1772,16 @@ function closeDrawer() {
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
+            </label>
+        `;
+    }
+
+    // Если это car_details и в конфигурации нет явного поля под файл, автоматически добавляем кнопку выбора файла
+    if (entity === 'car_details' && !config.columns.some(c => c.type === 'file' || c.field === 'file')) {
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                Файл / Документ:
+                <input type="file" name="file" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
             </label>
         `;
     }
@@ -1929,45 +1941,43 @@ function closeDrawer() {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
 
-        if (data.is_posted !== undefined && data.is_posted !== '') {
-            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
-        }
-
+        // Добавляем внешние ключи напрямую в FormData, чтобы они ушли на сервер вместе с файлом
         if (entity === 'receipt_items' && parentId) {
-            data.receipt_id = parentId;
+            formData.set('receipt_id', parentId);
         } else if (entity === 'move_items' && parentId) {
-            data.move_id = parentId; 
+            formData.set('move_id', parentId); 
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
-            data.dtp_id = parentId;
+            formData.set('dtp_id', parentId);
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
-            data.repair_id = parentId;
+            formData.set('repair_id', parentId);
         } else if (entity === 'counterparty_contacts' && parentId) {
-            data.counterparty_id = parentId;
+            formData.set('counterparty_id', parentId);
         } else if (entity === 'postavhik_contacts' && parentId) {
-            data.postavhik_id = parentId;
+            formData.set('postavhik_id', parentId);
         } else if (entity === 'customer_contacts' && parentId) {
-            data.customer_id = parentId; 
+            formData.set('customer_id', parentId); 
         } else if (entity === 'car_details' && parentId) {
-            data.car_id = parentId;
+            formData.set('car_id', parentId);
         } else if (entity === 'entity_contacts') {
+            let entId = parentId;
+            let entType = window.currentEntity || window.activeEntity || 'customers';
             if (parentId && typeof parentId === 'object') {
-                data.entity_id = parentId.entity_id || parentId.id;
-                data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
-            } else if (parentId) {
-                data.entity_id = parentId;
-                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+                entId = parentId.entity_id || parentId.id;
+                entType = parentId.entity_type || entType;
             }
-            
-            if (!data.entity_type || data.entity_type === 'entity_contacts') {
-                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
-            }
+            formData.set('entity_id', entId);
+            formData.set('entity_type', entType);
         }
 
-        // Страховка для car_details, если parentId передан напрямую
-        if (entity === 'car_details' && parentId && !data.car_id) {
-            data.car_id = parentId;
+        if (entity === 'car_details' && parentId && !formData.get('car_id')) {
+            formData.set('car_id', parentId);
+        }
+
+        // Обработка логического флага is_posted для FormData
+        const isPostedVal = formData.get('is_posted');
+        if (isPostedVal !== null && isPostedVal !== '') {
+            formData.set('is_posted', isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1);
         }
 
         try {
@@ -1979,13 +1989,14 @@ function closeDrawer() {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
+            // Отправляем FormData напрямую (без JSON.stringify), чтобы multer на сервере поймал файл и положил в uploads
             const response = await fetch(url, {
                 method: method,
                 headers: { 
-                    'Content-Type': 'application/json',
                     'x-user-id': currentUserId
+                    // Заголовок Content-Type НЕ ставим специально, чтобы браузер сам проставил boundary для multipart/form-data
                 },
-                body: JSON.stringify(data)
+                body: formData
             });
 
             if (response.ok) {
@@ -1993,7 +2004,8 @@ function closeDrawer() {
                 const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
                 const actionType = isEdit ? 'UPDATE' : 'INSERT';
 
-                await sendLog(entity, actionType, savedId, data);
+                const plainData = Object.fromEntries(formData.entries());
+                await sendLog(entity, actionType, savedId, plainData);
 
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
