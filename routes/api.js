@@ -2502,8 +2502,7 @@ router.post('/:entity', async (req, res) => {
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
-            console.log("\n================ ДЕБАГ ПЕРЕМЕЩЕНИЯ ================");
-            console.log(`[MOVE_ITEMS] Запрос перемещения: запчасть ID=${zaphasti_id}, документ move_id=${move_id}, запрошено кол-во=${requestedQty}`);
+            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
 
             // Открываем транзакцию для безопасной проверки остатков при перемещении
             const client = await pool.connect();
@@ -2511,55 +2510,47 @@ router.post('/:entity', async (req, res) => {
                 await client.query('BEGIN');
 
                 if (move_id) {
-                    const moveCheck = await client.query('SELECT is_posted, warehouse_from_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+                    const moveCheck = await client.query('SELECT warehouse_from_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
                     if (moveCheck.rows.length > 0) {
-                        const isPostedVal = moveCheck.rows[0].is_posted;
                         const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
 
-                        console.log(`[MOVE_ITEMS] Склад-источник ID: ${warehouseFromId}, статус проведенности: ${isPostedVal}`);
-
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
-                            await client.query('ROLLBACK');
-                            return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
-                        }
-
                         if (warehouseFromId) {
-                            // 1. Считаем приходы
-                            const incQuery = `SELECT SUM(ri.quantity) as sum FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2`;
-                            const incRes = await client.query(incQuery, [zaphasti_id, warehouseFromId]);
-                            const receiptsTotal = Number(incRes.rows[0].sum) || 0;
-                            console.log(`[DEBUG SQL] Приходы (receipt_items): ${receiptsTotal}`);
+                            // Считаем общий чистый остаток на складе-источнике (исключая прошлые строки *других* документов, но учитывая приходы и списания)
+                            const balanceQuery = `
+                                SELECT 
+                                    (
+                                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
+                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
+                                    ) - 
+                                    (
+                                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND (m_from.id != $3 OR m_from.id IS NULL)), 0) +
+                                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
+                                    ) 
+                                AS pure_stock
+                            `;
+                            
+                            const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
+                            const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
 
-                            // 2. Считаем перемещения НА этот склад
-                            const moveToQuery = `SELECT SUM(mi_to.quantity) as sum FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2`;
-                            const moveToRes = await client.query(moveToQuery, [zaphasti_id, warehouseFromId]);
-                            const movesToTotal = Number(moveToRes.rows[0].sum) || 0;
-                            console.log(`[DEBUG SQL] Перемещения ПРИХОД НА склад (move_items): ${movesToTotal}`);
+                            // Узнаем, сколько единиц этой запчасти УЖЕ добавлено в текущий документ перемещения (в черновик)
+                            const currentDocQuery = `
+                                SELECT SUM(quantity) as sum 
+                                FROM move_items 
+                                WHERE move_id = $1 AND zaphasti_id = $2
+                            `;
+                            const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
+                            const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
 
-                            // 3. Считаем перемещения С этого склада (исключая текущий документ)
-                            const moveFromQuery = `SELECT SUM(mi_from.quantity) as sum FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3`;
-                            const moveFromRes = await client.query(moveFromQuery, [zaphasti_id, warehouseFromId, move_id]);
-                            const movesFromTotal = Number(moveFromRes.rows[0].sum) || 0;
-                            console.log(`[DEBUG SQL] Перемещения РАСХОД СО склада (move_items, кроме текущего ID ${move_id}): ${movesFromTotal}`);
+                            // Доступно прямо сейчас = Реальный остаток минус то, что уже накидали в этот же черновик
+                            const availableStock = pureStock - alreadyInThisDoc;
 
-                            // 4. Считаем ремонты С этого склада
-                            const repQuery = `SELECT SUM(rep_i.quantity) as sum FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2`;
-                            const repRes = await client.query(repQuery, [zaphasti_id, warehouseFromId]);
-                            const repairsTotal = Number(repRes.rows[0].sum) || 0;
-                            console.log(`[DEBUG SQL] Списания в РЕМОНТЫ со склада (repair_items): ${repairsTotal}`);
-
-                            const totalPlus = receiptsTotal + movesToTotal;
-                            const totalMinus = movesFromTotal + repairsTotal;
-                            const availableStock = totalPlus - totalMinus;
-
-                            console.log(`[DEBUG SQL ИТОГ] Плюсы (${totalPlus}) - Минусы (${totalMinus}) = Доступно: ${availableStock}`);
+                            console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в черновике: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                             if (requestedQty > availableStock) {
-                                console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
+                                console.log(`[ERROR] Недостаточно остатка на складе! Доступно с учетом черновика: ${availableStock}, запрошено: ${requestedQty}`);
                                 await client.query('ROLLBACK');
                                 return res.status(400).json({ 
-                                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
+                                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт. (с учетом текущего документа), а вы пытаетесь добавить: ${requestedQty} шт.` 
                                 });
                             }
                         }
