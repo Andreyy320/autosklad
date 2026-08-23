@@ -2254,6 +2254,7 @@ router.delete('/car_details/:id', async (req, res) => {
         res.status(500).send('Ошибка сервера при удалении');
     }
 });
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2523,11 +2524,15 @@ router.post('/:entity', async (req, res) => {
                         }
 
                         if (warehouseFromId) {
+                            // ИСПРАВЛЕННЫЙ ТОЧНЫЙ РАСЧЕТ ОСТАТКА НА СКЛАДЕ-ИСТОЧНИКЕ:
+                            // Считаем всё, что когда-либо поступало на склад (приходы + входящие перемещения со других складов),
+                            // и вычитаем всё, что уходило (исходящие перемещения с этого склада + списания на ремонты).
+                            // При этом текущий документ (move_id) исключаем из подсчета расхода, чтобы не занижать остаток при редактировании/добавлении строк в него же.
                             const balanceQuery = `
                                 SELECT 
                                     (
                                         COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
+                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.id != $3), 0)
                                     ) - 
                                     (
                                         COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) +
