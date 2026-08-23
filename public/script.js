@@ -1986,7 +1986,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 body: formData
             };
 
-            // Если это редактирование без смены файла, можно отправлять JSON или FormData (multer на бэкенде одинаково хорошо примет FormData)
             const response = await fetch(url, fetchOptions);
 
             if (response.ok) {
