@@ -3127,6 +3127,8 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
+
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
@@ -3165,7 +3167,15 @@ tableBody.addEventListener('click', async (e) => {
     }
 
     if (selectedItem) {
-        if (currentEntity === 'cars' || currentEntity === 'car_card' || currentEntity === 'car_cards') {
+        if (currentEntity === 'cars') {
+            if (carTabsPanel) carTabsPanel.style.display = 'none';
+            if (tabsForCars) tabsForCars.style.display = 'none';
+            if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+            if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (detailContainer) detailContainer.style.display = 'flex';
+            
+            loadDetailData('car_details', selectedItem.id);
+        } else if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'flex';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -3179,8 +3189,6 @@ tableBody.addEventListener('click', async (e) => {
                 if (match && match[1]) {
                     loadDetailData(match[1], selectedItem.id);
                 }
-            } else if (currentEntity === 'cars') {
-                loadDetailData('car_details', selectedItem.id);
             }
         } else if (currentEntity === 'accidents') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
@@ -3236,8 +3244,6 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
-            } else if (currentEntity === 'cars') {
-                loadDetailData('car_details', selectedItem.id);
             } else if (currentEntity === 'postavhik') {
                 loadDetailData('postavhik_contacts', selectedItem.id);
             } else if (currentEntity === 'counterparties') {
@@ -3741,6 +3747,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
+
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
