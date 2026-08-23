@@ -1653,10 +1653,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="postavhik_id" value="${parentId}">`;
     } else if (entity === 'customer_contacts' && parentId) {
         html += `<input type="hidden" name="customer_id" value="${parentId}">`;
+    } else if (entity === 'car_details' && parentId) {
+        html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id' || col.field === 'car_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
@@ -1892,7 +1894,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
                                 'receipt_items', 'move_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'repair_items', 'repair_works', 'entity_contacts', 
-                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                                'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
+                                'car_details'
                             ];
                             if (detailEntities.includes(entity) && parentId) {
                                 loadDetailData(entity, parentId);
@@ -1948,6 +1951,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.postavhik_id = parentId;
         } else if (entity === 'customer_contacts' && parentId) {
             data.customer_id = parentId; 
+        } else if (entity === 'car_details' && parentId) {
+            data.car_id = parentId;
         } else if (entity === 'entity_contacts') {
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
@@ -1993,7 +1998,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     'receipt_items', 'move_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'repair_items', 'repair_works', 'entity_contacts', 
-                    'counterparty_contacts', 'postavhik_contacts', 'customer_contacts'
+                    'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
+                    'car_details'
                 ];
                 if (detailEntities.includes(entity) && parentId) {
                     loadDetailData(entity, parentId);
@@ -2015,7 +2021,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 // Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
@@ -2161,7 +2166,6 @@ function logout() {
     location.reload();
 }
 
-
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -2173,6 +2177,8 @@ async function refreshData() {
             loadDetailData('receipt_items', selectedItem.id);
         } else if (currentEntity === 'moves' && selectedItem.id) {
             loadDetailData('move_items', selectedItem.id);
+        } else if (currentEntity === 'cars' && selectedItem.id) {
+            loadDetailData('car_details', selectedItem.id);
         } else if (currentEntity === 'car_cards' && selectedItem.id) {
             const activeTabBtn = document.querySelector('#tabs-for-cars button.active');
             if (activeTabBtn) {
@@ -2471,8 +2477,7 @@ async function applyMovementFilters() {
     } catch (err) {
         console.error('Ошибка применения фильтров движения:', err);
     }
-}
-async function loadData(entity, title) {
+}async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
@@ -2519,7 +2524,7 @@ async function loadData(entity, title) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
@@ -2650,6 +2655,8 @@ async function loadData(entity, title) {
                     loadDetailData('receipt_items', item.id);
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
+                } else if (entity === 'cars') {
+                    loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
                     loadDetailData('postavhik_contacts', item.id);
                 } else if (entity === 'counterparties') {
@@ -2745,6 +2752,14 @@ async function loadData(entity, title) {
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     loadDetailData('part_movement_details', selectedItem);
+                } else {
+                    emptyDetailBody();
+                }
+            } else if (entity === 'cars') {
+                carTabsBar.style.display = 'none';
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    loadDetailData('car_details', currentItems[0].id);
                 } else {
                     emptyDetailBody();
                 }
@@ -2849,6 +2864,9 @@ function getCurrentDetailEntity() {
     }
     if (currentEntity === 'receipts') {
         return 'receipt_items';
+    }
+    if (currentEntity === 'cars') {
+        return 'car_details';
     }
     if (currentEntity === 'stock_balances') {
         return 'stock_batches'; 
@@ -3109,7 +3127,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
@@ -3162,6 +3179,8 @@ tableBody.addEventListener('click', async (e) => {
                 if (match && match[1]) {
                     loadDetailData(match[1], selectedItem.id);
                 }
+            } else if (currentEntity === 'cars') {
+                loadDetailData('car_details', selectedItem.id);
             }
         } else if (currentEntity === 'accidents') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
@@ -3217,6 +3236,8 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
+            } else if (currentEntity === 'cars') {
+                loadDetailData('car_details', selectedItem.id);
             } else if (currentEntity === 'postavhik') {
                 loadDetailData('postavhik_contacts', selectedItem.id);
             } else if (currentEntity === 'counterparties') {
@@ -3367,7 +3388,6 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3429,7 +3449,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history') {
+    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
     }
 
@@ -3505,7 +3525,8 @@ async function loadDetailData(entity, parentId) {
             move_items: 'Спецификация перемещения',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
-            customer_contacts: 'Контакты клиента'
+            customer_contacts: 'Контакты клиента',
+            car_details: 'Детали автомобиля'
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
 
