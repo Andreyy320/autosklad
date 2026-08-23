@@ -2159,8 +2159,6 @@ router.post('/logs', async (req, res) => {
     });
 
 
-
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2215,7 +2213,8 @@ router.post('/:entity', async (req, res) => {
             delete req.body.doc_type;
         }
 
-        if (req.body.is_posted !== undefined) {
+        // Безопасная проверка req.body, чтобы избежать ошибки чтения undefined
+        if (req.body && req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted; 
             } else {
