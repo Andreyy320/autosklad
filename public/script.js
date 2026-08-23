@@ -2147,7 +2147,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 // Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
     try {
@@ -3893,4 +3892,19 @@ document.querySelectorAll('.accordion-header').forEach(header => {
             content.style.display = 'flex';
         }
     });
+});
+
+
+
+// Автоматически делает все картинки в таблицах кликабельными
+document.addEventListener('click', function(e) {
+    // Если кликнули на картинку внутри ячейки таблицы
+    if (e.target.tagName === 'IMG' && e.target.closest('td')) {
+        const img = e.target;
+        // Проверяем, есть ли у неё путь (src)
+        if (img.src && !img.closest('a')) {
+            // Открываем картинку в новой вкладке в полном размере
+            window.open(img.src, '_blank');
+        }
+    }
 });
