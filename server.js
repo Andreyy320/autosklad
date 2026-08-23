@@ -41,7 +41,6 @@ const pool = new Pool({
     port: 5432,
 });
 
-// Передаем upload в роуты
 const apiRoutes = require('./routes/api')(pool, upload);
 app.use('/api', apiRoutes); 
 
