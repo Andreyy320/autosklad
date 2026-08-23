@@ -2267,10 +2267,12 @@ router.post('/:entity', async (req, res) => {
         if (entity === 'models') { entity = 'car_models'; }
         if (entity === 'bodies') { entity = 'kyzov_type'; }
         
+        // Обработка для поставщиков
         if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
             entity = 'postavhik_contacts'; 
         }
 
+        // Обработка для покупателей
         if (entity === 'customer-contacts' || entity === 'customer_ contacts') { 
             entity = 'customer_contacts'; 
         }
@@ -2314,7 +2316,6 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // ==================== REPAIR_ITEMS ====================
         if (entity === 'repair_items') {
             const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
             const requestedQty = Number(quantity) || 0;
@@ -2322,6 +2323,7 @@ router.post('/:entity', async (req, res) => {
                 
             console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
 
+            // Открываем транзакцию для безопасной проверки и списания
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
@@ -2333,12 +2335,12 @@ router.post('/:entity', async (req, res) => {
                         const warehouseId = repairCheck.rows[0].warehouse_id;
 
                         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                            console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
                         }
 
                         if (warehouseId) {
-                            // ИСПРАВЛЕНО: везде zaphasti_id для receipt_items/move_items и zaphast_id для repair_items
                             const balanceQuery = `
                                 SELECT 
                                     (
@@ -2358,6 +2360,7 @@ router.post('/:entity', async (req, res) => {
                             console.log(`[STOCK DEBUG] Склад ремонта ID=${warehouseId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
                             if (requestedQty > availableStock) {
+                                console.log(`[ERROR] Недостаточно остатка на складе ремонта! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                                 await client.query('ROLLBACK');
                                 return res.status(400).json({ 
                                     error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
@@ -2391,21 +2394,37 @@ router.post('/:entity', async (req, res) => {
                     RETURNING *;
                 `;
                 
-                const values = [zaphast_id || null, numPrice, requestedQty, description || null, repair_id || null, totalSum, targetReceiptId || null];
+                const values = [
+                    zaphast_id || null, 
+                    numPrice, 
+                    requestedQty, 
+                    description || null, 
+                    repair_id || null, 
+                    totalSum, 
+                    targetReceiptId || null
+                ];
+                
                 const result = await client.query(query, values);
                 const newRecord = result.rows[0];
 
+                // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (repair_items) ====================
                 try {
                     const userId = req.headers['user-id'] || req.body.user_id || null;
                     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
                     await client.query(
-                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) VALUES ($1, $2, $3, $4, $5, $6)`,
+                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
                         [userId, 'INSERT', 'repair_items', newRecord.id, JSON.stringify(req.body), clientIp]
                     );
-                } catch (logErr) {}
+                } catch (logErr) {
+                    console.error('Ошибка записи audit_logs:', logErr.message);
+                }
+                // =========================================================================
 
                 await client.query('COMMIT');
                 client.release();
+
+                console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${newRecord.id}`);
                 return res.status(201).json(newRecord);
 
             } catch (txErr) {
@@ -2417,11 +2436,13 @@ router.post('/:entity', async (req, res) => {
 
         if (entity === 'repair_works') {
             const { repair_id } = req.body;
+            
             if (repair_id) {
                 const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
                     }
                 }
@@ -2436,6 +2457,7 @@ router.post('/:entity', async (req, res) => {
                 if (receiptCheck.rows.length > 0) {
                     const isPostedVal = receiptCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
                         return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
                     }
                 }
@@ -2443,35 +2465,47 @@ router.post('/:entity', async (req, res) => {
 
             const numPrice = Number(price) || 0;
             const numQty = Number(quantity) || 0;
+            const priceRub = numPrice; 
+            const totalRub = numPrice * numQty;
+
             const query = `
                 INSERT INTO "receipt_items" 
                 ("zaphasti_id", "price", "currency", "quantity", "description", "receipt_id", "price_rub", "total_rub") 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                 RETURNING *;
             `;
-            const result = await pool.query(query, [zaphasti_id, numPrice, currency, numQty, description, receipt_id, numPrice, numPrice * numQty]);
+            
+            const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
+            const result = await pool.query(query, values);
             const newRecord = result.rows[0];
 
+            // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (receipt_items) ====================
             try {
                 const userId = req.headers['user-id'] || req.body.user_id || null;
                 const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
                 await pool.query(
-                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
                     [userId, 'INSERT', 'receipt_items', newRecord.id, JSON.stringify(req.body), clientIp]
                 );
-            } catch (logErr) {}
+            } catch (logErr) {
+                console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+            // =========================================================================
 
+            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${newRecord.id}`);
             return res.status(201).json(newRecord);
         }
 
-        // ==================== MOVE_ITEMS ====================
         if (entity === 'move_items') {
             const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
             const requestedQty = Number(quantity) || 0;
             const numPrice = Number(price) || 0;
             
-            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
+            console.log("\n================ ДЕБАГ ПЕРЕМЕЩЕНИЯ ================");
+            console.log(`[MOVE_ITEMS] Запрос перемещения: запчасть ID=${zaphasti_id}, документ move_id=${move_id}, запрошено кол-во=${requestedQty}`);
 
+            // Открываем транзакцию для безопасной проверки остатков при перемещении
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
@@ -2482,32 +2516,47 @@ router.post('/:entity', async (req, res) => {
                         const isPostedVal = moveCheck.rows[0].is_posted;
                         const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
 
+                        console.log(`[MOVE_ITEMS] Склад-источник ID: ${warehouseFromId}, статус проведенности: ${isPostedVal}`);
+
                         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                            console.log(`[ERROR] Попытка изменить проведенный документ перемещения ID: ${move_id}`);
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Нельзя добавлять товары в уже проведенный документ перемещения!' });
                         }
 
                         if (warehouseFromId) {
-                            // ИСПРАВЛЕНО: точный расчет остатка с правильными именами полей
-                            const balanceQuery = `
-                                SELECT 
-                                    (
-                                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
-                                    ) - 
-                                    (
-                                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3), 0) +
-                                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                                    ) 
-                                AS available_qty
-                            `;
-                            
-                            const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
-                            const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
+                            // 1. Считаем приходы
+                            const incQuery = `SELECT SUM(ri.quantity) as sum FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2`;
+                            const incRes = await client.query(incQuery, [zaphasti_id, warehouseFromId]);
+                            const receiptsTotal = Number(incRes.rows[0].sum) || 0;
+                            console.log(`[DEBUG SQL] Приходы (receipt_items): ${receiptsTotal}`);
 
-                            console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+                            // 2. Считаем перемещения НА этот склад
+                            const moveToQuery = `SELECT SUM(mi_to.quantity) as sum FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2`;
+                            const moveToRes = await client.query(moveToQuery, [zaphasti_id, warehouseFromId]);
+                            const movesToTotal = Number(moveToRes.rows[0].sum) || 0;
+                            console.log(`[DEBUG SQL] Перемещения ПРИХОД НА склад (move_items): ${movesToTotal}`);
+
+                            // 3. Считаем перемещения С этого склада (исключая текущий документ)
+                            const moveFromQuery = `SELECT SUM(mi_from.quantity) as sum FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.id != $3`;
+                            const moveFromRes = await client.query(moveFromQuery, [zaphasti_id, warehouseFromId, move_id]);
+                            const movesFromTotal = Number(moveFromRes.rows[0].sum) || 0;
+                            console.log(`[DEBUG SQL] Перемещения РАСХОД СО склада (move_items, кроме текущего ID ${move_id}): ${movesFromTotal}`);
+
+                            // 4. Считаем ремонты С этого склада
+                            const repQuery = `SELECT SUM(rep_i.quantity) as sum FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2`;
+                            const repRes = await client.query(repQuery, [zaphasti_id, warehouseFromId]);
+                            const repairsTotal = Number(repRes.rows[0].sum) || 0;
+                            console.log(`[DEBUG SQL] Списания в РЕМОНТЫ со склада (repair_items): ${repairsTotal}`);
+
+                            const totalPlus = receiptsTotal + movesToTotal;
+                            const totalMinus = movesFromTotal + repairsTotal;
+                            const availableStock = totalPlus - totalMinus;
+
+                            console.log(`[DEBUG SQL ИТОГ] Плюсы (${totalPlus}) - Минусы (${totalMinus}) = Доступно: ${availableStock}`);
 
                             if (requestedQty > availableStock) {
+                                console.log(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
                                 await client.query('ROLLBACK');
                                 return res.status(400).json({ 
                                     error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь переместить: ${requestedQty} шт.` 
@@ -2538,21 +2587,39 @@ router.post('/:entity', async (req, res) => {
                     RETURNING *;
                 `;
                 
-                const values = [zaphasti_id, numPrice, currency || 'Рубль ПМР', requestedQty, priceRub, totalRub, description, move_id, income_document_id];
+                const values = [
+                    zaphasti_id, 
+                    numPrice, 
+                    currency || 'Рубль ПМР', 
+                    requestedQty, 
+                    priceRub, 
+                    totalRub, 
+                    description, 
+                    move_id, 
+                    income_document_id 
+                ];
+                
                 const result = await client.query(query, values);
                 const newRecord = result.rows[0];
 
+                // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (move_items) ====================
                 try {
                     const userId = req.headers['user-id'] || req.body.user_id || null;
                     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
                     await client.query(
-                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) VALUES ($1, $2, $3, $4, $5, $6)`,
+                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
                         [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify(req.body), clientIp]
                     );
-                } catch (logErr) {}
+                } catch (logErr) {
+                    console.error('Ошибка записи audit_logs:', logErr.message);
+                }
+                // =========================================================================
 
                 await client.query('COMMIT');
                 client.release();
+
+                console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id}`);
                 return res.status(201).json(newRecord);
 
             } catch (txErr) {
@@ -2562,23 +2629,48 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        if (entity === 'tehosmotr' || entity === 'autostrahovanie') {
-            if (!req.body.date) req.body.date = new Date();
-            if (entity === 'tehosmotr') {
-                if (!req.body.to_date) req.body.to_date = new Date();
-                if (!req.body.doc_number) {
-                    const countResult = await pool.query('SELECT COUNT(*) FROM tehosmotr');
-                    req.body.doc_number = `ТО-${Number(countResult.rows[0].count) + 1}`;
-                }
-            } else {
-                if (!req.body.insurance_current) req.body.insurance_current = new Date();
-                if (!req.body.insurance_next) req.body.insurance_next = new Date();
-                if (!req.body.doc_number) {
-                    const countResult = await pool.query('SELECT COUNT(*) FROM autostrahovanie');
-                    req.body.doc_number = `СТРАХ-${Number(countResult.rows[0].count) + 1}`;
-                }
+        if (entity === 'tehosmotr') {
+            if (!req.body.date) {
+                req.body.date = new Date();
             }
-            if (!req.body.car_id) return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+            if (!req.body.to_date) {
+                req.body.to_date = new Date();
+            }
+
+            if (!req.body.doc_number) {
+                const countResult = await pool.query('SELECT COUNT(*) FROM tehosmotr');
+                const nextId = Number(countResult.rows[0].count) + 1;
+                req.body.doc_number = `ТО-${nextId}`;
+            }
+            
+            if (!req.body.car_id) {
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+            }
+            if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
+                return res.status(400).json({ error: 'Необходимо указать сумму!' });
+            }
+        }
+
+        if (entity === 'autostrahovanie') {
+            if (!req.body.date) {
+                req.body.date = new Date();
+            }
+            if (!req.body.insurance_current) {
+                req.body.insurance_current = new Date();
+            }
+            if (!req.body.insurance_next) {
+                req.body.insurance_next = new Date();
+            }
+
+            if (!req.body.doc_number) {
+                const countResult = await pool.query('SELECT COUNT(*) FROM autostrahovanie');
+                const nextId = Number(countResult.rows[0].count) + 1;
+                req.body.doc_number = `СТРАХ-${nextId}`;
+            }
+            
+            if (!req.body.car_id) {
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+            }
             if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
                 return res.status(400).json({ error: 'Необходимо указать сумму!' });
             }
@@ -2588,6 +2680,7 @@ router.post('/:entity', async (req, res) => {
         const values = Object.values(req.body);
 
         if (keys.length === 0) {
+            console.log(`[ERROR] Пустое тело запроса`);
             return res.status(400).json({ error: 'Нет данных для сохранения' });
         }
 
@@ -2599,15 +2692,29 @@ router.post('/:entity', async (req, res) => {
         const result = await pool.query(query, processedValues);
         const newRecord = result.rows[0];
 
+        // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
         try {
             const userId = req.headers['user-id'] || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            
             await pool.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'INSERT', entity, newRecord.id || null, JSON.stringify(req.body), clientIp]
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    userId,
+                    'INSERT',
+                    entity,
+                    newRecord.id || null,
+                    JSON.stringify(req.body),
+                    clientIp
+                ]
             );
-        } catch (logErr) {}
+        } catch (logErr) {
+            console.error('❌ [AUDIT ERROR] Не удалось записать лог:', logErr.message);
+        }
+        // ======================================================================================
 
+        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
         res.status(201).json(newRecord);
 
     } catch (err) {
