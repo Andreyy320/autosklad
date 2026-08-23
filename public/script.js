@@ -3128,7 +3128,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 
 tableBody.addEventListener('click', async (e) => {
@@ -3167,7 +3166,7 @@ tableBody.addEventListener('click', async (e) => {
     }
 
     if (selectedItem) {
-        if (currentEntity === 'cars' || currentEntity === 'car_card' || currentEntity === 'car_cards') {
+        if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'flex';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -3180,8 +3179,21 @@ tableBody.addEventListener('click', async (e) => {
                 const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
                 if (match && match[1]) {
                     loadDetailData(match[1], selectedItem.id);
+                } else {
+                    loadDetailData('car_details', selectedItem.id);
                 }
+            } else {
+                loadDetailData('car_details', selectedItem.id);
             }
+        } else if (currentEntity === 'cars') {
+            // Логика для отдельной таблицы cars (если у нее свои вкладки или своя специфика)
+            if (carTabsPanel) carTabsPanel.style.display = 'flex';
+            if (tabsForCars) tabsForCars.style.display = 'flex';
+            if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+            if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (detailContainer) detailContainer.style.display = 'flex';
+
+            loadDetailData('car_details', selectedItem.id);
         } else if (currentEntity === 'accidents') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -3241,7 +3253,7 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'counterparties') {
                 loadDetailData('counterparty_contacts', selectedItem.id);
             } else if (currentEntity === 'customers') {
-                loadDetailData('customer_contacts', selectedItem.id);
+                loadDetailData/('customer_contacts', selectedItem.id);
             }
         }
     }
@@ -3385,7 +3397,8 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3683,7 +3696,8 @@ function updateFilterPanels(entity) {
     } else if (entity === 'stock_movement') {
         movementFilter.style.display = 'flex';
     }
-}document.querySelectorAll('.nav-link').forEach(link => {
+}
+document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
@@ -3699,6 +3713,7 @@ function updateFilterPanels(entity) {
         const carTabsBar = document.getElementById('car-tabs-bar'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs');
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
@@ -3711,7 +3726,7 @@ function updateFilterPanels(entity) {
             }
         }
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'cars' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'cars' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
             if (carTabsBar) carTabsBar.style.display = 'flex';
@@ -3719,12 +3734,19 @@ function updateFilterPanels(entity) {
             if (entity === 'car_cards' || entity === 'cars') {
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             } else if (entity === 'accidents') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            } else if (entity === 'repairs') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             }
         } else {
             if (detailContainer) detailContainer.style.display = 'none';
