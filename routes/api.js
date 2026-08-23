@@ -2218,12 +2218,14 @@ router.post('/logs', async (req, res) => {
     });
 
     // Эндпоинт для удаления записи (DELETE)
-  // Эндпоинт удаления записи
+  const fs = require('fs');
+const path = require('path');
+
 router.delete('/car_details/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Сначала находим запись в базе, чтобы узнать путь к фото
+        // 1. Находим запись в базе
         const findQuery = 'SELECT photo_url FROM car_details WHERE id = $1';
         const findResult = await pool.query(findQuery, [id]);
 
@@ -2231,26 +2233,25 @@ router.delete('/car_details/:id', async (req, res) => {
             const photoUrl = findResult.rows[0].photo_url;
             
             if (photoUrl) {
-                // photo_url обычно выглядит как '/uploads/filename.jpg'
-                // Превращаем его в реальный путь на диске бэкенда
                 const filename = path.basename(photoUrl);
-                const filePath = path.join(__dirname, '../uploads', filename); // подкорректируй путь к uploads, если папка выше уровнем
+                
+                // ИСПРАВЛЕНИЕ ЗДЕСЬ: поднимись из папки routes в корень проекта через '../uploads'
+                // Или используй process.cwd() — это всегда папка, откуда запущен сервер (корень проекта!)
+                const filePath = path.join(process.cwd(), 'uploads', filename);
 
-                // Проверяем, существует ли файл физически, и удаляем его
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath);
-                    console.log(`Файл ${filename} успешно удален с диска.`);
                 }
             }
         }
 
-        // 2. Удаляем саму запись из базы данных PostgreSQL
+        // 2. Удаляем из базы
         await pool.query('DELETE FROM car_details WHERE id = $1', [id]);
 
-        res.json({ message: 'Запись и привязанное фото успешно удалены' });
+        res.json({ message: 'Успешно удалено' });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при удалении записи');
+        console.error("Ошибка при удалении:", err.message);
+        res.status(500).send('Ошибка сервера при удалении');
     }
 });
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
