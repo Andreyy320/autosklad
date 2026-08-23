@@ -3729,24 +3729,28 @@ document.querySelectorAll('.nav-link').forEach(link => {
         if (entity === 'receipts' || entity === 'moves' || entity === 'car_cards' || entity === 'cars' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
             if (detailContainer) detailContainer.style.display = 'flex';
             
-            if (carTabsBar) carTabsBar.style.display = 'flex';
-
+            // Для автомобилей скрываем общую панель вкладок (carTabsBar), чтобы кнопки пропали
             if (entity === 'car_cards' || entity === 'cars') {
-                if (tabsForCars) tabsForCars.style.display = 'flex';
+                if (carTabsBar) carTabsBar.style.display = 'none'; // <--- Скрыли панель с кнопками
+                if (tabsForCars) tabsForCars.style.display = 'none'; // <--- Скрыли сами кнопки авто
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-            } else if (entity === 'accidents') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-            } else if (entity === 'repairs') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
             } else {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (carTabsBar) carTabsBar.style.display = 'flex';
+
+                if (entity === 'accidents') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                } else if (entity === 'repairs') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                } else {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                }
             }
         } else {
             if (detailContainer) detailContainer.style.display = 'none';
