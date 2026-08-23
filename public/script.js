@@ -2023,7 +2023,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
 
 
-
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2041,12 +2040,10 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
-    // Если передан внешний ключ машины
     if (parentId) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    // Рендерим колонки из конфига
     for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'car_id') continue;
         if (col.insert === false) continue;
@@ -2054,9 +2051,9 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image') {
-            // Если это поле для файла/фото
-            inputHtml = `<input type="file" name="${col.field}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
+        // Если это поле файла или картинки, используем имя 'file' (или поменяй на то, которое настроено в upload.single('...') на сервере)
+        if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field.includes('file') || col.field.includes('photo')) {
+            inputHtml = `<input type="file" name="file" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.field === 'description') {
@@ -2073,13 +2070,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         `;
     }
 
-    // На всякий случай гарантируем наличие поля под файл, если в конфиге его забыли прописать
     html += `
-        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-            Файл / Фото документа:
-            <input type="file" name="file" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
-        </label>
-        
         <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
             <button type="submit" id="save-car-detail-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
             ${item.id ? `<button type="button" id="delete-car-detail-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
@@ -2093,7 +2084,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 
     const formElement = drawer.querySelector('#car-details-form');
 
-    // Кнопка удаления, если это редактирование
     const deleteBtn = drawer.querySelector('#delete-car-detail-btn');
     if (deleteBtn && item.id) {
         deleteBtn.addEventListener('click', async () => {
@@ -2114,7 +2104,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         });
     }
 
-    // Обработка отправки формы через FormData
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
         const saveBtn = formElement.querySelector('#save-car-detail-btn');
@@ -2134,7 +2123,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
                 method: method,
                 headers: {
                     'x-user-id': localStorage.getItem('currentUserId') || ''
-                    // Важно: заголовки Content-Type НЕ ставим, браузер сам сделает multipart/form-data с границей
                 },
                 body: formData
             });
