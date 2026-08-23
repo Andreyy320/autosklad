@@ -1761,8 +1761,6 @@ function closeDrawer() {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
-        } else if (col.type === 'file' || col.field.includes('photo') || col.field.includes('image') || col.field.includes('file')) {
-            inputHtml = `<input type="file" name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">`;
         } else {
             const inputType = (col.field === 'password_hash') ? 'password' : 'text';
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
@@ -1930,43 +1928,46 @@ function closeDrawer() {
         const saveButton = formElement.querySelector('#save-btn');
         if (saveButton) saveButton.disabled = true;
 
-        // Создаем FormData прямо из формы для поддержки файлов
         const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
 
-        // Дописываем parent_id и специфичные поля сущностей в FormData
-        if (entity === 'receipt_items' && parentId) {
-            formData.set('receipt_id', parentId);
-        } else if (entity === 'move_items' && parentId) {
-            formData.set('move_id', parentId); 
-        } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
-            formData.set('dtp_id', parentId);
-        } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
-            formData.set('repair_id', parentId);
-        } else if (entity === 'counterparty_contacts' && parentId) {
-            formData.set('counterparty_id', parentId);
-        } else if (entity === 'postavhik_contacts' && parentId) {
-            formData.set('postavhik_id', parentId);
-        } else if (entity === 'customer_contacts' && parentId) {
-            formData.set('customer_id', parentId); 
-        } else if (entity === 'car_details' && parentId) {
-            formData.set('car_id', parentId);
-        } else if (entity === 'entity_contacts') {
-            let targetEntityId = '';
-            let targetEntityType = window.currentEntity || window.activeEntity || 'customers';
-            if (parentId && typeof parentId === 'object') {
-                targetEntityId = parentId.entity_id || parentId.id;
-                targetEntityType = parentId.entity_type || targetEntityType;
-            } else if (parentId) {
-                targetEntityId = parentId;
-            }
-            formData.set('entity_id', targetEntityId);
-            formData.set('entity_type', targetEntityType);
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        const isPostedVal = formData.get('is_posted');
-        if (isPostedVal !== null && isPostedVal !== '') {
-            const boolVal = isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1;
-            formData.set('is_posted', boolVal);
+        if (entity === 'receipt_items' && parentId) {
+            data.receipt_id = parentId;
+        } else if (entity === 'move_items' && parentId) {
+            data.move_id = parentId; 
+        } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
+            data.dtp_id = parentId;
+        } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
+            data.repair_id = parentId;
+        } else if (entity === 'counterparty_contacts' && parentId) {
+            data.counterparty_id = parentId;
+        } else if (entity === 'postavhik_contacts' && parentId) {
+            data.postavhik_id = parentId;
+        } else if (entity === 'customer_contacts' && parentId) {
+            data.customer_id = parentId; 
+        } else if (entity === 'car_details' && parentId) {
+            data.car_id = parentId;
+        } else if (entity === 'entity_contacts') {
+            if (parentId && typeof parentId === 'object') {
+                data.entity_id = parentId.entity_id || parentId.id;
+                data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
+            } else if (parentId) {
+                data.entity_id = parentId;
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+            }
+            
+            if (!data.entity_type || data.entity_type === 'entity_contacts') {
+                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+            }
+        }
+
+        // Страховка для car_details, если parentId передан напрямую
+        if (entity === 'car_details' && parentId && !data.car_id) {
+            data.car_id = parentId;
         }
 
         try {
@@ -1978,14 +1979,13 @@ function closeDrawer() {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            // Важно: отправляем FormData БЕЗ 'Content-Type' и БЕЗ JSON.stringify,
-            // чтобы браузер автоматически передал файл и данные формы.
             const response = await fetch(url, {
                 method: method,
                 headers: { 
+                    'Content-Type': 'application/json',
                     'x-user-id': currentUserId
                 },
-                body: formData
+                body: JSON.stringify(data)
             });
 
             if (response.ok) {
@@ -1993,9 +1993,7 @@ function closeDrawer() {
                 const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
                 const actionType = isEdit ? 'UPDATE' : 'INSERT';
 
-                // Для логов преобразуем formData в обычный объект
-                const logData = Object.fromEntries(formData.entries());
-                await sendLog(entity, actionType, savedId, logData);
+                await sendLog(entity, actionType, savedId, data);
 
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
