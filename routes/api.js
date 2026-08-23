@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const path = require('path'); // Нужно для указания пути к файлу html
+const multer = require('multer'); // <--- 1. Подключаем multer
 
 
+const upload = multer({ dest: path.join(__dirname, '../uploads/') });
 module.exports = (pool) => {
     
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
