@@ -15,16 +15,17 @@ app.use(helmet({
 app.disable('x-powered-by');
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Важно для корректного чтения текстовых полей из форм с файлами
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Делаем папку uploads публичной, чтобы картинки открывались в браузере
+// Делаем папку uploads публичной, чтобы картинки открывались в браузере по ссылке /uploads/...
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Настройка multer для сохранения загружаемых файлов
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/');
+        cb(null, 'uploads/'); // Папка должна существовать в корне проекта
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + path.extname(file.originalname));
@@ -40,11 +41,11 @@ const pool = new Pool({
     port: 5432,
 });
 
-// Передаем upload в роуты (если потребуется) или оставляем вызов
+// Передаем upload в роуты
 const apiRoutes = require('./routes/api')(pool, upload);
 app.use('/api', apiRoutes); 
 
-// ВОТ СЮДА ДОБАВЬ:
+// Роут для логов
 app.get('/logs', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'logs.html'));
 });

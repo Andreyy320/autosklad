@@ -390,25 +390,27 @@ router.get('/customer_contacts/:customer_id', async (req, res) => {
     }
 });
 
-router.get('/car_details', async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                cd.*, 
-                c.gos_number AS car_gos_number,
-                m.name AS car_model_name
-            FROM car_details cd
-            LEFT JOIN cars c ON cd.car_id = c.id
-            LEFT JOIN car_models m ON c.model_id = m.id
-            ORDER BY cd.id ASC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении деталей и фото автомобилей');
-    }
-});
+
+// 1. Получение всех деталей автомобилей (включая путь к фото photo_url)
+    router.get('/car_details', async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    cd.*, 
+                    c.gos_number AS car_gos_number,
+                    m.name AS car_model_name
+                FROM car_details cd
+                LEFT JOIN cars c ON cd.car_id = c.id
+                LEFT JOIN car_models m ON c.model_id = m.id
+                ORDER BY cd.id ASC
+            `;
+            const result = await pool.query(query);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err.message);
+            res.status(500).send('Ошибка при получении деталей и фото автомобилей');
+        }
+    });
 
 
     // ПОЛУЧЕНИЕ СПИСКА ТИПОВ РАБОТ (из таблицы type_rabot)
@@ -2127,7 +2129,6 @@ router.post('/logs', async (req, res) => {
 
 
 
-
 // Эндпоинт для создания записи с деталями и фото автомобиля
     router.post('/car_details', upload.single('photo'), async (req, res) => {
         const client = await pool.connect();
@@ -2157,6 +2158,7 @@ router.post('/logs', async (req, res) => {
             client.release();
         }
     });
+
 
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
