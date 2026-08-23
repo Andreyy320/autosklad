@@ -256,8 +256,7 @@ customer_contacts: {
             <td>${item.description || ''}</td>
         `
     },
-
-    car_details: {
+car_details: {
         title: 'Детали и фото автомобиля',
         columns: [
             { field: 'car_id', label: 'Автомобиль', ref: 'cars' },
@@ -1700,10 +1699,9 @@ function closeDrawer() {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        // Проверка для фото/файлов (учитывает photo_url и вариации)
         const fName = (col.field || '').toLowerCase();
         const fLabel = (col.label || '').toLowerCase();
-        const isImageField = col.type === 'file' || 
+        const isImageField = col.type === 'file' || col.type === 'image' || 
             col.field === 'photo_url' ||
             fName.includes('image') || fName.includes('photo') || fName.includes('img') || 
             fName.includes('foto') || fName.includes('file') || fName.includes('pic') ||
@@ -1722,6 +1720,16 @@ function closeDrawer() {
                 <select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
                     ${optionsHtml}
                 </select>
+            `;
+        } else if (isImageField) {
+            let previewHtml = '';
+            if (val) {
+                previewHtml = `<div style="margin-top: 6px; font-size: 11px; color: #64748b;">Текущий файл: <a href="${val}" target="_blank" style="color: #2563eb; text-decoration: underline;">${val}</a></div>`;
+            }
+            inputHtml = `
+                <input type="file" name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle} padding: 6px; background: #fff;" accept="image/*">
+                <input type="hidden" name="${col.field}_existing" value="${val || ''}">
+                ${previewHtml}
             `;
         } else if (col.ref || col.field === 'receipt_id') {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
@@ -2029,7 +2037,6 @@ function closeDrawer() {
         }
     });
 }
-
 // Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
     try {
