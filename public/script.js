@@ -1700,7 +1700,14 @@ function closeDrawer() {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        const isImageField = col.type === 'file' || col.field === 'image' || col.field === 'photo' || col.field === 'img' || col.field.includes('foto') || col.field.includes('image');
+        // Проверка для фото/файлов (учитывает photo_url и вариации)
+        const fName = (col.field || '').toLowerCase();
+        const fLabel = (col.label || '').toLowerCase();
+        const isImageField = col.type === 'file' || 
+            col.field === 'photo_url' ||
+            fName.includes('image') || fName.includes('photo') || fName.includes('img') || 
+            fName.includes('foto') || fName.includes('file') || fName.includes('pic') ||
+            fLabel.includes('фото') || fLabel.includes('изображени') || fLabel.includes('картинк') || fLabel.includes('файл');
 
         if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
@@ -1744,12 +1751,6 @@ function closeDrawer() {
                     ${optionsHtml}
                 </select>
             `;
-        } else if (isImageField) {
-            let previewHtml = '';
-            if (val && typeof val === 'string') {
-                previewHtml = `<div style="margin-bottom: 8px;"><img src="${val}" alt="Preview" style="max-height: 80px; border-radius: 4px; border: 1px solid #cbd5e1;"></div>`;
-            }
-            inputHtml = `${previewHtml}<input type="file" name="${col.field}" accept="image/*" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
