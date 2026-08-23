@@ -2884,7 +2884,7 @@ function getCurrentDetailEntity() {
         const activeTab = document.querySelector('#tabs-for-accidents button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            const match = onclickAttr.match(/(?:loadDetailData|switchAccidentTab)\(['"]([^'"]+)['"]/);
+            const match = onclickAttr.match(/(?:loadDetailData|switchAccidentSubTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
@@ -2904,7 +2904,7 @@ function getCurrentDetailEntity() {
         }
         return 'repair_items'; 
     }
-    if (currentEntity === 'cars' || currentEntity === 'car_cards') {
+    if (currentEntity === 'car_cards') {
         if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) return currentCarSubTab;
 
         const activeTab = document.querySelector('#tabs-for-cars button.active');
@@ -2917,9 +2917,13 @@ function getCurrentDetailEntity() {
         }
         return 'car_details';
     }
+    if (currentEntity === 'cars') {
+        // Логика для отдельной таблицы cars, если требуется
+        if (typeof currentCarsSubTab !== 'undefined' && currentCarsSubTab) return currentCarsSubTab;
+        return 'car_details'; // Либо другая нужная детальная таблица для cars
+    }
     return 'receipt_items';
 }
-
 
 
 function openDetailForm(mode) {
