@@ -2213,10 +2213,7 @@ async function sendLog(entity, action, recordId, detailsData) {
     } catch (err) {
         console.error('Не удалось отправить лог:', err);
     }
-}
-
-
-async function deleteSelectedEntity() {
+}function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
         return;
@@ -2245,7 +2242,7 @@ async function deleteSelectedEntity() {
                     showAppNotification('Запись успешно удалена', 'success');
                     
                     const specialEntities = [
-                        'receipt_items', 'move_items', 'accident_invoices', 
+                        'car_details', 'receipt_items', 'move_items', 'accident_invoices', 
                         'accident_payments', 'accident_events', 'accident_items', 
                         'repair_items', 'repair_works'
                     ];
@@ -2273,7 +2270,6 @@ function editSelectedEntity() {
     }
     openEntityForm(currentEntity, selectedItem);
 }
-
 
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();

@@ -2159,7 +2159,77 @@ router.post('/logs', async (req, res) => {
         }
     });
 
+// Эндпоинт для обновления записи (PUT)
+    router.put('/car_details/:id', upload.single('photo'), async (req, res) => {
+        const client = await pool.connect();
+        try {
+            const { id } = req.params;
+            const { car_id, date, title, description } = req.body;
+            
+            // Если прикреплен новый файл, берем его путь, иначе оставляем старый из базы
+            const newPhotoUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
+            await client.query('BEGIN');
+
+            let query, values;
+            if (newPhotoUrl) {
+                query = `
+                    UPDATE car_details 
+                    SET car_id = $1, date = $2, title = $3, description = $4, photo_url = $5
+                    WHERE id = $6
+                    RETURNING *;
+                `;
+                values = [car_id, date || new Date(), title, description, newPhotoUrl, id];
+            } else {
+                query = `
+                    UPDATE car_details 
+                    SET car_id = $1, date = $2, title = $3, description = $4
+                    WHERE id = $5
+                    RETURNING *;
+                `;
+                values = [car_id, date || new Date(), title, description, id];
+            }
+
+            const result = await client.query(query, values);
+            await client.query('COMMIT');
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Запись не найдена' });
+            }
+
+            res.json(result.rows[0]);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error("Ошибка при обновлении car_details:", err.message);
+            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // Эндпоинт для удаления записи (DELETE)
+    router.delete('/car_details/:id', async (req, res) => {
+        const client = await pool.connect();
+        try {
+            const { id } = req.params;
+
+            await client.query('BEGIN');
+            const result = await client.query('DELETE FROM car_details WHERE id = $1 RETURNING *;', [id]);
+            await client.query('COMMIT');
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Запись не найдена' });
+            }
+
+            res.json({ success: true, message: 'Запись успешно удалена' });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error("Ошибка при удалении car_details:", err.message);
+            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        } finally {
+            client.release();
+        }
+    });
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
@@ -2640,7 +2710,7 @@ router.put('/:entity/:id', async (req, res) => {
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','car_details'
+            'postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2889,7 +2959,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts','car_details'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts'
         ];
 
         if (!allowedTables.includes(entity)) {
