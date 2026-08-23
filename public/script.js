@@ -1568,8 +1568,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1742,6 +1741,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 <select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
                     ${optionsHtml}
                 </select>
+            `;
+        } else if (col.type === 'image' || col.field === 'photo_url') {
+            // Поле для загрузки файла изображения
+            inputHtml = `
+                ${val ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Текущий файл: <a href="${val}" target="_blank" style="color: #2563eb;">посмотреть</a></div>` : ''}
+                <input type="file" name="${col.field}" accept="image/*" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
             `;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -1931,41 +1936,42 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
 
-        if (data.is_posted !== undefined && data.is_posted !== '') {
-            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
-        }
-
+        // Обработка внешних/родительских ID перед отправкой через FormData
         if (entity === 'receipt_items' && parentId) {
-            data.receipt_id = parentId;
+            formData.set('receipt_id', parentId);
         } else if (entity === 'move_items' && parentId) {
-            data.move_id = parentId; 
+            formData.set('move_id', parentId); 
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
-            data.dtp_id = parentId;
+            formData.set('dtp_id', parentId);
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
-            data.repair_id = parentId;
+            formData.set('repair_id', parentId);
         } else if (entity === 'counterparty_contacts' && parentId) {
-            data.counterparty_id = parentId;
+            formData.set('counterparty_id', parentId);
         } else if (entity === 'postavhik_contacts' && parentId) {
-            data.postavhik_id = parentId;
+            formData.set('postavhik_id', parentId);
         } else if (entity === 'customer_contacts' && parentId) {
-            data.customer_id = parentId; 
+            formData.set('customer_id', parentId); 
         } else if (entity === 'car_details' && parentId) {
-            data.car_id = parentId;
+            formData.set('car_id', parentId);
         } else if (entity === 'entity_contacts') {
+            let entId = parentId;
+            let entType = window.currentEntity || window.activeEntity || 'customers';
             if (parentId && typeof parentId === 'object') {
-                data.entity_id = parentId.entity_id || parentId.id;
-                data.entity_type = parentId.entity_type || window.currentEntity || window.activeEntity || 'customers';
-            } else if (parentId) {
-                data.entity_id = parentId;
-                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
+                entId = parentId.entity_id || parentId.id;
+                entType = parentId.entity_type || entType;
             }
-            
-            if (!data.entity_type || data.entity_type === 'entity_contacts') {
-                data.entity_type = window.currentEntity || window.activeEntity || 'customers';
-            }
+            formData.set('entity_id', entId);
+            formData.set('entity_type', entType);
         }
+
+        const isPostedVal = formData.get('is_posted');
+        if (isPostedVal !== null && isPostedVal !== '') {
+            formData.set('is_posted', isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1);
+        }
+
+        // Для логов собираем также plain-объект
+        const data = Object.fromEntries(formData.entries());
 
         try {
             const isEdit = item && item.id;
@@ -1976,13 +1982,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
+            // При использовании FormData заголовок 'Content-Type' указывать НЕ нужно (браузер сам выставит multipart/form-data с границами)
             const response = await fetch(url, {
                 method: method,
                 headers: { 
-                    'Content-Type': 'application/json',
                     'x-user-id': currentUserId
                 },
-                body: JSON.stringify(data)
+                body: formData
             });
 
             if (response.ok) {
