@@ -2218,29 +2218,41 @@ router.post('/logs', async (req, res) => {
     });
 
     // Эндпоинт для удаления записи (DELETE)
-    router.delete('/car_details/:id', async (req, res) => {
-        const client = await pool.connect();
-        try {
-            const { id } = req.params;
+  // Эндпоинт удаления записи
+router.delete('/car_details/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
 
-            await client.query('BEGIN');
-            const result = await client.query('DELETE FROM car_details WHERE id = $1 RETURNING *;', [id]);
-            await client.query('COMMIT');
+        // 1. Сначала находим запись в базе, чтобы узнать путь к фото
+        const findQuery = 'SELECT photo_url FROM car_details WHERE id = $1';
+        const findResult = await pool.query(findQuery, [id]);
 
-            if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Запись не найдена' });
+        if (findResult.rows.length > 0) {
+            const photoUrl = findResult.rows[0].photo_url;
+            
+            if (photoUrl) {
+                // photo_url обычно выглядит как '/uploads/filename.jpg'
+                // Превращаем его в реальный путь на диске бэкенда
+                const filename = path.basename(photoUrl);
+                const filePath = path.join(__dirname, '../uploads', filename); // подкорректируй путь к uploads, если папка выше уровнем
+
+                // Проверяем, существует ли файл физически, и удаляем его
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                    console.log(`Файл ${filename} успешно удален с диска.`);
+                }
             }
-
-            res.json({ success: true, message: 'Запись успешно удалена' });
-        } catch (err) {
-            await client.query('ROLLBACK');
-            console.error("Ошибка при удалении car_details:", err.message);
-            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
-        } finally {
-            client.release();
         }
-    });
 
+        // 2. Удаляем саму запись из базы данных PostgreSQL
+        await pool.query('DELETE FROM car_details WHERE id = $1', [id]);
+
+        res.json({ message: 'Запись и привязанное фото успешно удалены' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при удалении записи');
+    }
+});
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
