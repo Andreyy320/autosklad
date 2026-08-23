@@ -388,7 +388,25 @@ router.get('/customer_contacts/:customer_id', async (req, res) => {
     }
 });
 
-
+router.get('/car_details', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                cd.*, 
+                c.gos_number AS car_gos_number,
+                m.name AS car_model_name
+            FROM car_details cd
+            LEFT JOIN cars c ON cd.car_id = c.id
+            LEFT JOIN car_models m ON c.model_id = m.id
+            ORDER BY cd.id ASC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении деталей и фото автомобилей');
+    }
+});
 
 
     // ПОЛУЧЕНИЕ СПИСКА ТИПОВ РАБОТ (из таблицы type_rabot)
@@ -2105,6 +2123,42 @@ router.post('/logs', async (req, res) => {
     }
 });
 
+
+
+
+// Эндпоинт для создания записи с деталями и фото автомобиля
+    router.post('/car_details', upload.single('photo'), async (req, res) => {
+        const client = await pool.connect();
+        try {
+            const { car_id, date, title, description } = req.body;
+            
+            // Если файл был прикреплен, формируем путь к нему, иначе null
+            const photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+            await client.query('BEGIN');
+
+            const query = `
+                INSERT INTO car_details (car_id, date, title, description, photo_url)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING *;
+            `;
+            const values = [car_id, date || new Date(), title, description, photo_url];
+            const result = await client.query(query, values);
+
+            await client.query('COMMIT');
+            res.json(result.rows[0]);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error("Ошибка при добавлении car_details:", err.message);
+            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2559,6 +2613,7 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -2617,7 +2672,8 @@ router.put('/:entity/:id', async (req, res) => {
 
         const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs'];
         if (docWithStatusTables.includes(entity)) {
-            const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1`, [id]);
+            // Добавлен FOR UPDATE для блокировки шапки документа от гонок
+            const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
             if (currentDocRes.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Запись не найдена' });
@@ -2638,7 +2694,8 @@ router.put('/:entity/:id', async (req, res) => {
         }
 
         if (entity === 'repair_works') {
-            const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1', [id]);
+            // Добавлен FOR UPDATE
+            const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1 FOR UPDATE', [id]);
             if (oldItemRes.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Запись не найдена' });
@@ -2669,7 +2726,8 @@ router.put('/:entity/:id', async (req, res) => {
                 }
 
                 if (entity === 'move_items') {
-                    const oldItemRes = await client.query('SELECT * FROM "move_items" WHERE id = $1', [id]);
+                    // Добавлен FOR UPDATE
+                    const oldItemRes = await client.query('SELECT * FROM "move_items" WHERE id = $1 FOR UPDATE', [id]);
                     if (oldItemRes.rows.length === 0) {
                         await client.query('ROLLBACK');
                         return res.status(404).json({ error: 'Запись не найдена' });
@@ -2712,7 +2770,8 @@ router.put('/:entity/:id', async (req, res) => {
                 }
 
                 if (entity === 'repair_items') {
-                    const oldItemRes = await client.query('SELECT * FROM "repair_items" WHERE id = $1', [id]);
+                    // Добавлен FOR UPDATE
+                    const oldItemRes = await client.query('SELECT * FROM "repair_items" WHERE id = $1 FOR UPDATE', [id]);
                     if (oldItemRes.rows.length === 0) {
                         await client.query('ROLLBACK');
                         return res.status(404).json({ error: 'Запись не найдена' });
@@ -2779,7 +2838,6 @@ router.put('/:entity/:id', async (req, res) => {
 
         // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE) ====================
         try {
-            // Пытаемся достать userId из заголовков (если фронтенд его передает) или через body
             const userId = req.headers['x-user-id'] || req.body.user_id || null;
             const detailsStr = Object.entries(req.body)
                 .map(([k, v]) => `${k}: ${v}`)
