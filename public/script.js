@@ -1776,11 +1776,10 @@ function closeDrawer() {
         `;
     }
 
-    // Если это car_details и в конфигурации нет явного поля под файл, автоматически добавляем кнопку выбора файла
-    if (entity === 'car_details' && !config.columns.some(c => c.type === 'file' || c.field === 'file')) {
+    if (entity === 'car_details' && !config.columns.some(c => c.type === 'file' || c.field === 'file' || c.field === 'photo')) {
         html += `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-                Файл / Документ:
+                Фото / Документ:
                 <input type="file" name="file" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
             </label>
         `;
@@ -1941,8 +1940,13 @@ function closeDrawer() {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
+        
+        // Обработка логического флага is_posted
+        const isPostedVal = formData.get('is_posted');
+        if (isPostedVal !== null && isPostedVal !== '') {
+            formData.set('is_posted', isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1);
+        }
 
-        // Добавляем внешние ключи напрямую в FormData, чтобы они ушли на сервер вместе с файлом
         if (entity === 'receipt_items' && parentId) {
             formData.set('receipt_id', parentId);
         } else if (entity === 'move_items' && parentId) {
@@ -1970,16 +1974,6 @@ function closeDrawer() {
             formData.set('entity_type', entType);
         }
 
-        if (entity === 'car_details' && parentId && !formData.get('car_id')) {
-            formData.set('car_id', parentId);
-        }
-
-        // Обработка логического флага is_posted для FormData
-        const isPostedVal = formData.get('is_posted');
-        if (isPostedVal !== null && isPostedVal !== '') {
-            formData.set('is_posted', isPostedVal === 'true' || isPostedVal === true || isPostedVal === '1' || isPostedVal === 1);
-        }
-
         try {
             const isEdit = item && item.id;
             const url = isEdit 
@@ -1989,12 +1983,11 @@ function closeDrawer() {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            // Отправляем FormData напрямую (без JSON.stringify), чтобы multer на сервере поймал файл и положил в uploads
+            // Отправляем через FormData без JSON.stringify, чтобы файлы корректно ушли на сервер
             const response = await fetch(url, {
                 method: method,
                 headers: { 
                     'x-user-id': currentUserId
-                    // Заголовок Content-Type НЕ ставим специально, чтобы браузер сам проставил boundary для multipart/form-data
                 },
                 body: formData
             });
