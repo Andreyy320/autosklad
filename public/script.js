@@ -1568,8 +1568,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
