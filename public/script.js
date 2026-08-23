@@ -2051,9 +2051,9 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        // Если это поле файла или картинки, используем имя 'file' (или поменяй на то, которое настроено в upload.single('...') на сервере)
+        // Здесь имя изменено на 'photo', чтобы серверный multer успешно принял файл
         if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field.includes('file') || col.field.includes('photo')) {
-            inputHtml = `<input type="file" name="file" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
+            inputHtml = `<input type="file" name="photo" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.field === 'description') {
@@ -2147,7 +2147,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 // Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
