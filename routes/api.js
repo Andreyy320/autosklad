@@ -2482,17 +2482,16 @@ router.delete('/car_details/:id', async (req, res) => {
 
 
 
-
 // Получение списка всех реализаций с JOIN'ами для вывода названий
 router.get('/realizations', async (req, res) => {
     try {
         const query = `
             SELECT 
                 r.*,
-                c.name as customer_name,
+                c.name_full as customer_name,
                 s.name as sklad_name,
                 m.description as mol_name,
-                cc.gov_number, cc.model -- или поля вашего авто, поправьте под ваши колонки
+                cc.gov_number, cc.model 
             FROM realizations r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN skladi s ON r.sklad_id = s.id
