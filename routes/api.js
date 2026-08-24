@@ -1090,6 +1090,70 @@ router.get('/dtp_history', async (req, res) => {
 
 
 
+
+// ==================== ИЗОБРАЖЕНИЯ КОНКРЕТНОГО ДТП (для нижней таблицы/галереи) ====================
+router.get('/accident_images_list', async (req, res) => {
+    try {
+        const { accident_id } = req.query;
+        const query = `
+            SELECT * 
+            FROM accident_images 
+            WHERE accident_id = $1 
+            ORDER BY id DESC
+        `;
+        const result = await pool.query(query, [accident_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении изображений ДТП');
+    }
+});
+
+// ==================== ДОБАВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП ====================
+router.post('/accident_images', async (req, res) => {
+    try {
+        const { accident_id, image_url, description } = req.body;
+        
+        if (!accident_id || !image_url) {
+            return res.status(400).json({ error: 'Не указан accident_id или ссылка на изображение' });
+        }
+
+        const query = `
+            INSERT INTO accident_images (accident_id, image_url, description) 
+            VALUES ($1, $2, $3) 
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [accident_id, image_url, description || null]);
+        
+        console.log(`[SUCCESS] Успешно добавлено фото ДТП ID: ${result.rows[0].id}`);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error("Ошибка при добавлении фото ДТП:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера при добавлении фото ДТП' });
+    }
+});
+
+// ==================== УДАЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП ====================
+router.delete('/accident_images/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('DELETE FROM accident_images WHERE id = $1 RETURNING *', [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Фотография не найдена' });
+        }
+
+        console.log(`[SUCCESS] Удалено фото ДТП ID: ${id}`);
+        res.json({ message: 'Фотография успешно удалена', deleted: result.rows[0] });
+    } catch (err) {
+        console.error("Ошибка при удалении фото ДТП:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера при удалении фото' });
+    }
+});
+
+
+
+
 router.get('/doc_types', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name, description FROM doc_types ORDER BY id ASC');
@@ -2254,6 +2318,8 @@ router.delete('/car_details/:id', async (req, res) => {
         res.status(500).send('Ошибка сервера при удалении');
     }
 });
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2714,6 +2780,8 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
+
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================

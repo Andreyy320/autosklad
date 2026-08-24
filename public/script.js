@@ -2628,7 +2628,9 @@ async function applyMovementFilters() {
     } catch (err) {
         console.error('Ошибка применения фильтров движения:', err);
     }
-}async function loadData(entity, title) {
+}
+
+async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
