@@ -1139,10 +1139,78 @@ router.post('/accident_images', upload.single('image_url'), async (req, res) => 
     }
 });
 
+// ==================== ОБНОВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП (РЕДАКТИРОВАНИЕ) ====================
+router.put('/accident_images/:id', upload.single('image_url'), async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { description, created_at } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Получаем старую запись, чтобы узнать старый путь к файлу
+        const oldRecord = await client.query('SELECT * FROM accident_images WHERE id = $1', [id]);
+        if (oldRecord.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+
+        let image_url = oldRecord.rows[0].image_url;
+
+        // 2. Если загружен новый файл, удаляем старый с диска и обновляем путь
+        if (req.file) {
+            const newImageUrl = `/uploads/${req.file.filename}`;
+            
+            // Удаляем старый файл физически из папки uploads, если он существует
+            if (image_url && image_url.startsWith('/uploads/')) {
+                const oldFilePath = path.join(__dirname, '..', image_url); // Подстройте путь к папке uploads при необходимости
+                if (fs.existsSync(oldFilePath)) {
+                    fs.unlinkSync(oldFilePath);
+                }
+            }
+            image_url = newImageUrl;
+        }
+
+        // 3. Обновляем данные в базе
+        const query = `
+            UPDATE accident_images 
+            SET image_url = $1, description = $2, created_at = COALESCE($3, created_at)
+            WHERE id = $4 
+            RETURNING *;
+        `;
+        const values = [image_url, description || null, created_at || null, id];
+        const result = await client.query(query, values);
+
+        await client.query('COMMIT');
+        
+        console.log(`[SUCCESS] Обновлено фото ДТП ID: ${id}`);
+        res.json(result.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при обновлении фото ДТП:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // ==================== УДАЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП ====================
 router.delete('/accident_images/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        // Сначала получаем запись, чтобы удалить физический файл с диска
+        const record = await pool.query('SELECT * FROM accident_images WHERE id = $1', [id]);
+        if (record.rows.length > 0) {
+            const image_url = record.rows[0].image_url;
+            if (image_url && image_url.startsWith('/uploads/')) {
+                const filePath = path.join(__dirname, '..', image_url);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+        }
+
         const result = await pool.query('DELETE FROM accident_images WHERE id = $1 RETURNING *', [id]);
 
         if (result.rows.length === 0) {
@@ -1156,8 +1224,6 @@ router.delete('/accident_images/:id', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при удалении фото' });
     }
 });
-
-
 
 
 router.get('/doc_types', async (req, res) => {
