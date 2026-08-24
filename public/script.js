@@ -1785,8 +1785,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
     // Предварительно обрабатываем и рендерим поля, чтобы переставить склад выше МОЛ и скрыть нижнюю дату
     let columnsToRender = [];
 
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
+   for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
         if (col.field === 'car_id' && parentId) continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
