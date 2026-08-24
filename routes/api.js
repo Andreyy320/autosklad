@@ -1090,16 +1090,11 @@ router.get('/dtp_history', async (req, res) => {
 
 
 
-// ==================== ИЗОБРАЖЕНИЯ КОНКРЕТНОГО ДТП (получение списка) ====================
-router.get('/accident_images_list', async (req, res) => {
+// Можно сделать синоним для удобства
+router.get('/accident_images', async (req, res) => {
     try {
         const { accident_id } = req.query;
-        const query = `
-            SELECT * 
-            FROM accident_images 
-            WHERE accident_id = $1 
-            ORDER BY id DESC
-        `;
+        const query = `SELECT * FROM accident_images WHERE accident_id = $1 ORDER BY id DESC`;
         const result = await pool.query(query, [accident_id]);
         res.json(result.rows);
     } catch (err) {

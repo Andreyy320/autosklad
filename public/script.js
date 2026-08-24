@@ -2091,7 +2091,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
-    // Определяем имя скрытого поля в зависимости от сущности
+    // Корректно подставляем скрытый инпут в зависимости от сущности
     if (parentId) {
         if (entity === 'accident_images') {
             html += `<input type="hidden" name="accident_id" value="${parentId}">`;
@@ -2107,6 +2107,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
+        // Добавлено распознавание image_url и image для корректного отображения кнопки выбора файла
         if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field === 'image_url' || col.field.includes('file') || col.field.includes('photo') || col.field.includes('image')) {
             inputHtml = `<input type="file" name="photo" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
@@ -2166,7 +2167,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 
         const formData = new FormData(e.target);
         
-        // Автоматически проставляем правильный ID родителя при отправке
+        // Автоматически проставляем правильный id родителя перед отправкой
         if (parentId) {
             if (entity === 'accident_images' && !formData.get('accident_id')) {
                 formData.set('accident_id', parentId);
