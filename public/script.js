@@ -2170,7 +2170,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 
         const formData = new FormData(e.target);
         
-        // Автоматически проставляем правильный id родителя перед отправкой
         if (parentId) {
             if (entity === 'accident_images' && !formData.get('accident_id')) {
                 formData.set('accident_id', parentId);
@@ -2234,7 +2233,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="accident_id" value="${parentId}">`;
     }
 
-    // Поле даты загрузки
     html += `
         <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
             Дата загрузки:
@@ -2242,7 +2240,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
         </label>
     `;
 
-    // Поле выбора файла (картинки)
     html += `
         <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
             Изображение:
@@ -2251,7 +2248,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
         </label>
     `;
 
-    // Поле описания
     html += `
         <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
             Описание:
@@ -2273,7 +2269,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
 
     const formElement = drawer.querySelector('#accident-image-form');
 
-    // Кнопка удаления
     const deleteBtn = drawer.querySelector('#delete-accident-img-btn');
     if (deleteBtn && item.id) {
         deleteBtn.addEventListener('click', async () => {
@@ -2293,7 +2288,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
         });
     }
 
-    // Обработчик отправки формы
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
         const saveBtn = formElement.querySelector('#save-accident-img-btn');
@@ -2337,16 +2331,11 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
 }
 
 
-
-
-// Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
     try {
         let detailsStr = '';
         
         if (typeof detailsData === 'object' && detailsData !== null) {
-            // Если передан объект с полем info (как при логине), берем чистый текст.
-            // Иначе форматируем все поля ключ: значение.
             if (detailsData.info) {
                 detailsStr = detailsData.info;
             } else {
@@ -2356,7 +2345,6 @@ async function sendLog(entity, action, recordId, detailsData) {
             detailsStr = String(detailsData || '');
         }
 
-        // Автоматически подтягиваем ID текущего пользователя из localStorage
         const userId = localStorage.getItem('currentUserId') || null;
 
         await fetch('/api/logs', {
@@ -2383,7 +2371,6 @@ async function sendLog(entity, action, recordId, detailsData) {
         'Подтверждение удаления',
         `Вы уверены, что хотите удалить запись с ID: ${selectedItem.id}?`,
         async () => {
-            // Достаем ID текущего пользователя из localStorage
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
             try {
@@ -2391,7 +2378,7 @@ async function sendLog(entity, action, recordId, detailsData) {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ ДЛЯ ЛОГОВ
+                        'x-user-id': currentUserId 
                     }
                 });
 
@@ -2449,7 +2436,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
             
-            // Сохраняем ID зашедшего пользователя, если сервер его передал
             if (result.user && result.user.id) {
                 localStorage.setItem('currentUserId', result.user.id);
             }
@@ -2457,11 +2443,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
-            // --- ОТПРАВЛЯЕМ ЛОГ ЧЕРЕЗ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ ---
             await sendLog('auth', 'LOGIN', null, { 
                 info: `Пользователь ${login} вошел в систему` 
             });
-            // ----------------------------------------------------
 
             loadData('users', 'Пользователи');
         } else {
@@ -2475,7 +2459,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
 });
 
 function logout() {
-    localStorage.clear(); // Очищаем всё при выходе
+    localStorage.clear(); 
     location.reload();
 }
 
@@ -2629,7 +2613,6 @@ async function loadMolsForFilter() {
         console.error('Не удалось загрузить список МОЛ для фильтра:', err);
     }
 }
-
 
 async function applyFilters() {
     if (currentEntity !== 'stock_balances') return;
@@ -3254,13 +3237,11 @@ function openDetailForm(mode) {
     const itemToEdit = mode === 'edit' ? selectedDetailItem : null;
     const detailEntity = getCurrentDetailEntity();
     
-    // Если это таблица файлов/документов машины или изображений ДТП, вызываем специальную функцию для работы с файлами
     if (detailEntity === 'car_details') {
         openCarDetailsForm(detailEntity, itemToEdit, selectedItem.id);
     } else if (detailEntity === 'accident_images') {
         openAccidentImageForm(detailEntity, itemToEdit, selectedItem.id);
     } else {
-        // Для всех остальных таблиц оставляем твою стандартную логику
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
     }
 }
@@ -3276,7 +3257,6 @@ async function deleteDetailItem() {
         async () => {
             const detailEntity = getCurrentDetailEntity();
 
-            // Достаем ID текущего пользователя из localStorage
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
             try {
@@ -3284,7 +3264,7 @@ async function deleteDetailItem() {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-user-id': currentUserId // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ В ЗАГОЛОВКЕ
+                        'x-user-id': currentUserId 
                     }
                 });
 
@@ -3920,7 +3900,7 @@ async function loadDetailData(entity, parentId) {
         }
 
     } catch (err) {
-        console.error('❌ [loadDetailData] Ошибка:', err);
+        console.error(' [loadDetailData] Ошибка:', err);
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
@@ -4104,3 +4084,68 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 });
 
 
+function initTableResizer(table) {
+    if (!table) return;
+    
+    const headerCells = table.querySelectorAll('th');
+
+    headerCells.forEach(th => {
+        if (th.querySelector('.resizer')) return;
+
+        if (!th.style.width || th.style.width === 'auto') {
+            const currentWidth = th.offsetWidth;
+            if (currentWidth > 0) {
+                th.style.width = `${currentWidth}px`;
+            }
+        }
+
+        const resizer = document.createElement('div');
+        resizer.classList.add('resizer');
+        th.appendChild(resizer);
+
+        let startX = 0;
+        let startWidth = 0;
+
+        resizer.addEventListener('mousedown', function (e) {
+            startX = e.clientX;
+            startWidth = th.offsetWidth;
+
+            resizer.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+
+            function mouseMoveHandler(e) {
+                const dx = e.clientX - startX;
+                const newWidth = Math.max(30, startWidth + dx);
+                th.style.width = `${newWidth}px`;
+            }
+
+            function mouseUpHandler() {
+                resizer.classList.remove('resizing');
+                document.body.style.cursor = '';
+                window.removeEventListener('mousemove', mouseMoveHandler);
+                window.removeEventListener('mouseup', mouseUpHandler);
+            }
+
+            window.addEventListener('mousemove', mouseMoveHandler);
+            window.addEventListener('mouseup', mouseUpHandler);
+
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+}
+
+// Глобальная функция ручного вызова
+window.makeTablesResizable = function() {
+    document.querySelectorAll('table').forEach(table => {
+        initTableResizer(table);
+    });
+};
+
+// Запускаем сразу после загрузки страницы
+document.addEventListener('DOMContentLoaded', () => {
+    window.makeTablesResizable();
+});
+
+// И вызываем её прямо сейчас на случай, если документ уже загружен
+window.makeTablesResizable();
