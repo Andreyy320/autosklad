@@ -251,13 +251,11 @@ table {
     width: 100%;
     border-collapse: collapse;
     background-color: #ffffff;
-    /* Убираем жесткий fixed, чтобы колонки могли гибко менять размеры */
-    table-layout: auto !important;
+    table-layout: auto !important; /* Позволяет колонкам менять ширину под скрипт */
 }
 
 th {
     background: #eceff1;
-    position: sticky;
     top: 0;
     z-index: 10;
     font-weight: 600;          
@@ -267,9 +265,10 @@ th {
     text-align: left;
     font-size: 11px;
     white-space: nowrap;
-    position: relative !important;
+    position: relative !important; /* Обязательно для привязки ползунка мыши */
 }
 
+/* Ползунок изменения размера колонки */
 th .resizer {
     position: absolute;
     top: 0;
@@ -284,7 +283,7 @@ th .resizer {
 
 th .resizer:hover,
 th .resizer.resizing {
-    background-color: var(--primary);
+    background-color: var(--primary) !important;
 }
 
 td {
