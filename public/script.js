@@ -1782,17 +1782,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
-        
-        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
-        if (col.field === 'car_id' && parentId) continue;
-
-        if (col.insert === false) continue;
-        if ((col.update === false || col.edit === false) && item && item.id) continue;
-        
-        if (entity === 'repair_items' && col.field === 'receipt_id') continue;
-        if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
+    // Вспомогательная функция для рендеринга отдельного поля ввода формы
+    async function renderField(col) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') return '';
+        if (col.field === 'car_id' && parentId) return '';
+        if (col.insert === false) return '';
+        if ((col.update === false || col.edit === false) && item && item.id) return '';
+        if (entity === 'repair_items' && col.field === 'receipt_id') return '';
+        if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
         let val = '';
         if (item) {
@@ -1839,11 +1836,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `
-                <select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
-                    ${optionsHtml}
-                </select>
-            `;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref || col.field === 'receipt_id') {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
             const refItems = await fetchReferenceData(referenceName);
@@ -1867,11 +1860,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            inputHtml = `
-                <select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
-                    ${optionsHtml}
-                </select>
-            `;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -1897,12 +1886,26 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        html += `
+        return `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
             </label>
         `;
+    }
+
+    // Находим колонку car_id заранее, чтобы вывести её сразу после customer_id
+    const carCol = config.columns.find(c => c.field === 'car_id');
+
+    for (const col of config.columns) {
+        if (col.field === 'car_id') continue; // Пропускаем, выведем в нужном месте
+
+        html += await renderField(col);
+
+        // Если только что вывели поле покупателя (customer_id), сразу следом выводим авто (car_id)
+        if (col.field === 'customer_id' && carCol) {
+            html += await renderField(carCol);
+        }
     }
 
     html += `
