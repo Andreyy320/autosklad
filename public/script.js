@@ -1715,8 +1715,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
-        } else if (entity === 'realizations' || entity === 'realization') {
-            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1784,31 +1782,32 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    // Жестко заданный порядок полей согласно требованиям
-    const customFieldOrder = [
-        'date', 'fact_date', 'doc_number', 'customer_id', 'car_id', 'warehouse_id', 'mol_id', 'payment_type', 'description'
-    ];
+    // Предварительно обрабатываем и рендерим поля, чтобы переставить склад выше МОЛ и скрыть нижнюю дату
+    let columnsToRender = [];
 
-    // Сортируем колонки конфигурации по нашему порядку, а остальные пущаем следом
-    const sortedColumns = [...config.columns].sort((a, b) => {
-        let indexA = customFieldOrder.indexOf(a.field);
-        let indexB = customFieldOrder.indexOf(b.field);
-        if (indexA === -1) indexA = 999;
-        if (indexB === -1) indexB = 999;
-        return indexA - indexB;
-    });
-
-    for (const col of sortedColumns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id' && parentId && entity !== 'realizations') continue;
-        
+    for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
         if (col.field === 'car_id' && parentId) continue;
-
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
-        
         if (entity === 'repair_items' && col.field === 'receipt_id') continue;
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
-        
+
+        // Скрываем самую последнюю/нижнюю дату (поле называется 'date')
+        if (col.field === 'date') continue;
+
+        columnsToRender.push(col);
+    }
+
+    // Меняем местами склад и МОЛ, если они оба присутствуют (склад выше)
+    const warehouseIndex = columnsToRender.findIndex(c => c.field === 'warehouse_id');
+    const molIndex = columnsToRender.findIndex(c => c.field === 'mol_id');
+    if (warehouseIndex !== -1 && molIndex !== -1 && warehouseIndex > molIndex) {
+        const whCol = columnsToRender.splice(warehouseIndex, 1)[0];
+        columnsToRender.splice(molIndex, 0, whCol);
+    }
+
+    for (const col of columnsToRender) {
         let val = '';
         if (item) {
             const possibleKeys = [
