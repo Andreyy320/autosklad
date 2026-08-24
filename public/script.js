@@ -1689,7 +1689,8 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}async function openEntityForm(entity, item = null, parentId = null) {
+}
+async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1836,16 +1837,29 @@ function closeDrawer() {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
             let refItems = [];
 
-            // Если это машины, то при первичном рендеринге формы подгружаем машины выбранного покупателя (если он задан)
-            if (referenceName === 'customer_cars' && item && item.customer_id) {
-                try {
-                    const carRes = await fetch(`/api/customer_cars?customer_id=${item.customer_id}`);
-                    if (carRes.ok) refItems = await carRes.json();
-                } catch (e) {
-                    console.error('Ошибка загрузки машин покупателя при открытии:', e);
+            // Исправлено: корректная проверка для customer_cars, чтобы подтягивать машины по customer_id или car_id (если передан item с car_id или customer_id)
+            if (referenceName === 'customer_cars') {
+                const targetCustomerId = (item && item.customer_id) ? item.customer_id : null;
+                if (targetCustomerId) {
+                    try {
+                        const carRes = await fetch(`/api/customer_cars?customer_id=${targetCustomerId}`);
+                        if (carRes.ok) refItems = await carRes.json();
+                    } catch (e) {
+                        console.error('Ошибка загрузки машин покупателя при открытии:', e);
+                    }
+                } else if (item && item.car_id) {
+                    // Если customer_id пустой, но есть car_id, подгрузим все машины или конкретную машину для корректного отображения
+                    try {
+                        const carRes = await fetch(`/api/customer_cars`);
+                        if (carRes.ok) {
+                            const allCars = await carRes.json();
+                            // Если у нас передан item с car_id, гарантируем что машина будет в списке выбора
+                            refItems = allCars;
+                        }
+                    } catch (e) {
+                        console.error('Ошибка загрузки списка машин:', e);
+                    }
                 }
-            } else if (referenceName === 'customer_cars') {
-                refItems = []; // Если покупатель еще не выбран, список авто пустой до выбора
             } else {
                 refItems = await fetchReferenceData(referenceName);
             }
@@ -2208,7 +2222,6 @@ function closeDrawer() {
         }
     });
 }
-
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
