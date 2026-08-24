@@ -1,12 +1,16 @@
 function initTableResizer(table) {
     if (!table) return;
-    const headerCells = table.querySelectorAll('thead tr:last-child th');
+    
+    // Обязательно фиксируем таблицу, чтобы колонки держали заданную ширину
+    table.style.tableLayout = 'fixed';
+
+    const headerCells = table.querySelectorAll('th');
 
     headerCells.forEach(th => {
         if (th.querySelector('.resizer')) return;
 
-        // Убедимся, что у th задана начальная ширина в пикселях, если её не было
-        if (!th.style.width && th.offsetWidth) {
+        // Фиксируем начальную ширину каждого заголовка в пикселях, если её еще нет
+        if (!th.style.width) {
             th.style.width = `${th.offsetWidth}px`;
         }
 
@@ -14,18 +18,18 @@ function initTableResizer(table) {
         resizer.classList.add('resizer');
         th.appendChild(resizer);
 
-        let x = 0;
-        let w = 0;
+        let startX = 0;
+        let startWidth = 0;
 
         resizer.addEventListener('mousedown', function (e) {
-            x = e.clientX;
-            w = th.offsetWidth;
+            startX = e.clientX;
+            startWidth = th.offsetWidth;
 
             resizer.classList.add('resizing');
 
             function mouseMoveHandler(e) {
-                const dx = e.clientX - x;
-                const newWidth = Math.max(50, w + dx); // Минимальная ширина 50px
+                const dx = e.clientX - startX;
+                const newWidth = Math.max(30, startWidth + dx);
                 th.style.width = `${newWidth}px`;
             }
 
@@ -37,14 +41,13 @@ function initTableResizer(table) {
 
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler);
-            
-            // Предотвращаем выделение текста во время перетаскивания
-            e.preventDefault();
+
+            e.preventDefault(); // Предотвращаем выделение текста
         });
     });
 }
 
-// Следим за изменениями таблицы в DOM и инициализируем ресайзеры
+// Автоматически инициализируем таблицы
 const observer = new MutationObserver(() => {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
