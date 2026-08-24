@@ -2774,7 +2774,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -3989,7 +3988,9 @@ const navMap = {
     'Контакты поставщиков': 'postavhik_contacts',
     'Контакты контрагентов': 'counterparty_contacts',
     'Детали и фото авто': 'car_details',
-    'Изображения ДТП':'accident_images'
+    'Изображения ДТП':'accident_images',
+    'Скидки на запчасти': 'part_discounts',
+    'Скидки на услуги': 'service_discounts'
 };
 
 function updateFilterPanels(entity) {
@@ -4082,6 +4083,13 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         }
     });
 });
+
+
+
+
+
+
+
 
 
 (function() {
