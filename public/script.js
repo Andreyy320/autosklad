@@ -3782,7 +3782,7 @@ async function loadDetailData(entity, parentId) {
     if (!fetchUrl) {
         // Если это accident_images, заменяем эндпоинт на ваш кастомный метод
         if (entity === 'accident_images') {
-            fetchUrl = `/api/accident_images_list?accident_id=${parentId}`;
+            fetchUrl = `/api/accident_images?accident_id=${parentId}`;
         } else {
             fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
         }
