@@ -273,13 +273,21 @@ router.get('/postavhik_contacts/:postavhik_id', async (req, res) => {
 });
 
 
-// Роут получения покупателей с JOIN
+// 1. Обновленный роут получения покупателей (с JOIN для типов и новых скидок)
 router.get('/customers', async (req, res) => {
     try {
         const query = `
-            SELECT c.*, t.name AS type_name 
+            SELECT 
+                c.*, 
+                t.name AS type_name,
+                pd.name AS part_discount_name,
+                pd.discount_percent AS part_discount_percent,
+                sd.name AS service_discount_name,
+                sd.discount_percent AS service_discount_percent
             FROM customers c 
             LEFT JOIN counterparty_types t ON c.type_id = t.id 
+            LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+            LEFT JOIN service_discounts sd ON c.discount_service_id = sd.id
             ORDER BY c.id ASC
         `;
         const result = await pool.query(query);
@@ -289,6 +297,31 @@ router.get('/customers', async (req, res) => {
         res.status(500).send('Ошибка при получении покупателей');
     }
 });
+
+// 2. Роут получения списка скидок на запчасти
+router.get('/part_discounts', async (req, res) => {
+    try {
+        const query = `SELECT * FROM part_discounts ORDER BY id ASC`;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении скидок на запчасти');
+    }
+});
+
+// 3. Роут получения списка скидок на услуги
+router.get('/service_discounts', async (req, res) => {
+    try {
+        const query = `SELECT * FROM service_discounts ORDER BY id ASC`;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении скидок на услуги');
+    }
+});
+
 
 // ПОЛУЧЕНИЕ КОНТАКТОВ КОНКРЕТНОГО ПОКУПАТЕЛЯ (поддерживает и /api/customer_contacts/1, и /api/customer_contacts?customer_id=1)
 router.get('/customer_contacts', async (req, res) => {
@@ -2445,7 +2478,7 @@ router.post('/:entity', async (req, res) => {
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -2896,7 +2929,7 @@ router.put('/:entity/:id', async (req, res) => {
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -3145,7 +3178,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts','part_discounts','service_discounts'
         ];
 
         if (!allowedTables.includes(entity)) {
