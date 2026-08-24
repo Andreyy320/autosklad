@@ -3029,7 +3029,7 @@ async function loadData(entity, title) {
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
-        const tabsForCustomers = document.getElementById('tabs-for-customers'); // На случай если есть отдельный контейнер вкладок для покупателей
+        const tabsForCustomers = document.getElementById('tabs-for-customers');
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -3309,6 +3309,8 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
+
+
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
