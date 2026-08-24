@@ -3746,7 +3746,9 @@ async function loadDetailData(entity, parentId) {
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
         queryParamName = 'dtp_id'; 
     } else if (entity === 'accident_images') {
-        queryParamName = 'accident_id'; 
+        // Определяем откуда открыто: если текущий заголовок или контекст относится к машине, используем car_id
+        const isCarContext = document.getElementById('detail-title')?.innerText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
+        queryParamName = isCarContext ? 'car_id' : 'accident_id'; 
     } else if (entity === 'stock_batches') {
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
@@ -3783,7 +3785,12 @@ async function loadDetailData(entity, parentId) {
 
     if (!fetchUrl) {
         if (entity === 'accident_images') {
-            fetchUrl = `/api/accident_images?accident_id=${parentId}`;
+            const isCarContext = document.getElementById('detail-title')?.innerText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
+            if (isCarContext) {
+                fetchUrl = `/api/accident_images?car_id=${parentId}`;
+            } else {
+                fetchUrl = `/api/accident_images?accident_id=${parentId}`;
+            }
         } else {
             fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
         }
