@@ -348,10 +348,10 @@ tr.selected-row {
     overflow-x: auto;          
     flex-shrink: 0;
 }
-
 .car-tab-btn, 
 .accident-tab-btn, 
-.repair-tab-btn {
+.repair-tab-btn,
+.customer-tab-btn {
     background: #cfd8dc;
     border: 1px solid var(--border);
     border-bottom: none;
@@ -367,13 +367,15 @@ tr.selected-row {
 
 .car-tab-btn:hover, 
 .accident-tab-btn:hover, 
-.repair-tab-btn:hover {
+.repair-tab-btn:hover,
+.customer-tab-btn:hover {
     background: #e0e0e0;
 }
 
 .car-tab-btn.active, 
 .accident-tab-btn.active, 
-.repair-tab-btn.active {
+.repair-tab-btn.active,
+.customer-tab-btn.active {
     background: #ffffff;
     color: var(--primary);
     font-weight: 600;
@@ -382,7 +384,6 @@ tr.selected-row {
     position: relative;
     top: 1px;
 }
-
 #detail-toolbar {
     background: #ffffff !important;
     border-bottom: 1px solid var(--border) !important;
