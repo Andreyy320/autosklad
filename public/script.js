@@ -1709,7 +1709,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     if (!item || !item.id) {
         let nextId = 1;
-        let prefix = 'ДОК-';
+        let prefix = 'Р-';
 
         if (entity === 'receipts') {
             prefix = 'ПР-';
@@ -1782,32 +1782,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    // Предварительно обрабатываем и рендерим поля, чтобы переставить склад выше МОЛ и скрыть нижнюю дату
-    let columnsToRender = [];
-
-   for (const col of config.columns) {
+    for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
+        
+        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
         if (col.field === 'car_id' && parentId) continue;
+
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
+        
         if (entity === 'repair_items' && col.field === 'receipt_id') continue;
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
-
-        // Скрываем самую последнюю/нижнюю дату (поле называется 'date')
-        if (col.field === 'date') continue;
-
-        columnsToRender.push(col);
-    }
-
-    // Меняем местами склад и МОЛ, если они оба присутствуют (склад выше)
-    const warehouseIndex = columnsToRender.findIndex(c => c.field === 'warehouse_id');
-    const molIndex = columnsToRender.findIndex(c => c.field === 'mol_id');
-    if (warehouseIndex !== -1 && molIndex !== -1 && warehouseIndex > molIndex) {
-        const whCol = columnsToRender.splice(warehouseIndex, 1)[0];
-        columnsToRender.splice(molIndex, 0, whCol);
-    }
-
-    for (const col of columnsToRender) {
+        
         let val = '';
         if (item) {
             const possibleKeys = [
