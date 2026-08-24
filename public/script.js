@@ -2073,7 +2073,10 @@ document.addEventListener('click', function(e) {
             modal.style.display = 'flex';
         }
     }
-});async function openCarDetailsForm(entity, item = null, parentId = null) {
+});
+
+
+async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
     
@@ -2090,7 +2093,6 @@ document.addEventListener('click', function(e) {
         <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
-    // Корректно подставляем скрытый инпут в зависимости от сущности
     if (parentId) {
         if (entity === 'accident_images') {
             html += `<input type="hidden" name="accident_id" value="${parentId}">`;
@@ -2106,17 +2108,17 @@ document.addEventListener('click', function(e) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        // Исправлено: добавлено точное распознавание image_url и динамический вывод name="${col.field}"
+        // Исправлено: теперь корректно ловит type === 'image' и type === 'file', а также поле image_url
         const isFileField = col.type === 'file' || 
+                            col.type === 'image' || 
                             col.field === 'file' || 
                             col.field === 'photo' || 
                             col.field === 'image' || 
                             col.field === 'image_url' || 
-                            (entity === 'accident_images' && col.field === 'image_url') ||
+                            col.field === 'photo_url' ||
                             col.field.includes('file') || 
                             col.field.includes('photo') || 
-                            col.field.includes('image') ||
-                            col.field.includes('url');
+                            col.field.includes('image');
 
         if (isFileField) {
             inputHtml = `<input type="file" name="${col.field}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
@@ -2177,7 +2179,6 @@ document.addEventListener('click', function(e) {
 
         const formData = new FormData(e.target);
         
-        // Автоматически проставляем правильный id родителя перед отправкой
         if (parentId) {
             if (entity === 'accident_images' && !formData.get('accident_id')) {
                 formData.set('accident_id', parentId);
