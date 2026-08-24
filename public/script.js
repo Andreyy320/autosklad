@@ -121,22 +121,22 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
-    customers: {
+  customers: {
         title: 'Покупатели',
         columns: [
             { field: 'type_id', label: 'Тип', width: '130px', ref: 'counterparty_types' },
             { field: 'name_full', label: 'Наименование', width: '220px' },
             { field: 'name_short', label: 'Кратко', width: '150px' },
-            { field: 'discount_parts', label: 'Скидка зап.', width: '90px' },
-            { field: 'discount_services', label: 'Скидка усл.', width: '90px' },
+            { field: 'discount_part_id', label: 'Скидка зап.', width: '110px', ref: 'part_discounts' },
+            { field: 'discount_service_id', label: 'Скидка усл.', width: '110px', ref: 'service_discounts' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td><b>${item.type_name || '—'}</b></td>
             <td><b>${item.name_full || ''}</b></td>
             <td>${item.name_short || ''}</td>
-            <td>${item.discount_parts || ''}</td>
-            <td>${item.discount_services || ''}</td>
+            <td>${item.part_discount_name || '—'}</td>
+            <td>${item.service_discount_name || '—'}</td>
             <td>${item.description || ''}</td>
         `
     },
