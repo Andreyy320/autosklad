@@ -2890,6 +2890,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -2937,7 +2938,7 @@ async function loadData(entity, title) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
@@ -3068,6 +3069,8 @@ async function loadData(entity, title) {
                     loadDetailData('receipt_items', item.id);
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
+                } else if (entity === 'realizations') {
+                    loadDetailData('realization_items', item.id);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3219,10 +3222,10 @@ async function loadData(entity, title) {
             } else {
                 carTabsBar.style.display = 'none';
                 
-                if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves')) {
+                if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves' || entity === 'realizations')) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
-                    const detailEntity = entity === 'receipts' ? 'receipt_items' : 'move_items';
+                    const detailEntity = entity === 'receipts' ? 'receipt_items' : (entity === 'moves' ? 'move_items' : 'realization_items');
                     loadDetailData(detailEntity, activeId);
                 } else {
                     emptyDetailBody();
@@ -3236,7 +3239,6 @@ async function loadData(entity, title) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 function emptyDetailBody() {
     const detailBody = document.getElementById('detail-body');
     if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
