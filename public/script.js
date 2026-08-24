@@ -3713,9 +3713,6 @@ function switchCustomerTab(tabName, btnElement) {
     }
 }
 
-
-
-
 function switchCarTab(tabName, btnElement) {
     document.querySelectorAll('.car-tab-btn').forEach(btn => btn.classList.remove('active'));
     if (btnElement) {
