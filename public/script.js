@@ -1696,7 +1696,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1718,6 +1717,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
+        } else if (entity === 'realizations') {
+            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1788,7 +1789,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
     for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
         
-        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
+        // Убираем поле "Тип оплаты" по вашему запросу
+        if (col.field === 'payment_type' || col.field === 'type_oplata') continue;
+        
         if (col.field === 'car_id' && parentId) continue;
 
         if (col.insert === false) continue;
@@ -1854,7 +1857,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars') {
+                if (referenceName === 'cars' || referenceName === 'customer_cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
