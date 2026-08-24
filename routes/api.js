@@ -359,6 +359,43 @@ router.get('/customer_contacts/:customer_id', async (req, res) => {
 
 
 
+
+// 4. Роуты для получения автомобилей конкретного покупателя (поддерживает оба варианта запроса)
+router.get('/customer_cars', async (req, res) => {
+    try {
+        const customer_id = req.query.customer_id;
+        const query = `
+            SELECT * FROM customer_cars 
+            WHERE customer_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [customer_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении автомобилей покупателя');
+    }
+});
+
+router.get('/customer_cars/:customer_id', async (req, res) => {
+    try {
+        const { customer_id } = req.params;
+        const query = `
+            SELECT * FROM customer_cars 
+            WHERE customer_id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [customer_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении автомобилей покупателя');
+    }
+});
+
+
+
+
     // ПОЛУЧЕНИЕ СПИСКА ТИПОВ КОНТРАГЕНТОВ (из таблицы counterparty_types)
     router.get('/counterparty_types', async (req, res) => {
         try {

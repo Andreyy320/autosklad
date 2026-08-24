@@ -158,6 +158,27 @@ customer_contacts: {
             <td>${item.description || ''}</td>
         `
     },
+    customer_cars: {
+        title: 'Автомобили покупателя',
+        columns: [
+            { field: 'brand', label: 'Бренд', width: '120px' },
+            { field: 'model', label: 'Модель', width: '150px' },
+            { field: 'gos_number', label: 'Гос. номер', width: '120px' },
+            { field: 'year', label: 'Год', width: '70px' },
+            { field: 'color', label: 'Цвет', width: '100px' },
+            { field: 'vin', label: 'VIN-номер', width: '160px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.brand || ''}</b></td>
+            <td><b>${item.model || ''}</b></td>
+            <td><code>${item.gos_number || ''}</code></td>
+            <td>${item.year || ''}</td>
+            <td>${item.color || ''}</td>
+            <td>${item.vin || ''}</td>
+            <td>${item.description || ''}</td>
+        `
+    },
 
     postavhik_contacts: {
         title: 'Контакты поставщиков',
@@ -3182,7 +3203,6 @@ function filterTable() {
 }
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3206,6 +3226,18 @@ function getCurrentDetailEntity() {
         return 'counterparty_contacts'; 
     }
     if (currentEntity === 'customers') {
+        // Проверяем сохраненную переменную текущей вкладки покупателя
+        if (typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab) return currentCustomerSubTab;
+
+        // Либо ищем активную кнопку на панели вкладок покупателей
+        const activeTab = document.querySelector('#tabs-for-customers button.active');
+        if (activeTab) {
+            const onclickAttr = activeTab.getAttribute('onclick') || '';
+            const match = onclickAttr.match(/(?:loadDetailData|switchCustomerTab)\(['"]([^'"]+)['"]/);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
         return 'customer_contacts'; 
     }
     if (currentEntity === 'accidents') {
@@ -3623,6 +3655,39 @@ tableBody.addEventListener('dblclick', (e) => {
         openEntityForm(currentEntity, item);
     }
 });
+
+
+
+let currentCustomerSubTab = 'customer_contacts';
+
+function switchCustomerTab(tabName, btnElement) {
+    currentCustomerSubTab = tabName; 
+
+    const container = document.getElementById('tabs-for-customers');
+    if (container) {
+        container.querySelectorAll('.customer-tab-btn').forEach(b => b.classList.remove('active'));
+    }
+    if (btnElement) {
+        btnElement.classList.add('active');
+    }
+
+    const detailToolbar = document.getElementById('detail-toolbar');
+    if (detailToolbar) {
+        detailToolbar.style.display = 'flex';
+    }
+
+    if (selectedItem && selectedItem.id) {
+        loadDetailData(tabName, selectedItem.id);
+    } else {
+        const detailBody = document.getElementById('detail-body');
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите покупателя в верхней таблице</td></tr>`;
+        }
+    }
+}
+
+
+
 
 function switchCarTab(tabName, btnElement) {
     document.querySelectorAll('.car-tab-btn').forEach(btn => btn.classList.remove('active'));
