@@ -2211,9 +2211,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 }
 
 
-
-async function openCarDetailsForm(entity, item = null, parentId = null) {
-    const config = getConfig(entity);
+function openAccidentImageForm(entity, item = null, parentId = null) {
     const drawer = getOrCreateDrawer();
     
     const now = new Date();
@@ -2223,61 +2221,45 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: ${config.title || 'Документ / Фото'}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Изображение ДТП</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
+        <form id="accident-image-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
     if (parentId) {
-        if (entity === 'accident_images') {
-            html += `<input type="hidden" name="accident_id" value="${parentId}">`;
-        } else {
-            html += `<input type="hidden" name="car_id" value="${parentId}">`;
-        }
+        html += `<input type="hidden" name="accident_id" value="${parentId}">`;
     }
 
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'car_id' || col.field === 'accident_id') continue;
-        if (col.insert === false) continue;
+    // Поле даты загрузки
+    html += `
+        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+            Дата загрузки:
+            <input type="datetime-local" name="created_at" value="${item.created_at ? item.created_at.slice(0, 16) : currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+        </label>
+    `;
 
-        let val = item[col.field] || '';
-        let inputHtml = '';
+    // Поле выбора файла (картинки)
+    html += `
+        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+            Изображение:
+            ${item.image_url ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Текущий файл: <a href="${item.image_url}" target="_blank">посмотреть</a></div>` : ''}
+            <input type="file" name="image_url" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+        </label>
+    `;
 
-        // Исправлено: теперь корректно ловит type === 'image' и type === 'file', а также поле image_url
-        const isFileField = col.type === 'file' || 
-                            col.type === 'image' || 
-                            col.field === 'file' || 
-                            col.field === 'photo' || 
-                            col.field === 'image' || 
-                            col.field === 'image_url' || 
-                            col.field === 'photo_url' ||
-                            col.field.includes('file') || 
-                            col.field.includes('photo') || 
-                            col.field.includes('image');
-
-        if (isFileField) {
-            inputHtml = `<input type="file" name="${col.field}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
-        } else if (col.type === 'datetime-local' || col.field.includes('date')) {
-            inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
-        } else if (col.field === 'description') {
-            inputHtml = `<textarea name="${col.field}" rows="4" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;">${val}</textarea>`;
-        } else {
-            inputHtml = `<input type="text" name="${col.field}" value="${val}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
-        }
-
-        html += `
-            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-                ${col.label || col.field}:
-                ${inputHtml}
-            </label>
-        `;
-    }
+    // Поле описания
+    html += `
+        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+            Описание:
+            <textarea name="description" rows="4" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;">${item.description || ''}</textarea>
+        </label>
+    `;
 
     html += `
         <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-            <button type="submit" id="save-car-detail-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
-            ${item.id ? `<button type="button" id="delete-car-detail-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+            <button type="submit" id="save-accident-img-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+            ${item.id ? `<button type="button" id="delete-accident-img-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
             <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
         </div>
     </form>
@@ -2286,21 +2268,21 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
     drawer.innerHTML = html;
     drawer.style.right = '0';
 
-    const formElement = drawer.querySelector('#car-details-form');
+    const formElement = drawer.querySelector('#accident-image-form');
 
-    const deleteBtn = drawer.querySelector('#delete-car-detail-btn');
+    // Кнопка удаления
+    const deleteBtn = drawer.querySelector('#delete-accident-img-btn');
     if (deleteBtn && item.id) {
         deleteBtn.addEventListener('click', async () => {
-            showConfirmModal('Удаление', 'Удалить эту запись?', async () => {
-                const res = await fetch(`/api/${entity}/${item.id}`, {
+            showConfirmModal('Удаление', 'Удалить это изображение?', async () => {
+                const res = await fetch(`/api/accident_images/${item.id}`, {
                     method: 'DELETE',
                     headers: { 'x-user-id': localStorage.getItem('currentUserId') || '' }
                 });
                 if (res.ok) {
                     closeDrawer();
                     showAppNotification('Успешно удалено', 'success');
-                    if (parentId) loadDetailData(entity, parentId);
-                    else refreshData();
+                    if (parentId) loadDetailData('accident_images', parentId);
                 } else {
                     showAppNotification('Ошибка удаления', 'error');
                 }
@@ -2308,24 +2290,20 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         });
     }
 
+    // Обработчик отправки формы
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const saveBtn = formElement.querySelector('#save-car-detail-btn');
+        const saveBtn = formElement.querySelector('#save-accident-img-btn');
         if (saveBtn) saveBtn.disabled = true;
 
         const formData = new FormData(e.target);
-        
-        if (parentId) {
-            if (entity === 'accident_images' && !formData.get('accident_id')) {
-                formData.set('accident_id', parentId);
-            } else if (entity !== 'accident_images' && !formData.get('car_id')) {
-                formData.set('car_id', parentId);
-            }
+        if (parentId && !formData.get('accident_id')) {
+            formData.set('accident_id', parentId);
         }
 
         try {
             const isEdit = item && item.id;
-            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const url = isEdit ? `/api/accident_images/${item.id}` : `/api/accident_images`;
             const method = isEdit ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
@@ -2340,9 +2318,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
                 closeDrawer();
                 showAppNotification('Сохранено успешно', 'success');
                 if (parentId) {
-                    loadDetailData(entity, parentId);
-                } else {
-                    refreshData();
+                    loadDetailData('accident_images', parentId);
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -2356,6 +2332,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         }
     });
 }
+
 
 
 
@@ -3259,6 +3236,7 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
+
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
@@ -3802,9 +3780,9 @@ async function loadDetailData(entity, parentId) {
     }
 
     if (!fetchUrl) {
-        // Если это accident_images, используем правильный роут /api/accident_images?accident_id=...
+        // Если это accident_images, заменяем эндпоинт на ваш кастомный метод
         if (entity === 'accident_images') {
-            fetchUrl = `/api/accident_images?accident_id=${parentId}`;
+            fetchUrl = `/api/accident_images_list?accident_id=${parentId}`;
         } else {
             fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
         }
@@ -3872,7 +3850,7 @@ async function loadDetailData(entity, parentId) {
             accident_payments: 'Выплаты',
             accident_events: 'Хронология событий',
             accident_items: 'Поврежденные элементы',
-            accident_images: 'Изображения ДТП',
+            accident_images: 'Изображения ДТП', // <--- Добавлено название для заголовка
             repair_items: 'Список запчастей',
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
@@ -3891,7 +3869,7 @@ async function loadDetailData(entity, parentId) {
             } else if (queryParamName === 'dtp_id') {
                 titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'accident_id') {
-                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`; // <--- Обработка заголовка для фото ДТП
             } else if (queryParamName === 'repair_id') {
                 titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (entity === 'stock_batches') {
