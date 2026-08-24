@@ -1558,7 +1558,8 @@ car_general: {
 
         return html;
     }
-},realizations: {
+},
+realizations: {
     title: 'Реализация',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '110px' },
@@ -1596,13 +1597,28 @@ car_general: {
         const sumTotalVal = item.sum_total ? Number(item.sum_total).toFixed(2) : '0.00';
         const postedText = item.is_posted ? 'Да' : 'Нет';
 
+        // Формируем красивое отображение автомобиля (Марка, Модель, Госномер)
+        let carDisplay = '—';
+        if (item.car_display_name) {
+            carDisplay = item.car_display_name;
+        } else {
+            const brd = item.car_brand || item.brand || '';
+            const mdl = item.car_model || item.model || '';
+            const gos = item.car_number || item.gos_number || '';
+            if (brd || mdl || gos) {
+                carDisplay = `${brd} ${mdl} (${gos})`.trim();
+            } else if (item.car_id) {
+                carDisplay = `Авто #${item.car_id}`;
+            }
+        }
+
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatOnlyDate(item.doc_date)}</td>
             <td>${item.customer_name || item.customer_id || '—'}</td>
             <td>${item.sklad_name || item.sklad_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
-            <td>${item.car_display_name || item.car_number || item.car_id || '—'}</td>
+            <td>${carDisplay}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
@@ -1613,8 +1629,6 @@ car_general: {
     }
 }
 }
-
-
 
 
 
