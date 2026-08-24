@@ -3523,7 +3523,7 @@ tableBody.addEventListener('click', async (e) => {
 
     const id = tr.getAttribute('data-id');
     selectedItem = currentItems.find(i => i.id == id);
-    selectedDetailItem = null; 
+    selectedDetailItem = null;  
 
     const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
     const tabsForCars = document.getElementById('tabs-for-cars');
@@ -3679,7 +3679,6 @@ tableBody.addEventListener('dblclick', (e) => {
         openEntityForm(currentEntity, item);
     }
 });
-
 
 
 let currentCustomerSubTab = 'customer_contacts';
