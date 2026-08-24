@@ -2106,20 +2106,19 @@ document.addEventListener('click', function(e) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        // Проверяем поле на принадлежность к файлам/изображениям (включая image_url, photo и т.д.)
+        // Исправлено: добавлено точное распознавание image_url и динамический вывод name="${col.field}"
         const isFileField = col.type === 'file' || 
                             col.field === 'file' || 
                             col.field === 'photo' || 
                             col.field === 'image' || 
                             col.field === 'image_url' || 
-                            col.field === 'url' ||
+                            (entity === 'accident_images' && col.field === 'image_url') ||
                             col.field.includes('file') || 
                             col.field.includes('photo') || 
                             col.field.includes('image') ||
                             col.field.includes('url');
 
         if (isFileField) {
-            // Исправлено: name берется динамически через col.field, чтобы сервер получил нужное имя поля (например, image_url)
             inputHtml = `<input type="file" name="${col.field}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
