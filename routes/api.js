@@ -2481,7 +2481,6 @@ router.delete('/car_details/:id', async (req, res) => {
 });
 
 
-
 // Получение списка всех реализаций с JOIN'ами для вывода названий
 router.get('/realizations', async (req, res) => {
     try {
@@ -2489,6 +2488,8 @@ router.get('/realizations', async (req, res) => {
             SELECT 
                 r.*,
                 c.name_full as customer_name,
+                c.name_full as customer_full_name,
+                c.name_short as customer_short_name,
                 s.name as sklad_name,
                 m.description as mol_name,
                 cc.gos_number as car_number, 
@@ -2507,7 +2508,6 @@ router.get('/realizations', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {

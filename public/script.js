@@ -1717,8 +1717,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
-        } else if (entity === 'realizations') {
-            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1855,7 +1853,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars' || referenceName === 'customer_cars') {
+                if (referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
@@ -1864,8 +1862,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         displayName = gos || mdl || `Запись #${refItem.id}`;
                     }
                 } else {
-                    // Расширенная проверка полей для отображения имени покупателя / контрагента
-                    displayName = refItem.fio || refItem.company_name || refItem.short_name || refItem.name_full || refItem.user_fio || refItem.name || refItem.login || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                    displayName = refItem.name_full || refItem.name_short || refItem.user_fio || refItem.name || refItem.login || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
