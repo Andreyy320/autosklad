@@ -1,8 +1,9 @@
 function initTableResizer(table) {
-    const headerCells = table.querySelectorAll('th');
+    if (!table) return;
+    const headerCells = table.querySelectorAll('thead tr:last-child th');
 
     headerCells.forEach(th => {
-        // Чтобы случайно не добавить второй ресайзер на ту же колонку
+        // Чтобы не дублировать ресайзер
         if (th.querySelector('.resizer')) return;
 
         const resizer = document.createElement('div');
@@ -35,21 +36,18 @@ function initTableResizer(table) {
     });
 }
 
-// Инициализация для всех существующих и динамических таблиц на странице
+// Автоматически ищем таблицы и вешаем ресайзеры при любых изменениях на странице
+const observer = new MutationObserver(() => {
+    document.querySelectorAll('table').forEach(table => {
+        initTableResizer(table);
+    });
+});
+
+observer.observe(document.body, { childList: true, subtree: true });
+
+// И при первой загрузке тоже
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
     });
-
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length > 0) {
-                document.querySelectorAll('table').forEach(table => {
-                    initTableResizer(table);
-                });
-            }
-        });
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
 });
