@@ -1103,13 +1103,12 @@ router.get('/accident_images', async (req, res) => {
     }
 });
 
-// ==================== ДОБАВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП (с загрузкой файла через multer) ====================
-router.post('/accident_images', upload.single('photo'), async (req, res) => {
+
+router.post('/accident_images', upload.single('image_url'), async (req, res) => {
     const client = await pool.connect();
     try {
-        const { accident_id, description } = req.body;
+        const { accident_id, description, created_at } = req.body;
         
-        // Если файл был прикреплен, формируем путь к нему, иначе null
         const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
         if (!accident_id || !image_url) {
@@ -1118,12 +1117,13 @@ router.post('/accident_images', upload.single('photo'), async (req, res) => {
 
         await client.query('BEGIN');
 
+        // Добавили created_at, если пользователь его менял
         const query = `
-            INSERT INTO accident_images (accident_id, image_url, description) 
-            VALUES ($1, $2, $3) 
+            INSERT INTO accident_images (accident_id, image_url, description, created_at) 
+            VALUES ($1, $2, $3, COALESCE($4, NOW())) 
             RETURNING *;
         `;
-        const values = [accident_id, image_url, description || null];
+        const values = [accident_id, image_url, description || null, created_at || null];
         const result = await client.query(query, values);
 
         await client.query('COMMIT');
