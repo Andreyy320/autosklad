@@ -4085,14 +4085,14 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 
 
 (function() {
-    // 1. Автоматически добавляем нужные стили для ресайзера в шапку страницы
+    // 1. Внедряем стили для ресайзера
     if (!document.getElementById('auto-table-resizer-style')) {
         const style = document.createElement('style');
         style.id = 'auto-table-resizer-style';
         style.textContent = `
             table { table-layout: auto !important; }
-            th { position: relative !important; }
-            th .resizer {
+            th, td { position: relative !important; }
+            th .resizer, td .resizer {
                 position: absolute;
                 top: 0;
                 right: 0;
@@ -4103,39 +4103,50 @@ document.querySelectorAll('.accordion-header').forEach(header => {
                 z-index: 50;
                 background-color: transparent;
             }
-            th .resizer:hover, th .resizer.resizing {
+            th .resizer:hover, th .resizer.resizing,
+            td .resizer:hover, td .resizer.resizing {
                 background-color: var(--primary, #2563eb) !important;
             }
         `;
         document.head.appendChild(style);
     }
 
-    // 2. Функция инициализации ресайзеров для всех таблиц на экране
+    // 2. Основная функция настройки ресайзеров
     function applyTableResizers() {
         document.querySelectorAll('table').forEach(table => {
-            const rows = table.querySelectorAll('tr');
-            let textRow = null;
+            const rows = Array.from(table.querySelectorAll('tr'));
+            let textRowIndex = -1;
 
-            // Ищем ту самую строку с текстом заголовков, игнорируя пустые строки с инпутами
-            for (let row of rows) {
-                const cells = row.querySelectorAll('th, td');
+            // Находим индекс строки с текстом заголовков
+            for (let i = 0; i < rows.length; i++) {
+                const cells = rows[i].querySelectorAll('th, td');
                 const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
                 if (hasText) {
-                    textRow = row;
+                    textRowIndex = i;
                     break;
                 }
             }
 
-            if (!textRow) return;
+            if (textRowIndex === -1) return;
 
-            textRow.querySelectorAll('th, td').forEach(th => {
-                // Если ресайзер уже есть — пропускаем
+            const textRow = rows[textRowIndex];
+            const textCells = textRow.querySelectorAll('th, td');
+
+            textCells.forEach((th, colIndex) => {
                 if (th.querySelector('.resizer')) return;
 
-                // Фиксируем исходную ширину в пикселях
+                // Инициализируем начальную ширину в пикселях
                 if (!th.style.width || th.style.width === 'auto') {
                     const w = th.offsetWidth;
                     if (w > 0) th.style.width = `${w}px`;
+                }
+
+                // Синхронизируем также верхнюю строку с фильтрами (если она есть), чтобы она не мешала сжатию
+                for (let i = 0; i < textRowIndex; i++) {
+                    const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
+                    if (upperCell) {
+                        upperCell.style.width = th.style.width;
+                    }
                 }
 
                 const resizer = document.createElement('div');
@@ -4153,7 +4164,19 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 
                     function onMouseMove(e) {
                         const dx = e.clientX - startX;
-                        th.style.width = `${Math.max(30, startWidth + dx)}px`;
+                        // Позволяем сжимать почти до минимума (например, до 10 пикселей)
+                        const newWidth = Math.max(10, startWidth + dx);
+                        
+                        // Применяем ширину к заголовку
+                        th.style.width = `${newWidth}px`;
+
+                        // Синхронно сужаем/расширяем ячейки фильтров сверху в этой же колонке
+                        for (let i = 0; i < textRowIndex; i++) {
+                            const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
+                            if (upperCell) {
+                                upperCell.style.width = `${newWidth}px`;
+                            }
+                        }
                     }
 
                     function onMouseUp() {
@@ -4173,19 +4196,17 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         });
     }
 
-    // 3. Перехватываем клики по меню (.nav-link), чтобы таблица успела перерисоваться и ресайзеры вернулись
+    // 3. Автоматический запуск и перехват кликов по меню
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', () => {
-            setTimeout(applyTableResizers, 200); // Ждем 200мс пока данные подгрузятся и отрисуются
+            setTimeout(applyTableResizers, 200);
         });
     });
 
-    // 4. Также вешаем наблюдатель: если таблица меняется/создается динамически — скрипт сам подхватит её
     const observer = new MutationObserver(() => {
         applyTableResizers();
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 5. Первичный запуск при открытии страницы
     setTimeout(applyTableResizers, 300);
 })();
