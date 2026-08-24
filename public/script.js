@@ -1558,8 +1558,7 @@ car_general: {
 
         return html;
     }
-},
-realizations: {
+},realizations: {
     title: 'Реализация',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '110px' },
@@ -1577,8 +1576,7 @@ realizations: {
         { field: 'customer_id', label: 'Покупатель', width: '150px', ref: 'customers' },
         { field: 'sklad_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
-        { field: 'car_id', label: 'Авто (Гос номер)', width: '110px', ref: 'customer_cars' },
-        { field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true },
+        { field: 'car_id', label: 'Автомобиль', width: '150px', ref: 'customer_cars' },
         { field: 'description', label: 'Описание' },
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
@@ -1604,8 +1602,7 @@ realizations: {
             <td>${item.customer_name || item.customer_id || '—'}</td>
             <td>${item.sklad_name || item.sklad_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
-            <td>${item.car_number || item.car_id || '—'}</td>
-            <td>${item.car_model || '—'}</td>
+            <td>${item.car_display_name || item.car_number || item.car_id || '—'}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
