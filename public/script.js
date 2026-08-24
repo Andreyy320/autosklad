@@ -4111,13 +4111,18 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         document.head.appendChild(style);
     }
 
-    // 2. Основная функция настройки ресайзеров
+    // 2. Функция применения ресайзеров с сохранением в localStorage
     function applyTableResizers() {
+        // Узнаем текущий раздел (например, по активной ссылке в меню), чтобы сохранять размеры для каждой таблицы отдельно
+        const activeLink = document.querySelector('.nav-link.active');
+        const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
+        const storageKey = `col_widths_${sectionKey}`;
+
         document.querySelectorAll('table').forEach(table => {
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
-            // Находим индекс строки с текстом заголовков
+            // Находим строку с текстом заголовков
             for (let i = 0; i < rows.length; i++) {
                 const cells = rows[i].querySelectorAll('th, td');
                 const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
@@ -4132,22 +4137,23 @@ document.querySelectorAll('.accordion-header').forEach(header => {
             const textRow = rows[textRowIndex];
             const textCells = textRow.querySelectorAll('th, td');
 
-            textCells.forEach((th, colIndex) => {
-                if (th.querySelector('.resizer')) return;
+            // Загружаем сохраненные размеры для этого раздела
+            const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
-                // Инициализируем начальную ширину в пикселях
-                if (!th.style.width || th.style.width === 'auto') {
+            textCells.forEach((th, colIndex) => {
+                // Восстанавливаем сохраненную ширину, если она есть
+                if (savedWidths[colIndex]) {
+                    th.style.width = savedWidths[colIndex];
+                    for (let i = 0; i < textRowIndex; i++) {
+                        const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
+                        if (upperCell) upperCell.style.width = savedWidths[colIndex];
+                    }
+                } else if (!th.style.width || th.style.width === 'auto') {
                     const w = th.offsetWidth;
                     if (w > 0) th.style.width = `${w}px`;
                 }
 
-                // Синхронизируем также верхнюю строку с фильтрами (если она есть), чтобы она не мешала сжатию
-                for (let i = 0; i < textRowIndex; i++) {
-                    const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                    if (upperCell) {
-                        upperCell.style.width = th.style.width;
-                    }
-                }
+                if (th.querySelector('.resizer')) return;
 
                 const resizer = document.createElement('div');
                 resizer.classList.add('resizer');
@@ -4164,13 +4170,11 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 
                     function onMouseMove(e) {
                         const dx = e.clientX - startX;
-                        // Позволяем сжимать почти до минимума (например, до 10 пикселей)
-                        const newWidth = Math.max(10, startWidth + dx);
+                        const newWidth = Math.max(10, startWidth + dx); // Позволяем сжимать до 10px
                         
-                        // Применяем ширину к заголовку
                         th.style.width = `${newWidth}px`;
 
-                        // Синхронно сужаем/расширяем ячейки фильтров сверху в этой же колонке
+                        // Синхронно меняем верхние строки с фильтрами
                         for (let i = 0; i < textRowIndex; i++) {
                             const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
                             if (upperCell) {
@@ -4184,6 +4188,13 @@ document.querySelectorAll('.accordion-header').forEach(header => {
                         document.body.style.cursor = '';
                         window.removeEventListener('mousemove', onMouseMove);
                         window.removeEventListener('mouseup', onMouseUp);
+
+                        // Сохраняем все ширины колонок текущей таблицы в localStorage при отпускании мыши
+                        const currentWidths = {};
+                        textRow.querySelectorAll('th, td').forEach((cell, idx) => {
+                            currentWidths[idx] = cell.style.width;
+                        });
+                        localStorage.setItem(storageKey, JSON.stringify(currentWidths));
                     }
 
                     window.addEventListener('mousemove', onMouseMove);
@@ -4196,17 +4207,19 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         });
     }
 
-    // 3. Автоматический запуск и перехват кликов по меню
+    // 3. Перехватываем клики по меню (.nav-link), чтобы после загрузки данных применились сохраненные размеры
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', () => {
             setTimeout(applyTableResizers, 200);
         });
     });
 
+    // 4. Наблюдатель за изменениями DOM на случай динамической перерисовки таблиц
     const observer = new MutationObserver(() => {
         applyTableResizers();
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
+    // 5. Первичный запуск
     setTimeout(applyTableResizers, 300);
 })();
