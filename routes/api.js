@@ -2487,8 +2487,14 @@ router.get('/realizations', async (req, res) => {
                    COALESCE(c.name_full, c.name_short, 'Покупатель #' || c.id) AS customer_name,
                    s.name AS sklad_name,
                    m.description AS mol_name,
-                   COALESCE(cc.gos_number, cc.car_number, 'Авто #' || cc.id) AS car_display_name,
-                   cc.model AS car_model
+                   COALESCE(
+                       TRIM(CONCAT(cc.brand, ' ', cc.model, ' (', cc.gos_number, ')')), 
+                       cc.gos_number, 
+                       'Авто #' || cc.id
+                   ) AS car_display_name,
+                   cc.model AS car_model,
+                   cc.brand AS car_brand,
+                   cc.gos_number AS car_number
             FROM realizations r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN skladi s ON r.sklad_id = s.id
