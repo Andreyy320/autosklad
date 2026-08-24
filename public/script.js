@@ -1577,7 +1577,10 @@ realizations: {
         { field: 'customer_id', label: 'Покупатель', width: '150px', ref: 'customers' },
         { field: 'sklad_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
-        { field: 'car_id', label: 'Автомобиль', width: '150px', ref: 'customer_cars' },
+        // Слева: Гос. номер (поиск идет по нему благодаря кастомному отображению в ref)
+        { field: 'car_id', label: 'Гос. номер', width: '120px', ref: 'customer_cars', formatRef: (car) => car.gos_number || car.car_number || `ID #${car.id}` },
+        // Справа: Марка авто (ссылается на тот же справочник, но выводит марку/модель)
+        { field: 'car_id', label: 'Марка авто', width: '140px', ref: 'customer_cars', formatRef: (car) => `${car.brand || ''} ${car.model || ''}`.trim() || '—' },
         { field: 'description', label: 'Описание' },
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
@@ -1597,20 +1600,9 @@ realizations: {
         const sumTotalVal = item.sum_total ? Number(item.sum_total).toFixed(2) : '0.00';
         const postedText = item.is_posted ? 'Да' : 'Нет';
 
-        // Формируем красивое отображение автомобиля (Марка, Модель, Госномер)
-        let carDisplay = '—';
-        if (item.car_display_name) {
-            carDisplay = item.car_display_name;
-        } else {
-            const brd = item.car_brand || item.brand || '';
-            const mdl = item.car_model || item.model || '';
-            const gos = item.car_number || item.gos_number || '';
-            if (brd || mdl || gos) {
-                carDisplay = `${brd} ${mdl} (${gos})`.trim();
-            } else if (item.car_id) {
-                carDisplay = `Авто #${item.car_id}`;
-            }
-        }
+        // Достаем значения для раздельных ячеек таблицы
+        const gosNumber = item.car_number || item.gos_number || (item.car && (item.car.gos_number || item.car.car_number)) || '—';
+        const carBrandModel = `${item.car_brand || (item.car && item.car.brand) || ''} ${item.car_model || (item.car && item.car.model) || ''}`.trim() || item.car_display_name || '—';
 
         return `
             <td><b>${item.doc_number || ''}</b></td>
@@ -1618,7 +1610,8 @@ realizations: {
             <td>${item.customer_name || item.customer_id || '—'}</td>
             <td>${item.sklad_name || item.sklad_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
-            <td>${carDisplay}</td>
+            <td><b>${gosNumber}</b></td>
+            <td>${carBrandModel}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
@@ -1703,8 +1696,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1851,7 +1843,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
             let refItems = [];
 
-            // Исправлено: корректная проверка для customer_cars, чтобы подтягивать машины по customer_id или car_id (если передан item с car_id или customer_id)
             if (referenceName === 'customer_cars') {
                 const targetCustomerId = (item && item.customer_id) ? item.customer_id : null;
                 if (targetCustomerId) {
@@ -1862,12 +1853,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         console.error('Ошибка загрузки машин покупателя при открытии:', e);
                     }
                 } else if (item && item.car_id) {
-                    // Если customer_id пустой, но есть car_id, подгрузим все машины или конкретную машину для корректного отображения
                     try {
                         const carRes = await fetch(`/api/customer_cars`);
                         if (carRes.ok) {
                             const allCars = await carRes.json();
-                            // Если у нас передан item с car_id, гарантируем что машина будет в списке выбора
                             refItems = allCars;
                         }
                     } catch (e) {
@@ -1885,7 +1874,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (referenceName === 'customer_cars' || referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
-                    const brd = refItem.brand || '';
+                    const brd = refItem.brand || refItem.car_brand || '';
                     if (brd || mdl || gos) {
                         displayName = `${brd} ${mdl} (${gos})`.trim();
                     } else {
@@ -1962,7 +1951,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Логика динамической загрузки и фильтрации машин конкретного покупателя
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
 
@@ -1984,9 +1972,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 const cars = await response.json();
 
                 cars.forEach(car => {
-                    const gos = car.gos_number || '';
-                    const mdl = car.model || '';
-                    const brd = car.brand || '';
+                    const gos = car.gos_number || car.car_number || '';
+                    const mdl = car.model || car.car_model || '';
+                    const brd = car.brand || car.car_brand || '';
                     let displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
 
                     const option = document.createElement('option');
