@@ -1,16 +1,14 @@
 function initTableResizer(table) {
     if (!table) return;
     
-    // Обязательно фиксируем таблицу, чтобы колонки держали заданную ширину
-    table.style.tableLayout = 'fixed';
-
     const headerCells = table.querySelectorAll('th');
 
     headerCells.forEach(th => {
+        // Защита от повторного добавления ресайзера
         if (th.querySelector('.resizer')) return;
 
-        // Фиксируем начальную ширину каждого заголовка в пикселях, если её еще нет
-        if (!th.style.width) {
+        // Жестко фиксируем текущую ширину столбца в пикселях при старте
+        if (!th.style.width || th.style.width === 'auto') {
             th.style.width = `${th.offsetWidth}px`;
         }
 
@@ -26,28 +24,33 @@ function initTableResizer(table) {
             startWidth = th.offsetWidth;
 
             resizer.classList.add('resizing');
+            document.body.style.cursor = 'col-resize'; // Меняем курсор во всем документе при перетаскивании
 
             function mouseMoveHandler(e) {
                 const dx = e.clientX - startX;
-                const newWidth = Math.max(30, startWidth + dx);
+                const newWidth = Math.max(30, startWidth + dx); // Минимальная ширина столбца 30px
                 th.style.width = `${newWidth}px`;
             }
 
             function mouseUpHandler() {
                 resizer.classList.remove('resizing');
-                document.removeEventListener('mousemove', mouseMoveHandler);
-                document.removeEventListener('mouseup', mouseUpHandler);
+                document.body.style.cursor = ''; // Возвращаем обычный курсор
+                
+                // Слушатели вешаем на window, чтобы движение не терялось, если курсор ушел за пределы таблицы
+                window.removeEventListener('mousemove', mouseMoveHandler);
+                window.removeEventListener('mouseup', mouseUpHandler);
             }
 
-            document.addEventListener('mousemove', mouseMoveHandler);
-            document.addEventListener('mouseup', mouseUpHandler);
+            window.addEventListener('mousemove', mouseMoveHandler);
+            window.addEventListener('mouseup', mouseUpHandler);
 
-            e.preventDefault(); // Предотвращаем выделение текста
+            e.preventDefault(); // Предотвращаем выделение текста в таблице
+            e.stopPropagation(); // Останавливаем всплытие
         });
     });
 }
 
-// Автоматически инициализируем таблицы
+// Автоматическая инициализация при загрузке и изменении DOM
 const observer = new MutationObserver(() => {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
