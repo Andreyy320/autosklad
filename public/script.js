@@ -1693,7 +1693,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1843,6 +1842,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
+                // Если это список машин, сразу фильтруем по текущему выбранному покупателю (если он уже задан в item)
+                if (referenceName === 'cars' && item && item.customer_id && refItem.customer_id && String(refItem.customer_id) !== String(item.customer_id)) {
+                    return; 
+                }
+
                 let displayName = '';
                 if (referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
@@ -1860,7 +1864,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            // Добавляем ID для селектов, чтобы скрипт мог их найти и связать
+            const extraAttributes = col.field === 'car_id' ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : '');
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -1923,6 +1929,46 @@ async function openEntityForm(entity, item = null, parentId = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    // Логика динамической фильтрации машин при выборе покупателя
+    const customerSelect = formElement.querySelector('#customer-select');
+    const carSelect = formElement.querySelector('#car-select');
+
+    if (customerSelect && carSelect) {
+        customerSelect.addEventListener('change', async () => {
+            const selectedCustomerId = customerSelect.value;
+            const currentCarValue = carSelect.value;
+
+            carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+            try {
+                const carsRes = await fetchReferenceData('cars');
+                carsRes.forEach(car => {
+                    if (selectedCustomerId) {
+                        const carCustId = car.customer_id || car.client_id || car.owner_id;
+                        if (carCustId && String(carCustId) !== String(selectedCustomerId)) {
+                            return; 
+                        }
+                    }
+
+                    const gos = car.gos_number || car.car_number || '';
+                    const mdl = car.model || car.car_model || '';
+                    let displayName = (gos && mdl) ? `${gos} (${mdl})` : (gos || mdl || `Запись #${car.id}`);
+
+                    const option = document.createElement('option');
+                    option.value = car.id;
+                    option.textContent = displayName;
+
+                    if (String(car.id) === String(currentCarValue)) {
+                        option.selected = true;
+                    }
+                    carSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Ошибка при динамической фильтрации машин:', err);
+            }
+        });
+    }
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
