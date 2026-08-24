@@ -1172,12 +1172,11 @@ accident_events: {
             <td><b>${item.event_text || ''}</b></td>
         `;
     }
-},
-accident_images: {
+},accident_images: {
     title: 'Изображения ДТП',
     columns: [
         { field: 'created_at', label: 'Дата загрузки', width: '160px' },
-        { field: 'image_url', label: 'Изображение', width: '150px' },
+        { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
         { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
@@ -1187,14 +1186,11 @@ accident_images: {
             return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         };
 
-        // Рендерим превью картинки, чтобы сразу было видно фото прямо в таблице
-        const imgHtml = item.image_url 
-            ? `<a href="${item.image_url}" target="_blank"><img src="${item.image_url}" alt="Фото ДТП" style="width: 80px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc;"></a>` 
-            : '—';
-
         return `
             <td>${formatDT(item.created_at)}</td>
-            <td>${imgHtml}</td>
+            <td>
+                ${item.image_url ? `<a href="${item.image_url}" target="_blank"><img src="${item.image_url}" alt="Фото ДТП" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" /></a>` : '—'}
+            </td>
             <td>${item.description || ''}</td>
         `;
     }

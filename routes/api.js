@@ -1090,8 +1090,7 @@ router.get('/dtp_history', async (req, res) => {
 
 
 
-
-// ==================== ИЗОБРАЖЕНИЯ КОНКРЕТНОГО ДТП (для нижней таблицы/галереи) ====================
+// ==================== ИЗОБРАЖЕНИЯ КОНКРЕТНОГО ДТП (получение списка) ====================
 router.get('/accident_images_list', async (req, res) => {
     try {
         const { accident_id } = req.query;
@@ -1109,27 +1108,39 @@ router.get('/accident_images_list', async (req, res) => {
     }
 });
 
-// ==================== ДОБАВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП ====================
-router.post('/accident_images', async (req, res) => {
+// ==================== ДОБАВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП (с загрузкой файла через multer) ====================
+router.post('/accident_images', upload.single('photo'), async (req, res) => {
+    const client = await pool.connect();
     try {
-        const { accident_id, image_url, description } = req.body;
+        const { accident_id, description } = req.body;
         
+        // Если файл был прикреплен, формируем путь к нему, иначе null
+        const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+
         if (!accident_id || !image_url) {
-            return res.status(400).json({ error: 'Не указан accident_id или ссылка на изображение' });
+            return res.status(400).json({ error: 'Не указан accident_id или не загружено изображение' });
         }
+
+        await client.query('BEGIN');
 
         const query = `
             INSERT INTO accident_images (accident_id, image_url, description) 
             VALUES ($1, $2, $3) 
             RETURNING *;
         `;
-        const result = await pool.query(query, [accident_id, image_url, description || null]);
+        const values = [accident_id, image_url, description || null];
+        const result = await client.query(query, values);
+
+        await client.query('COMMIT');
         
         console.log(`[SUCCESS] Успешно добавлено фото ДТП ID: ${result.rows[0].id}`);
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error("Ошибка при добавлении фото ДТП:", err.message);
-        res.status(500).json({ error: 'Ошибка сервера при добавлении фото ДТП' });
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    } finally {
+        client.release();
     }
 });
 
