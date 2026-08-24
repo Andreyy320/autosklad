@@ -1637,7 +1637,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1968,7 +1967,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'repair_items', 'repair_works', 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
-                                'car_details'
+                                'car_details', 'customer_cars'
                             ];
                             if (detailEntities.includes(entity) && parentId) {
                                 loadDetailData(entity, parentId);
@@ -2026,6 +2025,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.customer_id = parentId; 
         } else if (entity === 'car_details' && parentId) {
             data.car_id = parentId;
+        } else if (entity === 'customer_cars' && parentId) {
+            data.customer_id = parentId;
         } else if (entity === 'entity_contacts') {
             if (parentId && typeof parentId === 'object') {
                 data.entity_id = parentId.entity_id || parentId.id;
@@ -2072,7 +2073,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     'accident_payments', 'accident_events', 'accident_items', 
                     'repair_items', 'repair_works', 'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
-                    'car_details'
+                    'car_details', 'customer_cars'
                 ];
                 if (detailEntities.includes(entity) && parentId) {
                     loadDetailData(entity, parentId);
@@ -2094,7 +2095,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 // Автоматически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
