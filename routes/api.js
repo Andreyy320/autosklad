@@ -2491,7 +2491,8 @@ router.get('/realizations', async (req, res) => {
                 c.name_full as customer_name,
                 s.name as sklad_name,
                 m.description as mol_name,
-                cc.gov_number, cc.model 
+                cc.gos_number as car_number, 
+                cc.model as car_model
             FROM realizations r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN skladi s ON r.sklad_id = s.id
@@ -2506,8 +2507,6 @@ router.get('/realizations', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-
 
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
