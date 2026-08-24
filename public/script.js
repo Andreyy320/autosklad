@@ -1677,7 +1677,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
     }
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id' || col.field === 'car_id') continue;
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
+        
+        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
+        if (col.field === 'car_id' && parentId) continue;
+
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
         
@@ -2040,7 +2044,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 // Автоматически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
