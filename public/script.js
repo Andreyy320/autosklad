@@ -3714,7 +3714,6 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3747,7 +3746,7 @@ async function loadDetailData(entity, parentId) {
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
         queryParamName = 'dtp_id'; 
     } else if (entity === 'accident_images') {
-        queryParamName = 'accident_id'; // <--- Добавлено для изображений ДТП
+        queryParamName = 'accident_id'; 
     } else if (entity === 'stock_batches') {
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
@@ -3783,7 +3782,6 @@ async function loadDetailData(entity, parentId) {
     }
 
     if (!fetchUrl) {
-        // Если это accident_images, заменяем эндпоинт на ваш кастомный метод
         if (entity === 'accident_images') {
             fetchUrl = `/api/accident_images?accident_id=${parentId}`;
         } else {
@@ -3853,7 +3851,7 @@ async function loadDetailData(entity, parentId) {
             accident_payments: 'Выплаты',
             accident_events: 'Хронология событий',
             accident_items: 'Поврежденные элементы',
-            accident_images: 'Изображения ДТП', // <--- Добавлено название для заголовка
+            accident_images: 'Изображения ДТП',
             repair_items: 'Список запчастей',
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
@@ -3872,7 +3870,7 @@ async function loadDetailData(entity, parentId) {
             } else if (queryParamName === 'dtp_id') {
                 titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'accident_id') {
-                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`; // <--- Обработка заголовка для фото ДТП
+                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'repair_id') {
                 titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (entity === 'stock_batches') {
