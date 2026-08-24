@@ -1637,6 +1637,7 @@ function closeDrawer() {
     }
 
 }
+
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -2126,6 +2127,7 @@ document.addEventListener('click', function(e) {
         }
     }
 });
+
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2410,7 +2412,8 @@ async function sendLog(entity, action, recordId, detailsData) {
     } catch (err) {
         console.error('Не удалось отправить лог:', err);
     }
-}function deleteSelectedEntity() {
+}
+function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
         return;
@@ -2534,6 +2537,10 @@ async function refreshData() {
             loadDetailData('accident_invoices', selectedItem.id);
         } else if (currentEntity === 'repairs' && selectedItem.id) {
             loadDetailData('repair_items', selectedItem.id);
+        } else if (currentEntity === 'customers' && selectedItem.id) {
+            // Обновляем текущую активную вкладку покупателя (контакты или автомобили)
+            const detailEntity = typeof currentCustomerSubTab !== 'undefined' ? currentCustomerSubTab : 'customer_contacts';
+            loadDetailData(detailEntity, selectedItem.id);
         } else if (currentEntity === 'stock_balances') {
             const zId = selectedItem.zaphasti_id || selectedItem.id;
             const wId = selectedItem.warehouse_id || selectedItem.sklad_id || selectedItem.id_sklad || selectedItem.warehouseId;
@@ -3008,7 +3015,8 @@ async function loadData(entity, title) {
                 } else if (entity === 'counterparties') {
                     loadDetailData('counterparty_contacts', item.id);
                 } else if (entity === 'customers') {
-                    loadDetailData('customer_contacts', item.id);
+                    const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
+                    loadDetailData(activeSubTab, item.id);
                 }
             };
 
@@ -3021,11 +3029,13 @@ async function loadData(entity, title) {
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
+        const tabsForCustomers = document.getElementById('tabs-for-customers'); // На случай если есть отдельный контейнер вкладок для покупателей
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForCustomers) tabsForCustomers.style.display = 'none';
 
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
@@ -3077,6 +3087,27 @@ async function loadData(entity, title) {
                 } else {
                     emptyDetailBody();
                 }
+            } else if (entity === 'customers') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
+                
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    const activeId = currentItems[0].id;
+                    
+                    if (tabsForCustomers) {
+                        const firstBtn = tabsForCustomers.querySelector('button');
+                        if (firstBtn) {
+                            tabsForCustomers.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                            firstBtn.classList.add('active');
+                        }
+                    }
+                    
+                    const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
+                    loadDetailData(activeSubTab, activeId);
+                } else {
+                    emptyDetailBody();
+                }
             } else if (entity === 'stock_balances') {
                 carTabsBar.style.display = 'none';
                 
@@ -3122,14 +3153,6 @@ async function loadData(entity, title) {
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     loadDetailData('counterparty_contacts', currentItems[0].id);
-                } else {
-                    emptyDetailBody();
-                }
-            } else if (entity === 'customers') {
-                carTabsBar.style.display = 'none';
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    loadDetailData('customer_contacts', currentItems[0].id);
                 } else {
                     emptyDetailBody();
                 }
@@ -3203,6 +3226,7 @@ function filterTable() {
 }
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3849,7 +3873,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'postavhik_id';
     } else if (entity === 'counterparty_contacts') {
         queryParamName = 'counterparty_id';
-    } else if (entity === 'customer_contacts') {
+    } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
     } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
@@ -3938,6 +3962,7 @@ async function loadDetailData(entity, parentId) {
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
+            customer_cars: 'Автомобили клиента',
             car_details: 'Детали автомобиля'
         };
         const prettyEntityName = entityTitles[entity] || config.title || entity;
@@ -3958,7 +3983,7 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `Детальная история движения запчасти | Операций: ${items.length}`;
             } else if (entity === 'stock_balances') {
                 titleElement.innerText = `Остатки запчастей на складах | Позиций: ${items.length}`;
-            } else if (entity === 'postavhik_contacts' || entity === 'counterparty_contacts' || entity === 'customer_contacts') {
+            } else if (entity === 'postavhik_contacts' || entity === 'counterparty_contacts' || entity === 'customer_contacts' || entity === 'customer_cars') {
                 titleElement.innerText = `${prettyEntityName} | Записей: ${items.length}`;
             } else {
                 titleElement.innerText = `${prettyEntityName} (Документ №${parentId}) | Позиций: ${items.length}`;
@@ -4078,6 +4103,7 @@ const navMap = {
     'Движение запчастей':'stock_movement',
     'Детали двжиения': 'part_movement_details',
     'Контакты покупателей': 'customer_contacts',
+    'Автомобили покупателя': 'customer_cars',
     'Контакты поставщиков': 'postavhik_contacts',
     'Контакты контрагентов': 'counterparty_contacts',
     'Детали и фото авто': 'car_details',
@@ -4158,7 +4184,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
