@@ -1717,6 +1717,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
+        } else if (entity === 'realizations') {
+            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1784,15 +1786,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    // --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОТРИСОВКИ ОДНОГО ПОЛЯ (ДЛЯ СОХРАНЕНИЯ УНИВЕРСАЛЬНОСТИ) ---
-    async function renderColumnInput(col) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') return '';
-        if (col.field === 'car_id' && parentId) return '';
-        if (col.insert === false) return '';
-        if ((col.update === false || col.edit === false) && item && item.id) return '';
-        if (entity === 'repair_items' && col.field === 'receipt_id') return '';
-        if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
+    for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
+        
+        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
+        if (col.field === 'car_id' && parentId) continue;
 
+        if (col.insert === false) continue;
+        if ((col.update === false || col.edit === false) && item && item.id) continue;
+        
+        if (entity === 'repair_items' && col.field === 'receipt_id') continue;
+        if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
+        
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -1850,7 +1855,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars') {
+                if (referenceName === 'cars' || referenceName === 'customer_cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
@@ -1859,7 +1864,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         displayName = gos || mdl || `Запись #${refItem.id}`;
                     }
                 } else {
-                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                    // Расширенная проверка полей для отображения имени покупателя / контрагента
+                    displayName = refItem.fio || refItem.company_name || refItem.short_name || refItem.name_full || refItem.user_fio || refItem.name || refItem.login || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
@@ -1896,25 +1902,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        return `
+        html += `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
             </label>
         `;
-    }
-
-    // --- РЕАЛИЗАЦИЯ ДЛЯ ТАБЛИЦ И ОСТАЛЬНЫХ СУЩНОСТЕЙ ---
-    if (entity === 'receipt_items' || entity === 'move_items') {
-        // СПЕЦИАЛЬНАЯ РЕАЛИЗАЦИЯ ТОЛЬКО ДЛЯ ЭТОЙ ТАБЛИЦЫ (можете настроить порядок или кастомную верстку)
-        for (const col of config.columns) {
-            html += await renderColumnInput(col);
-        }
-    } else {
-        // СТАНДАРТНАЯ ЛОГИКА ДЛЯ ВСЕХ ОСТАЛЬНЫХ СУЩНОСТЕЙ
-        for (const col of config.columns) {
-            html += await renderColumnInput(col);
-        }
     }
 
     html += `
