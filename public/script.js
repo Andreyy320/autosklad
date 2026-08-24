@@ -1715,6 +1715,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
+        } else if (entity === 'realizations' || entity === 'realization') {
+            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1723,8 +1725,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ДТП-';
         } else if (entity === 'repairs' || entity === 'repair_items' || entity === 'repair_works') {
             prefix = 'РЕМ-';
-        } else if (entity === 'realizations') {
-            prefix = 'РЕАЛ-';
         }
 
         try {
@@ -1784,9 +1784,22 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    for (const col of config.columns) {
-        // Убрали customer_id из списка скрытых полей, чтобы он отрисовывался как справочник
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') continue;
+    // Жестко заданный порядок полей согласно требованиям
+    const customFieldOrder = [
+        'date', 'fact_date', 'doc_number', 'customer_id', 'car_id', 'warehouse_id', 'mol_id', 'payment_type', 'description'
+    ];
+
+    // Сортируем колонки конфигурации по нашему порядку, а остальные пущаем следом
+    const sortedColumns = [...config.columns].sort((a, b) => {
+        let indexA = customFieldOrder.indexOf(a.field);
+        let indexB = customFieldOrder.indexOf(b.field);
+        if (indexA === -1) indexA = 999;
+        if (indexB === -1) indexB = 999;
+        return indexA - indexB;
+    });
+
+    for (const col of sortedColumns) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id' && parentId && entity !== 'realizations') continue;
         
         if (col.field === 'car_id' && parentId) continue;
 
@@ -1846,15 +1859,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     ${optionsHtml}
                 </select>
             `;
-        } else if (col.ref || col.field === 'receipt_id' || col.field === 'customer_id') {
-            // Поддержка справочников для полей со ссылками, включая customer_id
-            const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : (col.field === 'customer_id' ? 'customers' : ''));
+        } else if (col.ref || col.field === 'receipt_id') {
+            const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
             const refItems = await fetchReferenceData(referenceName);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars' || referenceName === 'customer_cars') {
+                if (referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
