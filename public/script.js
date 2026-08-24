@@ -231,6 +231,34 @@ customer_contacts: {
             <td>${item.description || ''}</td>
         `
     },
+
+part_discounts: {
+        title: 'Скидки на запчасти',
+        columns: [
+            { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'discount_percent', label: 'Процент скидки', width: '150px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.discount_percent ?? '0'}%</td>
+            <td>${item.description || ''}</td>
+        `
+    },
+    service_discounts: {
+        title: 'Скидки на услуги',
+        columns: [
+            { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'discount_percent', label: 'Процент скидки', width: '150px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.discount_percent ?? '0'}%</td>
+            <td>${item.description || ''}</td>
+        `
+    },
+
     cars: {
         title: 'Автомобили',
         columns: [
