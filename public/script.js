@@ -4084,3 +4084,108 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 });
 
 
+(function() {
+    // 1. Автоматически добавляем нужные стили для ресайзера в шапку страницы
+    if (!document.getElementById('auto-table-resizer-style')) {
+        const style = document.createElement('style');
+        style.id = 'auto-table-resizer-style';
+        style.textContent = `
+            table { table-layout: auto !important; }
+            th { position: relative !important; }
+            th .resizer {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 6px;
+                height: 100%;
+                cursor: col-resize;
+                user-select: none;
+                z-index: 50;
+                background-color: transparent;
+            }
+            th .resizer:hover, th .resizer.resizing {
+                background-color: var(--primary, #2563eb) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // 2. Функция инициализации ресайзеров для всех таблиц на экране
+    function applyTableResizers() {
+        document.querySelectorAll('table').forEach(table => {
+            const rows = table.querySelectorAll('tr');
+            let textRow = null;
+
+            // Ищем ту самую строку с текстом заголовков, игнорируя пустые строки с инпутами
+            for (let row of rows) {
+                const cells = row.querySelectorAll('th, td');
+                const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
+                if (hasText) {
+                    textRow = row;
+                    break;
+                }
+            }
+
+            if (!textRow) return;
+
+            textRow.querySelectorAll('th, td').forEach(th => {
+                // Если ресайзер уже есть — пропускаем
+                if (th.querySelector('.resizer')) return;
+
+                // Фиксируем исходную ширину в пикселях
+                if (!th.style.width || th.style.width === 'auto') {
+                    const w = th.offsetWidth;
+                    if (w > 0) th.style.width = `${w}px`;
+                }
+
+                const resizer = document.createElement('div');
+                resizer.classList.add('resizer');
+                th.appendChild(resizer);
+
+                let startX = 0;
+                let startWidth = 0;
+
+                resizer.addEventListener('mousedown', function (e) {
+                    startX = e.clientX;
+                    startWidth = th.offsetWidth;
+                    resizer.classList.add('resizing');
+                    document.body.style.cursor = 'col-resize';
+
+                    function onMouseMove(e) {
+                        const dx = e.clientX - startX;
+                        th.style.width = `${Math.max(30, startWidth + dx)}px`;
+                    }
+
+                    function onMouseUp() {
+                        resizer.classList.remove('resizing');
+                        document.body.style.cursor = '';
+                        window.removeEventListener('mousemove', onMouseMove);
+                        window.removeEventListener('mouseup', onMouseUp);
+                    }
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+        });
+    }
+
+    // 3. Перехватываем клики по меню (.nav-link), чтобы таблица успела перерисоваться и ресайзеры вернулись
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            setTimeout(applyTableResizers, 200); // Ждем 200мс пока данные подгрузятся и отрисуются
+        });
+    });
+
+    // 4. Также вешаем наблюдатель: если таблица меняется/создается динамически — скрипт сам подхватит её
+    const observer = new MutationObserver(() => {
+        applyTableResizers();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 5. Первичный запуск при открытии страницы
+    setTimeout(applyTableResizers, 300);
+})();
