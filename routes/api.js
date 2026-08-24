@@ -2479,14 +2479,13 @@ router.delete('/car_details/:id', async (req, res) => {
         res.status(500).send('Ошибка сервера при удалении');
     }
 });
-
 router.get('/realizations', async (req, res) => {
     try {
         const query = `
             SELECT r.*, 
                    COALESCE(c.name_full, c.name_short, 'Покупатель #' || c.id) AS customer_name,
                    s.name AS sklad_name,
-                   m.description AS mol_name,
+                   COALESCE(u.name, u.login, m.description, 'МОЛ #' || m.id) AS mol_name,
                    COALESCE(
                        TRIM(CONCAT(cc.brand, ' ', cc.model, ' (', cc.gos_number, ')')), 
                        cc.gos_number, 
@@ -2499,6 +2498,7 @@ router.get('/realizations', async (req, res) => {
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN skladi s ON r.sklad_id = s.id
             LEFT JOIN mol m ON r.mol_id = m.id
+            LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN customer_cars cc ON r.car_id = cc.id
             ORDER BY r.id DESC
         `;
@@ -2995,7 +2995,7 @@ router.put('/:entity/:id', async (req, res) => {
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
         if (!allowedTables.includes(entity)) {
