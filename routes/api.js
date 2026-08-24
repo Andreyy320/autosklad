@@ -2481,6 +2481,36 @@ router.delete('/car_details/:id', async (req, res) => {
 });
 
 
+
+
+// Получение списка всех реализаций с JOIN'ами для вывода названий
+router.get('/realizations', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                r.*,
+                c.name as customer_name,
+                s.name as sklad_name,
+                m.description as mol_name,
+                cc.gov_number, cc.model -- или поля вашего авто, поправьте под ваши колонки
+            FROM realizations r
+            LEFT JOIN customers c ON r.customer_id = c.id
+            LEFT JOIN skladi s ON r.sklad_id = s.id
+            LEFT JOIN mol m ON r.mol_id = m.id
+            LEFT JOIN customer_cars cc ON r.car_id = cc.id
+            ORDER BY r.id DESC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка при получении реализаций:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -2515,7 +2545,7 @@ router.post('/:entity', async (req, res) => {
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
         if (!allowedTables.includes(entity)) {
