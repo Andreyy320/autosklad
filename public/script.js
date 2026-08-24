@@ -1689,8 +1689,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1835,23 +1834,34 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref || col.field === 'receipt_id') {
             const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
-            const refItems = await fetchReferenceData(referenceName);
+            let refItems = [];
+
+            // Если это машины, то при первичном рендеринге формы подгружаем машины выбранного покупателя (если он задан)
+            if (referenceName === 'customer_cars' && item && item.customer_id) {
+                try {
+                    const carRes = await fetch(`/api/customer_cars?customer_id=${item.customer_id}`);
+                    if (carRes.ok) refItems = await carRes.json();
+                } catch (e) {
+                    console.error('Ошибка загрузки машин покупателя при открытии:', e);
+                }
+            } else if (referenceName === 'customer_cars') {
+                refItems = []; // Если покупатель еще не выбран, список авто пустой до выбора
+            } else {
+                refItems = await fetchReferenceData(referenceName);
+            }
+
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
-                // Если это список машин, сразу фильтруем по текущему выбранному покупателю (если он уже задан в item)
-                if (referenceName === 'cars' && item && item.customer_id && refItem.customer_id && String(refItem.customer_id) !== String(item.customer_id)) {
-                    return; 
-                }
-
                 let displayName = '';
-                if (referenceName === 'cars') {
+                if (referenceName === 'customer_cars' || referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
-                    if (gos && mdl) {
-                        displayName = `${gos} (${mdl})`;
+                    const brd = refItem.brand || '';
+                    if (brd || mdl || gos) {
+                        displayName = `${brd} ${mdl} (${gos})`.trim();
                     } else {
-                        displayName = gos || mdl || `Запись #${refItem.id}`;
+                        displayName = `Авто #${refItem.id}`;
                     }
                 } else {
                     displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
@@ -1861,8 +1871,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            // Добавляем ID для селектов, чтобы скрипт мог их найти и связать
-            const extraAttributes = col.field === 'car_id' ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : '');
+            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : '');
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -1897,15 +1906,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-    // Находим колонку car_id заранее, чтобы вывести её сразу после customer_id
     const carCol = config.columns.find(c => c.field === 'car_id');
 
     for (const col of config.columns) {
-        if (col.field === 'car_id') continue; // Пропускаем, выведем в нужном месте
+        if (col.field === 'car_id') continue; 
 
         html += await renderField(col);
 
-        // Если только что вывели поле покупателя (customer_id), сразу следом выводим авто (car_id)
         if (col.field === 'customer_id' && carCol) {
             html += await renderField(carCol);
         }
@@ -1927,7 +1934,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Логика динамической фильтрации машин при выборе покупателя
+    // Логика динамической загрузки и фильтрации машин конкретного покупателя
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
 
@@ -1938,19 +1945,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
 
-            try {
-                const carsRes = await fetchReferenceData('cars');
-                carsRes.forEach(car => {
-                    if (selectedCustomerId) {
-                        const carCustId = car.customer_id || car.client_id || car.owner_id;
-                        if (carCustId && String(carCustId) !== String(selectedCustomerId)) {
-                            return; 
-                        }
-                    }
+            if (!selectedCustomerId) return;
 
-                    const gos = car.gos_number || car.car_number || '';
-                    const mdl = car.model || car.car_model || '';
-                    let displayName = (gos && mdl) ? `${gos} (${mdl})` : (gos || mdl || `Запись #${car.id}`);
+            try {
+                const response = await fetch(`/api/customer_cars?customer_id=${selectedCustomerId}`);
+                if (!response.ok) {
+                    console.error('Ошибка загрузки автомобилей покупателя');
+                    return;
+                }
+                const cars = await response.json();
+
+                cars.forEach(car => {
+                    const gos = car.gos_number || '';
+                    const mdl = car.model || '';
+                    const brd = car.brand || '';
+                    let displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
 
                     const option = document.createElement('option');
                     option.value = car.id;
@@ -1962,7 +1971,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     carSelect.appendChild(option);
                 });
             } catch (err) {
-                console.error('Ошибка при динамической фильтрации машин:', err);
+                console.error('Ошибка при запросе машин покупателя:', err);
             }
         });
     }
@@ -1984,7 +1993,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
             { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+            { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
         ];
 
         pairs.forEach(({ warehouse, mol }) => {
@@ -2198,7 +2208,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-// Автоматически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
+
+//ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
         const img = e.target;
