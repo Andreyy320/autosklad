@@ -3581,7 +3581,8 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3649,9 +3650,9 @@ function switchRepairTab(tabName, btnElement) {
     }
 
     if (!fetchUrl) {
-        // Если это accident_images, заменяем эндпоинт на ваш кастомный метод
+        // Если это accident_images, используем правильный роут /api/accident_images?accident_id=...
         if (entity === 'accident_images') {
-            fetchUrl = `/api/accident_images_list?accident_id=${parentId}`;
+            fetchUrl = `/api/accident_images?accident_id=${parentId}`;
         } else {
             fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
         }
@@ -3719,7 +3720,7 @@ function switchRepairTab(tabName, btnElement) {
             accident_payments: 'Выплаты',
             accident_events: 'Хронология событий',
             accident_items: 'Поврежденные элементы',
-            accident_images: 'Изображения ДТП', // <--- Добавлено название для заголовка
+            accident_images: 'Изображения ДТП',
             repair_items: 'Список запчастей',
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
@@ -3738,7 +3739,7 @@ function switchRepairTab(tabName, btnElement) {
             } else if (queryParamName === 'dtp_id') {
                 titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'accident_id') {
-                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`; // <--- Обработка заголовка для фото ДТП
+                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'repair_id') {
                 titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (entity === 'stock_batches') {
@@ -3785,7 +3786,6 @@ function switchRepairTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
