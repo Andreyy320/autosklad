@@ -1559,8 +1559,6 @@ car_general: {
         return html;
     }
 },
-
-
 realizations: {
     title: 'Реализация',
     columns: [
@@ -1617,7 +1615,6 @@ realizations: {
         `;
     }
 }
-
 }
 
 
@@ -1696,6 +1693,7 @@ function closeDrawer() {
     }
 
 }
+
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1725,6 +1723,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ДТП-';
         } else if (entity === 'repairs' || entity === 'repair_items' || entity === 'repair_works') {
             prefix = 'РЕМ-';
+        } else if (entity === 'realizations') {
+            prefix = 'РЕАЛ-';
         }
 
         try {
@@ -1787,7 +1787,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
         
-        // car_id скрываем только если это дочерняя форма (например, внутри машины), а в ТО/Страховках оставляем
         if (col.field === 'car_id' && parentId) continue;
 
         if (col.insert === false) continue;
@@ -1853,7 +1852,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars') {
+                if (referenceName === 'cars' || referenceName === 'customer_cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
@@ -1862,7 +1861,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         displayName = gos || mdl || `Запись #${refItem.id}`;
                     }
                 } else {
-                    displayName = refItem.name_full || refItem.name_short || refItem.user_fio || refItem.name || refItem.login || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
