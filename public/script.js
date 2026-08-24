@@ -3621,7 +3621,11 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-            if (carTabsPanel) carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves') ? 'flex' : 'none';
+            
+            // Включаем панель переключателей для receipts, moves, а теперь и для customers (покупателей)
+            if (carTabsPanel) {
+                carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
+            }
 
             if (currentEntity === 'receipts') {
                 loadDetailData('receipt_items', selectedItem.id);
