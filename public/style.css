@@ -251,7 +251,8 @@ table {
     width: 100%;
     border-collapse: collapse;
     background-color: #ffffff;
-    table-layout: fixed !important;
+    /* Убираем жесткий fixed, чтобы колонки могли гибко менять размеры */
+    table-layout: auto !important;
 }
 
 th {
@@ -273,7 +274,7 @@ th .resizer {
     position: absolute;
     top: 0;
     right: 0;
-    width: 5px;
+    width: 6px;
     height: 100%;
     cursor: col-resize;
     user-select: none;
@@ -295,7 +296,6 @@ td {
     font-size: 12px;
     background-color: #ffffff;
     font-weight: 400;        
-    max-width: 250px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
