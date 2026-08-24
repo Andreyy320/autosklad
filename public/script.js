@@ -1752,9 +1752,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
         config.columns.forEach(col => {
-            if (col.value && typeof col.value === 'function') {
-                item[col.field] = col.value();
-            } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
             }
         });
@@ -1786,17 +1784,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     }
 
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
-        
-        if (col.field === 'car_id' && parentId) continue;
+    // --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОТРИСОВКИ ОДНОГО ПОЛЯ (ДЛЯ СОХРАНЕНИЯ УНИВЕРСАЛЬНОСТИ) ---
+    async function renderColumnInput(col) {
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') return '';
+        if (col.field === 'car_id' && parentId) return '';
+        if (col.insert === false) return '';
+        if ((col.update === false || col.edit === false) && item && item.id) return '';
+        if (entity === 'repair_items' && col.field === 'receipt_id') return '';
+        if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
 
-        if (col.insert === false) continue;
-        if ((col.update === false || col.edit === false) && item && item.id) continue;
-        
-        if (entity === 'repair_items' && col.field === 'receipt_id') continue;
-        if (entity === 'users' && col.field === 'password_hash' && item && item.id) continue;
-        
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -1900,12 +1896,25 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        html += `
+        return `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
             </label>
         `;
+    }
+
+    // --- РЕАЛИЗАЦИЯ ДЛЯ ТАБЛИЦ И ОСТАЛЬНЫХ СУЩНОСТЕЙ ---
+    if (entity === 'receipt_items' || entity === 'move_items') {
+        // СПЕЦИАЛЬНАЯ РЕАЛИЗАЦИЯ ТОЛЬКО ДЛЯ ЭТОЙ ТАБЛИЦЫ (можете настроить порядок или кастомную верстку)
+        for (const col of config.columns) {
+            html += await renderColumnInput(col);
+        }
+    } else {
+        // СТАНДАРТНАЯ ЛОГИКА ДЛЯ ВСЕХ ОСТАЛЬНЫХ СУЩНОСТЕЙ
+        for (const col of config.columns) {
+            html += await renderColumnInput(col);
+        }
     }
 
     html += `
