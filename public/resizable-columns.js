@@ -1,15 +1,22 @@
 function initTableResizer(table) {
     if (!table) return;
     
-    const headerCells = table.querySelectorAll('th');
+    // Проверяем в консоли, для какой таблицы сработал скрипт
+    console.log('Инициализация ресайзера для таблицы:', table);
 
-    headerCells.forEach(th => {
-        // Защита от повторного добавления ресайзера
+    const headerCells = table.querySelectorAll('th');
+    console.log('Найдено заголовков (th):', headerCells.length);
+
+    headerCells.forEach((th, index) => {
+        // Если ресайзер уже есть, не создаем его заново
         if (th.querySelector('.resizer')) return;
 
-        // Жестко фиксируем текущую ширину столбца в пикселях при старте
+        // Принудительно задаем начальную ширину, если её нет
         if (!th.style.width || th.style.width === 'auto') {
-            th.style.width = `${th.offsetWidth}px`;
+            const currentWidth = th.offsetWidth;
+            if (currentWidth > 0) {
+                th.style.width = `${currentWidth}px`;
+            }
         }
 
         const resizer = document.createElement('div');
@@ -24,19 +31,18 @@ function initTableResizer(table) {
             startWidth = th.offsetWidth;
 
             resizer.classList.add('resizing');
-            document.body.style.cursor = 'col-resize'; // Меняем курсор во всем документе при перетаскивании
+            document.body.style.cursor = 'col-resize';
 
             function mouseMoveHandler(e) {
                 const dx = e.clientX - startX;
-                const newWidth = Math.max(30, startWidth + dx); // Минимальная ширина столбца 30px
+                const newWidth = Math.max(30, startWidth + dx);
                 th.style.width = `${newWidth}px`;
             }
 
             function mouseUpHandler() {
                 resizer.classList.remove('resizing');
-                document.body.style.cursor = ''; // Возвращаем обычный курсор
+                document.body.style.cursor = '';
                 
-                // Слушатели вешаем на window, чтобы движение не терялось, если курсор ушел за пределы таблицы
                 window.removeEventListener('mousemove', mouseMoveHandler);
                 window.removeEventListener('mouseup', mouseUpHandler);
             }
@@ -44,23 +50,39 @@ function initTableResizer(table) {
             window.addEventListener('mousemove', mouseMoveHandler);
             window.addEventListener('mouseup', mouseUpHandler);
 
-            e.preventDefault(); // Предотвращаем выделение текста в таблице
-            e.stopPropagation(); // Останавливаем всплытие
+            e.preventDefault();
+            e.stopPropagation();
         });
     });
 }
 
-// Автоматическая инициализация при загрузке и изменении DOM
-const observer = new MutationObserver(() => {
+// Функция глобального сканирования всех таблиц на странице
+window.makeTablesResizable = function() {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
     });
+};
+
+// Автоматический запуск при загрузке DOM
+document.addEventListener('DOMContentLoaded', () => {
+    window.makeTablesResizable();
+});
+
+// Периодический или мутационный перехват для динамических таблиц
+const observer = new MutationObserver((mutations) => {
+    let hasNewTables = false;
+    mutations.forEach(mutation => {
+        if (mutation.addedNodes.length > 0) {
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeName === 'TABLE' || (node.querySelectorAll && node.querySelectorAll('table').length > 0)) {
+                    hasNewTables = true;
+                }
+            });
+        }
+    });
+    if (hasNewTables) {
+        window.makeTablesResizable();
+    }
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('table').forEach(table => {
-        initTableResizer(table);
-    });
-});
