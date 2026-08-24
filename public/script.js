@@ -1175,7 +1175,7 @@ accident_events: {
 },accident_images: {
     title: 'Изображения ДТП',
     columns: [
-        { field: 'created_at', label: 'Дата загрузки', type: 'datetime-local', width: '160px' },
+        { field: 'created_at', label: 'Дата загрузки', width: '160px' },
         { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
         { field: 'description', label: 'Описание' }
     ],
@@ -2074,6 +2074,142 @@ document.addEventListener('click', function(e) {
         }
     }
 });
+async function openCarDetailsForm(entity, item = null, parentId = null) {
+    const config = getConfig(entity);
+    const drawer = getOrCreateDrawer();
+    
+    const now = new Date();
+    const currentDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    if (!item) item = {};
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: ${config.title || 'Документ / Фото'}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
+    `;
+
+    // Корректно подставляем скрытый инпут в зависимости от сущности
+    if (parentId) {
+        if (entity === 'accident_images') {
+            html += `<input type="hidden" name="accident_id" value="${parentId}">`;
+        } else {
+            html += `<input type="hidden" name="car_id" value="${parentId}">`;
+        }
+    }
+
+    for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'car_id' || col.field === 'accident_id') continue;
+        if (col.insert === false) continue;
+
+        let val = item[col.field] || '';
+        let inputHtml = '';
+
+        // Добавлено распознавание image_url и image для корректного отображения кнопки выбора файла
+        if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field === 'image_url' || col.field.includes('file') || col.field.includes('photo') || col.field.includes('image')) {
+            inputHtml = `<input type="file" name="photo" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
+        } else if (col.type === 'datetime-local' || col.field.includes('date')) {
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
+        } else if (col.field === 'description') {
+            inputHtml = `<textarea name="${col.field}" rows="4" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;">${val}</textarea>`;
+        } else {
+            inputHtml = `<input type="text" name="${col.field}" value="${val}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
+        }
+
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${col.label || col.field}:
+                ${inputHtml}
+            </label>
+        `;
+    }
+
+    html += `
+        <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+            <button type="submit" id="save-car-detail-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+            ${item.id ? `<button type="button" id="delete-car-detail-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+            <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+        </div>
+    </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    const formElement = drawer.querySelector('#car-details-form');
+
+    const deleteBtn = drawer.querySelector('#delete-car-detail-btn');
+    if (deleteBtn && item.id) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal('Удаление', 'Удалить эту запись?', async () => {
+                const res = await fetch(`/api/${entity}/${item.id}`, {
+                    method: 'DELETE',
+                    headers: { 'x-user-id': localStorage.getItem('currentUserId') || '' }
+                });
+                if (res.ok) {
+                    closeDrawer();
+                    showAppNotification('Успешно удалено', 'success');
+                    if (parentId) loadDetailData(entity, parentId);
+                    else refreshData();
+                } else {
+                    showAppNotification('Ошибка удаления', 'error');
+                }
+            });
+        });
+    }
+
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const saveBtn = formElement.querySelector('#save-car-detail-btn');
+        if (saveBtn) saveBtn.disabled = true;
+
+        const formData = new FormData(e.target);
+        
+        // Автоматически проставляем правильный id родителя перед отправкой
+        if (parentId) {
+            if (entity === 'accident_images' && !formData.get('accident_id')) {
+                formData.set('accident_id', parentId);
+            } else if (entity !== 'accident_images' && !formData.get('car_id')) {
+                formData.set('car_id', parentId);
+            }
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'x-user-id': localStorage.getItem('currentUserId') || ''
+                },
+                body: formData
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Сохранено успешно', 'success');
+                if (parentId) {
+                    loadDetailData(entity, parentId);
+                } else {
+                    refreshData();
+                }
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка сохранения', 'error');
+                if (saveBtn) saveBtn.disabled = false;
+            }
+        } catch (err) {
+            console.error(err);
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            if (saveBtn) saveBtn.disabled = false;
+        }
+    });
+}
+
 
 
 async function openCarDetailsForm(entity, item = null, parentId = null) {
@@ -2220,6 +2356,9 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+
+
 // Универсальная функция отправки логов на бэкенд
 async function sendLog(entity, action, recordId, detailsData) {
     try {
@@ -3120,7 +3259,6 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
-
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
@@ -3135,9 +3273,11 @@ function openDetailForm(mode) {
     const itemToEdit = mode === 'edit' ? selectedDetailItem : null;
     const detailEntity = getCurrentDetailEntity();
     
-    // Если это таблица файлов/документов машины, вызываем отдельную функцию для работы с файлами
+    // Если это таблица файлов/документов машины или изображений ДТП, вызываем специальную функцию для работы с файлами
     if (detailEntity === 'car_details') {
         openCarDetailsForm(detailEntity, itemToEdit, selectedItem.id);
+    } else if (detailEntity === 'accident_images') {
+        openAccidentImageForm(detailEntity, itemToEdit, selectedItem.id);
     } else {
         // Для всех остальных таблиц оставляем твою стандартную логику
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
@@ -3593,6 +3733,7 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -3797,6 +3938,7 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
