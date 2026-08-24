@@ -1717,8 +1717,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПР-';
         } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
             prefix = 'ПМ-';
-        } else if (entity === 'realizations') {
-            prefix = 'РЕАЛ-';
         } else if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
@@ -1754,7 +1752,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
         config.columns.forEach(col => {
-            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            if (col.value && typeof col.value === 'function') {
+                item[col.field] = col.value();
+            } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
             }
         });
@@ -1788,9 +1788,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     for (const col of config.columns) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'customer_id') continue;
-        
-        // Убираем поле "Тип оплаты" по вашему запросу
-        if (col.field === 'payment_type' || col.field === 'type_oplata') continue;
         
         if (col.field === 'car_id' && parentId) continue;
 
@@ -1857,7 +1854,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (referenceName === 'cars' || referenceName === 'customer_cars') {
+                if (referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     if (gos && mdl) {
