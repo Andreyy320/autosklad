@@ -1175,7 +1175,7 @@ accident_events: {
 },accident_images: {
     title: 'Изображения ДТП',
     columns: [
-        { field: 'created_at', label: 'Дата загрузки', width: '160px' },
+        { field: 'created_at', label: 'Дата загрузки', type: 'datetime-local', width: '160px' },
         { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
         { field: 'description', label: 'Описание' }
     ],
