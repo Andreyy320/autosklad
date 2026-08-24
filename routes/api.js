@@ -3244,7 +3244,8 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts','customer_cars','part_discounts','service_discounts'
+            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
+            'customer_cars','part_discounts','service_discounts','realizations'
         ];
 
         if (!allowedTables.includes(entity)) {
