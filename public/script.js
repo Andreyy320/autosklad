@@ -2074,7 +2074,6 @@ document.addEventListener('click', function(e) {
         }
     }
 });
-
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2092,19 +2091,23 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
+    // Определяем имя скрытого поля в зависимости от сущности
     if (parentId) {
-        html += `<input type="hidden" name="car_id" value="${parentId}">`;
+        if (entity === 'accident_images') {
+            html += `<input type="hidden" name="accident_id" value="${parentId}">`;
+        } else {
+            html += `<input type="hidden" name="car_id" value="${parentId}">`;
+        }
     }
 
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'car_id') continue;
+        if (col.field === 'id' || col.field === 'car_id' || col.field === 'accident_id') continue;
         if (col.insert === false) continue;
 
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        // Здесь имя изменено на 'photo', чтобы серверный multer успешно принял файл
-        if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field.includes('file') || col.field.includes('photo')) {
+        if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field === 'image_url' || col.field.includes('file') || col.field.includes('photo') || col.field.includes('image')) {
             inputHtml = `<input type="file" name="photo" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${val || currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
@@ -2162,8 +2165,14 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         if (saveBtn) saveBtn.disabled = true;
 
         const formData = new FormData(e.target);
-        if (parentId && !formData.get('car_id')) {
-            formData.set('car_id', parentId);
+        
+        // Автоматически проставляем правильный ID родителя при отправке
+        if (parentId) {
+            if (entity === 'accident_images' && !formData.get('accident_id')) {
+                formData.set('accident_id', parentId);
+            } else if (entity !== 'accident_images' && !formData.get('car_id')) {
+                formData.set('car_id', parentId);
+            }
         }
 
         try {
