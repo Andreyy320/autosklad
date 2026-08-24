@@ -3226,7 +3226,6 @@ function filterTable() {
 }
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3260,6 +3259,11 @@ function getCurrentDetailEntity() {
             const match = onclickAttr.match(/(?:loadDetailData|switchCustomerTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
+            }
+            // Также поддерживаем data-tab, если он используется
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) {
+                return dataTab;
             }
         }
         return 'customer_contacts'; 
@@ -3305,7 +3309,6 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
-
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
