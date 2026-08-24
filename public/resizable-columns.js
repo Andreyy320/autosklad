@@ -3,8 +3,12 @@ function initTableResizer(table) {
     const headerCells = table.querySelectorAll('thead tr:last-child th');
 
     headerCells.forEach(th => {
-        // Чтобы не дублировать ресайзер
         if (th.querySelector('.resizer')) return;
+
+        // Убедимся, что у th задана начальная ширина в пикселях, если её не было
+        if (!th.style.width && th.offsetWidth) {
+            th.style.width = `${th.offsetWidth}px`;
+        }
 
         const resizer = document.createElement('div');
         resizer.classList.add('resizer');
@@ -21,7 +25,8 @@ function initTableResizer(table) {
 
             function mouseMoveHandler(e) {
                 const dx = e.clientX - x;
-                th.style.width = `${w + dx}px`;
+                const newWidth = Math.max(50, w + dx); // Минимальная ширина 50px
+                th.style.width = `${newWidth}px`;
             }
 
             function mouseUpHandler() {
@@ -32,11 +37,14 @@ function initTableResizer(table) {
 
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler);
+            
+            // Предотвращаем выделение текста во время перетаскивания
+            e.preventDefault();
         });
     });
 }
 
-// Автоматически ищем таблицы и вешаем ресайзеры при любых изменениях на странице
+// Следим за изменениями таблицы в DOM и инициализируем ресайзеры
 const observer = new MutationObserver(() => {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
@@ -45,7 +53,6 @@ const observer = new MutationObserver(() => {
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-// И при первой загрузке тоже
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('table').forEach(table => {
         initTableResizer(table);
