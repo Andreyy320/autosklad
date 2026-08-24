@@ -1558,7 +1558,66 @@ car_general: {
 
         return html;
     }
+},
+
+
+realizations: {
+    title: 'Реализация',
+    columns: [
+        { field: 'doc_number', label: '№ документа', width: '110px' },
+        { 
+            field: 'doc_date', 
+            label: 'Дата', 
+            type: 'datetime-local', 
+            width: '160px',
+            value: () => {
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+            }
+        },
+        { field: 'customer_id', label: 'Покупатель', width: '150px', ref: 'customers' },
+        { field: 'sklad_id', label: 'Склад', width: '130px', ref: 'skladi' },
+        { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
+        { field: 'car_id', label: 'Авто (Гос номер)', width: '110px', ref: 'customer_cars' },
+        { field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true },
+        { field: 'description', label: 'Описание' },
+        { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
+        { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
+        { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
+        { field: 'fact_date', label: 'Дата факт', width: '110px', type: 'datetime-local' },
+        { field: 'is_posted', label: 'Проведен', width: '90px' }
+    ],
+    render: (item) => {
+        const formatOnlyDate = (dateStr) => {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+        };
+
+        const sumPartsVal = item.sum_parts ? Number(item.sum_parts).toFixed(2) : '0.00';
+        const sumWorkVal = item.sum_work ? Number(item.sum_work).toFixed(2) : '0.00';
+        const sumTotalVal = item.sum_total ? Number(item.sum_total).toFixed(2) : '0.00';
+        const postedText = item.is_posted ? 'Да' : 'Нет';
+
+        return `
+            <td><b>${item.doc_number || ''}</b></td>
+            <td>${formatOnlyDate(item.doc_date)}</td>
+            <td>${item.customer_name || item.customer_id || '—'}</td>
+            <td>${item.sklad_name || item.sklad_id || '—'}</td>
+            <td>${item.mol_name || item.mol_id || '—'}</td>
+            <td>${item.car_number || item.car_id || '—'}</td>
+            <td>${item.car_model || '—'}</td>
+            <td>${item.description || ''}</td>
+            <td style="text-align: right;">${sumPartsVal}</td>
+            <td style="text-align: right;">${sumWorkVal}</td>
+            <td style="text-align: right; font-weight: bold;">${sumTotalVal}</td>
+            <td>${formatOnlyDate(item.fact_date)}</td>
+            <td>${postedText}</td>
+        `;
+    }
 }
+
 }
 
 
@@ -4114,7 +4173,8 @@ const navMap = {
     'Детали и фото авто': 'car_details',
     'Изображения ДТП':'accident_images',
     'Скидки на запчасти': 'part_discounts',
-    'Скидки на услуги': 'service_discounts'
+    'Скидки на услуги': 'service_discounts',
+    'Реализация':'realizations'
 };
 
 function updateFilterPanels(entity) {
