@@ -1090,19 +1090,38 @@ router.get('/dtp_history', async (req, res) => {
 
 
 
-// Можно сделать синоним для удобства
 router.get('/accident_images', async (req, res) => {
     try {
-        const { accident_id } = req.query;
-        const query = `SELECT * FROM accident_images WHERE accident_id = $1 ORDER BY id DESC`;
-        const result = await pool.query(query, [accident_id]);
+        const { accident_id, car_id } = req.query;
+        let query = '';
+        let params = [];
+
+        if (car_id) {
+            // Если запрос пришел из карточки авто, достаем все фото ДТП, которые принадлежат машинам с этим car_id
+            // (Предполагается, что в таблице ДТП (например, accidents или dtp) есть поле car_id)
+            query = `
+                SELECT ai.* 
+                FROM accident_images ai
+                JOIN accidents a ON ai.accident_id = a.id
+                WHERE a.car_id = $1
+                ORDER BY ai.id DESC
+            `;
+            params = [car_id];
+        } else if (accident_id) {
+            // Стандартный запрос для конкретного ДТП
+            query = `SELECT * FROM accident_images WHERE accident_id = $1 ORDER BY id DESC`;
+            params = [accident_id];
+        } else {
+            return res.status(400).json({ error: 'Не указан accident_id или car_id' });
+        }
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Ошибка при получении изображений ДТП');
     }
 });
-
 
 router.post('/accident_images', upload.single('image_url'), async (req, res) => {
     const client = await pool.connect();
