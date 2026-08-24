@@ -2480,20 +2480,15 @@ router.delete('/car_details/:id', async (req, res) => {
     }
 });
 
-
-// Получение списка всех реализаций с JOIN'ами для вывода названий
 router.get('/realizations', async (req, res) => {
     try {
         const query = `
-            SELECT 
-                r.*,
-                c.name_full as customer_name,
-                c.name_full as customer_full_name,
-                c.name_short as customer_short_name,
-                s.name as sklad_name,
-                m.description as mol_name,
-                cc.gos_number as car_number, 
-                cc.model as car_model
+            SELECT r.*, 
+                   COALESCE(c.name_full, c.name_short, 'Покупатель #' || c.id) AS customer_name,
+                   s.name AS sklad_name,
+                   m.description AS mol_name,
+                   COALESCE(cc.gos_number, cc.car_number, 'Авто #' || cc.id) AS car_display_name,
+                   cc.model AS car_model
             FROM realizations r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN skladi s ON r.sklad_id = s.id
@@ -2505,7 +2500,7 @@ router.get('/realizations', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении реализаций:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
+        res.status(500).json({ error: 'Ошибка сервера при получении реализаций' });
     }
 });
 
