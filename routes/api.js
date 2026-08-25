@@ -711,6 +711,38 @@ router.get('/zaphasti', async (req, res) => {
     }
 });
 
+
+// ==================== ПОЛУЧЕНИЕ ОДНОЙ ЗАПЧАСТИ ПО ID (Устраняет ошибку 404) ====================
+router.get('/zaphasti/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = `
+            SELECT z.*, 
+                   p.name AS proizvoditel_name, 
+                   e.name AS ed_izmereniya_name, 
+                   gt.name AS gruppa_tsen_name, 
+                   gz.name AS gryppa_zamehenia_name 
+            FROM zaphasti z
+            LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
+            LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            LEFT JOIN gryppa_zamehenia gz ON z.gryppa_zamehenia_id = gz.id
+            WHERE z.id = $1
+        `;
+        const result = await pool.query(query, [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Запчасть не найдена' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка при получении запчасти:', err);
+        res.status(500).json({ error: 'Ошибка сервера при получении запчасти' });
+    }
+});
+
+
 // ПОЛУЧЕНИЕ СПИСКА ПРОИЗВОДИТЕЛЕЙ ЗАПЧАСТЕЙ
 router.get('/proizvoditel_zaphasti', async (req, res) => {
     try {
@@ -2510,8 +2542,7 @@ router.get('/realizations', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении реализаций' });
     }
 });
-
-// Получить список запчастей для конкретной реализации
+// ==================== ПОЛУЧИТЬ СПИСОК ЗАПЧАСТЕЙ РЕАЛИЗАЦИИ ====================
 router.get('/realization_items', async (req, res) => {
     const { realization_id } = req.query;
     try {
@@ -2536,7 +2567,6 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-
 
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
@@ -2630,7 +2660,7 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 5. Узнаем закупочную цену из последней партии прихода
+        // 5. Узнаем закупочную цену и ID документа прихода из последней партии
         const priceQuery = `
             SELECT ri.price AS purchase_price, ri.receipt_id 
             FROM receipt_items ri
@@ -2670,14 +2700,15 @@ router.post('/realization_items', async (req, res) => {
             }
         }
 
-        // Базовая цена (переданная с фронтенда или закупка)
-        const basePrice = Number(price) || purchase_price || 0;
+        // 7. Определяем розничную цену: 
+        // Если цена передана с фронтенда — берем её, иначе берем закупочную (или можно задать базовую логику наценки, если розница не указана)
+        const baseRetailPrice = Number(price) > 0 ? Number(price) : (purchase_price > 0 ? purchase_price : 0);
 
-        // Высчитываем цену с учетом процента скидки клиента
-        const finalPrice = basePrice * (1 - discountPercent / 100);
+        // Считаем цену со скидкой и общую сумму
+        const finalPrice = baseRetailPrice * (1 - discountPercent / 100);
         const total_rub = requestedQty * finalPrice;
 
-        // 7. Вставляем строку в реализацию
+        // 8. Вставляем строку в реализацию
         const insertQuery = `
             INSERT INTO realization_items (
                 realization_id, zaphasti_id, article, code, name, 
@@ -2697,10 +2728,10 @@ router.post('/realization_items', async (req, res) => {
             requestedQty, 
             zap.unit || 'шт', 
             purchase_price, 
-            basePrice,       // retail_price (базовая до скидки)
+            baseRetailPrice, // retail_price (розничная до скидки)
             finalPrice,      // price (итоговая цена со скидкой)
-            discountText,    // текст скидки, например "Оптовая (10%)"
-            total_rub,       // итоговая сумма (количество * цена со скидкой)
+            discountText,    // текст скидки
+            total_rub,       // итоговая сумма
             description, 
             income_document_id
         ];
@@ -2737,6 +2768,7 @@ router.delete('/realization_items/:id', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при удалении запчасти' });
     }
 });
+
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
