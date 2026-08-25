@@ -2659,7 +2659,7 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 5. Узнаем закупочную цену (ищем сначала по складу, если нет — берем последнюю общую цену прихода по этой запчасти)
+        // 5. Узнаем закупочную цену из последней партии
         const priceQuery = `
             SELECT ri.price AS purchase_price, ri.receipt_id 
             FROM receipt_items ri
@@ -2698,15 +2698,14 @@ router.post('/realization_items', async (req, res) => {
             }
         }
 
-        // 7. Определяем базовую розничную цену: 
-        // Если передана с фронта — берем её, если нет — берем закупочную цену (или можно настроить наценку)
-        const baseRetailPrice = Number(price) > 0 ? Number(price) : (purchase_price > 0 ? purchase_price : 0);
+        // 7. Розничная цена всегда закупка + 30% (или берем с фронта, если передана вручную)
+        let baseRetailPrice = Number(price) > 0 ? Number(price) : (purchase_price * 1.30);
 
-        // Считаем цену со скидкой и общую сумму
+        // Цена реализации = розничная цена минус процент скидки клиента
         const finalPrice = baseRetailPrice * (1 - discountPercent / 100);
         const total_rub = requestedQty * finalPrice;
 
-        // 8. Вставляем строку в реализацию (с пробросом purchase_price и income_document_id)
+        // 8. Вставляем строку в реализацию
         const insertQuery = `
             INSERT INTO realization_items (
                 realization_id, zaphasti_id, article, code, name, 
@@ -2725,13 +2724,13 @@ router.post('/realization_items', async (req, res) => {
             zap.name, 
             requestedQty, 
             zap.unit || 'шт', 
-            purchase_price,  // <-- Теперь сюда запишется реальная закупочная цена
-            baseRetailPrice, // retail_price (до скидки)
-            finalPrice,      // price (со скидкой)
-            discountText,    
-            total_rub,       
+            purchase_price,   // Закупка
+            baseRetailPrice,  // Розничная (закупка + 30%)
+            finalPrice,       // Реализация (со скидкой)
+            discountText,     // Текст скидки
+            total_rub,        // Итоговая сумма
             description, 
-            income_document_id // <-- ID документа прихода
+            income_document_id // Док. прихода
         ];
 
         const result = await client.query(insertQuery, values);
