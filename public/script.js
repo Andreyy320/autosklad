@@ -4147,8 +4147,6 @@ function switchRepairTab(tabName, btnElement) {
         }
     });
 }
-
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -4237,6 +4235,7 @@ async function loadDetailData(entity, parentId) {
     let filterRow = document.getElementById('detail-filter-row');
 
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     if (queryParamName === 'car_id' || queryParamName === 'dtp_id' || queryParamName === 'repair_id' || queryParamName === 'accident_id') {
         if (thead && visibleColumns.length > 0) {
@@ -4336,7 +4335,7 @@ async function loadDetailData(entity, parentId) {
         }
         
         if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
@@ -4363,7 +4362,7 @@ async function loadDetailData(entity, parentId) {
 
     } catch (err) {
         console.error(' [loadDetailData] Ошибка:', err);
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
 
