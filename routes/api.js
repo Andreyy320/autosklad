@@ -2679,32 +2679,43 @@ router.post('/realization_items', async (req, res) => {
             income_document_id = priceRes.rows[0].receipt_id;
         }
 
-        // 6. Получаем скидку покупателя из связанной таблицы part_discounts через customers
-        let discountPercent = 0; 
+        // 6. Розничная цена всегда честно считается от закупки (+30%)
+        const baseRetailPrice = Number((purchase_price * 1.30).toFixed(2));
+
+        // 7. Определение цены реализации и скидки
+        let finalPrice = 0;
         let discountText = 'Розница (0%)';
 
-        if (customer_id) {
-            const customerDiscountQuery = `
-                SELECT pd.name, pd.discount_percent 
-                FROM customers c
-                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
-                WHERE c.id = $1
-            `;
-            const cdRes = await client.query(customerDiscountQuery, [customer_id]);
-            
-            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
-                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
-                const discountName = cdRes.rows[0].name || 'Скидка';
-                discountText = `${discountName} (${discountPercent}%)`;
+        // Если вы передали кастомную цену реализации с фронтенда (больше 0)
+        if (Number(price) > 0) {
+            finalPrice = Number(price);
+            if (baseRetailPrice > 0) {
+                const calculatedDiscount = Number((((baseRetailPrice - finalPrice) / baseRetailPrice) * 100).toFixed(2));
+                if (calculatedDiscount > 0) {
+                    discountText = `ручная цена (-${calculatedDiscount}%)`;
+                }
             }
+        } else {
+            // Если вручную не передавали — берем скидку клиента
+            let discountPercent = 0; 
+            if (customer_id) {
+                const customerDiscountQuery = `
+                    SELECT pd.name, pd.discount_percent 
+                    FROM customers c
+                    LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                    WHERE c.id = $1
+                `;
+                const cdRes = await client.query(customerDiscountQuery, [customer_id]);
+                
+                if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                    discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                    const discountName = cdRes.rows[0].name || 'Скидка';
+                    discountText = `${discountName} (${discountPercent}%)`;
+                }
+            }
+            finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
         }
 
-        // 7. Расчет цен:
-        // Розничная цена = Закупка + 30% (если с фронта передали кастомную цену и она больше 0, можно опционально её учесть, но по логике берем закупку * 1.30)
-        const baseRetailPrice = Number(price) > 0 ? Number(price) : Number((purchase_price * 1.30).toFixed(2));
-
-        // Цена реализации = Розничная цена минус процент скидки клиента
-        const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
         const total_rub = Number((requestedQty * finalPrice).toFixed(2));
 
         // 8. Вставляем строку в реализацию
@@ -2726,9 +2737,9 @@ router.post('/realization_items', async (req, res) => {
             zap.name, 
             requestedQty, 
             zap.unit || 'шт', 
-            purchase_price,   // Закупка из прихода
-            baseRetailPrice,  // Розничная цена (Закупка + 30%)
-            finalPrice,       // Цена реализации (со скидкой)
+            purchase_price,   // Закупка
+            baseRetailPrice,  // Розничная (Закупка * 1.30)
+            finalPrice,       // Цена реализации (ваша введенная или со скидкой)
             discountText,     // Текст скидки
             total_rub,        // Итоговая сумма (Кол-во * Цена реализации)
             description, 
