@@ -1623,7 +1623,7 @@ realizations: {
 },realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '250px', insert: true, update: true, table: false, formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', width: '250px', insert: true, update: true, table: false, formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
         { field: 'article', label: 'Артикул', width: '110px', insert: false, update: false },
         { field: 'code', label: 'Код', width: '100px', insert: false, update: false },
         { field: 'name', label: 'Наименование', width: '220px', insert: false, update: false },
@@ -1632,26 +1632,28 @@ realizations: {
         { field: 'purchase_price', label: 'Цена закупка', width: '100px', type: 'number' },
         { field: 'retail_price', label: 'Цена розница', width: '100px', type: 'number' },
         { field: 'price', label: 'Цена реализация', width: '100px', type: 'number' },
-        { field: 'discount', label: 'Скидка', width: '80px', type: 'number' },
-        { field: 'sum', label: 'Сумма', width: '90px', insert: false, update: false },
-        { field: 'description', label: 'Описание', width: '180px', type: 'textarea' },       // <-- добавили width
-        { field: 'receipt_doc', label: 'Документ прихода', width: '150px', type: 'text' }
+        { field: 'discount', label: 'Скидка', width: '90px', type: 'text' }, // В базе discount — это VARCHAR
+        { field: 'total_rub', label: 'Сумма', width: '90px', insert: false, update: false }, // В базе total_rub вместо sum
+        { field: 'description', label: 'Описание', width: '180px', type: 'textarea' },
+        { field: 'income_document_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: false, update: false } // Поле связи с приходом из вашей БД
     ],
     render: (item) => {
         const qty = Number(item.quantity) || 1;
         const price = Number(item.price) || 0;
-        const discount = Number(item.discount) || 0;
+        const totalSum = Number(item.total_rub) || (qty * price);
+        
         const purchasePrice = Number(item.purchase_price || 0).toFixed(2);
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
         const realizationPrice = price.toFixed(2);
         
-        const sum = (qty * price) - discount;
-
         const article = item.article || item.zaphasti_article || '—';
         const code = item.code || item.zaphasti_code || '—';
-        const name = item.name || item.zaphasti_name || item.zaphasti_title || '—';
+        const name = item.name || item.zaphasti_name || '—';
         const unit = item.unit || item.zaphasti_unit || 'шт';
+        const discountText = item.discount || '';
+        const incomeDocText = item.income_document_name || item.income_document_id || '';
 
+        // Строго 12 видимых ячеек <td> для 12 видимых колонок в таблице
         return `
             <td>${article}</td>
             <td>${code}</td>
@@ -1661,10 +1663,10 @@ realizations: {
             <td style="text-align: right;">${purchasePrice}</td>
             <td style="text-align: right;">${retailPrice}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
-            <td style="text-align: right;">${discount ? discount.toFixed(2) : ''}</td>
-            <td style="text-align: right; font-weight: bold;">${sum.toFixed(2)}</td>
+            <td>${discountText}</td>
+            <td style="text-align: right; font-weight: bold;">${Number(totalSum).toFixed(2)}</td>
             <td>${item.description || ''}</td>
-            <td>${item.receipt_doc || ''}</td>
+            <td>${incomeDocText}</td>
         `;
     }
 }
