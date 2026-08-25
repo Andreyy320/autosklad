@@ -3417,11 +3417,20 @@ async function loadData(entity, title) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-function emptyDetailBody() {
+function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
-    if (detailBody) detailBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>';
-}
+    if (!detailBody) return;
 
+    // Получаем конфигурацию для текущей сущности
+    const config = getConfig(entity);
+    
+    // Считаем только те колонки, у которых не стоит table: false
+    const visibleColumnsCount = config.columns 
+        ? config.columns.filter(col => col.table !== false).length 
+        : 1; // Дефолт на случай отсутствия конфига
+
+    detailBody.innerHTML = `<tr><td colspan="${visibleColumnsCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+}
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
     const filters = {};
