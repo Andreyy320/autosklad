@@ -2567,7 +2567,6 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
     const { 
@@ -2660,14 +2659,13 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 5. Узнаем закупочную цену и ID документа прихода из последней партии
+        // 5. Узнаем закупочную цену (ищем сначала по складу, если нет — берем последнюю общую цену прихода по этой запчасти)
         const priceQuery = `
             SELECT ri.price AS purchase_price, ri.receipt_id 
             FROM receipt_items ri
             JOIN receipts r ON ri.receipt_id = r.id
             WHERE ri.zaphasti_id = $1 
-              AND ($2::int IS NULL OR r.warehouse_id = $2)
-            ORDER BY r.date DESC, ri.id DESC
+            ORDER BY (r.warehouse_id = $2) DESC, r.date DESC, ri.id DESC
             LIMIT 1
         `;
         const priceRes = await client.query(priceQuery, [zaphasti_id, sklad_id]);
@@ -2700,15 +2698,15 @@ router.post('/realization_items', async (req, res) => {
             }
         }
 
-        // 7. Определяем розничную цену: 
-        // Если цена передана с фронтенда — берем её, иначе берем закупочную (или можно задать базовую логику наценки, если розница не указана)
+        // 7. Определяем базовую розничную цену: 
+        // Если передана с фронта — берем её, если нет — берем закупочную цену (или можно настроить наценку)
         const baseRetailPrice = Number(price) > 0 ? Number(price) : (purchase_price > 0 ? purchase_price : 0);
 
         // Считаем цену со скидкой и общую сумму
         const finalPrice = baseRetailPrice * (1 - discountPercent / 100);
         const total_rub = requestedQty * finalPrice;
 
-        // 8. Вставляем строку в реализацию
+        // 8. Вставляем строку в реализацию (с пробросом purchase_price и income_document_id)
         const insertQuery = `
             INSERT INTO realization_items (
                 realization_id, zaphasti_id, article, code, name, 
@@ -2727,13 +2725,13 @@ router.post('/realization_items', async (req, res) => {
             zap.name, 
             requestedQty, 
             zap.unit || 'шт', 
-            purchase_price, 
-            baseRetailPrice, // retail_price (розничная до скидки)
-            finalPrice,      // price (итоговая цена со скидкой)
-            discountText,    // текст скидки
-            total_rub,       // итоговая сумма
+            purchase_price,  // <-- Теперь сюда запишется реальная закупочная цена
+            baseRetailPrice, // retail_price (до скидки)
+            finalPrice,      // price (со скидкой)
+            discountText,    
+            total_rub,       
             description, 
-            income_document_id
+            income_document_id // <-- ID документа прихода
         ];
 
         const result = await client.query(insertQuery, values);
