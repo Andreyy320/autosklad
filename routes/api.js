@@ -2536,7 +2536,9 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-// Добавить запчасть к реализации с учетом скидки клиента из таблицы customers
+
+
+// ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
     const { 
         realization_id, zaphasti_id, quantity, 
@@ -2644,38 +2646,35 @@ router.post('/realization_items', async (req, res) => {
         let income_document_id = null;
 
         if (priceRes.rows.length > 0) {
-            purchase_price = priceRes.rows[0].purchase_price || 0;
+            purchase_price = Number(priceRes.rows[0].purchase_price) || 0;
             income_document_id = priceRes.rows[0].receipt_id;
         }
 
-        // 6. Получаем скидку покупателя из таблицы customers (поле discount_parts)
-        let discountValue = 0; // числовой процент скидки
+        // 6. Получаем скидку покупателя из связанной таблицы part_discounts через customers
+        let discountPercent = 0; 
         let discountText = 'Розница (0%)';
 
         if (customer_id) {
-            const customerQuery = `SELECT discount_parts FROM customers WHERE id = $1`;
-            const customerRes = await client.query(customerQuery, [customer_id]);
+            const customerDiscountQuery = `
+                SELECT pd.name, pd.discount_percent 
+                FROM customers c
+                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                WHERE c.id = $1
+            `;
+            const cdRes = await client.query(customerDiscountQuery, [customer_id]);
             
-            if (customerRes.rows.length > 0) {
-                const rawDiscount = customerRes.rows[0].discount_parts; // например, строка "10" или "10%"
-                if (rawDiscount) {
-                    discountText = rawDiscount;
-                    // Извлекаем первое попавшееся число из строки (например, из "10%" получим 10)
-                    const parsedNum = parseFloat(rawDiscount.toString().replace(',', '.'));
-                    if (!isNaN(parsedNum)) {
-                        discountValue = parsedNum;
-                    }
-                }
+            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                const discountName = cdRes.rows[0].name || 'Скидка';
+                discountText = `${discountName} (${discountPercent}%)`;
             }
         }
 
-        // Базовая цена (если не передана в запросе, можем взять закупочную или задать логику базовой розницы, например, с наценкой х1.3, либо просто закупка/переданная цена)
-        // Если у вас нет отдельной розничной цены в zaphasti, базовой ценой может быть переданная цена или закупка.
+        // Базовая цена (переданная с фронтенда или закупка)
         const basePrice = Number(price) || purchase_price || 0;
 
-        // Высчитываем цену с учетом скидки покупателя
-        // Формула: Базовая цена минус процент скидки
-        const finalPrice = basePrice * (1 - discountValue / 100);
+        // Высчитываем цену с учетом процента скидки клиента
+        const finalPrice = basePrice * (1 - discountPercent / 100);
         const total_rub = requestedQty * finalPrice;
 
         // 7. Вставляем строку в реализацию
@@ -2698,10 +2697,10 @@ router.post('/realization_items', async (req, res) => {
             requestedQty, 
             zap.unit || 'шт', 
             purchase_price, 
-            basePrice,             // retail_price (базовая до скидки)
-            finalPrice,            // итоговая цена со скидкой
-            discountText,          // строка скидки, например "10%"
-            total_rub, 
+            basePrice,       // retail_price (базовая до скидки)
+            finalPrice,      // price (итоговая цена со скидкой)
+            discountText,    // текст скидки, например "Оптовая (10%)"
+            total_rub,       // итоговая сумма (количество * цена со скидкой)
             description, 
             income_document_id
         ];
@@ -2719,9 +2718,10 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-// Удалить запчасть из реализации
+
+// ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
-    const { id } = req.query; // или req.params.id в зависимости от твоей структуры роутинга
+    const { id } = req.query;
     const itemId = req.params.id || id;
     try {
         const query = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
@@ -2737,8 +2737,6 @@ router.delete('/realization_items/:id', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при удалении запчасти' });
     }
 });
-
-
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
