@@ -1620,7 +1620,9 @@ realizations: {
             <td>${postedText}</td>
         `;
     }
-}realization_items: {
+},
+
+realization_items: {
     title: 'Спецификация реализации',
     columns: [
         { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '250px', insert: true, update: true, table: false },
