@@ -1624,6 +1624,9 @@ realizations: {
 realization_items: {
     title: 'Спецификация реализации',
     columns: [
+        // Добавляем поле выбора запчасти со ссылкой на справочник
+        { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', table: false },
+        
         { field: 'article', label: 'Артикул', width: '90px', table: true },
         { field: 'code', label: 'Код', width: '80px', table: true },
         { field: 'name', label: 'Наименование', width: '180px', table: true },
@@ -1637,6 +1640,7 @@ realization_items: {
         { field: 'description', label: 'Описание', width: '130px', type: 'textarea', table: true },
         { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', table: true }
     ],
+    
     render: (item) => {
         if (!item) return '';
 
