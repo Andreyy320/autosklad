@@ -1620,10 +1620,10 @@ realizations: {
             <td>${postedText}</td>
         `;
     }
-},
-realization_items: {
+},realization_items: {
     title: 'Спецификация реализации',
     columns: [
+        // Эти поля видны только в форме (для выбора/редактирования)
         { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
         { field: 'quantity', label: 'Кол-во', type: 'number' },
         { field: 'unit', label: 'Ед. изм', type: 'text' },
@@ -1632,7 +1632,14 @@ realization_items: {
         { field: 'price', label: 'Цена реализация', type: 'number' },
         { field: 'discount', label: 'Скидка', type: 'number' },
         { field: 'description', label: 'Описание', type: 'textarea' },
-        { field: 'receipt_doc', label: 'Документ прихода', type: 'text' }
+        { field: 'receipt_doc', label: 'Документ прихода', type: 'text' },
+
+        // А эти поля нужны только для отображения в таблице (в шапке и строках), 
+        // поэтому мы отключаем их появление в модалке добавления/редактирования:
+        { field: 'article', label: 'Артикул', insert: false, update: false },
+        { field: 'code', label: 'Код', insert: false, update: false },
+        { field: 'name', label: 'Наименование', insert: false, update: false },
+        { field: 'sum', label: 'Сумма', insert: false, update: false }
     ],
     render: (item) => {
         const qty = item.quantity || 1;
