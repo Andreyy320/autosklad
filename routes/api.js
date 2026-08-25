@@ -2629,9 +2629,9 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 5. Узнаем закупочную цену из последней партии прихода
+        // 5. Узнаем закупочную цену из последней партии прихода (используем реальное поле ri.price)
         const priceQuery = `
-            SELECT ri.purchase_price, ri.receipt_id 
+            SELECT ri.price AS purchase_price, ri.receipt_id 
             FROM receipt_items ri
             JOIN receipts r ON ri.receipt_id = r.id
             WHERE ri.zaphasti_id = $1 
@@ -2693,7 +2693,6 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-
 // Удалить запчасть из реализации
 router.delete('/realization_items/:id', async (req, res) => {
     const { id } = req.query; // или req.params.id в зависимости от твоей структуры роутинга
