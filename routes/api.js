@@ -2572,8 +2572,8 @@ router.get('/realization_items', async (req, res) => {
 router.post('/realization_items', async (req, res) => {
     const { 
         realization_id, zaphasti_id, quantity, 
-        price, description 
-    } = req.body;
+        description 
+    } = req.body; // Убрали 'price' из деструктуризации, чтобы присланное с формы значение цены не учитывалось
 
     const client = await pool.connect();
 
@@ -2682,40 +2682,27 @@ router.post('/realization_items', async (req, res) => {
         // 6. Розничная цена всегда честно считается от закупки (+30%)
         const baseRetailPrice = Number((purchase_price * 1.30).toFixed(2));
 
-        // 7. Определение цены реализации и скидки
-        let finalPrice = 0;
+        // 7. Строго автоматический расчет цены реализации с учетом скидки клиента (без ручного ввода price)
+        let discountPercent = 0;
         let discountText = 'Розница (0%)';
 
-        // Если вы передали кастомную цену реализации с фронтенда (больше 0)
-        if (Number(price) > 0) {
-            finalPrice = Number(price);
-            if (baseRetailPrice > 0) {
-                const calculatedDiscount = Number((((baseRetailPrice - finalPrice) / baseRetailPrice) * 100).toFixed(2));
-                if (calculatedDiscount > 0) {
-                    discountText = `ручная цена (-${calculatedDiscount}%)`;
-                }
+        if (customer_id) {
+            const customerDiscountQuery = `
+                SELECT pd.name, pd.discount_percent 
+                FROM customers c
+                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                WHERE c.id = $1
+            `;
+            const cdRes = await client.query(customerDiscountQuery, [customer_id]);
+            
+            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                const discountName = cdRes.rows[0].name || 'Скидка';
+                discountText = `${discountName} (${discountPercent}%)`;
             }
-        } else {
-            // Если вручную не передавали — берем скидку клиента
-            let discountPercent = 0; 
-            if (customer_id) {
-                const customerDiscountQuery = `
-                    SELECT pd.name, pd.discount_percent 
-                    FROM customers c
-                    LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
-                    WHERE c.id = $1
-                `;
-                const cdRes = await client.query(customerDiscountQuery, [customer_id]);
-                
-                if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
-                    discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
-                    const discountName = cdRes.rows[0].name || 'Скидка';
-                    discountText = `${discountName} (${discountPercent}%)`;
-                }
-            }
-            finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
         }
 
+        const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
         const total_rub = Number((requestedQty * finalPrice).toFixed(2));
 
         // 8. Вставляем строку в реализацию
@@ -2739,7 +2726,7 @@ router.post('/realization_items', async (req, res) => {
             zap.unit || 'шт', 
             purchase_price,   // Закупка
             baseRetailPrice,  // Розничная (Закупка * 1.30)
-            finalPrice,       // Цена реализации (ваша введенная или со скидкой)
+            finalPrice,       // Автоматически рассчитанная цена реализации со скидкой
             discountText,     // Текст скидки
             total_rub,        // Итоговая сумма (Кол-во * Цена реализации)
             description, 
@@ -2759,7 +2746,6 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-
 // ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
     const { id } = req.query;
