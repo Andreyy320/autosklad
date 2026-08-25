@@ -1743,8 +1743,7 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}
-async function openEntityForm(entity, item = null, parentId = null) {
+}async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1843,6 +1842,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (entity === 'repair_items' && col.field === 'receipt_id') return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
+        // Оставляем в realization_items только: zaphasti_id (Запчасть), quantity (Количество), price (Цена реализации), description (Описание)
+        if (entity === 'realization_items') {
+            const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+            if (!allowedFields.includes(col.field)) {
+                return '';
+            }
+        }
+
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -2005,7 +2012,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
 
-    // Автозаполнение полей при выборе запчасти для таблицы realization_items
+    // Автозаполнение полей при выборе запчасти для таблицы realization_items (теперь заполняет скрытые/нужные данные на бэкенд)
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
@@ -2016,23 +2023,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (response.ok) {
                     const itemData = await response.json();
                     
-                    const articleInput = formElement.querySelector('[name="article"]');
-                    const codeInput = formElement.querySelector('[name="code"]');
-                    const nameInput = formElement.querySelector('[name="name"]');
-                    const unitInput = formElement.querySelector('[name="unit"]');
-                    const purchasePriceInput = formElement.querySelector('[name="purchase_price"]');
-                    const retailPriceInput = formElement.querySelector('[name="retail_price"]');
                     const priceInput = formElement.querySelector('[name="price"]');
-                    const incomeDocInput = formElement.querySelector('[name="income_document_id"]');
-
-                    if (articleInput && itemData.article) articleInput.value = itemData.article;
-                    if (codeInput && itemData.code) codeInput.value = itemData.code;
-                    if (nameInput && (itemData.name || itemData.title)) nameInput.value = itemData.name || itemData.title;
-                    if (unitInput && itemData.unit) unitInput.value = itemData.unit;
-                    if (purchasePriceInput && itemData.purchase_price !== undefined) purchasePriceInput.value = itemData.purchase_price;
-                    if (retailPriceInput && itemData.retail_price !== undefined) retailPriceInput.value = itemData.retail_price;
-                    if (priceInput && itemData.retail_price !== undefined && !priceInput.value) priceInput.value = itemData.retail_price;
-                    if (incomeDocInput && itemData.income_document_id !== undefined) incomeDocInput.value = itemData.income_document_id;
+                    if (priceInput && itemData.retail_price !== undefined && !priceInput.value) {
+                        priceInput.value = itemData.retail_price;
+                    }
                 }
             } catch (err) {
                 console.error('Ошибка при автозаполнении данных запчасти:', err);
@@ -2312,7 +2306,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
