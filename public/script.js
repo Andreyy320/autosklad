@@ -1623,46 +1623,47 @@ realizations: {
 },realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        // Колонки для отображения в таблице (в нужном порядке)
-        { field: 'article', label: 'Артикул', insert: false, update: false },
-        { field: 'code', label: 'Код', insert: false, update: false },
-        { field: 'name', label: 'Наименование', insert: false, update: false },
-        { field: 'quantity', label: 'Кол-во', type: 'number' },
-        { field: 'unit', label: 'Ед. изм', type: 'text' },
-        { field: 'purchase_price', label: 'Цена закупка', type: 'number' },
-        { field: 'retail_price', label: 'Цена розница', type: 'number' },
-        { field: 'price', label: 'Цена реализация', type: 'number' },
-        { field: 'discount', label: 'Скидка', type: 'number' },
-        { field: 'sum', label: 'Сумма', insert: false, update: false },
+        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '250px', insert: true, update: true, table: false, formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        { field: 'article', label: 'Артикул', width: '110px', insert: false, update: false },
+        { field: 'code', label: 'Код', width: '100px', insert: false, update: false },
+        { field: 'name', label: 'Наименование', width: '220px', insert: false, update: false },
+        { field: 'quantity', label: 'Кол-во', width: '80px', type: 'number' },
+        { field: 'unit', label: 'Ед. изм', width: '70px', type: 'text', insert: false, update: false },
+        { field: 'purchase_price', label: 'Цена закупка', width: '90px', type: 'number' },
+        { field: 'retail_price', label: 'Цена розница', width: '90px', type: 'number' },
+        { field: 'price', label: 'Цена реализация', width: '90px', type: 'number' },
+        { field: 'discount', label: 'Скидка', width: '80px', type: 'number' },
+        { field: 'sum', label: 'Сумма', width: '90px', insert: false, update: false },
         { field: 'description', label: 'Описание', type: 'textarea' },
-        { field: 'receipt_doc', label: 'Документ прихода', type: 'text' },
-        
-        // Поле для выбора товара в модалке (в самой таблице как отдельная колонка не выводится)
-        { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', type: 'select', insert: true, update: true, formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() }
+        { field: 'receipt_doc', label: 'Документ прихода', width: '150px', type: 'text' }
     ],
     render: (item) => {
-        const qty = item.quantity || 1;
-        const price = item.price || 0;
-        const discount = item.discount || 0;
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.price) || 0;
+        const discount = Number(item.discount) || 0;
         const purchasePrice = Number(item.purchase_price || 0).toFixed(2);
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
-        const realizationPrice = Number(price).toFixed(2);
+        const realizationPrice = price.toFixed(2);
         
         // Расчет итоговой суммы (с учетом скидки)
         const sum = (qty * price) - discount;
 
-        // Порядок ячеек строго соответствует порядку полей в columns выше
+        const article = item.article || item.zaphasti_article || '—';
+        const code = item.code || item.zaphasti_code || '—';
+        const name = item.name || item.zaphasti_name || item.zaphasti_title || '—';
+        const unit = item.unit || item.zaphasti_unit || 'шт';
+
         return `
-            <td>${item.article || item.zaphasti_article || ''}</td>
-            <td>${item.code || item.zaphasti_code || ''}</td>
-            <td><b>${item.name || item.zaphasti_name || '—'}</b></td>
+            <td>${article}</td>
+            <td>${code}</td>
+            <td><b>${name}</b></td>
             <td>${qty}</td>
-            <td>${item.unit || 'шт'}</td>
+            <td>${unit}</td>
             <td style="text-align: right;">${purchasePrice}</td>
             <td style="text-align: right;">${retailPrice}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
-            <td style="text-align: right;">${discount ? Number(discount).toFixed(2) : ''}</td>
-            <td style="text-align: right; font-weight: bold;">${Number(sum).toFixed(2)}</td>
+            <td style="text-align: right;">${discount ? discount.toFixed(2) : ''}</td>
+            <td style="text-align: right; font-weight: bold;">${sum.toFixed(2)}</td>
             <td>${item.description || ''}</td>
             <td>${item.receipt_doc || ''}</td>
         `;
