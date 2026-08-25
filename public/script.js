@@ -1629,12 +1629,12 @@ realizations: {
         { field: 'name', label: 'Наименование', width: '220px', insert: false, update: false },
         { field: 'quantity', label: 'Кол-во', width: '80px', type: 'number' },
         { field: 'unit', label: 'Ед. изм', width: '70px', type: 'text', insert: false, update: false },
-        { field: 'purchase_price', label: 'Цена закупка', width: '90px', type: 'number' },
-        { field: 'retail_price', label: 'Цена розница', width: '90px', type: 'number' },
-        { field: 'price', label: 'Цена реализация', width: '90px', type: 'number' },
+        { field: 'purchase_price', label: 'Цена закупка', width: '100px', type: 'number' },
+        { field: 'retail_price', label: 'Цена розница', width: '100px', type: 'number' },
+        { field: 'price', label: 'Цена реализация', width: '100px', type: 'number' },
         { field: 'discount', label: 'Скидка', width: '80px', type: 'number' },
         { field: 'sum', label: 'Сумма', width: '90px', insert: false, update: false },
-        { field: 'description', label: 'Описание', type: 'textarea' },
+        { field: 'description', label: 'Описание', width: '180px', type: 'textarea' },       // <-- добавили width
         { field: 'receipt_doc', label: 'Документ прихода', width: '150px', type: 'text' }
     ],
     render: (item) => {
@@ -1645,7 +1645,6 @@ realizations: {
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
         const realizationPrice = price.toFixed(2);
         
-        // Расчет итоговой суммы (с учетом скидки)
         const sum = (qty * price) - discount;
 
         const article = item.article || item.zaphasti_article || '—';
