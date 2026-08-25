@@ -1744,8 +1744,8 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}async function openEntityForm(entity, item = null, parentId = null) {
-    
+}
+async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
     
@@ -1843,9 +1843,9 @@ function closeDrawer() {
         if (entity === 'repair_items' && col.field === 'receipt_id') return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
-        // Для realization_items оставляем нужные поля для ввода в форме добавления/редактирования строки
+        // Жесткая фильтрация полей для realization_items (оставляем только запрошенные: запчасть, количество, цена реализации, описание)
         if (entity === 'realization_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'purchase_price', 'retail_price', 'price', 'discount', 'description', 'income_document_id'];
+            const allowedFields = ['zaphasti_id', 'quantity', 'retail_price', 'description'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -1939,7 +1939,6 @@ function closeDrawer() {
                         displayName = `Авто #${refItem.id}`;
                     }
                 } else {
-                    // Красивое отображение для запчастей (артикул + наименование)
                     if (referenceName === 'zaphasti') {
                         const art = refItem.article ? `[${refItem.article}] ` : '';
                         const nm = refItem.name || refItem.title || '';
@@ -2020,7 +2019,7 @@ function closeDrawer() {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
 
-    // Автозаполнение полей при выборе запчасти для таблицы realization_items
+    // Автозаполнение цены реализации при выборе запчасти
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
@@ -2030,19 +2029,10 @@ function closeDrawer() {
                 const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
                 if (response.ok) {
                     const itemData = await response.json();
-                    
-                    const priceInput = formElement.querySelector('[name="price"]');
                     const retailPriceInput = formElement.querySelector('[name="retail_price"]');
-                    const purchasePriceInput = formElement.querySelector('[name="purchase_price"]');
                     
-                    if (priceInput && itemData.retail_price !== undefined && !priceInput.value) {
-                        priceInput.value = itemData.retail_price;
-                    }
                     if (retailPriceInput && itemData.retail_price !== undefined && !retailPriceInput.value) {
                         retailPriceInput.value = itemData.retail_price;
-                    }
-                    if (purchasePriceInput && itemData.purchase_price !== undefined && !purchasePriceInput.value) {
-                        purchasePriceInput.value = itemData.purchase_price;
                     }
                 }
             } catch (err) {
