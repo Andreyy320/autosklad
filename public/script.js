@@ -3417,6 +3417,7 @@ async function loadData(entity, title) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
+
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -3431,6 +3432,7 @@ function emptyDetailBody(entity) {
 
     detailBody.innerHTML = `<tr><td colspan="${visibleColumnsCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
 }
+
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
     const filters = {};
