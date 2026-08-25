@@ -1624,19 +1624,19 @@ realizations: {
 realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '250px', insert: true, update: true, table: false },
-        { field: 'article', label: 'Артикул', width: '110px', insert: false, update: false, table: true },
-        { field: 'code', label: 'Код', width: '100px', insert: false, update: false, table: true },
-        { field: 'name', label: 'Наименование', width: '220px', insert: false, update: false, table: true },
-        { field: 'quantity', label: 'Кол-во', width: '80px', type: 'number', table: true },
-        { field: 'unit', label: 'Ед. изм', width: '70px', type: 'text', insert: false, update: false, table: true },
-        { field: 'purchase_price', label: 'Цена закупка', width: '100px', type: 'number', table: true },
-        { field: 'retail_price', label: 'Цена розница', width: '100px', type: 'number', table: true },
-        { field: 'price', label: 'Цена реализация', width: '100px', type: 'number', table: true },
-        { field: 'discount', label: 'Скидка', width: '90px', type: 'text', table: true },
-        { field: 'total_rub', label: 'Сумма', width: '90px', insert: false, update: false, table: true },
-        { field: 'description', label: 'Описание', width: '180px', type: 'textarea', table: true },
-        { field: 'income_document_id', label: 'Документ прихода', width: '150px', type: 'text', insert: false, update: false, table: true }
+        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '200px', insert: true, update: true, table: false },
+        { field: 'article', label: 'Артикул', width: '90px', insert: false, update: false, table: true },
+        { field: 'code', label: 'Код', width: '80px', insert: false, update: false, table: true },
+        { field: 'name', label: 'Наименование', width: '180px', insert: false, update: false, table: true },
+        { field: 'quantity', label: 'Кол-во', width: '70px', type: 'number', table: true },
+        { field: 'unit', label: 'Ед. изм', width: '60px', type: 'text', insert: false, update: false, table: true },
+        { field: 'purchase_price', label: 'Закупка', width: '90px', type: 'number', table: true },
+        { field: 'retail_price', label: 'Розница', width: '90px', type: 'number', table: true },
+        { field: 'price', label: 'Реализация', width: '95px', type: 'number', table: true },
+        { field: 'discount', label: 'Скидка', width: '80px', type: 'text', table: true },
+        { field: 'total_rub', label: 'Сумма', width: '85px', insert: false, update: false, table: true },
+        { field: 'description', label: 'Описание', width: '130px', type: 'textarea', table: true },
+        { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', insert: false, update: false, table: true }
     ],
     render: (item) => {
         const qty = Number(item.quantity) || 1;
