@@ -2520,9 +2520,10 @@ router.get('/realization_items', async (req, res) => {
                    COALESCE(ri.name, z.name) AS name,
                    COALESCE(ri.article, z.article) AS article,
                    COALESCE(ri.code, z.code) AS code,
-                   COALESCE(ri.name, z.name) AS zaphasti_name,
-                   COALESCE(ri.article, z.article) AS zaphasti_article,
-                   COALESCE(ri.code, z.code) AS zaphasti_code
+                   COALESCE(ri.unit, z.unit, 'шт') AS unit,
+                   COALESCE(ri.quantity, 1) AS quantity,
+                   COALESCE(ri.price, 0) AS price,
+                   COALESCE(ri.total_rub, 0) AS total_rub
             FROM realization_items ri
             LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
             WHERE ri.realization_id = $1
