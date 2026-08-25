@@ -2536,11 +2536,11 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-// Добавить запчасть к реализации с проверкой остатков и автозаполнением цен
+// Добавить запчасть к реализации с учетом скидки клиента из таблицы customers
 router.post('/realization_items', async (req, res) => {
     const { 
         realization_id, zaphasti_id, quantity, 
-        retail_price, price, discount, description 
+        price, description 
     } = req.body;
 
     const client = await pool.connect();
@@ -2548,8 +2548,8 @@ router.post('/realization_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Узнаем, к какому складу и МОЛ принадлежит эта реализация
-        const realizationQuery = `SELECT sklad_id, mol_id FROM realizations WHERE id = $1`;
+        // 1. Узнаем склад, МОЛ и клиента для этой реализации
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id FROM realizations WHERE id = $1`;
         const realizationRes = await client.query(realizationQuery, [realization_id]);
         
         if (realizationRes.rows.length === 0) {
@@ -2557,11 +2557,10 @@ router.post('/realization_items', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, mol_id } = realizationRes.rows[0];
+        const { sklad_id, mol_id, customer_id } = realizationRes.rows[0];
         const requestedQty = Number(quantity) || 1;
 
         // 2. Считаем текущий остаток этой запчасти на конкретном складе и у конкретного МОЛ
-        // (учитываем приходы, перемещения и предыдущие реализации)
         const stockCheckQuery = `
             WITH warehouse_stocks AS (
                 SELECT ri.zaphasti_id, r.warehouse_id, r.mol_id, SUM(ri.quantity) as qty
@@ -2618,7 +2617,7 @@ router.post('/realization_items', async (req, res) => {
             });
         }
 
-        // 4. Получаем базовые данные запчасти (артикул, код, наименование, единицу)
+        // 4. Получаем базовые данные запчасти из справочника zaphasti
         const zaphastiQuery = `SELECT * FROM zaphasti WHERE id = $1`;
         const zaphastiRes = await client.query(zaphastiQuery, [zaphasti_id]);
 
@@ -2629,7 +2628,7 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 5. Узнаем закупочную цену из последней партии прихода (используем реальное поле ri.price)
+        // 5. Узнаем закупочную цену из последней партии прихода
         const priceQuery = `
             SELECT ri.price AS purchase_price, ri.receipt_id 
             FROM receipt_items ri
@@ -2649,10 +2648,37 @@ router.post('/realization_items', async (req, res) => {
             income_document_id = priceRes.rows[0].receipt_id;
         }
 
-        const finalPrice = Number(price) || zap.retail_price || 0;
+        // 6. Получаем скидку покупателя из таблицы customers (поле discount_parts)
+        let discountValue = 0; // числовой процент скидки
+        let discountText = 'Розница (0%)';
+
+        if (customer_id) {
+            const customerQuery = `SELECT discount_parts FROM customers WHERE id = $1`;
+            const customerRes = await client.query(customerQuery, [customer_id]);
+            
+            if (customerRes.rows.length > 0) {
+                const rawDiscount = customerRes.rows[0].discount_parts; // например, строка "10" или "10%"
+                if (rawDiscount) {
+                    discountText = rawDiscount;
+                    // Извлекаем первое попавшееся число из строки (например, из "10%" получим 10)
+                    const parsedNum = parseFloat(rawDiscount.toString().replace(',', '.'));
+                    if (!isNaN(parsedNum)) {
+                        discountValue = parsedNum;
+                    }
+                }
+            }
+        }
+
+        // Базовая цена (если не передана в запросе, можем взять закупочную или задать логику базовой розницы, например, с наценкой х1.3, либо просто закупка/переданная цена)
+        // Если у вас нет отдельной розничной цены в zaphasti, базовой ценой может быть переданная цена или закупка.
+        const basePrice = Number(price) || purchase_price || 0;
+
+        // Высчитываем цену с учетом скидки покупателя
+        // Формула: Базовая цена минус процент скидки
+        const finalPrice = basePrice * (1 - discountValue / 100);
         const total_rub = requestedQty * finalPrice;
 
-        // 6. Вставляем строку в реализацию
+        // 7. Вставляем строку в реализацию
         const insertQuery = `
             INSERT INTO realization_items (
                 realization_id, zaphasti_id, article, code, name, 
@@ -2672,9 +2698,9 @@ router.post('/realization_items', async (req, res) => {
             requestedQty, 
             zap.unit || 'шт', 
             purchase_price, 
-            zap.retail_price || 0, 
-            finalPrice, 
-            discount || 'Розница (0%)', 
+            basePrice,             // retail_price (базовая до скидки)
+            finalPrice,            // итоговая цена со скидкой
+            discountText,          // строка скидки, например "10%"
             total_rub, 
             description, 
             income_document_id
