@@ -1621,18 +1621,25 @@ realizations: {
         `;
     }
 },
-realization_items: {
-    title: 'Партия / запчасть',
+ realization_items = {
+    title: 'Спецификация реализации',
     columns: [
-        { field: 'zaphasti_id', label: 'Партия / запчасть', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
         { field: 'quantity', label: 'Кол-во', type: 'number' },
-        { field: 'price', label: 'Цена реализации', type: 'number' },
-        { field: 'description', label: 'Описание', type: 'textarea' }
+        { field: 'unit', label: 'Ед. изм', type: 'text' },
+        { field: 'purchase_price', label: 'Цена закупка', type: 'number' },
+        { field: 'retail_price', label: 'Цена розница', type: 'number' },
+        { field: 'price', label: 'Цена реализация', type: 'number' },
+        { field: 'discount', label: 'Скидка', type: 'number' },
+        { field: 'description', label: 'Описание', type: 'textarea' },
+        { field: 'receipt_doc', label: 'Документ прихода', type: 'text' }
     ],
     render: (item) => {
         const qty = item.quantity || 1;
         const price = item.price || 0;
-        const sum = qty * price;
+        const discount = item.discount || 0;
+        // Считаем сумму с учетом скидки (если скидка в процентах или абсолютная — по аналогии с остальным проектом)
+        const sum = (qty * price) - discount;
 
         return `
             <td>${item.article || item.zaphasti_article || ''}</td>
@@ -1640,7 +1647,10 @@ realization_items: {
             <td><b>${item.name || item.zaphasti_name || '—'}</b></td>
             <td>${qty}</td>
             <td>${item.unit || 'шт'}</td>
+            <td style="text-align: right;">${Number(item.purchase_price || 0).toFixed(2)}</td>
+            <td style="text-align: right;">${Number(item.retail_price || 0).toFixed(2)}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${Number(price).toFixed(2)}</td>
+            <td style="text-align: right;">${Number(discount).toFixed(2)}</td>
             <td style="text-align: right; font-weight: bold;">${Number(sum).toFixed(2)}</td>
             <td>${item.description || ''}</td>
             <td>${item.receipt_doc || ''}</td>
