@@ -1748,7 +1748,8 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}async function openEntityForm(entity, item = null, parentId = null) {
+}
+async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
     
@@ -1846,9 +1847,9 @@ function closeDrawer() {
         if (entity === 'repair_items' && col.field === 'receipt_id') return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
-        // Жесткая фильтрация полей для realization_items (заменено retail_price на цену реализации, например selling_price)
+        // Жесткая фильтрация полей для realization_items (оставляем запчасть, количество, цену реализации и описание)
         if (entity === 'realization_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'selling_price', 'description'];
+            const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -2022,7 +2023,7 @@ function closeDrawer() {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
 
-    // Автозаполнение цены реализации при выборе запчасти (заменено retail_price на selling_price)
+    // Автозаполнение цены реализации при выборе запчасти
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
@@ -2032,10 +2033,12 @@ function closeDrawer() {
                 const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
                 if (response.ok) {
                     const itemData = await response.json();
-                    const sellingPriceInput = formElement.querySelector('[name="selling_price"]');
+                    const priceInput = formElement.querySelector('[name="price"]');
                     
-                    if (sellingPriceInput && itemData.selling_price !== undefined && !sellingPriceInput.value) {
-                        sellingPriceInput.value = itemData.selling_price;
+                    const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
+
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
+                        priceInput.value = targetPrice;
                     }
                 }
             } catch (err) {
