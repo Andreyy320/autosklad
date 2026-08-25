@@ -1624,19 +1624,18 @@ realizations: {
 realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', width: '200px', insert: true, update: true, table: false },
-        { field: 'article', label: 'Артикул', width: '90px', insert: false, update: false, table: true },
-        { field: 'code', label: 'Код', width: '80px', insert: false, update: false, table: true },
-        { field: 'name', label: 'Наименование', width: '180px', insert: false, update: false, table: true },
+        { field: 'article', label: 'Артикул', width: '90px', table: true },
+        { field: 'code', label: 'Код', width: '80px', table: true },
+        { field: 'name', label: 'Наименование', width: '180px', table: true },
         { field: 'quantity', label: 'Кол-во', width: '70px', type: 'number', table: true },
-        { field: 'unit', label: 'Ед. изм', width: '60px', type: 'text', insert: false, update: false, table: true },
+        { field: 'unit', label: 'Ед. изм', width: '60px', type: 'text', table: true },
         { field: 'purchase_price', label: 'Закупка', width: '90px', type: 'number', table: true },
         { field: 'retail_price', label: 'Розница', width: '90px', type: 'number', table: true },
         { field: 'price', label: 'Реализация', width: '95px', type: 'number', table: true },
         { field: 'discount', label: 'Скидка', width: '80px', type: 'text', table: true },
-        { field: 'total_rub', label: 'Сумма', width: '85px', insert: false, update: false, table: true },
+        { field: 'total_rub', label: 'Сумма', width: '85px', table: true },
         { field: 'description', label: 'Описание', width: '130px', type: 'textarea', table: true },
-        { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', insert: false, update: false, table: true }
+        { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', table: true }
     ],
     render: (item) => {
         if (!item) return '';
@@ -1649,15 +1648,14 @@ realization_items: {
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
         const realizationPrice = price.toFixed(2);
         
-        const article = item.article || item.zaphasti_article || '—';
-        const code = item.code || item.zaphasti_code || '—';
-        const name = item.name || item.zaphasti_name || '—';
-        const unit = item.unit || item.zaphasti_unit || 'шт';
+        const article = item.article || '—';
+        const code = item.code || '—';
+        const name = item.name || '—';
+        const unit = item.unit || 'шт';
         const discountText = item.discount || '';
         const incomeDoc = item.income_document_id || '';
 
         return `
-            <td></td> <!-- Пустая ячейка под скрытую колонку zaphasti_id, чтобы сходилось количество -->
             <td>${article}</td>
             <td>${code}</td>
             <td><b>${name}</b></td>
