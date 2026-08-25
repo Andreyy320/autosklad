@@ -3732,7 +3732,6 @@ async function postReceipt(receiptId) {
     );
 }
 
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -3852,7 +3851,7 @@ tableBody.addEventListener('click', async (e) => {
 
             const activeRealizationTab = document.querySelector('#tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations .realization-tab-btn');
             if (activeRealizationTab) {
-                const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
+                const subTabName = activeRealizationTab.getAttribute('data-tab') || activeRealizationTab.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || 'realization_items';
                 if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
                 loadDetailData(subTabName, selectedItem.id);
             } else {
