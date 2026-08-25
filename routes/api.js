@@ -2567,6 +2567,7 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
+
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
     const { 
@@ -2698,12 +2699,13 @@ router.post('/realization_items', async (req, res) => {
             }
         }
 
-        // 7. Розничная цена всегда закупка + 30% (или берем с фронта, если передана вручную)
-        let baseRetailPrice = Number(price) > 0 ? Number(price) : (purchase_price * 1.30);
+        // 7. Расчет цен:
+        // Розничная цена = Закупка + 30% (если с фронта передали кастомную цену и она больше 0, можно опционально её учесть, но по логике берем закупку * 1.30)
+        const baseRetailPrice = Number(price) > 0 ? Number(price) : Number((purchase_price * 1.30).toFixed(2));
 
-        // Цена реализации = розничная цена минус процент скидки клиента
-        const finalPrice = baseRetailPrice * (1 - discountPercent / 100);
-        const total_rub = requestedQty * finalPrice;
+        // Цена реализации = Розничная цена минус процент скидки клиента
+        const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
+        const total_rub = Number((requestedQty * finalPrice).toFixed(2));
 
         // 8. Вставляем строку в реализацию
         const insertQuery = `
@@ -2724,11 +2726,11 @@ router.post('/realization_items', async (req, res) => {
             zap.name, 
             requestedQty, 
             zap.unit || 'шт', 
-            purchase_price,   // Закупка
-            baseRetailPrice,  // Розничная (закупка + 30%)
-            finalPrice,       // Реализация (со скидкой)
+            purchase_price,   // Закупка из прихода
+            baseRetailPrice,  // Розничная цена (Закупка + 30%)
+            finalPrice,       // Цена реализации (со скидкой)
             discountText,     // Текст скидки
-            total_rub,        // Итоговая сумма
+            total_rub,        // Итоговая сумма (Кол-во * Цена реализации)
             description, 
             income_document_id // Док. прихода
         ];
