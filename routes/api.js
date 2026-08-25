@@ -2536,17 +2536,124 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-
-// Добавить запчасть к реализации
+// Добавить запчасть к реализации с проверкой остатков и автозаполнением цен
 router.post('/realization_items', async (req, res) => {
     const { 
-        realization_id, zaphasti_id, article, code, name, 
-        quantity, unit, purchase_price, retail_price, price, 
-        discount, total_rub, description, income_document_id 
+        realization_id, zaphasti_id, quantity, 
+        retail_price, price, discount, description 
     } = req.body;
 
+    const client = await pool.connect();
+
     try {
-        const query = `
+        await client.query('BEGIN');
+
+        // 1. Узнаем, к какому складу и МОЛ принадлежит эта реализация
+        const realizationQuery = `SELECT sklad_id, mol_id FROM realizations WHERE id = $1`;
+        const realizationRes = await client.query(realizationQuery, [realization_id]);
+        
+        if (realizationRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
+
+        const { sklad_id, mol_id } = realizationRes.rows[0];
+        const requestedQty = Number(quantity) || 1;
+
+        // 2. Считаем текущий остаток этой запчасти на конкретном складе и у конкретного МОЛ
+        // (учитываем приходы, перемещения и предыдущие реализации)
+        const stockCheckQuery = `
+            WITH warehouse_stocks AS (
+                SELECT ri.zaphasti_id, r.warehouse_id, r.mol_id, SUM(ri.quantity) as qty
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                WHERE r.warehouse_id IS NOT NULL
+                GROUP BY ri.zaphasti_id, r.warehouse_id, r.mol_id
+
+                UNION ALL
+
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.mol_to_id AS mol_id, SUM(mi.quantity) as qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE m.warehouse_to_id IS NOT NULL
+                GROUP BY mi.zaphasti_id, m.warehouse_to_id, m.mol_to_id
+
+                UNION ALL
+
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.mol_from_id AS mol_id, -SUM(mi.quantity) as qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE m.warehouse_from_id IS NOT NULL
+                GROUP BY mi.zaphasti_id, m.warehouse_from_id, m.mol_from_id
+
+                UNION ALL
+
+                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.mol_id, -SUM(rep_i.quantity) as qty
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep.warehouse_id IS NOT NULL
+                GROUP BY rep_i.zaphast_id, rep.warehouse_id, rep.mol_id
+
+                UNION ALL
+
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, r_rel.mol_id, -SUM(ri_rel.quantity) as qty
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                WHERE r_rel.sklad_id IS NOT NULL
+                GROUP BY ri_rel.zaphasti_id, r_rel.sklad_id, r_rel.mol_id
+            )
+            SELECT COALESCE(SUM(qty), 0) as current_stock
+            FROM warehouse_stocks
+            WHERE zaphasti_id = $1 AND warehouse_id = $2 AND ($3::int IS NULL OR mol_id = $3)
+        `;
+
+        const stockRes = await client.query(stockCheckQuery, [zaphasti_id, sklad_id, mol_id]);
+        const currentStock = Number(stockRes.rows[0]?.current_stock || 0);
+
+        // 3. Проверяем, хватает ли товара на складе
+        if (currentStock < requestedQty) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно товара на складе! На складе сейчас доступно: ${currentStock} шт., а вы пытаетесь добавить: ${requestedQty} шт.` 
+            });
+        }
+
+        // 4. Получаем базовые данные запчасти (артикул, код, наименование, единицу)
+        const zaphastiQuery = `SELECT * FROM zaphasti WHERE id = $1`;
+        const zaphastiRes = await client.query(zaphastiQuery, [zaphasti_id]);
+
+        if (zaphastiRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запчасть не найдена' });
+        }
+
+        const zap = zaphastiRes.rows[0];
+
+        // 5. Узнаем закупочную цену из последней партии прихода
+        const priceQuery = `
+            SELECT ri.purchase_price, ri.receipt_id 
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 
+              AND ($2::int IS NULL OR r.warehouse_id = $2)
+            ORDER BY r.date DESC, ri.id DESC
+            LIMIT 1
+        `;
+        const priceRes = await client.query(priceQuery, [zaphasti_id, sklad_id]);
+        
+        let purchase_price = 0;
+        let income_document_id = null;
+
+        if (priceRes.rows.length > 0) {
+            purchase_price = priceRes.rows[0].purchase_price || 0;
+            income_document_id = priceRes.rows[0].receipt_id;
+        }
+
+        const finalPrice = Number(price) || zap.retail_price || 0;
+        const total_rub = requestedQty * finalPrice;
+
+        // 6. Вставляем строку в реализацию
+        const insertQuery = `
             INSERT INTO realization_items (
                 realization_id, zaphasti_id, article, code, name, 
                 quantity, unit, purchase_price, retail_price, price, 
@@ -2555,17 +2662,35 @@ router.post('/realization_items', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
             RETURNING *
         `;
+        
         const values = [
-            realization_id, zaphasti_id, article, code, name, 
-            quantity || 1, unit || 'шт', purchase_price || 0, retail_price || 0, price || 0, 
-            discount || 'Розница (0%)', total_rub || 0, description, income_document_id
+            realization_id, 
+            zaphasti_id, 
+            zap.article, 
+            zap.code, 
+            zap.name, 
+            requestedQty, 
+            zap.unit || 'шт', 
+            purchase_price, 
+            zap.retail_price || 0, 
+            finalPrice, 
+            discount || 'Розница (0%)', 
+            total_rub, 
+            description, 
+            income_document_id
         ];
 
-        const result = await pool.query(query, values);
+        const result = await client.query(insertQuery, values);
+
+        await client.query('COMMIT');
         res.json(result.rows[0]);
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Ошибка при добавлении запчасти в реализацию:', err);
-        res.status(500).json({ error: 'Ошибка сервера при добавлении запчасти' });
+        res.status(500).json({ error: 'Ошибка сервера при добавлении запчасти: ' + err.message });
+    } finally {
+        client.release();
     }
 });
 
