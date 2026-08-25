@@ -1735,7 +1735,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
@@ -1765,6 +1764,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ДТП-';
         } else if (entity === 'repairs' || entity === 'repair_items' || entity === 'repair_works') {
             prefix = 'РЕМ-';
+        } else if (entity === 'realizations' || entity === 'realization_items') {
+            prefix = 'РЛ-';
         }
 
         try {
@@ -1787,7 +1788,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
-        if (entity === 'receipt_items' || entity === 'move_items') {
+        if (entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') {
             item.currency = 'Рубль ПМР';
         }
 
@@ -1801,7 +1802,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             item.autoservice = 'Евроавтотест';
         }
     } else {
-        if ((entity === 'receipt_items' || entity === 'move_items') && !item.currency) {
+        if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') && !item.currency) {
             item.currency = 'Рубль ПМР';
         }
     }
@@ -1826,7 +1827,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     // Вспомогательная функция для рендеринга отдельного поля ввода формы
     async function renderField(col) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id') return '';
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id') return '';
         if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
@@ -1855,7 +1856,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        if ((entity === 'receipt_items' || entity === 'move_items') && col.field === 'currency' && !val) {
+        if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') && col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
 
@@ -1928,7 +1929,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : '');
+            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : ''));
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -1993,6 +1994,42 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
+    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+
+    // Автозаполнение полей при выборе запчасти для таблицы realization_items
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', async () => {
+            const selectedZaphastiId = zaphastiSelect.value;
+            if (!selectedZaphastiId) return;
+
+            try {
+                const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
+                if (response.ok) {
+                    const itemData = await response.json();
+                    
+                    const articleInput = formElement.querySelector('[name="article"]');
+                    const codeInput = formElement.querySelector('[name="code"]');
+                    const nameInput = formElement.querySelector('[name="name"]');
+                    const unitInput = formElement.querySelector('[name="unit"]');
+                    const purchasePriceInput = formElement.querySelector('[name="purchase_price"]');
+                    const retailPriceInput = formElement.querySelector('[name="retail_price"]');
+                    const priceInput = formElement.querySelector('[name="price"]');
+                    const incomeDocInput = formElement.querySelector('[name="income_document_id"]');
+
+                    if (articleInput && itemData.article) articleInput.value = itemData.article;
+                    if (codeInput && itemData.code) codeInput.value = itemData.code;
+                    if (nameInput && (itemData.name || itemData.title)) nameInput.value = itemData.name || itemData.title;
+                    if (unitInput && itemData.unit) unitInput.value = itemData.unit;
+                    if (purchasePriceInput && itemData.purchase_price !== undefined) purchasePriceInput.value = itemData.purchase_price;
+                    if (retailPriceInput && itemData.retail_price !== undefined) retailPriceInput.value = itemData.retail_price;
+                    if (priceInput && itemData.retail_price !== undefined && !priceInput.value) priceInput.value = itemData.retail_price;
+                    if (incomeDocInput && itemData.income_document_id !== undefined) incomeDocInput.value = itemData.income_document_id;
+                }
+            } catch (err) {
+                console.error('Ошибка при автозаполнении данных запчасти:', err);
+            }
+        });
+    }
 
     if (customerSelect && carSelect) {
         customerSelect.addEventListener('change', async () => {
@@ -2132,7 +2169,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'receipt_items', 'move_items', 'accident_invoices', 
+                                'receipt_items', 'move_items', 'realization_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'repair_items', 'repair_works', 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2182,6 +2219,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.receipt_id = parentId;
         } else if (entity === 'move_items' && parentId) {
             data.move_id = parentId; 
+        } else if (entity === 'realization_items' && parentId) {
+            data.realization_id = parentId;
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
             data.dtp_id = parentId;
         } else if ((entity === 'repair_items' || entity === 'repair_works') && parentId) {
@@ -2238,7 +2277,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
                 const detailEntities = [
-                    'receipt_items', 'move_items', 'accident_invoices', 
+                    'receipt_items', 'move_items', 'realization_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'repair_items', 'repair_works', 'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
