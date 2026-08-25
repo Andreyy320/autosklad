@@ -3423,6 +3423,7 @@ function filterTable() {
         row.style.display = isVisible ? '' : 'none';
     });
 }
+
 let selectedDetailItem = null;
 let currentDetailItems = []; 
 function getCurrentDetailEntity() {
@@ -3732,6 +3733,7 @@ async function postReceipt(receiptId) {
     );
 }
 
+
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -3851,7 +3853,7 @@ tableBody.addEventListener('click', async (e) => {
 
             const activeRealizationTab = document.querySelector('#tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations .realization-tab-btn');
             if (activeRealizationTab) {
-                const subTabName = activeRealizationTab.getAttribute('data-tab') || activeRealizationTab.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || 'realization_items';
+                const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
                 if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
                 loadDetailData(subTabName, selectedItem.id);
             } else {
@@ -3954,23 +3956,31 @@ function switchCustomerTab(tabName, btnElement) {
     }
 }
 
-
 function switchRealizationTab(tabName, btnElement) {
-    document.querySelectorAll('.realization-tab-btn').forEach(btn => btn.classList.remove('active'));
+    currentRealizationSubTab = tabName;
+
+    const container = document.getElementById('tabs-for-realizations');
+    if (container) {
+        container.querySelectorAll('.realization-tab-btn').forEach(btn => btn.classList.remove('active'));
+    }
     if (btnElement) {
         btnElement.classList.add('active');
     }
 
     const detailToolbar = document.getElementById('detail-toolbar');
     if (detailToolbar) {
-        detailToolbar.style.display = 'none';
+        detailToolbar.style.display = 'flex';
     }
 
     if (selectedItem && selectedItem.id) {
         loadDetailData(tabName, selectedItem.id);
+    } else {
+        const detailBody = document.getElementById('detail-body');
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите реализацию в верхней таблице</td></tr>`;
+        }
     }
 }
-
 
 function switchCarTab(tabName, btnElement) {
     document.querySelectorAll('.car-tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -4068,7 +4078,10 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+
+
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
