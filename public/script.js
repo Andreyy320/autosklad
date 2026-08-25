@@ -1623,23 +1623,22 @@ realizations: {
 },realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        // Эти поля видны только в форме (для выбора/редактирования)
-        { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        // Колонки для отображения в таблице (в нужном порядке)
+        { field: 'article', label: 'Артикул', insert: false, update: false },
+        { field: 'code', label: 'Код', insert: false, update: false },
+        { field: 'name', label: 'Наименование', insert: false, update: false },
         { field: 'quantity', label: 'Кол-во', type: 'number' },
         { field: 'unit', label: 'Ед. изм', type: 'text' },
         { field: 'purchase_price', label: 'Цена закупка', type: 'number' },
         { field: 'retail_price', label: 'Цена розница', type: 'number' },
         { field: 'price', label: 'Цена реализация', type: 'number' },
         { field: 'discount', label: 'Скидка', type: 'number' },
+        { field: 'sum', label: 'Сумма', insert: false, update: false },
         { field: 'description', label: 'Описание', type: 'textarea' },
         { field: 'receipt_doc', label: 'Документ прихода', type: 'text' },
-
-        // А эти поля нужны только для отображения в таблице (в шапке и строках), 
-        // поэтому мы отключаем их появление в модалке добавления/редактирования:
-        { field: 'article', label: 'Артикул', insert: false, update: false },
-        { field: 'code', label: 'Код', insert: false, update: false },
-        { field: 'name', label: 'Наименование', insert: false, update: false },
-        { field: 'sum', label: 'Сумма', insert: false, update: false }
+        
+        // Поле для выбора товара в модалке (в самой таблице как отдельная колонка не выводится)
+        { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', type: 'select', insert: true, update: true, formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() }
     ],
     render: (item) => {
         const qty = item.quantity || 1;
@@ -1649,9 +1648,10 @@ realizations: {
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
         const realizationPrice = Number(price).toFixed(2);
         
-        // Расчет итоговой суммы (с учетом скидки, если она задана)
+        // Расчет итоговой суммы (с учетом скидки)
         const sum = (qty * price) - discount;
 
+        // Порядок ячеек строго соответствует порядку полей в columns выше
         return `
             <td>${item.article || item.zaphasti_article || ''}</td>
             <td>${item.code || item.zaphasti_code || ''}</td>
