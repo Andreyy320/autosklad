@@ -2479,6 +2479,7 @@ router.delete('/car_details/:id', async (req, res) => {
         res.status(500).send('Ошибка сервера при удалении');
     }
 });
+
 router.get('/realizations', async (req, res) => {
     try {
         const query = `
@@ -2509,6 +2510,82 @@ router.get('/realizations', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении реализаций' });
     }
 });
+
+
+// Получить список запчастей для конкретной реализации
+router.get('/realization_items', async (req, res) => {
+    const { realization_id } = req.query;
+    try {
+        const query = `
+            SELECT ri.*, 
+                   COALESCE(ri.name, z.name) AS zaphasti_name,
+                   COALESCE(ri.article, z.article) AS zaphasti_article,
+                   COALESCE(ri.code, z.code) AS zaphasti_code
+            FROM realization_items ri
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            WHERE ri.realization_id = $1
+            ORDER BY ri.id DESC
+        `;
+        const result = await pool.query(query, [realization_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка при получении запчастей реализации:', err);
+        res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
+    }
+});
+
+// Добавить запчасть к реализации
+router.post('/realization_items', async (req, res) => {
+    const { 
+        realization_id, zaphasti_id, article, code, name, 
+        quantity, unit, purchase_price, retail_price, price, 
+        discount, total_rub, description, income_document_id 
+    } = req.body;
+
+    try {
+        const query = `
+            INSERT INTO realization_items (
+                realization_id, zaphasti_id, article, code, name, 
+                quantity, unit, purchase_price, retail_price, price, 
+                discount, total_rub, description, income_document_id
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+            RETURNING *
+        `;
+        const values = [
+            realization_id, zaphasti_id, article, code, name, 
+            quantity || 1, unit || 'шт', purchase_price || 0, retail_price || 0, price || 0, 
+            discount || 'Розница (0%)', total_rub || 0, description, income_document_id
+        ];
+
+        const result = await pool.query(query, values);
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка при добавлении запчасти в реализацию:', err);
+        res.status(500).json({ error: 'Ошибка сервера при добавлении запчасти' });
+    }
+});
+
+// Удалить запчасть из реализации
+router.delete('/realization_items/:id', async (req, res) => {
+    const { id } = req.query; // или req.params.id в зависимости от твоей структуры роутинга
+    const itemId = req.params.id || id;
+    try {
+        const query = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
+        const result = await pool.query(query, [itemId]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+        
+        res.json({ success: true, deleted: result.rows[0] });
+    } catch (err) {
+        console.error('Ошибка при удалении запчасти реализации:', err);
+        res.status(500).json({ error: 'Ошибка сервера при удалении запчасти' });
+    }
+});
+
+
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {

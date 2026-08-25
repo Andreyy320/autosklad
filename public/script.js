@@ -1620,10 +1620,34 @@ realizations: {
             <td>${postedText}</td>
         `;
     }
+},
+realization_items: {
+    title: 'Партия / запчасть',
+    columns: [
+        { field: 'zaphasti_id', label: 'Партия / запчасть', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        { field: 'quantity', label: 'Кол-во', type: 'number' },
+        { field: 'price', label: 'Цена реализации', type: 'number' },
+        { field: 'description', label: 'Описание', type: 'textarea' }
+    ],
+    render: (item) => {
+        const qty = item.quantity || 1;
+        const price = item.price || 0;
+        const sum = qty * price;
+
+        return `
+            <td>${item.article || item.zaphasti_article || ''}</td>
+            <td>${item.code || item.zaphasti_code || ''}</td>
+            <td><b>${item.name || item.zaphasti_name || '—'}</b></td>
+            <td>${qty}</td>
+            <td>${item.unit || 'шт'}</td>
+            <td style="text-align: right; color: #2563eb; font-weight: 500;">${Number(price).toFixed(2)}</td>
+            <td style="text-align: right; font-weight: bold;">${Number(sum).toFixed(2)}</td>
+            <td>${item.description || ''}</td>
+            <td>${item.receipt_doc || ''}</td>
+        `;
+    }
 }
 }
-
-
 
 function getConfig(entity) {
     if (tableConfig[entity]) {
@@ -1696,7 +1720,9 @@ function closeDrawer() {
         backdrop.style.pointerEvents = 'none';
     }
 
-}async function openEntityForm(entity, item = null, parentId = null) {
+}
+
+async function openEntityForm(entity, item = null, parentId = null) {
     
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2224,6 +2250,8 @@ function closeDrawer() {
         }
     });
 }
+
+
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
@@ -2643,7 +2671,6 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
-
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -2666,6 +2693,11 @@ async function refreshData() {
             loadDetailData('accident_invoices', selectedItem.id);
         } else if (currentEntity === 'repairs' && selectedItem.id) {
             loadDetailData('repair_items', selectedItem.id);
+        } else if (currentEntity === 'realizations' && selectedItem.id) {
+            // Обновляем текущую активную вкладку реализации (запчасти или услуги)
+            const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+            loadDetailData(detailEntity, selectedItem.id);
         } else if (currentEntity === 'customers' && selectedItem.id) {
             // Обновляем текущую активную вкладку покупателя (контакты или автомобили)
             const detailEntity = typeof currentCustomerSubTab !== 'undefined' ? currentCustomerSubTab : 'customer_contacts';
@@ -2679,7 +2711,6 @@ async function refreshData() {
         }
     }
 }
-
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -2959,7 +2990,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -3139,7 +3169,9 @@ async function loadData(entity, title) {
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
                 } else if (entity === 'realizations') {
-                    loadDetailData('realization_items', item.id);
+                    const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+                    loadDetailData(detailEntity, item.id);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3162,12 +3194,14 @@ async function loadData(entity, title) {
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForCustomers = document.getElementById('tabs-for-customers');
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (tabsForCustomers) tabsForCustomers.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
 
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
@@ -3216,6 +3250,26 @@ async function loadData(entity, title) {
                     }
                     
                     loadDetailData('repair_items', activeId);
+                } else {
+                    emptyDetailBody();
+                }
+            } else if (entity === 'realizations') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                
+                if (currentItems.length > 0) {
+                    selectedItem = currentItems[0];
+                    const activeId = currentItems[0].id;
+                    
+                    if (tabsForRealizations) {
+                        const firstBtn = tabsForRealizations.querySelector('button');
+                        if (firstBtn) {
+                            tabsForRealizations.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                            firstBtn.classList.add('active');
+                        }
+                    }
+                    
+                    loadDetailData('realization_items', activeId);
                 } else {
                     emptyDetailBody();
                 }
@@ -3291,10 +3345,10 @@ async function loadData(entity, title) {
             } else {
                 carTabsBar.style.display = 'none';
                 
-                if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves' || entity === 'realizations')) {
+                if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves')) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
-                    const detailEntity = entity === 'receipts' ? 'receipt_items' : (entity === 'moves' ? 'move_items' : 'realization_items');
+                    const detailEntity = entity === 'receipts' ? 'receipt_items' : 'move_items';
                     loadDetailData(detailEntity, activeId);
                 } else {
                     emptyDetailBody();
@@ -3378,6 +3432,23 @@ function getCurrentDetailEntity() {
     }
     if (currentEntity === 'counterparties') {
         return 'counterparty_contacts'; 
+    }
+    if (currentEntity === 'realizations') {
+        if (typeof currentRealizationSubTab !== 'undefined' && currentRealizationSubTab) return currentRealizationSubTab;
+
+        const activeTab = document.querySelector('#tabs-for-realizations button.active');
+        if (activeTab) {
+            const onclickAttr = activeTab.getAttribute('onclick') || '';
+            const match = onclickAttr.match(/(?:loadDetailData|switchRealizationTab)\(['"]([^'"]+)['"]/);
+            if (match && match[1]) {
+                return match[1];
+            }
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) {
+                return dataTab;
+            }
+        }
+        return 'realization_items'; 
     }
     if (currentEntity === 'customers') {
         // Проверяем сохраненную переменную текущей вкладки покупателя
@@ -3649,7 +3720,6 @@ async function postReceipt(receiptId) {
 
 
 const tableBody = document.getElementById('table-body');
-
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -3665,6 +3735,7 @@ tableBody.addEventListener('click', async (e) => {
     const tabsForCars = document.getElementById('tabs-for-cars');
     const tabsForAccidents = document.getElementById('tabs-for-accidents');
     const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
+    const tabsForRealizations = document.getElementById('tabs-for-realizations');
     const detailContainer = document.getElementById('detail-container');
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -3691,6 +3762,7 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             if (detailContainer) detailContainer.style.display = 'flex';
             
             loadDetailData('car_details', selectedItem.id);
@@ -3699,6 +3771,7 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForCars) tabsForCars.style.display = 'flex';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             if (detailContainer) detailContainer.style.display = 'flex';
             
             const activeCarTab = document.querySelector('.car-tab-btn.active') || document.querySelector('.car-tab-btn');
@@ -3714,6 +3787,7 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             if (detailContainer) detailContainer.style.display = 'flex';
 
             const activeAccidentTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
@@ -3736,6 +3810,7 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             if (detailContainer) detailContainer.style.display = 'flex';
 
             const activeRepairTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
@@ -3753,10 +3828,28 @@ tableBody.addEventListener('click', async (e) => {
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = 'repair_items';
                 loadDetailData('repair_items', selectedItem.id);
             }
+        } else if (currentEntity === 'realizations') {
+            if (carTabsPanel) carTabsPanel.style.display = 'flex';
+            if (tabsForCars) tabsForCars.style.display = 'none';
+            if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+            if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+            if (detailContainer) detailContainer.style.display = 'flex';
+
+            const activeRealizationTab = document.querySelector('#tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations .realization-tab-btn');
+            if (activeRealizationTab) {
+                const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
+                if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
+                loadDetailData(subTabName, selectedItem.id);
+            } else {
+                if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = 'realization_items';
+                loadDetailData('realization_items', selectedItem.id);
+            }
         } else {
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             
             // Включаем панель переключателей для receipts, moves, а теперь и для customers (покупателей)
             if (carTabsPanel) {
@@ -3820,7 +3913,6 @@ tableBody.addEventListener('dblclick', (e) => {
     }
 });
 
-
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
@@ -3848,6 +3940,24 @@ function switchCustomerTab(tabName, btnElement) {
         }
     }
 }
+
+
+function switchRealizationTab(tabName, btnElement) {
+    document.querySelectorAll('.realization-tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (btnElement) {
+        btnElement.classList.add('active');
+    }
+
+    const detailToolbar = document.getElementById('detail-toolbar');
+    if (detailToolbar) {
+        detailToolbar.style.display = 'none';
+    }
+
+    if (selectedItem && selectedItem.id) {
+        loadDetailData(tabName, selectedItem.id);
+    }
+}
+
 
 function switchCarTab(tabName, btnElement) {
     document.querySelectorAll('.car-tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -3945,8 +4055,7 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}
-async function loadDetailData(entity, parentId) {
+}async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -3973,6 +4082,8 @@ async function loadDetailData(entity, parentId) {
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
+    } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations') {
+        queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
         queryParamName = 'repair_id'; 
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
@@ -4095,6 +4206,8 @@ async function loadDetailData(entity, parentId) {
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
             move_items: 'Спецификация перемещения',
+            realization_items: 'Спецификация реализации',
+            realization_payments: 'Платежи реализации',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
@@ -4113,6 +4226,8 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'repair_id') {
                 titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+            } else if (queryParamName === 'realization_id') {
+                titleElement.innerText = `Реализация (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (entity === 'stock_batches') {
                 titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
@@ -4246,7 +4361,9 @@ const navMap = {
     'Изображения ДТП':'accident_images',
     'Скидки на запчасти': 'part_discounts',
     'Скидки на услуги': 'service_discounts',
-    'Реализация':'realizations'
+    'Реализация':'realizations',
+    'Запчасти реализации': 'realization_items',
+    'Услуги реализации': 'realization_works'
 };
 
 function updateFilterPanels(entity) {
@@ -4277,9 +4394,11 @@ document.querySelectorAll('.nav-link').forEach(link => {
         updateFilterPanels(entity);
 
         const detailContainer = document.getElementById('detail-container');
-        const carTabsBar = document.getElementById('car-tabs-bar'); 
+        const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs');
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
@@ -4292,11 +4411,24 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers') {
+        if (
+            entity === 'receipts' || 
+            entity === 'moves' || 
+            entity === 'cars' || 
+            entity === 'car_cards' || 
+            entity === 'accidents' || 
+            entity === 'repairs' || 
+            entity === 'realizations' || 
+            entity === 'stock_balances' || 
+            entity === 'stock_movement' || 
+            entity === 'postavhik' || 
+            entity === 'counterparties' || 
+            entity === 'customers'
+        ) {
             if (detailContainer) detailContainer.style.display = 'flex';
             
             if (carTabsBar) {
-                if (entity === 'car_cards' || entity === 'accidents') {
+                if (entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'realizations') {
                     carTabsBar.style.display = 'flex';
                 } else {
                     carTabsBar.style.display = 'none';
@@ -4306,12 +4438,28 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (entity === 'car_cards') {
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             } else if (entity === 'accidents') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+            } else if (entity === 'repairs') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+            } else if (entity === 'realizations') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             }
         } else {
             if (detailContainer) detailContainer.style.display = 'none';
@@ -4321,7 +4469,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
