@@ -2511,13 +2511,15 @@ router.get('/realizations', async (req, res) => {
     }
 });
 
-
 // Получить список запчастей для конкретной реализации
 router.get('/realization_items', async (req, res) => {
     const { realization_id } = req.query;
     try {
         const query = `
             SELECT ri.*, 
+                   COALESCE(ri.name, z.name) AS name,
+                   COALESCE(ri.article, z.article) AS article,
+                   COALESCE(ri.code, z.code) AS code,
                    COALESCE(ri.name, z.name) AS zaphasti_name,
                    COALESCE(ri.article, z.article) AS zaphasti_article,
                    COALESCE(ri.code, z.code) AS zaphasti_code
