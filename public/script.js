@@ -1842,9 +1842,9 @@ function closeDrawer() {
         if (entity === 'repair_items' && col.field === 'receipt_id') return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
-        // Оставляем в realization_items только: zaphasti_id (Запчасть), quantity (Количество), price (Цена реализации), description (Описание)
+        // Для realization_items оставляем нужные поля для ввода в форме добавления/редактирования строки
         if (entity === 'realization_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+            const allowedFields = ['zaphasti_id', 'quantity', 'purchase_price', 'retail_price', 'price', 'discount', 'description', 'income_document_id'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -1938,7 +1938,14 @@ function closeDrawer() {
                         displayName = `Авто #${refItem.id}`;
                     }
                 } else {
-                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                    // Красивое отображение для запчастей (артикул + наименование)
+                    if (referenceName === 'zaphasti') {
+                        const art = refItem.article ? `[${refItem.article}] ` : '';
+                        const nm = refItem.name || refItem.title || '';
+                        displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                    } else {
+                        displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                    }
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
@@ -2012,7 +2019,7 @@ function closeDrawer() {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
 
-    // Автозаполнение полей при выборе запчасти для таблицы realization_items (теперь заполняет скрытые/нужные данные на бэкенд)
+    // Автозаполнение полей при выборе запчасти для таблицы realization_items
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
@@ -2024,8 +2031,17 @@ function closeDrawer() {
                     const itemData = await response.json();
                     
                     const priceInput = formElement.querySelector('[name="price"]');
+                    const retailPriceInput = formElement.querySelector('[name="retail_price"]');
+                    const purchasePriceInput = formElement.querySelector('[name="purchase_price"]');
+                    
                     if (priceInput && itemData.retail_price !== undefined && !priceInput.value) {
                         priceInput.value = itemData.retail_price;
+                    }
+                    if (retailPriceInput && itemData.retail_price !== undefined && !retailPriceInput.value) {
+                        retailPriceInput.value = itemData.retail_price;
+                    }
+                    if (purchasePriceInput && itemData.purchase_price !== undefined && !purchasePriceInput.value) {
+                        purchasePriceInput.value = itemData.purchase_price;
                     }
                 }
             } catch (err) {
@@ -2306,7 +2322,6 @@ function closeDrawer() {
         }
     });
 }
-
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
