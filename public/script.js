@@ -1639,6 +1639,8 @@ realization_items: {
         { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', insert: false, update: false, table: true }
     ],
     render: (item) => {
+        if (!item) return '';
+
         const qty = Number(item.quantity) || 1;
         const price = Number(item.price) || 0;
         const totalSum = Number(item.total_rub) || (qty * price);
@@ -1655,11 +1657,12 @@ realization_items: {
         const incomeDoc = item.income_document_id || '';
 
         return `
+            <td></td> <!-- Пустая ячейка под скрытую колонку zaphasti_id, чтобы сходилось количество -->
             <td>${article}</td>
             <td>${code}</td>
             <td><b>${name}</b></td>
-            <td>${qty}</td>
-            <td>${unit}</td>
+            <td style="text-align: right;">${qty}</td>
+            <td style="text-align: center;">${unit}</td>
             <td style="text-align: right;">${purchasePrice}</td>
             <td style="text-align: right;">${retailPrice}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
