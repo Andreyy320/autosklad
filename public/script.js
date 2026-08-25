@@ -1621,10 +1621,10 @@ realizations: {
         `;
     }
 },
- realization_items = {
+realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        { field: 'zaphasti_id', label: 'Товар', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
+        { field: 'zaphasti_id', label: 'Товар (Партия / запчасть)', ref: 'zaphasti', type: 'select', formatRef: (item) => `${item.article || ''} - ${item.name || ''}`.trim() },
         { field: 'quantity', label: 'Кол-во', type: 'number' },
         { field: 'unit', label: 'Ед. изм', type: 'text' },
         { field: 'purchase_price', label: 'Цена закупка', type: 'number' },
@@ -1638,7 +1638,11 @@ realizations: {
         const qty = item.quantity || 1;
         const price = item.price || 0;
         const discount = item.discount || 0;
-        // Считаем сумму с учетом скидки (если скидка в процентах или абсолютная — по аналогии с остальным проектом)
+        const purchasePrice = Number(item.purchase_price || 0).toFixed(2);
+        const retailPrice = Number(item.retail_price || 0).toFixed(2);
+        const realizationPrice = Number(price).toFixed(2);
+        
+        // Расчет итоговой суммы (с учетом скидки, если она задана)
         const sum = (qty * price) - discount;
 
         return `
@@ -1647,10 +1651,10 @@ realizations: {
             <td><b>${item.name || item.zaphasti_name || '—'}</b></td>
             <td>${qty}</td>
             <td>${item.unit || 'шт'}</td>
-            <td style="text-align: right;">${Number(item.purchase_price || 0).toFixed(2)}</td>
-            <td style="text-align: right;">${Number(item.retail_price || 0).toFixed(2)}</td>
-            <td style="text-align: right; color: #2563eb; font-weight: 500;">${Number(price).toFixed(2)}</td>
-            <td style="text-align: right;">${Number(discount).toFixed(2)}</td>
+            <td style="text-align: right;">${purchasePrice}</td>
+            <td style="text-align: right;">${retailPrice}</td>
+            <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
+            <td style="text-align: right;">${discount ? Number(discount).toFixed(2) : ''}</td>
             <td style="text-align: right; font-weight: bold;">${Number(sum).toFixed(2)}</td>
             <td>${item.description || ''}</td>
             <td>${item.receipt_doc || ''}</td>
