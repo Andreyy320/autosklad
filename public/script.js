@@ -4773,7 +4773,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
@@ -4913,7 +4912,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
-            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
+            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail'];
             
             if (readOnlyMainEntities.includes(entity)) {
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
@@ -4993,41 +4992,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
-document.querySelectorAll('.accordion-header').forEach(header => {
-    header.addEventListener('click', () => {
-        const content = header.nextElementSibling;
-        if (!content) return;
-
-        const isOpen = content.style.display === 'flex';
-
-        document.querySelectorAll('.accordion-content').forEach(item => {
-            item.style.display = 'none';
-        });
-
-        if (!isOpen) {
-            content.style.display = 'flex';
-        }
-    });
-});
-
-// Добавленная логика переключения вкладок нижней панели «Запчасть» / «Услуга» для Приходов
-document.querySelectorAll('#tabs-for-money-receipts button').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('#tabs-for-money-receipts button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        // Определяем какую сущность грузить в зависимости от нажатой кнопки
-        const detailEntity = btn.getAttribute('data-tab') || 'money_receipts_detail';
-
-        // Если в верхней таблице выбрана строка (например, клиент), перезагружаем детали
-        if (typeof selectedItem !== 'undefined' && selectedItem) {
-            loadDetailData(detailEntity, selectedItem);
-        }
-    });
-});
-
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
