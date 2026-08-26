@@ -3419,15 +3419,15 @@ router.get('/money_receipts', async (req, res) => {
         const query = `
             SELECT 
                 c.id AS customer_id,
-                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty_name,
-                'Продажа запчастей' AS income_category,
-                COUNT(DISTINCT real.id) AS total_orders,
-                SUM(ri.quantity) AS total_quantity,
-                SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
-                SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
-                SUM(ri.total_rub) AS total_realization_sum,
-                sk.name AS cashbox,
-                MAX(real.is_posted) AS is_posted
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
+                'Продажа запчастей'::text AS income_category,
+                COUNT(DISTINCT real.id)::integer AS total_orders,
+                SUM(ri.quantity)::numeric AS total_quantity,
+                SUM(ri.purchase_price * ri.quantity)::numeric AS total_purchase_sum,
+                SUM(ri.retail_price * ri.quantity)::numeric AS total_retail_sum,
+                SUM(ri.total_rub)::numeric AS total_realization_sum,
+                sk.name::text AS cashbox,
+                MAX(real.is_posted)::boolean AS is_posted
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             JOIN realization_items ri ON real.id = ri.realization_id
@@ -3439,7 +3439,7 @@ router.get('/money_receipts', async (req, res) => {
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error('Ошибка в /money_receipts:', err);
         res.status(500).json({ error: 'Ошибка при получении аналитики по покупателям' });
     }
 });
