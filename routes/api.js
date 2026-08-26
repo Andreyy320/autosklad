@@ -2776,9 +2776,6 @@ router.delete('/realization_items/:id', async (req, res) => {
 
 
 
-
-
-
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
 router.get('/realization_works', async (req, res) => {
     const { realization_id } = req.query;
@@ -2808,7 +2805,7 @@ router.post('/realization_works', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Узнаем клиента реализации для применения его скидки
+        // 1. Узнаем клиента реализации
         const realizationRes = await client.query(
             `SELECT customer_id FROM realizations WHERE id = $1`, 
             [realization_id]
@@ -2832,15 +2829,15 @@ router.post('/realization_works', async (req, res) => {
         const work = workRes.rows[0];
         const retailPrice = Number(work.price) || 0; // Базовая розница из справочника
 
-        // 3. Узнаем скидку клиента
+        // 3. Узнаем скидку клиента НА УСЛУГИ из service_discounts по полю discount_services из customers
         let discountPercent = 0;
         let discountText = 'Розница (0%)';
 
         if (customer_id) {
             const cdRes = await client.query(`
-                SELECT pd.name, pd.discount_percent 
+                SELECT sd.name, sd.discount_percent 
                 FROM customers c
-                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                LEFT JOIN service_discounts sd ON c.discount_services = sd.name
                 WHERE c.id = $1
             `, [customer_id]);
             
@@ -2855,7 +2852,7 @@ router.post('/realization_works', async (req, res) => {
         const realizationPrice = Number((retailPrice * (1 - discountPercent / 100)).toFixed(2));
         const total_rub = Number((requestedQty * realizationPrice).toFixed(2));
 
-        // 5. Вставляем в базу с учетом vidy_rabot_id
+        // 5. Вставляем в базу
         const insertQuery = `
             INSERT INTO realization_works (
                 realization_id, vidy_rabot_id, name, quantity, retail_price, price, discount, total_rub, description
@@ -2871,7 +2868,7 @@ router.post('/realization_works', async (req, res) => {
             requestedQty, 
             retailPrice,          // Розница из справочника
             realizationPrice,     // Реализация со скидкой
-            discountText,         // Скидка
+            discountText,         // Текст скидки
             total_rub,            // Сумма РУБ
             description
         ];

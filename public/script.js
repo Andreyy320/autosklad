@@ -1790,6 +1790,7 @@ function closeDrawer() {
     }
 
 }
+
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -1818,7 +1819,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ДТП-';
         } else if (entity === 'repairs' || entity === 'repair_items' || entity === 'repair_works') {
             prefix = 'РЕМ-';
-        } else if (entity === 'realizations' || entity === 'realization_items') {
+        } else if (entity === 'realizations' || entity === 'realization_items' || entity === 'realization_works') {
             prefix = 'РЛ-';
         }
 
@@ -1888,9 +1889,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (entity === 'repair_items' && col.field === 'receipt_id') return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
         
-        // Жесткая фильтрация полей для realization_items (оставляем запчасть, количество, цену реализации и описание)
+        // Жесткая фильтрация полей для realization_items
         if (entity === 'realization_items') {
             const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+            if (!allowedFields.includes(col.field)) {
+                return '';
+            }
+        }
+
+        // Жесткая фильтрация полей для realization_works (услуга, количество, цена реализации, описание)
+        if (entity === 'realization_works') {
+            const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -1997,7 +2006,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : ''));
+            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : (col.field === 'vidy_rabot_id' ? 'id="vidy-rabot-select"' : '')));
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -2063,8 +2072,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+    const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
 
-    // Автозаполнение цены реализации при выборе запчасти
+    // Автозаполнение цены при выборе запчасти
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
@@ -2084,6 +2094,30 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             } catch (err) {
                 console.error('Ошибка при автозаполнении данных запчасти:', err);
+            }
+        });
+    }
+
+    // Автозаполнение цены реализации при выборе услуги (vidy_rabot)
+    if (vidyRabotSelect) {
+        vidyRabotSelect.addEventListener('change', async () => {
+            const selectedWorkId = vidyRabotSelect.value;
+            if (!selectedWorkId) return;
+
+            try {
+                const response = await fetch(`/api/vidy_rabot/${selectedWorkId}`);
+                if (response.ok) {
+                    const workData = await response.json();
+                    const priceInput = formElement.querySelector('[name="price"]');
+                    
+                    const targetPrice = workData.price !== undefined ? workData.price : workData.retail_price;
+
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
+                        priceInput.value = targetPrice;
+                    }
+                }
+            } catch (err) {
+                console.error('Ошибка при автозаполнении данных услуги:', err);
             }
         });
     }
@@ -2226,7 +2260,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'receipt_items', 'move_items', 'realization_items', 'accident_invoices', 
+                                'receipt_items', 'move_items', 'realization_items', 'realization_works', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'repair_items', 'repair_works', 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2277,6 +2311,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         } else if (entity === 'move_items' && parentId) {
             data.move_id = parentId; 
         } else if (entity === 'realization_items' && parentId) {
+            data.realization_id = parentId;
+        } else if (entity === 'realization_works' && parentId) {
             data.realization_id = parentId;
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
             data.dtp_id = parentId;
@@ -2334,7 +2370,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
                 const detailEntities = [
-                    'receipt_items', 'move_items', 'realization_items', 'accident_invoices', 
+                    'receipt_items', 'move_items', 'realization_items', 'realization_works', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'repair_items', 'repair_works', 'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
