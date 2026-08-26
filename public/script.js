@@ -4462,14 +4462,18 @@ async function loadDetailData(entity, parentId) {
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            // Поддерживаем как customer_id, так и id из таблицы customers
             customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || parentId.client_id || '';
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || ''; 
         } else {
             customerId = parentId;
         }
         
-        fetchUrl = `/api/money_receipts_detail?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        // Исправление: если customerId пустой, а skladId есть, запрашиваем детали по складу, чтобы не падала ошибка 500
+        if (!customerId && skladId) {
+            fetchUrl = `/api/money_receipts_detail?sklad_id=${skladId}`;
+        } else {
+            fetchUrl = `/api/money_receipts_detail?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
     } else if (entity === 'counterparty_contacts') {
