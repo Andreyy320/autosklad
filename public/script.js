@@ -4517,7 +4517,10 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}async function loadDetailData(entity, parentId) {
+}
+
+
+async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -4613,7 +4616,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works_detail') {
+    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_detail') {
         let customerId = '';
         let skladId = '';
 
@@ -4624,8 +4627,11 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             customerId = parentId;
         }
         
-        // Определяем нужный эндпоинт в зависимости от активной вкладки
-        const apiRoute = activeEntity === 'money_receipts_works_detail' ? 'money_receipts_works_detail' : 'money_receipts_detail';
+        // Исправлено: жестко проверяем строку без пробелов
+        let apiRoute = 'money_receipts_detail';
+        if (activeEntity === 'money_receipts_works_detail' || entity === 'money_receipts_works_detail') {
+            apiRoute = 'money_receipts_works_detail';
+        }
 
         if (!customerId && skladId) {
             fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
@@ -4798,7 +4804,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
