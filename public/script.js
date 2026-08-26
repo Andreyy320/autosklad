@@ -897,7 +897,6 @@ part_movement_details: {
         `;
     }
 },
-
 stock_batches: {
     title: 'Партии товара',
     columns: [
@@ -910,11 +909,17 @@ stock_batches: {
         { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
         { field: 'purchase_price', label: 'Цена закуп.', width: '90px', align: 'right' },
-        { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
+        { field: 'currency', label: 'Валюта', width: '80px', align: 'center' },
+        { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' }
     ],
     render: (item) => {
         if (!item) return '';
         let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
+        
+        // Берем готовое значение от бэкенда либо вычисляем на лету, если бэкенд еще не перезапущен
+        let rawPurchasePrice = item.purchase_price !== undefined ? Number(item.purchase_price) : 0;
+        let retailPrice = item.retail_price !== undefined ? item.retail_price : (rawPurchasePrice * 1.3).toFixed(2);
+
         return `
             <td>${item.artikul || ''}</td>
             <td style="text-align: center;">${item.code || ''}</td>
@@ -924,8 +929,9 @@ stock_batches: {
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold; color: #0044cc;">${item.qty !== undefined ? item.qty : 0}</td>
             <td style="text-align: center;">${item.unit || 'шт'}</td>
-            <td style="text-align: right;">${item.purchase_price !== undefined ? item.purchase_price : 0}</td>
+            <td style="text-align: right;">${rawPurchasePrice}</td>
             <td style="text-align: center;">${item.currency || ''}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">${retailPrice}</td>
         `;
     }
 },
