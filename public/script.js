@@ -1676,8 +1676,48 @@ realization_items: {
             <td>${incomeDoc}</td>
         `;
     }
+},
+realization_works: {
+    title: 'Спецификация услуг',
+    columns: [
+        // Поле выбора услуги со ссылкой на справочник vidy_rabot (в самой таблице не выводится, нужно для модалки добавления)
+        { field: 'vidy_rabot_id', label: 'Услуга', ref: 'vidy_rabot', table: false },
+        
+        { field: 'name', label: 'Наименование', width: '220px', table: true },
+        { field: 'quantity', label: 'Кол-во', width: '80px', type: 'number', table: true },
+        { field: 'retail_price', label: 'Розница', width: '90px', type: 'number', table: true },
+        { field: 'price', label: 'Реализация', width: '95px', type: 'number', table: true },
+        { field: 'discount', label: 'Скидка', width: '100px', type: 'text', table: true },
+        { field: 'total_rub', label: 'Сумма РУБ', width: '85px', table: true },
+        { field: 'description', label: 'Описание', width: '130px', type: 'textarea', table: true }
+    ],
+    
+    render: (item) => {
+        if (!item) return '';
+
+        const qty = Number(item.quantity) || 1;
+        const retailPrice = Number(item.retail_price || 0).toFixed(2);
+        const realizationPrice = Number(item.price || 0).toFixed(2);
+        const totalSum = Number(item.total_rub || 0).toFixed(2);
+        
+        const name = item.name || '—';
+        const discountText = item.discount || '';
+
+        return `
+            <td><b>${name}</b></td>
+            <td style="text-align: right;">${qty}</td>
+            <td style="text-align: right;">${retailPrice}</td>
+            <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
+            <td>${discountText}</td>
+            <td style="text-align: right; font-weight: bold;">${totalSum}</td>
+            <td>${item.description || ''}</td>
+        `;
+    }
 }
 }
+
+
+
 function getConfig(entity) {
     if (tableConfig[entity]) {
         return tableConfig[entity];
