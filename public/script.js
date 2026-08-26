@@ -4505,6 +4505,8 @@ function switchRepairTab(tabName, btnElement) {
 let currentMoneyReceiptSubTab = 'money_receipts_detail';
 
 function switchMoneyReceiptTab(tabName, btnElement) {
+    console.log(' [switchMoneyReceiptTab] НАЧАЛО переключения таба:', { tabName, selectedItem });
+    
     currentMoneyReceiptSubTab = tabName; 
 
     const container = document.getElementById('tabs-for-money-receipts');
@@ -4514,6 +4516,9 @@ function switchMoneyReceiptTab(tabName, btnElement) {
     if (btnElement) {
         btnElement.classList.add('active');
         btnElement.setAttribute('data-tab', tabName);
+        console.log(' [switchMoneyReceiptTab] Активная кнопка установлена:', tabName);
+    } else {
+        console.warn(' [switchMoneyReceiptTab] btnElement не передан!');
     }
 
     const detailToolbar = document.getElementById('detail-toolbar');
@@ -4521,16 +4526,18 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         detailToolbar.style.display = 'flex';
     }
 
-    // Делаем точно так же, как во всех остальных вкладках: передаем объект с нужными ID,
-    // который функция loadDetailData умеет правильно разбирать.
     if (selectedItem) {
         const payload = {
             customer_id: selectedItem.customer_id || selectedItem.id,
             sklad_id: selectedItem.sklad_id || window.currentSkladId || ''
         };
+        console.log(' [switchMoneyReceiptTab] Сформирован payload для загрузки:', payload);
 
+        // Вызываем загрузку и логируем прямо перед вызовом
+        console.log(` [switchMoneyReceiptTab] Вызываем loadDetailData для сущности: ${tabName}`);
         loadDetailData(tabName, payload);
     } else {
+        console.warn(' [switchMoneyReceiptTab] ОШИБКА: selectedItem отсутствует (ничего не выбрано в верхней таблице)!');
         const detailBody = document.getElementById('detail-body');
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите запись в верхней таблице</td></tr>`;
