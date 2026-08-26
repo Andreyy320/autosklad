@@ -1657,7 +1657,9 @@ realization_items: {
         const name = item.name || '—';
         const unit = item.unit || 'шт';
         const discountText = item.discount || '';
-        const incomeDoc = item.income_document_id || '';
+        
+        // Меняем здесь: берем готовый текст из бэкенда (income_document), а не ID
+        const incomeDoc = item.income_document || '—';
 
         return `
             <td>${article}</td>
@@ -1676,7 +1678,6 @@ realization_items: {
     }
 }
 }
-
 function getConfig(entity) {
     if (tableConfig[entity]) {
         return tableConfig[entity];
