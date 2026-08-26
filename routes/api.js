@@ -3412,7 +3412,30 @@ router.delete('/realization_works/:id', async (req, res) => {
 });
 
 
-
+router.get('/money_receipts_by_sklad', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                sk.id AS id,
+                sk.id AS sklad_id,
+                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
+                COUNT(DISTINCT real.id)::integer AS total_orders,
+                SUM(ri.quantity)::numeric AS total_qty,
+                SUM(ri.total_rub)::numeric AS total_realization_sum
+            FROM realizations real
+            JOIN realization_items ri ON real.id = ri.realization_id
+            LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            WHERE real.is_posted = true
+            GROUP BY sk.id, sk.name
+            ORDER BY total_realization_sum DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения аналитики по складам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 
 router.get('/money_receipts', async (req, res) => {
     try {
