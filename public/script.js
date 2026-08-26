@@ -1723,14 +1723,15 @@ realization_works: {
 
 
 money_receipts: {
-    title: 'Аналитика приходов по покупателям (закупка, розница, скидка)',
+    title: 'Аналитика продаж по покупателям и складам',
     columns: [
-        { field: 'counterparty_name', label: 'Покупатель', width: '220px' },
-        { field: 'total_orders', label: 'Заказов', width: '90px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '100px', align: 'right' },
-        { field: 'total_purchase_sum', label: 'Закупка (руб)', width: '130px', align: 'right' },
-        { field: 'total_retail_sum', label: 'Розница (руб)', width: '130px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Сумма со скидкой', width: '140px', align: 'right' }
+        { field: 'counterparty_name', label: 'Покупатель', width: '200px' },
+        { field: 'sklad_name', label: 'Склад списания', width: '150px' },
+        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
+        { field: 'total_purchase_sum', label: 'Закупка', width: '110px', align: 'right' },
+        { field: 'total_retail_sum', label: 'Розница', width: '110px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Итог со скидкой', width: '130px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
@@ -1740,6 +1741,7 @@ money_receipts: {
 
         return `
             <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
+            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center;">${item.total_orders || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
             <td style="text-align: right; color: #666;">${purchaseSum} ₽</td>
