@@ -3215,6 +3215,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title) {
     currentEntity = entity;
     selectedItem = null;
@@ -4345,7 +4346,8 @@ async function loadDetailData(entity, parentId) {
             'stock_batches', 
             'stock_balances', 
             'car_general',
-            'money_receipts'
+            'money_receipts',
+            'money_receipts_detail'
         ];
 
         if (readOnlyEntities.includes(entity)) {
@@ -4355,7 +4357,13 @@ async function loadDetailData(entity, parentId) {
         }
     }
 
-    const config = getConfig(entity); 
+    // Если передан 'money_receipts', подменяем на конфиг и логику детализации для нижней таблицы
+    let activeEntity = entity;
+    if (activeEntity === 'money_receipts') {
+        activeEntity = 'money_receipts_detail';
+    }
+
+    const config = getConfig(activeEntity); 
     const tbody = document.getElementById('detail-body');
     const headerTr = document.getElementById('detail-headers'); 
     
@@ -4398,7 +4406,6 @@ async function loadDetailData(entity, parentId) {
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'money_receipts') {
-        // Исправлено: добавлен префикс /api/ и передача sklad_id на бэкенд
         let customerId = '';
         let skladId = '';
 
@@ -4504,14 +4511,15 @@ async function loadDetailData(entity, parentId) {
             realization_items: 'Спецификация реализации',
             realization_works: 'Спецификация услуг',
             realization_payments: 'Платежи реализации',
-            money_receipts: 'Детализация: купленные товары и услуги',
+            money_receipts: 'Аналитика продаж по покупателям и складам',
+            money_receipts_detail: 'Детализация: купленные товары и услуги',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
             customer_cars: 'Автомобили клиента',
             car_details: 'Детали автомобиля'
         };
-        const prettyEntityName = entityTitles[entity] || config.title || entity;
+        const prettyEntityName = entityTitles[activeEntity] || config.title || activeEntity;
 
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
@@ -4525,8 +4533,8 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'realization_id') {
                 titleElement.innerText = `Реализация (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
-            } else if (entity === 'money_receipts') {
-                titleElement.innerText = `Детализация по покупателю — Купленные товары и услуги | Позиций: ${items.length}`;
+            } else if (activeEntity === 'money_receipts_detail') {
+                titleElement.innerText = `Детализация: купленные товары и услуги | Позиций: ${items.length}`;
             } else if (entity === 'stock_batches') {
                 titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
@@ -4545,7 +4553,7 @@ async function loadDetailData(entity, parentId) {
             return;
         }
 
-        if ((entity === 'repair_history' || entity === 'car_general') && typeof config.render === 'function') {
+        if ((activeEntity === 'repair_history' || activeEntity === 'car_general') && typeof config.render === 'function') {
             tbody.innerHTML = config.render(items);
         } else {
             tbody.innerHTML = '';
@@ -4571,7 +4579,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
