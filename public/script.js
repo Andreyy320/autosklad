@@ -3748,6 +3748,9 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
+
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -4124,7 +4127,6 @@ async function postReceipt(receiptId) {
     );
 }
 
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4158,7 +4160,7 @@ tableBody.addEventListener('click', async (e) => {
             currentEntity === 'money_receipts' ||
             currentEntity === 'money_receipts_by_sklad' ||
             currentEntity === 'money_receipts_detail' ||
-            currentEntity === 'money_receipts_works'
+            currentEntity === 'money_receipts_works_detail'
         ) {
             actionButtonsBar.style.display = 'none';
         } else {
@@ -4246,12 +4248,20 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
             if (detailContainer) detailContainer.style.display = 'flex';
 
+            // Переключаем видимость самих панелей вкладок в интерфейсе
+            const realizationsTabs = document.getElementById('tabs-for-realizations');
+            const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
+            
+            if (realizationsTabs) realizationsTabs.style.display = (currentEntity === 'realizations') ? 'flex' : 'none';
+            if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts') ? 'flex' : 'none';
+
             if (currentEntity === 'money_receipts_by_sklad') {
-                // Провал из списка складов в список покупателей выбранного склада
                 loadData('money_receipts', `Покупатели склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
             } else if (currentEntity === 'money_receipts') {
-                const activeMoneyTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
+                // Берем активную вкладку через data-tab с защитой от ошибок
+                const activeMoneyTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
                 const subTabName = activeMoneyTab ? (activeMoneyTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
+                
                 if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
 
                 loadDetailData(subTabName, {
@@ -4259,6 +4269,9 @@ tableBody.addEventListener('click', async (e) => {
                     sklad_id: selectedItem.sklad_id
                 });
             } else {
+                if (realizationsTabs) realizationsTabs.style.display = 'flex';
+                if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
+
                 const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
                 if (activeRealizationTab) {
                     const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
@@ -4275,6 +4288,9 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             
+            const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
+            if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
+
             if (carTabsPanel) {
                 carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
             }
@@ -4293,7 +4309,6 @@ tableBody.addEventListener('click', async (e) => {
         }
     }
 });
-
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
