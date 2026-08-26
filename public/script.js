@@ -4205,7 +4205,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4215,7 +4214,13 @@ tableBody.addEventListener('click', async (e) => {
     tr.style.background = '#e2e8f0';
 
     const id = tr.getAttribute('data-id');
-    selectedItem = currentItems.find(i => i.id == id);
+    
+    if (currentEntity === 'money_receipts') {
+        selectedItem = currentItems.find(i => i.id == id || i.customer_id == id);
+    } else {
+        selectedItem = currentItems.find(i => i.id == id);
+    }
+    
     selectedDetailItem = null;  
 
     console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
