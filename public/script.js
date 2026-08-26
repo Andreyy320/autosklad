@@ -3758,7 +3758,6 @@ let selectedDetailItem = null;
 let currentDetailItems = []; 
 
 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3785,7 +3784,14 @@ function getCurrentDetailEntity() {
         return ''; // Верхний уровень складов детализации не требует
     }
     if (currentEntity === 'money_receipts') {
-        // Сначала проверяем data-tab у активной кнопки (самый точный способ)
+        // Сначала проверяем глобальную переменную состояния (самый быстрый и надежный способ для тумблеров)
+        if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
+            if (currentMoneyReceiptSubTab === 'realization_works') return 'money_receipts_works_detail';
+            if (currentMoneyReceiptSubTab === 'realization_items') return 'money_receipts_detail';
+            return currentMoneyReceiptSubTab;
+        }
+
+        // Затем проверяем data-tab у активной кнопки
         const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
@@ -3795,8 +3801,6 @@ function getCurrentDetailEntity() {
                 return dataTab;
             }
         }
-
-        if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) return currentMoneyReceiptSubTab;
 
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
