@@ -4215,13 +4215,24 @@ tableBody.addEventListener('click', async (e) => {
 
     const id = tr.getAttribute('data-id');
     
+    // НАДЕЖНЫЙ ПОИСК: Сначала ищем по стандартному id, если нет — пробуем по customer_id или sklad_id, либо по индексу строки
     if (currentEntity === 'money_receipts') {
         selectedItem = currentItems.find(i => i.id == id || i.customer_id == id);
+    } else if (currentEntity === 'money_receipts_by_sklad') {
+        selectedItem = currentItems.find(i => i.id == id || i.sklad_id == id);
     } else {
         selectedItem = currentItems.find(i => i.id == id);
     }
+
+    // Если всё еще не нашли по ID, попробуем определить элемент по порядковому номеру строки в таблице
+    if (!selectedItem) {
+        const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
+        if (rowIndex >= 0 && currentItems[rowIndex]) {
+            selectedItem = currentItems[rowIndex];
+        }
+    }
     
-    selectedDetailItem = null;  
+    selectedDetailItem =  null;  
 
     console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
