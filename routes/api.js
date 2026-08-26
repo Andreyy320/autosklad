@@ -2542,6 +2542,7 @@ router.get('/realizations', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении реализаций' });
     }
 });
+
 // ==================== ПОЛУЧИТЬ СПИСОК ЗАПЧАСТЕЙ РЕАЛИЗАЦИИ ====================
 router.get('/realization_items', async (req, res) => {
     const { realization_id } = req.query;
@@ -2554,9 +2555,17 @@ router.get('/realization_items', async (req, res) => {
                    COALESCE(ri.unit, z.unit, 'шт') AS unit,
                    COALESCE(ri.quantity, 1) AS quantity,
                    COALESCE(ri.price, 0) AS price,
-                   COALESCE(ri.total_rub, 0) AS total_rub
+                   COALESCE(ri.total_rub, 0) AS total_rub,
+                   COALESCE(
+                       CASE 
+                           WHEN r.fact_date IS NOT NULL THEN CONCAT(r.doc_number, ' от ', TO_CHAR(r.fact_date, 'DD.MM.YYYY HH24:MI'))
+                           ELSE r.doc_number
+                       END, 
+                       '—'
+                   ) AS income_document
             FROM realization_items ri
             LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            LEFT JOIN receipts r ON ri.income_document_id = r.id
             WHERE ri.realization_id = $1
             ORDER BY ri.id DESC
         `;
