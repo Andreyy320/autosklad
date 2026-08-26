@@ -3050,7 +3050,6 @@ router.get('/realization_works', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении услуг реализации' });
     }
 });
-
 // ==================== ДОБАВИТЬ УСЛУГУ В РЕАЛИЗАЦИЮ ====================
 router.post('/realization_works', async (req, res) => {
     const { realization_id, vidy_rabot_id, quantity, price: userPrice, description } = req.body;
@@ -3059,9 +3058,9 @@ router.post('/realization_works', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Узнаем клиента реализации
+        // 1. Узнаем клиента и статус проведения реализации с блокировкой строки
         const realizationRes = await client.query(
-            `SELECT customer_id FROM realizations WHERE id = $1`, 
+            `SELECT customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`, 
             [realization_id]
         );
         
@@ -3070,7 +3069,14 @@ router.post('/realization_works', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { customer_id } = realizationRes.rows[0];
+        const { customer_id, is_posted } = realizationRes.rows[0];
+
+        // Проверяем, проведена ли реализация
+        if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя добавлять услуги в уже проведенную реализацию!' });
+        }
+
         const requestedQty = Number(quantity) || 1;
 
         // 2. Берем наименование и базовую розничную цену из справочника видов работ (vidy_rabot)
@@ -3163,14 +3169,36 @@ router.put('/realization_works/:id', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Услуга в реализации не найдена' });
         }
-        const currentWork = existingWorkRes.rows.fetchone || existingWorkRes.rows[0];
+        const currentWork = existingWorkRes.rows[0];
+
+        // Проверяем статус исходной реализации
+        const sourceRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [currentWork.realization_id]);
+        if (sourceRealizationCheck.rows.length > 0) {
+            const { is_posted } = sourceRealizationCheck.rows[0];
+            if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя изменять услуги в уже проведенной реализации!' });
+            }
+        }
 
         // Определяем реализацию (если realization_id не передан в теле, берем из существующей записи)
         const targetRealizationId = realization_id || currentWork.realization_id;
 
-        // 2. Узнаем клиента реализации
+        // Если целевая реализация отличается от исходной, проверяем её статус
+        if (targetRealizationId !== currentWork.realization_id) {
+            const targetRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [targetRealizationId]);
+            if (targetRealizationCheck.rows.length > 0) {
+                const { is_posted } = targetRealizationCheck.rows[0];
+                if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Нельзя переносить услуги в уже проведенную реализацию!' });
+                }
+            }
+        }
+
+        // 2. Узнаем клиента и статус проведения реализации с блокировкой
         const realizationRes = await client.query(
-            `SELECT customer_id FROM realizations WHERE id = $1`, 
+            `SELECT customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`, 
             [targetRealizationId]
         );
         
@@ -3179,7 +3207,14 @@ router.put('/realization_works/:id', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { customer_id } = realizationRes.rows[0];
+        const { customer_id, is_posted } = realizationRes.rows[0];
+
+        // Дополнительная проверка статуса целевой реализации
+        if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять услуги в уже проведенной реализации!' });
+        }
+
         const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentWork.quantity);
         const targetVidyRabotId = vidy_rabot_id !== undefined ? vidy_rabot_id : currentWork.vidy_rabot_id;
 
@@ -3265,7 +3300,6 @@ router.put('/realization_works/:id', async (req, res) => {
         client.release();
     }
 });
-
 // ==================== УДАЛИТЬ УСЛУГУ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_works/:id', async (req, res) => {
     const { id } = req.params;
