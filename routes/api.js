@@ -3414,7 +3414,7 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
-
+// Роут для отображения журнала приходов и реализаций
 router.get('/money_receipts', async (req, res) => {
     try {
         const query = `
@@ -3457,7 +3457,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при получении данных' });
     }
 });
-
 
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
