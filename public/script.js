@@ -4503,7 +4503,8 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             'car_general',
             'money_receipts',
             'money_receipts_by_sklad',
-            'money_receipts_detail'
+            'money_receipts_detail',
+            'money_receipts_works_detail'
         ];
 
         if (readOnlyEntities.includes(entity)) {
@@ -4519,20 +4520,27 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     }
 
+    // Если entity базовый, подменяем для проверки конфига на запчасти по умолчанию
+    let checkEntity = entity;
+    if (checkEntity === 'money_receipts') {
+        checkEntity = 'money_receipts_detail';
+    }
+
     // Защита от отправки запроса с пустым ID (предотвращает ошибку 500 в PostgreSQL)
-    const configCheck = getConfig(entity === 'money_receipts' ? 'money_receipts_detail' : entity); 
+    const configCheck = getConfig(checkEntity); 
     const tbodyCheck = document.getElementById('detail-body');
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
-    if (!cleanParentId && !['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail'].includes(entity)) {
+    const allowedWithoutId = ['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
+    if (!cleanParentId && !allowedWithoutId.includes(entity)) {
         if (tbodyCheck) {
             tbodyCheck.innerHTML = `<tr><td colspan="${colCountCheck}" style="text-align: center; color: #888; padding: 20px;">Выберите элемент в верхней таблице</td></tr>`;
         }
         return;
     }
 
-    // Если передан 'money_receipts', подменяем на конфиг и логику детализации для нижней таблицы
+    // Если передан 'money_receipts', по умолчанию открываем запчасти ('money_receipts_detail')
     let activeEntity = entity;
     if (activeEntity === 'money_receipts') {
         activeEntity = 'money_receipts_detail';
@@ -4580,7 +4588,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail') {
+    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works_detail') {
         let customerId = '';
         let skladId = '';
 
@@ -4591,11 +4599,13 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             customerId = parentId;
         }
         
-        // Исправление: если customerId пустой, а skladId есть, запрашиваем детали по складу, чтобы не падала ошибка 500
+        // Определяем нужный эндпоинт в зависимости от активной вкладки
+        const apiRoute = activeEntity === 'money_receipts_works_detail' ? 'money_receipts_works_detail' : 'money_receipts_detail';
+
         if (!customerId && skladId) {
-            fetchUrl = `/api/money_receipts_detail?sklad_id=${skladId}`;
+            fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
         } else {
-            fetchUrl = `/api/money_receipts_detail?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+            fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
         }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
@@ -4693,7 +4703,8 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             realization_payments: 'Платежи реализации',
             money_receipts: 'Аналитика продаж по покупателям и складам',
             money_receipts_by_sklad: 'Склады',
-            money_receipts_detail: 'Детализация: купленные товары и услуги',
+            money_receipts_detail: 'Детализация: купленные товары',
+            money_receipts_works_detail: 'Детализация: оказанные услуги',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
@@ -4715,7 +4726,9 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             } else if (queryParamName === 'realization_id') {
                 titleElement.innerText = `Реализация (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (activeEntity === 'money_receipts_detail') {
-                titleElement.innerText = `Детализация: купленные товары и услуги | Позиций: ${items.length}`;
+                titleElement.innerText = `Детализация: купленные товары | Позиций: ${items.length}`;
+            } else if (activeEntity === 'money_receipts_works_detail') {
+                titleElement.innerText = `Детализация: оказанные услуги | Позиций: ${items.length}`;
             } else if (entity === 'stock_batches') {
                 titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
@@ -4760,6 +4773,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
@@ -4899,7 +4913,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
-            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail'];
+            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
             
             if (readOnlyMainEntities.includes(entity)) {
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
@@ -4979,6 +4993,41 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
+
+document.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', () => {
+        const content = header.nextElementSibling;
+        if (!content) return;
+
+        const isOpen = content.style.display === 'flex';
+
+        document.querySelectorAll('.accordion-content').forEach(item => {
+            item.style.display = 'none';
+        });
+
+        if (!isOpen) {
+            content.style.display = 'flex';
+        }
+    });
+});
+
+// Добавленная логика переключения вкладок нижней панели «Запчасть» / «Услуга» для Приходов
+document.querySelectorAll('#tabs-for-money-receipts button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#tabs-for-money-receipts button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Определяем какую сущность грузить в зависимости от нажатой кнопки
+        const detailEntity = btn.getAttribute('data-tab') || 'money_receipts_detail';
+
+        // Если в верхней таблице выбрана строка (например, клиент), перезагружаем детали
+        if (typeof selectedItem !== 'undefined' && selectedItem) {
+            loadDetailData(detailEntity, selectedItem);
+        }
+    });
+});
+
+
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
