@@ -3242,10 +3242,7 @@ async function applyMovementFilters() {
 async function loadData(entity, title, customParams = {}) {
     currentEntity = entity;
     selectedItem = null;
-    
-    // Подменяем сущность запроса для API, если это уровень складов приходов
-    const apiEntity = (entity === 'money_receipts_by_sklad') ? 'warehouses' : entity;
-    const config = getConfig(apiEntity);
+    const config = getConfig(entity);
 
     const filterPanel = document.getElementById('parts-filter-panel');
     if (filterPanel) {
@@ -3305,9 +3302,10 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     try {
-        let url = `/api/${apiEntity}`;
+        let url = `/api/${entity}`;
         const params = new URLSearchParams();
 
+        // Поддержка кастомных параметров (например, sklad_id при проваливании в покупателей склада)
         for (const [key, value] of Object.entries(customParams)) {
             if (value !== undefined && value !== '') {
                 params.append(key, value);
@@ -3431,9 +3429,8 @@ async function loadData(entity, title, customParams = {}) {
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                     loadDetailData(detailEntity, item.id);
                 } else if (entity === 'money_receipts_by_sklad') {
-                    const skladId = item.id || item.sklad_id;
-                    const skladName = item.name || item.sklad_name || 'Склад';
-                    loadData('money_receipts', `Покупатели склада: ${skladName}`, { sklad_id: skladId });
+                    // Клик по складу: проваливаемся внутрь — загружаем покупателей этого склада в эту же верхнюю таблицу
+                    loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
                 } else if (entity === 'money_receipts') {
                     loadDetailData('money_receipts_detail', {
                         customer_id: item.customer_id,
