@@ -3410,7 +3410,6 @@ router.delete('/realization_works/:id', async (req, res) => {
         client.release();
     }
 });
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3419,20 +3418,26 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(SUM(ri.quantity), 0)::numeric AS total_qty,
-                COALESCE(SUM(ri.total_rub), 0)::numeric AS parts_sum,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
                 COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                (COALESCE(SUM(ri.total_rub), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
+                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
             FROM realizations real
-            LEFT JOIN realization_items ri ON real.id = ri.realization_id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            -- Подзапрос для точного суммирования запчастей и количества по складу
+            LEFT JOIN (
+                SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
+                FROM realization_items ri
+                GROUP BY ri.realization_id
+            ) sub_i ON real.id = sub_i.realization_id
+            -- Подзапрос для точного суммирования услуг по складу
             LEFT JOIN (
                 SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
-            GROUP BY sk.id, sk.name, sub_w.works_sum
+            GROUP BY sk.id, sk.name, sub_i.total_qty, sub_i.parts_sum, sub_w.works_sum
             ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query);

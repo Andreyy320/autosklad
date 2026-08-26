@@ -1719,24 +1719,29 @@ realization_works: {
         `;
     }
 },
-
 money_receipts_by_sklad: {
     title: 'Аналитика продаж по складам',
     columns: [
-        { field: 'sklad_name', label: 'Склад', width: '300px' },
-        { field: 'total_orders', label: 'Всего заказов', width: '120px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '120px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Общий доход (итого)', width: '150px', align: 'right' }
+        { field: 'sklad_name', label: 'Склад', width: '220px' },
+        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
+        { field: 'parts_sum', label: 'Запчасти ', width: '110px', align: 'right' },
+        { field: 'works_sum', label: 'Услуги ', width: '110px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Общая ', width: '120px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
+        const partsSum = Number(item.parts_sum || 0).toFixed(2);
+        const worksSum = Number(item.works_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
 
         return `
             <td><span style="color: #0284c7; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center;">${item.total_orders || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum} </td>
+            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
+            <td style="text-align: right; color: #0284c7;">${worksSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum}</td>
         `;
     }
 },
