@@ -3498,7 +3498,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_works_detail', async (req, res) => {
     try {
         const { customer_id, sklad_id } = req.query;
@@ -3508,13 +3507,13 @@ router.get('/money_receipts_works_detail', async (req, res) => {
                 rw.id,
                 real.doc_number::text AS doc_number,
                 real.doc_date AS date,
-                rw.title::text AS work_name,
+                rw.name::text AS work_name,
                 rw.quantity::numeric AS quantity,
-                rw.price::numeric AS retail_price,
+                rw.retail_price::numeric AS retail_price,
                 rw.price::numeric AS final_unit_price,
-                'Розница (0%)'::text AS discount_label,
+                COALESCE(rw.discount, 'Розница (0%)')::text AS discount_label,
                 rw.total_sum::numeric AS total_rub,
-                ''::text AS description
+                COALESCE(rw.description, '')::text AS description
             FROM realization_works rw
             JOIN realizations real ON rw.realization_id = real.id
             WHERE real.is_posted = true 
@@ -3526,16 +3525,10 @@ router.get('/money_receipts_works_detail', async (req, res) => {
         const result = await pool.query(query, [customer_id, sklad_id || null]);
         res.json(result.rows);
     } catch (err) {
-        // ВЫВОДИМ ПОЛНЫЙ ОБЪЕКТ ОШИБКИ И САМО ИМЯ КОЛОНКИ/ТАБЛИЦЫ
-        console.error('--- ОШИБКА В SQL ЗАПРОСЕ ---');
-        console.error('Сообщение:', err.message);
-        console.error('Детали (какая колонка/таблица упала):', err.column || err.table || err.where);
-        console.error('Полный объект ошибки:', err);
-        
+        console.error('Ошибка при получении детальных услуг:', err.message);
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
