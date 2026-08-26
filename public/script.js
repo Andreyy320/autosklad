@@ -910,8 +910,7 @@ stock_batches: {
         { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
         { field: 'purchase_price', label: 'Цена закуп.', width: '90px', align: 'right' },
         { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' },
-                { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
-
+        { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
     ],
     render: (item) => {
         if (!item) return '';
@@ -931,8 +930,8 @@ stock_batches: {
             <td style="text-align: right; font-weight: bold; color: #0044cc;">${item.qty !== undefined ? item.qty : 0}</td>
             <td style="text-align: center;">${item.unit || 'шт'}</td>
             <td style="text-align: right;">${rawPurchasePrice}</td>
-            <td style="text-align: center;">${item.currency || ''}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">${retailPrice}</td>
+            <td style="text-align: center;">${item.currency || ''}</td>
         `;
     }
 },
