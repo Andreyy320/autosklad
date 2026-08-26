@@ -3600,8 +3600,16 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'realizations') {
         if (typeof currentRealizationSubTab !== 'undefined' && currentRealizationSubTab) return currentRealizationSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-realizations button.active');
+        const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .active');
         if (activeTab) {
+            const text = activeTab.innerText.trim().toLowerCase();
+            if (text.includes('услуг') || text.includes('работ')) {
+                return 'realization_works';
+            }
+            if (text.includes('запчаст')) {
+                return 'realization_items';
+            }
+
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchRealizationTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
@@ -3612,6 +3620,12 @@ function getCurrentDetailEntity() {
                 return dataTab;
             }
         }
+
+        const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
+        if (activeText.toLowerCase().includes('услуг')) {
+            return 'realization_works';
+        }
+
         return 'realization_items'; 
     }
     if (currentEntity === 'customers') {
@@ -3675,7 +3689,6 @@ function getCurrentDetailEntity() {
     }
     return 'receipt_items';
 }
-
 
 function openDetailForm(mode) {
     if (!selectedItem) {
