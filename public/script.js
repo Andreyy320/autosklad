@@ -929,7 +929,6 @@ stock_batches: {
         `;
     }
 },
-
 stock_movement: {
     title: 'Движение запчастей',
     columns: [
