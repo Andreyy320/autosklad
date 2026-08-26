@@ -2819,6 +2819,7 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
+
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -3417,7 +3418,9 @@ async function loadData(entity, title) {
                         }
                     }
                     
-                    loadDetailData('realization_items', activeId);
+                    const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+                    loadDetailData(detailEntity, activeId);
                 } else {
                     emptyDetailBody();
                 }
@@ -3571,6 +3574,7 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3878,7 +3882,6 @@ async function postReceipt(receiptId) {
     );
 }
 
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -3996,7 +3999,7 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
             if (detailContainer) detailContainer.style.display = 'flex';
 
-            const activeRealizationTab = document.querySelector('#tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations .realization-tab-btn');
+            const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
             if (activeRealizationTab) {
                 const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
                 if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
@@ -4011,7 +4014,6 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             
-            // Включаем панель переключателей для receipts, moves, а теперь и для customers (покупателей)
             if (carTabsPanel) {
                 carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
             }
@@ -4030,7 +4032,6 @@ tableBody.addEventListener('click', async (e) => {
         }
     }
 });
-
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -4258,7 +4259,6 @@ async function loadDetailData(entity, parentId) {
     } else if (entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') {
         queryParamName = 'dtp_id'; 
     } else if (entity === 'accident_images') {
-        // Определяем откуда открыто: если текущий заголовок или контекст относится к машине, используем car_id
         const isCarContext = document.getElementById('detail-title')?.innerText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
         queryParamName = isCarContext ? 'car_id' : 'accident_id'; 
     } else if (entity === 'stock_batches') {
@@ -4442,7 +4442,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
