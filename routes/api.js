@@ -3510,8 +3510,11 @@ router.get('/money_receipts_works_detail', async (req, res) => {
                 real.doc_date AS date,
                 rw.title::text AS work_name,
                 rw.quantity::numeric AS quantity,
-                rw.price::numeric AS unit_price,
-                rw.total_sum::numeric AS total_rub
+                rw.price::numeric AS retail_price,
+                rw.price::numeric AS final_unit_price,
+                'Розница (0%)'::text AS discount_label,
+                rw.total_sum::numeric AS total_rub,
+                ''::text AS description
             FROM realization_works rw
             JOIN realizations real ON rw.realization_id = real.id
             WHERE real.is_posted = true 
