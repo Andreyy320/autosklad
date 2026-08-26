@@ -1590,8 +1590,6 @@ router.get('/repair_history', async (req, res) => {
 });
 
 
-
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (СУММАРНО ПО СКЛАДАМ) ====================
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (СУММАРНО ПО СКЛАДАМ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
@@ -1603,6 +1601,7 @@ router.get('/stock_balances', async (req, res) => {
         let dateConditionReceipts = '';
         let dateConditionMoves = '';
         let dateConditionRepairs = '';
+        let dateConditionRealizations = '';
 
         // Фильтр по дате: берем всё С выбранной даты и до текущего момента (>=)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
@@ -1611,6 +1610,7 @@ router.get('/stock_balances', async (req, res) => {
             dateConditionReceipts = `AND r.date >= $${paramIndex}::timestamp`;
             dateConditionMoves = `AND m.date >= $${paramIndex}::timestamp`;
             dateConditionRepairs = `AND rep.doc_date >= $${paramIndex}::timestamp`;
+            dateConditionRealizations = `AND r_rel.doc_date >= $${paramIndex}::timestamp`; // Учитываем дату документа реализации
             paramIndex++;
         }
 
@@ -1681,6 +1681,19 @@ router.get('/stock_balances', async (req, res) => {
                 JOIN repairs rep ON rep_i.repair_id = rep.id
                 WHERE rep.warehouse_id IS NOT NULL ${dateConditionRepairs}
                 GROUP BY rep_i.zaphast_id, rep.warehouse_id, rep.mol_id
+
+                UNION ALL
+
+                -- 5. Расход по реализациям (продажи запчастей со складов)
+                SELECT 
+                    ri_rel.zaphasti_id,
+                    r_rel.sklad_id AS warehouse_id,
+                    r_rel.mol_id,
+                    -SUM(ri_rel.quantity) as qty
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                WHERE r_rel.sklad_id IS NOT NULL ${dateConditionRealizations}
+                GROUP BY ri_rel.zaphasti_id, r_rel.sklad_id, r_rel.mol_id
             ),
             aggregated_stocks AS (
                 -- Схлопываем всё строго по связке: Товар + Склад + МОЛ
@@ -1691,7 +1704,7 @@ router.get('/stock_balances', async (req, res) => {
                     SUM(qty) AS total_qty
                 FROM warehouse_stocks
                 GROUP BY zaphasti_id, warehouse_id, mol_id
-                HAVING SUM(qty) > 0 -- Показываем только то, что есть в наличии (> 0)
+                having SUM(qty) > 0 -- Показываем только то, что есть в наличии (> 0)
             )
             SELECT 
                 z.id,
