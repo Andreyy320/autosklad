@@ -908,7 +908,6 @@ router.get('/moves', async (req, res) => {
 });
 
 
-
 router.get('/move_items', async (req, res) => {
     try {
         const moveId = req.query.move_id;
@@ -916,6 +915,8 @@ router.get('/move_items', async (req, res) => {
         let query = `
             SELECT 
                 mi.*, 
+                -- Подтягиваем цену из прихода, если документ прихода указан, иначе оставляем цену из move_items
+                COALESCE(ri_orig.price, mi.price, 0) AS price,
                 z.name AS zaphasti_name, 
                 z.code AS zaphasti_code,
                 z.article AS zaphasti_article,
@@ -931,6 +932,8 @@ router.get('/move_items', async (req, res) => {
             LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
             LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
             LEFT JOIN receipts r ON mi.income_document_id = r.id
+            -- Джойним конкретную строку прихода, чтобы взять точную закупочную цену партии
+            LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
         `;
         
         const params = [];
