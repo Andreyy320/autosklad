@@ -2074,7 +2074,6 @@ router.get('/stock_movement', async (req, res) => {
     }
 });
 
-
 // ==================== ДЕТАЛЬНОЕ ДВИЖЕНИЕ КОНКРЕТНОЙ ЗАПЧАСТИ ====================
 router.get('/part_movement_details', async (req, res) => {
     try {
@@ -2104,7 +2103,8 @@ router.get('/part_movement_details', async (req, res) => {
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
             currentWarehouseId = parseInt(warehouse_id, 10);
             queryParams.push(currentWarehouseId);
-            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int)`;
+            // Для реализации проверяем sklad_id, для остальных — warehouse_from_id / warehouse_to_id / warehouse_id
+            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
             paramIndex++;
         }
 
@@ -2122,7 +2122,8 @@ router.get('/part_movement_details', async (req, res) => {
                     (ri.quantity * COALESCE(ri.price, 0)) AS sum,
                     ri.description,
                     NULL::int AS warehouse_from_id,
-                    r.warehouse_id AS warehouse_to_id
+                    r.warehouse_id AS warehouse_to_id,
+                    NULL::int AS sklad_id
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
                 LEFT JOIN counterparties k ON r.supplier_id = k.id
@@ -2134,7 +2135,6 @@ router.get('/part_movement_details', async (req, res) => {
                 UNION ALL
 
                 -- 2. Перемещения (Склад-источник -> Склад-получатель)
-                -- Если выбран конкретный склад и он источник -> МИНУС (ушло). Если получатель -> ПЛЮС (пришло).
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2152,7 +2152,8 @@ router.get('/part_movement_details', async (req, res) => {
                     END AS sum,
                     mi.description,
                     m.warehouse_from_id,
-                    m.warehouse_to_id
+                    m.warehouse_to_id,
+                    NULL::int AS sklad_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
@@ -2165,7 +2166,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Ремонты / Расход (Склад -> Автомобиль) — ВСЕГДА МИНУС (списание)
+                -- 3. Ремонты / Расход (Склад -> Автомобиль) — ВСЕГДА МИНУС
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2177,7 +2178,8 @@ router.get('/part_movement_details', async (req, res) => {
                     (-1 * ri_rep.quantity * COALESCE(ri_rep.price, 0)) AS sum,
                     ri_rep.description,
                     rep.warehouse_id AS warehouse_from_id,
-                    NULL::int AS warehouse_to_id
+                    NULL::int AS warehouse_to_id,
+                    NULL::int AS sklad_id
                 FROM repair_items ri_rep
                 JOIN repairs rep ON ri_rep.repair_id = rep.id
                 LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
@@ -2185,6 +2187,30 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
                 LEFT JOIN cars car ON rep.car_id = car.id
                 WHERE ri_rep.zaphast_id = $1
+
+                UNION ALL
+
+                -- 4. Реализации (Продажи) (Склад -> Покупатель) — ВСЕГДА МИНУС
+                SELECT 
+                    COALESCE(r_rel.doc_date, NOW()) AS op_date,
+                    CAST(r_rel.id AS VARCHAR) AS doc_num,
+                    'Реализация' AS doc_type,
+                    CONCAT(COALESCE(s_rel.name, 'Склад'), ' | ', COALESCE(u_rel.name, 'МОЛ')) AS source_info,
+                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
+                    (-1 * ri_rel.quantity) AS qty,
+                    COALESCE(ri_rel.purchase_price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum,
+                    ri_rel.description,
+                    r_rel.sklad_id AS warehouse_from_id,
+                    NULL::int AS warehouse_to_id,
+                    r_rel.sklad_id AS sklad_id
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
+                LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
+                LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
+                LEFT JOIN customers cust ON r_rel.customer_id = cust.id
+                WHERE ri_rel.zaphasti_id = $1
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2200,7 +2226,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
