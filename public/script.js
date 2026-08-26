@@ -4496,8 +4496,7 @@ async function loadDetailData(entity, parentId) {
             'car_general',
             'money_receipts',
             'money_receipts_by_sklad',
-            'money_receipts_detail',
-            'money_receipts_works'
+            'money_receipts_detail'
         ];
 
         if (readOnlyEntities.includes(entity)) {
@@ -4507,7 +4506,13 @@ async function loadDetailData(entity, parentId) {
         }
     }
 
-    // Если передан 'money_receipts' без конкретного подтипа, по умолчанию берем детализацию товаров
+    // Защита от [object Object]: если parentId пришел как объект, вытаскиваем из него реальный ID
+    let cleanParentId = parentId;
+    if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details'].includes(entity)) {
+        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || '';
+    }
+
+    // Если передан 'money_receipts', подменяем на конфиг и логику детализации для нижней таблицы
     let activeEntity = entity;
     if (activeEntity === 'money_receipts') {
         activeEntity = 'money_receipts_detail';
@@ -4555,7 +4560,7 @@ async function loadDetailData(entity, parentId) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works') {
+    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail') {
         let customerId = '';
         let skladId = '';
 
@@ -4566,13 +4571,11 @@ async function loadDetailData(entity, parentId) {
             customerId = parentId;
         }
         
-        // Поддерживаем раздельный эндпоинт для услуг прихода денег, если активна соответствующая вкладка
-        const endpointTarget = (activeEntity === 'money_receipts_works') ? 'money_receipts_works' : 'money_receipts_detail';
-
+        // Исправление: если customerId пустой, а skladId есть, запрашиваем детали по складу, чтобы не падала ошибка 500
         if (!customerId && skladId) {
-            fetchUrl = `/api/${endpointTarget}?sklad_id=${skladId}`;
+            fetchUrl = `/api/money_receipts_detail?sklad_id=${skladId}`;
         } else {
-            fetchUrl = `/api/${endpointTarget}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+            fetchUrl = `/api/money_receipts_detail?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
         }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
@@ -4588,12 +4591,12 @@ async function loadDetailData(entity, parentId) {
         if (entity === 'accident_images') {
             const isCarContext = document.getElementById('detail-title')?.innerText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
             if (isCarContext) {
-                fetchUrl = `/api/accident_images?car_id=${parentId}`;
+                fetchUrl = `/api/accident_images?car_id=${cleanParentId}`;
             } else {
-                fetchUrl = `/api/accident_images?accident_id=${parentId}`;
+                fetchUrl = `/api/accident_images?accident_id=${cleanParentId}`;
             }
         } else {
-            fetchUrl = `/api/${entity}?${queryParamName}=${parentId}`;
+            fetchUrl = `/api/${entity}?${queryParamName}=${cleanParentId}`;
         }
     }
         
@@ -4670,8 +4673,7 @@ async function loadDetailData(entity, parentId) {
             realization_payments: 'Платежи реализации',
             money_receipts: 'Аналитика продаж по покупателям и складам',
             money_receipts_by_sklad: 'Склады',
-            money_receipts_detail: 'Детализация: купленные товары',
-            money_receipts_works: 'Детализация: оказанные услуги',
+            money_receipts_detail: 'Детализация: купленные товары и услуги',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
@@ -4683,17 +4685,17 @@ async function loadDetailData(entity, parentId) {
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
             if (queryParamName === 'car_id') {
-                titleElement.innerText = `Автомобиль (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `Автомобиль (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'dtp_id') {
-                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `ДТП (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'accident_id') {
-                titleElement.innerText = `ДТП (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `ДТП (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'repair_id') {
-                titleElement.innerText = `Ремонт (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `Ремонт (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'realization_id') {
-                titleElement.innerText = `Реализация (ID: ${parentId}) — ${prettyEntityName} | Записей: ${items.length}`;
-            } else if (activeEntity === 'money_receipts_detail' || activeEntity === 'money_receipts_works') {
-                titleElement.innerText = `${prettyEntityName} | Позиций: ${items.length}`;
+                titleElement.innerText = `Реализация (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+            } else if (activeEntity === 'money_receipts_detail') {
+                titleElement.innerText = `Детализация: купленные товары и услуги | Позиций: ${items.length}`;
             } else if (entity === 'stock_batches') {
                 titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
@@ -4703,7 +4705,7 @@ async function loadDetailData(entity, parentId) {
             } else if (entity === 'postavhik_contacts' || entity === 'counterparty_contacts' || entity === 'customer_contacts' || entity === 'customer_cars') {
                 titleElement.innerText = `${prettyEntityName} | Записей: ${items.length}`;
             } else {
-                titleElement.innerText = `${prettyEntityName} (Документ №${parentId}) | Позиций: ${items.length}`;
+                titleElement.innerText = `${prettyEntityName} (Документ №${cleanParentId}) | Позиций: ${items.length}`;
             }
         }
         
