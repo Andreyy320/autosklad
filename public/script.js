@@ -4752,7 +4752,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.add('active');
 
         const text = link.innerText.trim();
-        const entity = navMap[text] || text.toLowerCase();
+        let entity = navMap[text] || text.toLowerCase();
+        
+        // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
+        if (entity === 'money_receipts') {
+            entity = 'money_receipts_by_sklad';
+        }
         
         updateFilterPanels(entity);
 
@@ -4765,7 +4770,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
-            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts'];
+            const readOnlyMainEntities = ['stock_balances', 'stock_movement', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail'];
             
             if (readOnlyMainEntities.includes(entity)) {
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
@@ -4783,6 +4788,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity === 'repairs' || 
             entity === 'realizations' || 
             entity === 'money_receipts' || 
+            entity === 'money_receipts_by_sklad' ||
             entity === 'stock_balances' || 
             entity === 'stock_movement' || 
             entity === 'postavhik' || 
@@ -4792,7 +4798,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (detailContainer) detailContainer.style.display = 'flex';
             
             if (carTabsBar) {
-                if (entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'realizations' || entity === 'money_receipts') {
+                if (entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                     carTabsBar.style.display = 'flex';
                 } else {
                     carTabsBar.style.display = 'none';
@@ -4814,7 +4820,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            } else if (entity === 'realizations' || entity === 'money_receipts') {
+            } else if (entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
