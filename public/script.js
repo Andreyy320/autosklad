@@ -4506,10 +4506,23 @@ async function loadDetailData(entity, parentId) {
         }
     }
 
-    // Безопасное извлечение ID, если передали объект, и сохранение исходного parentId для заголовков
+    // Безопасное извлечение ID, если передан объект
     let cleanParentId = parentId;
     if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details'].includes(entity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
+    }
+
+    // Защита от отправки запроса с пустым ID (предотвращает ошибку 500 в PostgreSQL)
+    const configCheck = getConfig(entity === 'money_receipts' ? 'money_receipts_detail' : entity); 
+    const tbodyCheck = document.getElementById('detail-body');
+    const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
+    const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
+
+    if (!cleanParentId && !['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail'].includes(entity)) {
+        if (tbodyCheck) {
+            tbodyCheck.innerHTML = `<tr><td colspan="${colCountCheck}" style="text-align: center; color: #888; padding: 20px;">Выберите элемент в верхней таблице</td></tr>`;
+        }
+        return;
     }
 
     // Если передан 'money_receipts', подменяем на конфиг и логику детализации для нижней таблицы
