@@ -4504,7 +4504,11 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         detailToolbar.style.display = 'flex';
     }
 
-    if (selectedItem) {
+    // Универсально вытаскиваем ID независимо от того, как он называется в объекте
+    const itemId = selectedItem ? (selectedItem.id || selectedItem.customer_id || selectedItem.sklad_id) : null;
+
+    if (itemId) {
+        // Передаем в loadDetailData нужный идентификатор
         loadDetailData(tabName, selectedItem);
     } else {
         const detailBody = document.getElementById('detail-body');
@@ -4513,7 +4517,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     }
 }
-
 
     const detailBody = document.getElementById('detail-body');
 
