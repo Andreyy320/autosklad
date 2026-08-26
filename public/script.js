@@ -4506,10 +4506,10 @@ async function loadDetailData(entity, parentId) {
         }
     }
 
-    // Защита от [object Object]: если parentId пришел как объект, вытаскиваем из него реальный ID
+    // Безопасное извлечение ID, если передали объект, и сохранение исходного parentId для заголовков
     let cleanParentId = parentId;
     if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details'].includes(entity)) {
-        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || '';
+        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     }
 
     // Если передан 'money_receipts', подменяем на конфиг и логику детализации для нижней таблицы
