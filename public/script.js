@@ -1720,68 +1720,87 @@ realization_works: {
     }
 },
 
-
-
-money_receipts: {
-    title: 'Аналитика продаж по покупателям и складам',
+money_receipts_by_sklad: {
+    title: 'Аналитика продаж по складам',
     columns: [
-        { field: 'counterparty_name', label: 'Покупатель', width: '200px' },
-        { field: 'sklad_name', label: 'Склад списания', width: '150px' },
-        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
-        { field: 'total_purchase_sum', label: 'Закупка', width: '110px', align: 'right' },
-        { field: 'total_retail_sum', label: 'Розница', width: '110px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Итог со скидкой', width: '130px', align: 'right' }
+        { field: 'sklad_name', label: 'Склад', width: '300px' },
+        { field: 'total_orders', label: 'Всего заказов', width: '120px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '120px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Общий доход (итого)', width: '150px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
-        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
-        const retailSum = Number(item.total_retail_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
 
         return `
-            <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
-            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
+            <td><span style="color: #0284c7; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center;">${item.total_orders || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; color: #666;">${purchaseSum} ₽</td>
-            <td style="text-align: right; text-decoration: line-through; color: #999;">${retailSum} ₽</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum} ₽</td>
         `;
     }
 },
 
-money_receipts_detail: {
-    title: 'Детализация: купленные товары и услуги',
-    columns: [
-        { field: 'doc_number', label: 'Документ', width: '100px' },
-        { field: 'product_code', label: 'Код', width: '90px' },
-        { field: 'product_name', label: 'Наименование товара / услуги', width: '240px' },
-        { field: 'quantity', label: 'Кол-во', width: '80px', align: 'center' },
-        { field: 'purchase_price', label: 'Закупка (шт)', width: '110px', align: 'right' },
-        { field: 'retail_price', label: 'Розница (шт)', width: '110px', align: 'right' },
-        { field: 'final_unit_price', label: 'Цена со скидкой', width: '120px', align: 'right' },
-        { field: 'total_rub', label: 'Итого сумма', width: '120px', align: 'right' }
-    ],
-    render: (item) => {
-        const qty = Number(item.quantity || 0).toFixed(2);
-        const purchase = Number(item.purchase_price || 0).toFixed(2);
-        const retail = Number(item.retail_price || 0).toFixed(2);
-        const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
-        const total = Number(item.total_rub || 0).toFixed(2);
+    money_receipts: {
+        title: 'Аналитика продаж по покупателям и складам',
+        columns: [
+            { field: 'counterparty_name', label: 'Покупатель', width: '200px' },
+            { field: 'sklad_name', label: 'Склад списания', width: '150px' },
+            { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
+            { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
+            { field: 'total_purchase_sum', label: 'Закупка', width: '110px', align: 'right' },
+            { field: 'total_retail_sum', label: 'Розница', width: '110px', align: 'right' },
+            { field: 'total_realization_sum', label: 'Итог со скидкой', width: '130px', align: 'right' }
+        ],
+        render: (item) => {
+            const totalQty = Number(item.total_qty || 0).toFixed(2);
+            const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
+            const retailSum = Number(item.total_retail_sum || 0).toFixed(2);
+            const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
 
-        return `
-            <td><b>${item.doc_number || ''}</b></td>
-            <td>${item.product_code || '—'}</td>
-            <td><b>${item.product_name || '—'}</b></td>
-            <td style="text-align: center;">${qty}</td>
-            <td style="text-align: right; color: #666;">${purchase} ₽</td>
-            <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} ₽</td>
-            <td style="text-align: right; color: #0284c7; font-weight: 500;">${finalPrice} ₽</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${total} ₽</td>
-        `;
+            return `
+                <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
+                <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
+                <td style="text-align: center;">${item.total_orders || 0}</td>
+                <td style="text-align: right;">${totalQty}</td>
+                <td style="text-align: right; color: #666;">${purchaseSum} ₽</td>
+                <td style="text-align: right; text-decoration: line-through; color: #999;">${retailSum} ₽</td>
+                <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum} ₽</td>
+            `;
+        }
+    },
+
+    money_receipts_detail: {
+        title: 'Детализация: купленные товары и услуги',
+        columns: [
+            { field: 'doc_number', label: 'Документ', width: '100px' },
+            { field: 'product_code', label: 'Код', width: '90px' },
+            { field: 'product_name', label: 'Наименование товара / услуги', width: '240px' },
+            { field: 'quantity', label: 'Кол-во', width: '80px', align: 'center' },
+            { field: 'purchase_price', label: 'Закупка (шт)', width: '110px', align: 'right' },
+            { field: 'retail_price', label: 'Розница (шт)', width: '110px', align: 'right' },
+            { field: 'final_unit_price', label: 'Цена со скидкой', width: '120px', align: 'right' },
+            { field: 'total_rub', label: 'Итого сумма', width: '120px', align: 'right' }
+        ],
+        render: (item) => {
+            const qty = Number(item.quantity || 0).toFixed(2);
+            const purchase = Number(item.purchase_price || 0).toFixed(2);
+            const retail = Number(item.retail_price || 0).toFixed(2);
+            const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
+            const total = Number(item.total_rub || 0).toFixed(2);
+
+            return `
+                <td><b>${item.doc_number || ''}</b></td>
+                <td>${item.product_code || '—'}</td>
+                <td><b>${item.product_name || '—'}</b></td>
+                <td style="text-align: center;">${qty}</td>
+                <td style="text-align: right; color: #666;">${purchase} ₽</td>
+                <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} ₽</td>
+                <td style="text-align: right; color: #0284c7; font-weight: 500;">${finalPrice} ₽</td>
+                <td style="text-align: right; font-weight: bold; color: #16a34a;">+${total} ₽</td>
+            `;
+        }
     }
-}
 }
 
 
@@ -2895,7 +2914,6 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
-
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -2933,6 +2951,12 @@ async function refreshData() {
             loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId });
         } else if (currentEntity === 'stock_movement') {
             loadDetailData('part_movement_details', selectedItem);
+        } else if (currentEntity === 'money_receipts' && selectedItem.customer_id) {
+            // Обновляем нижнюю детализацию товаров при выборе покупателя в аналитике
+            loadDetailData('money_receipts_detail', {
+                customer_id: selectedItem.customer_id,
+                sklad_id: selectedItem.sklad_id
+            });
         }
     }
 }
@@ -3215,8 +3239,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
-async function loadData(entity, title) {
+async function loadData(entity, title, customParams = {}) {
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
@@ -3248,7 +3271,7 @@ async function loadData(entity, title) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -3263,11 +3286,11 @@ async function loadData(entity, title) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts') {
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -3281,6 +3304,13 @@ async function loadData(entity, title) {
     try {
         let url = `/api/${entity}`;
         const params = new URLSearchParams();
+
+        // Поддержка кастомных параметров (например, sklad_id при проваливании в покупателей склада)
+        for (const [key, value] of Object.entries(customParams)) {
+            if (value !== undefined && value !== '') {
+                params.append(key, value);
+            }
+        }
 
         if (entity === 'stock_balances') {
             const startDateVal = document.getElementById('filter-start-date')?.value || document.getElementById('filter-date')?.value || '';
@@ -3398,8 +3428,14 @@ async function loadData(entity, title) {
                     const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                     loadDetailData(detailEntity, item.id);
+                } else if (entity === 'money_receipts_by_sklad') {
+                    // Клик по складу: проваливаемся внутрь — загружаем покупателей этого склада в эту же верхнюю таблицу
+                    loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
                 } else if (entity === 'money_receipts') {
-                    loadDetailData('money_receipts', item);
+                    loadDetailData('money_receipts_detail', {
+                        customer_id: item.customer_id,
+                        sklad_id: item.sklad_id
+                    });
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3503,13 +3539,18 @@ async function loadData(entity, title) {
                 } else {
                     emptyDetailBody();
                 }
-            } else if (entity === 'money_receipts') {
+            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                 
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    loadDetailData('money_receipts', selectedItem);
+                    if (entity === 'money_receipts') {
+                        loadDetailData('money_receipts_detail', {
+                            customer_id: selectedItem.customer_id,
+                            sklad_id: selectedItem.sklad_id
+                        });
+                    }
                 } else {
                     emptyDetailBody();
                 }
@@ -3663,7 +3704,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     if (currentEntity === 'moves') {
         return 'move_items';
@@ -3687,7 +3727,10 @@ function getCurrentDetailEntity() {
         return 'counterparty_contacts'; 
     }
     if (currentEntity === 'money_receipts') {
-        return 'money_receipts';
+        return 'money_receipts_detail';
+    }
+    if (currentEntity === 'money_receipts_by_sklad') {
+        return ''; // Верхний уровень складов детализации не требует
     }
     if (currentEntity === 'realizations') {
         if (typeof currentRealizationSubTab !== 'undefined' && currentRealizationSubTab) return currentRealizationSubTab;
@@ -3986,7 +4029,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4017,7 +4059,9 @@ tableBody.addEventListener('click', async (e) => {
             currentEntity === 'part_movement_details' ||
             currentEntity === 'car_general' ||
             currentEntity === 'car_cards' ||
-            currentEntity === 'money_receipts'
+            currentEntity === 'money_receipts' ||
+            currentEntity === 'money_receipts_by_sklad' ||
+            currentEntity === 'money_receipts_detail'
         ) {
             actionButtonsBar.style.display = 'none';
         } else {
@@ -4097,7 +4141,7 @@ tableBody.addEventListener('click', async (e) => {
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = 'repair_items';
                 loadDetailData('repair_items', selectedItem.id);
             }
-        } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts') {
+        } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -4105,8 +4149,14 @@ tableBody.addEventListener('click', async (e) => {
             if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
             if (detailContainer) detailContainer.style.display = 'flex';
 
-            if (currentEntity === 'money_receipts') {
-                loadDetailData('money_receipts', selectedItem);
+            if (currentEntity === 'money_receipts_by_sklad') {
+                // Провал из списка складов в список покупателей выбранного склада
+                loadData('money_receipts', `Покупатели склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
+            } else if (currentEntity === 'money_receipts') {
+                loadDetailData('money_receipts_detail', {
+                    customer_id: selectedItem.customer_id,
+                    sklad_id: selectedItem.sklad_id
+                });
             } else {
                 const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
                 if (activeRealizationTab) {
@@ -4173,7 +4223,9 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
         currentEntity === 'repair_history' ||
-        currentEntity === 'money_receipts'
+        currentEntity === 'money_receipts' ||
+        currentEntity === 'money_receipts_by_sklad' ||
+        currentEntity === 'money_receipts_detail'
     ) {
         return; 
     }
@@ -4185,7 +4237,6 @@ tableBody.addEventListener('dblclick', (e) => {
         openEntityForm(currentEntity, item);
     }
 });
-
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
@@ -4347,6 +4398,7 @@ async function loadDetailData(entity, parentId) {
             'stock_balances', 
             'car_general',
             'money_receipts',
+            'money_receipts_by_sklad',
             'money_receipts_detail'
         ];
 
@@ -4405,7 +4457,7 @@ async function loadDetailData(entity, parentId) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'money_receipts') {
+    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail') {
         let customerId = '';
         let skladId = '';
 
@@ -4512,6 +4564,7 @@ async function loadDetailData(entity, parentId) {
             realization_works: 'Спецификация услуг',
             realization_payments: 'Платежи реализации',
             money_receipts: 'Аналитика продаж по покупателям и складам',
+            money_receipts_by_sklad: 'Склады',
             money_receipts_detail: 'Детализация: купленные товары и услуги',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
@@ -4672,7 +4725,8 @@ const navMap = {
     'Запчасти реализации': 'realization_items',
     'Услуги реализации': 'realization_works',
     'Приходы':'money_receipts',
-    'Детали приходов':'money_receipts_detail'
+    'Детали приходов':'money_receipts_detail',
+    'Аналитика по складам':'money_receipts_by_sklad'
 };
 
 function updateFilterPanels(entity) {
