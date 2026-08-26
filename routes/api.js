@@ -1832,7 +1832,7 @@ router.get('/stock_batches', async (req, res) => {
                     -- Реализации (продажи) с этого склада с указанием покупателя (отрицательное кол-во)
                     SELECT 
                         ri_rel.zaphasti_id,
-                        CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name, ')'), '')) AS document_name,
+                        CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name_full, ')'), '')) AS document_name,
                         COALESCE(r_rel.doc_date, NOW()) AS doc_date,
                         ri_rel.description,
                         (-1 * ri_rel.quantity) AS qty,
@@ -1878,7 +1878,7 @@ router.get('/stock_batches', async (req, res) => {
 
                     UNION ALL
 
-                    SELECT ri_rel.zaphasti_id, CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name, ')'), '')) AS document_name, COALESCE(r_rel.doc_date, NOW()) AS doc_date, ri_rel.description, (-1 * ri_rel.quantity) AS qty, ri_rel.purchase_price AS price, 'Рубль ПМР' AS currency
+                    SELECT ri_rel.zaphasti_id, CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name_full, ')'), '')) AS document_name, COALESCE(r_rel.doc_date, NOW()) AS doc_date, ri_rel.description, (-1 * ri_rel.quantity) AS qty, ri_rel.purchase_price AS price, 'Рубль ПМР' AS currency
                     FROM realization_items ri_rel 
                     JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
                     LEFT JOIN customers cust ON r_rel.customer_id = cust.id 
