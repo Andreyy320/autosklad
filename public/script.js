@@ -4503,6 +4503,7 @@ function switchRepairTab(tabName, btnElement) {
     }
 }
 let currentMoneyReceiptSubTab = 'money_receipts_detail';
+
 function switchMoneyReceiptTab(tabName, btnElement) {
     currentMoneyReceiptSubTab = tabName; 
 
@@ -4520,17 +4521,15 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         detailToolbar.style.display = 'flex';
     }
 
+    // Делаем точно так же, как во всех остальных вкладках: передаем объект с нужными ID,
+    // который функция loadDetailData умеет правильно разбирать.
     if (selectedItem) {
-        // ИСПРАВЛЕНИЕ: Формируем точный объект с customer_id и sklad_id (берем из item или ищем в глобальном/кастомном месте)
         const payload = {
             customer_id: selectedItem.customer_id || selectedItem.id,
             sklad_id: selectedItem.sklad_id || window.currentSkladId || ''
         };
 
-        // Получаем правильное имя сущности для запроса (например, money_receipts_works_detail)
-        const detailEntity = getCurrentDetailEntity();
-
-        loadDetailData(detailEntity, payload);
+        loadDetailData(tabName, payload);
     } else {
         const detailBody = document.getElementById('detail-body');
         if (detailBody) {
@@ -4968,7 +4967,10 @@ function updateFilterPanels(entity) {
     } else if (entity === 'stock_movement') {
         movementFilter.style.display = 'flex';
     }
-}document.querySelectorAll('.nav-link').forEach(link => {
+}
+
+
+document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
