@@ -3414,7 +3414,6 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
-// Роут для отображения журнала приходов и реализаций
 router.get('/money_receipts', async (req, res) => {
     try {
         const query = `
@@ -3439,8 +3438,8 @@ router.get('/money_receipts', async (req, res) => {
                 real.doc_number,
                 real.doc_date AS date,
                 cust.name_full AS counterparty_name,
-                'Реализация (продажа)' AS income_category,
-                real.sum_total AS sum_rub,
+                'Продажа запчастей' AS income_category,
+                real.sum_parts AS sum_rub, -- Берем строго сумму по запчастям, исключая работу
                 sk.name AS cashbox,
                 real.description,
                 real.is_posted
