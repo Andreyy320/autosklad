@@ -4565,6 +4565,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -4595,7 +4596,7 @@ async function loadDetailData(entity, parentId) {
 
     // Безопасное извлечение ID, если передан объект
     let cleanParentId = parentId;
-    if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_detail', 'money_receipts_works_detail'].includes(entity) && !['money_receipts_detail', 'money_receipts_works_detail'].includes(activeEntity)) {
+    if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'].includes(entity) && !['money_receipts_detail', 'money_receipts_works_detail'].includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     }
 
@@ -4670,20 +4671,24 @@ async function loadDetailData(entity, parentId) {
 
         if (parentId && typeof parentId === 'object') {
             customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || parentId.client_id || '';
-            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || ''; 
+            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || window.currentSkladId || ''; 
         } else {
             customerId = parentId;
+            skladId = window.currentSkladId || '';
         }
         
+        // Используем activeEntity, чтобы точно знать, запрашиваем мы товары или услуги
         let apiRoute = activeEntity;
         if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
-            apiRoute = 'money_receipts_detail';
+            apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
         }
 
         if (!customerId && skladId) {
             fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
-        } else {
+        } else if (customerId) {
             fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        } else {
+            fetchUrl = `/api/${apiRoute}`;
         }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
