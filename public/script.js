@@ -2947,6 +2947,7 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
+
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -2963,20 +2964,20 @@ async function refreshData() {
         } else if (currentEntity === 'car_cards' && selectedItem.id) {
             const activeTabBtn = document.querySelector('#tabs-for-cars button.active');
             if (activeTabBtn) {
-                loadDetailData('tehosmotr', selectedItem.id); 
+                const detailEntity = activeTabBtn.getAttribute('data-tab') || 'tehosmotr';
+                loadDetailData(detailEntity, selectedItem.id); 
             }
         } else if (currentEntity === 'accidents' && selectedItem.id) {
             loadDetailData('accident_invoices', selectedItem.id);
         } else if (currentEntity === 'repairs' && selectedItem.id) {
             loadDetailData('repair_items', selectedItem.id);
         } else if (currentEntity === 'realizations' && selectedItem.id) {
-            // Обновляем текущую активную вкладку реализации (запчасти или услуги)
             const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
             const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
             loadDetailData(detailEntity, selectedItem.id);
         } else if (currentEntity === 'customers' && selectedItem.id) {
-            // Обновляем текущую активную вкладку покупателя (контакты или автомобили)
-            const detailEntity = typeof currentCustomerSubTab !== 'undefined' ? currentCustomerSubTab : 'customer_contacts';
+            const activeTabBtn = document.querySelector('#tabs-for-customers button.active');
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : (typeof currentCustomerSubTab !== 'undefined' ? currentCustomerSubTab : 'customer_contacts');
             loadDetailData(detailEntity, selectedItem.id);
         } else if (currentEntity === 'stock_balances') {
             const zId = selectedItem.zaphasti_id || selectedItem.id;
@@ -2985,8 +2986,10 @@ async function refreshData() {
         } else if (currentEntity === 'stock_movement') {
             loadDetailData('part_movement_details', selectedItem);
         } else if (currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
-            // Обновляем нижнюю детализацию прихода денег (проверяем какая подвкладка сейчас активна: запчасти или услуги)
-            const detailEntity = typeof currentMoneyReceiptSubTab !== 'undefined' ? currentMoneyReceiptSubTab : 'money_receipts_detail';
+            // Надежное определение активной вкладки (Запчасть / Услуга) прямо из интерфейса
+            const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
+            
             loadDetailData(detailEntity, selectedItem);
         }
     }
@@ -4773,6 +4776,8 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
