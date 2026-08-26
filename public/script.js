@@ -3283,7 +3283,6 @@ async function applyMovementFilters() {
     }
 }
 
-
 async function loadData(entity, title, customParams = {}) {
     currentEntity = entity;
     selectedItem = null;
@@ -3443,7 +3442,7 @@ async function loadData(entity, title, customParams = {}) {
 
         headerTr.innerHTML = headersHtml;
 
-        currentItems.forEach(item => {
+        currentItems.forEach((item, index) => {
             const tr = document.createElement('tr');
             tr.dataset.id = item.id || '';
             tr.style.cursor = 'pointer';
@@ -3479,7 +3478,13 @@ async function loadData(entity, title, customParams = {}) {
                 } else if (entity === 'money_receipts') {
                     const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-                    loadDetailData(detailEntity, item);
+                    
+                    // ИСПРАВЛЕНИЕ: гарантируем передачу объекта с правильными ключами для дочерних запросов
+                    const payload = {
+                        customer_id: item.customer_id || item.id,
+                        sklad_id: item.sklad_id || customParams.sklad_id || ''
+                    };
+                    loadDetailData(detailEntity, payload);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3601,7 +3606,13 @@ async function loadData(entity, title, customParams = {}) {
                     if (entity === 'money_receipts') {
                         const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-                        loadDetailData(detailEntity, selectedItem);
+                        
+                        // ИСПРАВЛЕНИЕ: прокидываем корректный объект с ID покупателя и склада при инициализации
+                        const payload = {
+                            customer_id: selectedItem.customer_id || selectedItem.id,
+                            sklad_id: selectedItem.sklad_id || customParams.sklad_id || ''
+                        };
+                        loadDetailData(detailEntity, payload);
                     }
                 } else {
                     emptyDetailBody();
@@ -3686,6 +3697,14 @@ async function loadData(entity, title, customParams = {}) {
                 } else {
                     emptyDetailBody();
                 }
+            }
+        }
+
+        // Автоматически подсвечиваем первую строку в таблице при загрузке, чтобы состояние было синхронным
+        if (currentItems.length > 0) {
+            const firstRow = tbody.querySelector('tr');
+            if (firstRow) {
+                firstRow.classList.add('selected-row');
             }
         }
 
