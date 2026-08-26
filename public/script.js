@@ -4948,8 +4948,7 @@ function updateFilterPanels(entity) {
     } else if (entity === 'stock_movement') {
         movementFilter.style.display = 'flex';
     }
-}
-document.querySelectorAll('.nav-link').forEach(link => {
+}document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
