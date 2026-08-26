@@ -1896,6 +1896,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
+        // Жесткая фильтрация полей для move_items (убираем цену)
+        if (entity === 'move_items') {
+            const allowedFields = ['zaphasti_id', 'quantity', 'description', 'currency'];
+            if (!allowedFields.includes(col.field)) {
+                return '';
+            }
+        }
+
         // Жесткая фильтрация полей для realization_works (услуга, количество, цена реализации, описание)
         if (entity === 'realization_works') {
             const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
