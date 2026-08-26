@@ -3415,6 +3415,39 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
+
+router.get('/sales-profit-report', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                sd.id AS sale_id,
+                sd.doc_number,
+                sd.doc_date,
+                c.name AS counterparty_name,
+                sd.warehouse_name,
+                si.product_name,
+                si.quantity,
+                si.purchase_price,
+                si.sale_price,
+                (si.quantity * si.purchase_price) AS total_purchase,
+                (si.quantity * si.sale_price) AS total_sale,
+                ((si.sale_price - si.purchase_price) * si.quantity) AS net_profit,
+                sd.status
+            FROM sales_documents sd
+            JOIN counterparties c ON sd.counterparty_id = c.id
+            JOIN sales_items si ON sd.id = si.sale_id
+            ORDER BY sd.doc_date DESC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows); // Отдаем готовые данные в интерфейс для отрисовки таблицы
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка при формировании отчета' });
+    }
+});
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
