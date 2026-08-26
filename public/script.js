@@ -4138,7 +4138,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4272,8 +4271,11 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'money_receipts') {
                 // Берем активную вкладку через data-tab с защитой от ошибок
                 const activeMoneyTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
-                const subTabName = activeMoneyTab ? (activeMoneyTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
+                let subTabName = activeMoneyTab ? (activeMoneyTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
                 
+                if (subTabName === 'realization_items') subTabName = 'money_receipts_detail';
+                if (subTabName === 'realization_works') subTabName = 'money_receipts_works_detail';
+
                 if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
 
                 loadDetailData(subTabName, {
