@@ -2790,7 +2790,6 @@ router.delete('/realization_items/:id', async (req, res) => {
 });
 
 
-
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
 router.get('/realization_works', async (req, res) => {
     const { realization_id } = req.query;
@@ -2814,7 +2813,7 @@ router.get('/realization_works', async (req, res) => {
 
 // ==================== ДОБАВИТЬ УСЛУГУ В РЕАЛИЗАЦИЮ ====================
 router.post('/realization_works', async (req, res) => {
-    const { realization_id, vidy_rabot_id, quantity, description } = req.body;
+    const { realization_id, vidy_rabot_id, quantity, price: userPrice, description } = req.body;
     
     const client = await pool.connect();
     try {
@@ -2863,8 +2862,14 @@ router.post('/realization_works', async (req, res) => {
             }
         }
 
-        // 4. Считаем цену реализации со скидкой и общую сумму
-        const realizationPrice = Number((retailPrice * (1 - discountPercent / 100)).toFixed(2));
+        // 4. Считаем цену реализации (если пользователь ввел вручную — берем её, иначе считаем со скидкой)
+        let realizationPrice;
+        if (userPrice !== undefined && userPrice !== null && String(userPrice).trim() !== '') {
+            realizationPrice = Number(userPrice);
+        } else {
+            realizationPrice = Number((retailPrice * (1 - discountPercent / 100)).toFixed(2));
+        }
+
         const total_rub = Number((requestedQty * realizationPrice).toFixed(2));
 
         // 5. Вставляем в базу
@@ -2881,10 +2886,10 @@ router.post('/realization_works', async (req, res) => {
             vidy_rabot_id,
             work.name, 
             requestedQty, 
-            retailPrice,          // Розница из справочника
-            realizationPrice,     // Реализация со скидкой
-            discountText,         // Текст скидки
-            total_rub,            // Сумма РУБ
+            retailPrice,        // Розница из справочника
+            realizationPrice,   // Цена реализации (ручная или со скидкой)
+            discountText,       // Текст скидки
+            total_rub,          // Сумма РУБ
             description
         ];
 
