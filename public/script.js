@@ -4462,8 +4462,8 @@ async function loadDetailData(entity, parentId) {
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            customerId = parentId.customer_id || '';
-            skladId = parentId.sklad_id || ''; 
+            customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || '';
+            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || ''; 
         } else {
             customerId = parentId;
         }
@@ -4632,7 +4632,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
