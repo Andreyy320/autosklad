@@ -3498,6 +3498,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+// Обязательно должно быть с подчеркиваниями:
 router.get('/money_receipts_works_detail', async (req, res) => {
     try {
         const { customer_id, sklad_id } = req.query;
