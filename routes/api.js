@@ -3418,42 +3418,29 @@ router.get('/money_receipts', async (req, res) => {
     try {
         const query = `
             SELECT 
-                r.id,
-                r.doc_number,
-                r.date AS date,
-                c.name AS counterparty_name,
-                'Приход от поставщика' AS income_category,
-                r.sum_rub AS sum_rub,
-                s.name AS cashbox,
-                r.description,
-                r.is_posted
-            FROM receipts r
-            LEFT JOIN counterparties c ON r.supplier_id = c.id
-            LEFT JOIN skladi s ON r.warehouse_id = s.id
-
-            UNION ALL
-
-            SELECT 
-                real.id,
-                real.doc_number,
-                real.doc_date AS date,
-                cust.name_full AS counterparty_name,
+                c.id AS customer_id,
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty_name,
                 'Продажа запчастей' AS income_category,
-                real.sum_parts AS sum_rub, -- Берем строго сумму по запчастям, исключая работу
+                COUNT(DISTINCT real.id) AS total_orders,
+                SUM(ri.quantity) AS total_quantity,
+                SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
+                SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
+                SUM(ri.total_rub) AS total_realization_sum,
                 sk.name AS cashbox,
-                real.description,
-                real.is_posted
+                MAX(real.is_posted) AS is_posted
             FROM realizations real
-            LEFT JOIN customers cust ON real.customer_id = cust.id
+            JOIN customers c ON real.customer_id = c.id
+            JOIN realization_items ri ON real.id = ri.realization_id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
-
-            ORDER BY date DESC;
+            WHERE real.is_posted = true
+            GROUP BY c.id, c.name_full, c.name_short, sk.name
+            ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Ошибка при получении данных' });
+        res.status(500).json({ error: 'Ошибка при получении аналитики по покупателям' });
     }
 });
 
