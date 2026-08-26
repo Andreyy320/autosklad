@@ -3410,6 +3410,8 @@ router.delete('/realization_works/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3447,7 +3449,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3458,16 +3459,25 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                 sk.name::text AS sklad_name,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(SUM(ri.quantity), 0)::numeric AS total_qty,
-                COALESCE(SUM(ri.purchase_price * ri.quantity), 0)::numeric AS total_purchase_sum,
-                COALESCE(SUM(ri.retail_price * ri.quantity), 0)::numeric AS total_retail_sum,
-                COALESCE(SUM(ri.total_rub), 0)::numeric AS parts_sum,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
+                COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
                 COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                (COALESCE(SUM(ri.total_rub), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
+                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
-            LEFT JOIN realization_items ri ON real.id = ri.realization_id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            LEFT JOIN (
+                SELECT 
+                    ri.realization_id, 
+                    SUM(ri.quantity) AS total_qty, 
+                    SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
+                    SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
+                    SUM(ri.total_rub) AS parts_sum
+                FROM realization_items ri
+                GROUP BY ri.realization_id
+            ) sub_i ON real.id = sub_i.realization_id
             LEFT JOIN (
                 SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
                 FROM realization_works rw
@@ -3475,7 +3485,7 @@ router.get('/money_receipts', async (req, res) => {
             ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
-            GROUP BY c.id, c.name_full, c.name_short, sk.name, sub_w.works_sum
+            GROUP BY c.id, c.name_full, c.name_short, sk.name, sub_i.total_qty, sub_i.total_purchase_sum, sub_i.total_retail_sum, sub_i.parts_sum, sub_w.works_sum
             ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query, [sklad_id || null]);

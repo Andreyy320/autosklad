@@ -1746,34 +1746,37 @@ money_receipts_by_sklad: {
     }
 },
 
-    money_receipts: {
-        title: 'Аналитика продаж по покупателям и складам',
-        columns: [
-            { field: 'counterparty_name', label: 'Покупатель', width: '200px' },
-            { field: 'sklad_name', label: 'Склад списания', width: '150px' },
-            { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
-            { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
-            { field: 'total_purchase_sum', label: 'Закупка', width: '110px', align: 'right' },
-            { field: 'total_retail_sum', label: 'Розница', width: '110px', align: 'right' },
-            { field: 'total_realization_sum', label: 'Итог со скидкой', width: '130px', align: 'right' }
-        ],
-        render: (item) => {
-            const totalQty = Number(item.total_qty || 0).toFixed(2);
-            const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
-            const retailSum = Number(item.total_retail_sum || 0).toFixed(2);
-            const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
+   money_receipts: {
+    title: 'Аналитика продаж по покупателям и складам',
+    columns: [
+        { field: 'counterparty_name', label: 'Покупатель', width: '180px' },
+        { field: 'sklad_name', label: 'Склад списания', width: '130px' },
+        { field: 'total_orders', label: 'Заказов', width: '70px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во', width: '75px', align: 'right' },
+        { field: 'total_purchase_sum', label: 'Закупка', width: '95px', align: 'right' },
+        { field: 'parts_sum', label: 'Запчасти', width: '95px', align: 'right' },
+        { field: 'works_sum', label: 'Услуги', width: '95px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Итого выручка', width: '110px', align: 'right' }
+    ],
+    render: (item) => {
+        const totalQty = Number(item.total_qty || 0).toFixed(2);
+        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
+        const partsSum = Number(item.parts_sum || 0).toFixed(2);
+        const worksSum = Number(item.works_sum || 0).toFixed(2);
+        const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
 
-            return `
-                <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
-                <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-                <td style="text-align: center;">${item.total_orders || 0}</td>
-                <td style="text-align: right;">${totalQty}</td>
-                <td style="text-align: right; color: #666;">${purchaseSum} </td>
-                <td style="text-align: right; text-decoration: line-through; color: #999;">${retailSum} </td>
-                <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum} </td>
-            `;
-        }
-    },
+        return `
+            <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
+            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
+            <td style="text-align: center;">${item.total_orders || 0}</td>
+            <td style="text-align: right;">${totalQty}</td>
+            <td style="text-align: right; color: #666;">${purchaseSum}</td>
+            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
+            <td style="text-align: right; color: #0284c7; font-weight: 500;">${worksSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
+        `;
+    }
+},
 
     money_receipts_detail: {
         title: 'Детализация: купленные товары и услуги',
