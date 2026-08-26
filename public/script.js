@@ -1723,51 +1723,28 @@ realization_works: {
 
 
 money_receipts: {
-    title: 'Журнал приходов и реализаций',
+    title: 'Аналитика приходов по покупателям (закупка, розница, скидка)',
     columns: [
-        { field: 'doc_number', label: '№ документа', width: '120px' },
-        { field: 'date', label: 'Дата', type: 'datetime-local', width: '160px' },
-        { field: 'counterparty_name', label: 'Контрагент', width: '220px' },
-        { field: 'income_category', label: 'Тип / Статья', width: '180px' },
-        { field: 'sum_rub', label: 'Сумма РУБ', width: '110px', align: 'right' },
-        { field: 'cashbox', label: 'Склад / Касса', width: '150px' },
-        { field: 'description', label: 'Описание' },
-        { field: 'is_posted', label: 'Статус', width: '120px' }
+        { field: 'counterparty_name', label: 'Покупатель', width: '220px' },
+        { field: 'total_orders', label: 'Заказов', width: '90px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '100px', align: 'right' },
+        { field: 'total_purchase_sum', label: 'Закупка (руб)', width: '130px', align: 'right' },
+        { field: 'total_retail_sum', label: 'Розница (руб)', width: '130px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Сумма со скидкой', width: '140px', align: 'right' }
     ],
     render: (item) => {
-        const formatDT = (dateStr) => {
-            if (!dateStr) return '—';
-            const d = new Date(dateStr);
-            if (isNaN(d)) return '—';
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            return `${day}.${month}.${year} ${hours}:${minutes}`;
-        };
-
-        const sumRub = Number(item.sum_rub || 0).toFixed(2);
-        const isPosted = Boolean(item.is_posted);
-        const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
-        const isPostedColor = isPosted ? 'green' : 'gray';
-
-        const actionButton = !isPosted 
-            ? `<button onclick="event.stopPropagation(); postDocument(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
-            : '';
+        const totalQty = Number(item.total_qty || 0).toFixed(2);
+        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
+        const retailSum = Number(item.total_retail_sum || 0).toFixed(2);
+        const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
 
         return `
-            <td><b>${item.doc_number || ''}</b></td>
-            <td>${formatDT(item.date)}</td>
-            <td>${item.counterparty_name || '—'}</td>
-            <td>${item.income_category || '—'}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sumRub}</td>
-            <td>${item.cashbox || '—'}</td>
-            <td>${item.description || ''}</td>
-            <td>
-                <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
-                ${actionButton}
-            </td>
+            <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
+            <td style="text-align: center;">${item.total_orders || 0}</td>
+            <td style="text-align: right;">${totalQty}</td>
+            <td style="text-align: right; color: #666;">${purchaseSum} ₽</td>
+            <td style="text-align: right; text-decoration: line-through; color: #999;">${retailSum} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum} ₽</td>
         `;
     }
 }

@@ -3420,27 +3420,23 @@ router.get('/money_receipts', async (req, res) => {
             SELECT 
                 c.id AS customer_id,
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
-                'Продажа запчастей'::text AS income_category,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                SUM(ri.quantity)::numeric AS total_quantity,
+                SUM(ri.quantity)::numeric AS total_qty,
                 SUM(ri.purchase_price * ri.quantity)::numeric AS total_purchase_sum,
                 SUM(ri.retail_price * ri.quantity)::numeric AS total_retail_sum,
-                SUM(ri.total_rub)::numeric AS total_realization_sum,
-                sk.name::text AS cashbox,
-                MAX(real.is_posted)::boolean AS is_posted
+                SUM(ri.total_rub)::numeric AS total_realization_sum
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             JOIN realization_items ri ON real.id = ri.realization_id
-            LEFT JOIN skladi sk ON real.sklad_id = sk.id
             WHERE real.is_posted = true
-            GROUP BY c.id, c.name_full, c.name_short, sk.name
+            GROUP BY c.id, c.name_full, c.name_short
             ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка в /money_receipts:', err);
-        res.status(500).json({ error: 'Ошибка при получении аналитики по покупателям' });
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка' });
     }
 });
 
