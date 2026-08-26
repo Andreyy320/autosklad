@@ -3499,7 +3499,34 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
-
+router.get('/money_receipts_works_detail', async (req, res) => {
+    try {
+        const { customer_id, sklad_id } = req.query;
+        
+        const query = `
+            SELECT 
+                rw.id,
+                real.doc_number::text AS doc_number,
+                real.doc_date AS date,
+                rw.title::text AS work_name,
+                rw.quantity::numeric AS quantity,
+                rw.price::numeric AS unit_price,
+                rw.total_sum::numeric AS total_rub
+            FROM realization_works rw
+            JOIN realizations real ON rw.realization_id = real.id
+            WHERE real.is_posted = true 
+              AND real.customer_id = $1
+              AND ($2::integer IS NULL OR real.sklad_id = $2)
+            ORDER BY real.doc_date DESC;
+        `;
+        
+        const result = await pool.query(query, [customer_id, sklad_id || null]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка при получении детальных услуг:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
