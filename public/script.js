@@ -1718,6 +1718,58 @@ realization_works: {
             <td>${item.description || ''}</td>
         `;
     }
+},
+
+
+
+money_receipts: {
+    title: 'Приходы денежных средств',
+    columns: [
+        { field: 'doc_number', label: '№ документа', width: '120px' },
+        { field: 'date', label: 'Дата', type: 'datetime-local', width: '160px' },
+        { field: 'counterparty_id', label: 'Контрагент (Покупатель)', width: '220px', ref: 'counterparties' },
+        { field: 'income_category', label: 'Статья доходов', width: '180px', ref: 'income_categories' },
+        { field: 'sum_rub', label: 'Сумма РУБ', width: '110px', align: 'right' },
+        { field: 'cashbox', label: 'Касса / Счет', width: '150px' },
+        { field: 'description', label: 'Описание / Назначение' },
+        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses' }
+    ],
+    render: (item) => {
+        const formatDT = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            if (isNaN(d)) return '—';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
+        };
+
+        const sumRub = Number(item.sum_rub || 0).toFixed(2);
+        const isPosted = Boolean(item.is_posted);
+        const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
+        const isPostedColor = isPosted ? 'green' : 'gray';
+
+        const actionButton = !isPosted 
+            ? `<button onclick="event.stopPropagation(); postMoneyReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
+            : '';
+
+        return `
+            <td><b>${item.doc_number || ''}</b></td>
+            <td>${formatDT(item.date)}</td>
+            <td>${item.counterparty_name || item.counterparty_id || '—'}</td>
+            <td>${item.income_category_name || 'Продажа запчастей'}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sumRub}</td>
+            <td>${item.cashbox || 'Основная касса'}</td>
+            <td>${item.description || ''}</td>
+            <td>
+                <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
+                ${actionButton}
+            </td>
+        `;
+    }
 }
 }
 
@@ -4560,7 +4612,8 @@ const navMap = {
     'Скидки на услуги': 'service_discounts',
     'Реализация':'realizations',
     'Запчасти реализации': 'realization_items',
-    'Услуги реализации': 'realization_works'
+    'Услуги реализации': 'realization_works',
+    'Приходы':'money_receipts'
 };
 
 function updateFilterPanels(entity) {
