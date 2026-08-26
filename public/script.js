@@ -3442,7 +3442,7 @@ async function loadData(entity, title, customParams = {}) {
 
         headerTr.innerHTML = headersHtml;
 
-        currentItems.forEach((item, index) => {
+        currentItems.forEach(item => {
             const tr = document.createElement('tr');
             tr.dataset.id = item.id || '';
             tr.style.cursor = 'pointer';
@@ -3479,7 +3479,7 @@ async function loadData(entity, title, customParams = {}) {
                     const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
                     
-                    // ИСПРАВЛЕНИЕ: гарантируем передачу объекта с правильными ключами для дочерних запросов
+                    // ИСПРАВЛЕНИЕ: Формируем объект с явным customer_id и sklad_id (берем из item или из customParams)
                     const payload = {
                         customer_id: item.customer_id || item.id,
                         sklad_id: item.sklad_id || customParams.sklad_id || ''
@@ -3607,7 +3607,7 @@ async function loadData(entity, title, customParams = {}) {
                         const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
                         
-                        // ИСПРАВЛЕНИЕ: прокидываем корректный объект с ID покупателя и склада при инициализации
+                        // ИСПРАВЛЕНИЕ: Передаем корректный payload при первоначальной загрузке первой строки
                         const payload = {
                             customer_id: selectedItem.customer_id || selectedItem.id,
                             sklad_id: selectedItem.sklad_id || customParams.sklad_id || ''
@@ -3697,14 +3697,6 @@ async function loadData(entity, title, customParams = {}) {
                 } else {
                     emptyDetailBody();
                 }
-            }
-        }
-
-        // Автоматически подсвечиваем первую строку в таблице при загрузке, чтобы состояние было синхронным
-        if (currentItems.length > 0) {
-            const firstRow = tbody.querySelector('tr');
-            if (firstRow) {
-                firstRow.classList.add('selected-row');
             }
         }
 
