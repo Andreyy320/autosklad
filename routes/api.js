@@ -3416,7 +3416,7 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
-router.get('/sales-profit-report', async (req, res) => {
+router.get('/money_receipts', async (req, res) => {
     try {
         const query = `
             SELECT 
