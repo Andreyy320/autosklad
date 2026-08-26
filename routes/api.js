@@ -3411,7 +3411,6 @@ router.delete('/realization_works/:id', async (req, res) => {
     }
 });
 
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3420,13 +3419,20 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                SUM(ri.quantity)::numeric AS total_qty,
-                SUM(ri.total_rub)::numeric AS total_realization_sum
+                COALESCE(SUM(ri.quantity), 0)::numeric AS total_qty,
+                COALESCE(SUM(ri.total_rub), 0)::numeric AS parts_sum,
+                COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                (COALESCE(SUM(ri.total_rub), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
             FROM realizations real
-            JOIN realization_items ri ON real.id = ri.realization_id
+            LEFT JOIN realization_items ri ON real.id = ri.realization_id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            LEFT JOIN (
+                SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
+                FROM realization_works rw
+                GROUP BY rw.realization_id
+            ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
-            GROUP BY sk.id, sk.name
+            GROUP BY sk.id, sk.name, sub_w.works_sum
             ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query);
@@ -3439,25 +3445,35 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
 router.get('/money_receipts', async (req, res) => {
     try {
+        const { sklad_id } = req.query;
+
         const query = `
             SELECT 
                 c.id AS customer_id,
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                 sk.name::text AS sklad_name,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                SUM(ri.quantity)::numeric AS total_qty,
-                SUM(ri.purchase_price * ri.quantity)::numeric AS total_purchase_sum,
-                SUM(ri.retail_price * ri.quantity)::numeric AS total_retail_sum,
-                SUM(ri.total_rub)::numeric AS total_realization_sum
+                COALESCE(SUM(ri.quantity), 0)::numeric AS total_qty,
+                COALESCE(SUM(ri.purchase_price * ri.quantity), 0)::numeric AS total_purchase_sum,
+                COALESCE(SUM(ri.retail_price * ri.quantity), 0)::numeric AS total_retail_sum,
+                COALESCE(SUM(ri.total_rub), 0)::numeric AS parts_sum,
+                COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                (COALESCE(SUM(ri.total_rub), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
-            JOIN realization_items ri ON real.id = ri.realization_id
+            LEFT JOIN realization_items ri ON real.id = ri.realization_id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            LEFT JOIN (
+                SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
+                FROM realization_works rw
+                GROUP BY rw.realization_id
+            ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
-            GROUP BY c.id, c.name_full, c.name_short, sk.name
+              AND ($1::integer IS NULL OR real.sklad_id = $1)
+            GROUP BY c.id, c.name_full, c.name_short, sk.name, sub_w.works_sum
             ORDER BY total_realization_sum DESC;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [sklad_id || null]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка:', err);
