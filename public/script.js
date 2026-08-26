@@ -4237,8 +4237,7 @@ function switchRepairTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}
-async function loadDetailData(entity, parentId) {
+}async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -4265,7 +4264,7 @@ async function loadDetailData(entity, parentId) {
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
-    } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations') {
+    } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
         queryParamName = 'repair_id'; 
@@ -4390,6 +4389,7 @@ async function loadDetailData(entity, parentId) {
             receipt_items: 'Спецификация прихода',
             move_items: 'Спецификация перемещения',
             realization_items: 'Спецификация реализации',
+            realization_works: 'Спецификация услуг',
             realization_payments: 'Платежи реализации',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
