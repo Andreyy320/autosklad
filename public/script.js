@@ -1723,16 +1723,16 @@ realization_works: {
 
 
 money_receipts: {
-    title: 'Приходы денежных средств',
+    title: 'Журнал приходов и реализаций',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '120px' },
         { field: 'date', label: 'Дата', type: 'datetime-local', width: '160px' },
-        { field: 'counterparty_id', label: 'Контрагент (Покупатель)', width: '220px', ref: 'counterparties' },
-        { field: 'income_category', label: 'Статья доходов', width: '180px', ref: 'income_categories' },
+        { field: 'counterparty_name', label: 'Контрагент', width: '220px' },
+        { field: 'income_category', label: 'Тип / Статья', width: '180px' },
         { field: 'sum_rub', label: 'Сумма РУБ', width: '110px', align: 'right' },
-        { field: 'cashbox', label: 'Касса / Счет', width: '150px' },
-        { field: 'description', label: 'Описание / Назначение' },
-        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses' }
+        { field: 'cashbox', label: 'Склад / Касса', width: '150px' },
+        { field: 'description', label: 'Описание' },
+        { field: 'is_posted', label: 'Статус', width: '120px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1753,16 +1753,16 @@ money_receipts: {
         const isPostedColor = isPosted ? 'green' : 'gray';
 
         const actionButton = !isPosted 
-            ? `<button onclick="event.stopPropagation(); postMoneyReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
+            ? `<button onclick="event.stopPropagation(); postDocument(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
 
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.date)}</td>
-            <td>${item.counterparty_name || item.counterparty_id || '—'}</td>
-            <td>${item.income_category_name || 'Продажа запчастей'}</td>
+            <td>${item.counterparty_name || '—'}</td>
+            <td>${item.income_category || '—'}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sumRub}</td>
-            <td>${item.cashbox || 'Основная касса'}</td>
+            <td>${item.cashbox || '—'}</td>
             <td>${item.description || ''}</td>
             <td>
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>

@@ -3417,53 +3417,44 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/money_receipts', async (req, res) => {
     try {
-        // Объединяем приходы товаров от поставщиков и реализации клиентам, 
-        // чтобы сформировать единый сводный журнал приходов/поступлений
         const query = `
             SELECT 
-                'receipt' AS source_type,
                 r.id,
                 r.doc_number,
-                r.date AS doc_date,
-                COALESCE(c.name, 'Поставщик без имени') AS counterparty_name,
-                s.name AS warehouse_or_sklad,
-                r.sum_rub AS total_sum,
-                r.is_posted,
+                r.date AS date,
+                c.name AS counterparty_name,
+                'Приход от поставщика' AS income_category,
+                r.sum_rub AS sum_rub,
+                s.name AS cashbox,
                 r.description,
-                COUNT(ri.id) AS items_count
+                r.is_posted
             FROM receipts r
             LEFT JOIN counterparties c ON r.supplier_id = c.id
             LEFT JOIN skladi s ON r.warehouse_id = s.id
-            LEFT JOIN receipt_items ri ON r.id = ri.receipt_id
-            GROUP BY r.id, c.name, s.name
 
             UNION ALL
 
             SELECT 
-                'realization' AS source_type,
                 real.id,
                 real.doc_number,
-                real.doc_date,
-                COALESCE(cust.name_full, 'Покупатель без имени') AS counterparty_name,
-                sk.name AS warehouse_or_sklad,
-                real.sum_total AS total_sum,
-                real.is_posted,
+                real.doc_date AS date,
+                cust.name_full AS counterparty_name,
+                'Реализация (продажа)' AS income_category,
+                real.sum_total AS sum_rub,
+                sk.name AS cashbox,
                 real.description,
-                COUNT(rei.id) AS items_count
+                real.is_posted
             FROM realizations real
             LEFT JOIN customers cust ON real.customer_id = cust.id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
-            LEFT JOIN realization_items rei ON real.id = rei.realization_id
-            GROUP BY real.id, cust.name_full, sk.name
 
-            ORDER BY doc_date DESC;
+            ORDER BY date DESC;
         `;
-
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка при получении сводного журнала приходов:', err);
-        res.status(500).json({ error: 'Ошибка сервера при формировании журнала приходов' });
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка при получении данных' });
     }
 });
 
