@@ -1900,7 +1900,6 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -2003,6 +2002,22 @@ router.get('/stock_movement', async (req, res) => {
                 FROM repair_items rep_i
                 JOIN repairs rep ON rep_i.repair_id = rep.id
                 WHERE rep.warehouse_id IS NOT NULL
+
+                UNION ALL
+
+                -- 5. Реализации (продажи) - расход (realization_items)
+                SELECT 
+                    ri_rel.zaphasti_id,
+                    r_rel.sklad_id AS warehouse_id,
+                    r_rel.mol_id,
+                    COALESCE(r_rel.doc_date, NOW()) AS date,
+                    0 AS qty_in,
+                    ri_rel.quantity AS qty_out,
+                    0 AS sum_in,
+                    (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum_out
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                WHERE r_rel.sklad_id IS NOT NULL
             ),
             filtered_ops AS (
                 SELECT * FROM all_operations d
@@ -2017,7 +2032,7 @@ router.get('/stock_movement', async (req, res) => {
                     SUM(qty_in) AS income_qty,
                     SUM(sum_in) AS income_sum,
                     
-                    -- Расход за период (включая перемещения и ремонты)
+                    -- Расход за период (включая перемещения, ремонты и реализации)
                     SUM(qty_out) AS outcome_qty,
                     SUM(sum_out) AS outcome_sum
 
