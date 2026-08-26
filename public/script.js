@@ -2073,28 +2073,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
 
-    // Автозаполнение цены при выборе запчасти (работает и для move_items, и для других, если поле цены пустое)
+    // Автозаполнение цены при выборе запчасти
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
             if (!selectedZaphastiId) return;
 
-            const priceInput = formElement.querySelector('[name="price"]');
-            
-            // Если пользователь уже ввёл цену вручную, не перезаписываем
-            if (priceInput && priceInput.value.trim() !== '') {
-                return;
-            }
-
             try {
                 const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
                 if (response.ok) {
                     const itemData = await response.json();
+                    const priceInput = formElement.querySelector('[name="price"]');
                     
-                    // Проверяем различные варианты полей цены в объекте запчасти
                     const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
 
-                    if (priceInput && targetPrice !== undefined) {
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
                         priceInput.value = targetPrice;
                     }
                 }
@@ -2112,6 +2105,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             const priceInput = formElement.querySelector('[name="price"]');
             
+            // Если пользователь уже ввёл значение вручную, ничего не перезаписываем
             if (priceInput && priceInput.value.trim() !== '') {
                 return; 
             }
