@@ -4545,7 +4545,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
     });
 }
 
-
 async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -4597,7 +4596,7 @@ async function loadDetailData(entity, parentId) {
     // Если передан 'money_receipts', по умолчанию открываем запчасти ('money_receipts_detail')
     let activeEntity = entity;
     if (activeEntity === 'money_receipts') {
-        activeEntity = 'money_receipts_detail';
+        activeEntity = currentMoneyReceiptSubTab || 'money_receipts_detail';
     }
 
     const config = getConfig(activeEntity); 
@@ -4653,10 +4652,9 @@ async function loadDetailData(entity, parentId) {
             customerId = parentId;
         }
         
-        // Исправлено: жестко проверяем строку без пробелов
-        let apiRoute = 'money_receipts_detail';
-        if (activeEntity === 'money_receipts_works_detail' || entity === 'money_receipts_works_detail') {
-            apiRoute = 'money_receipts_works_detail';
+        let apiRoute = activeEntity;
+        if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
+            apiRoute = 'money_receipts_detail';
         }
 
         if (!customerId && skladId) {
