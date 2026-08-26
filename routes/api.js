@@ -2770,6 +2770,212 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
+
+
+
+// ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
+router.put('/realization_items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { realization_id, zaphasti_id, quantity, description } = req.body;
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим существующую запись в реализации
+        const existingItemRes = await client.query(`SELECT * FROM realization_items WHERE id = $1`, [id]);
+        if (existingItemRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция запчасти в реализации не найдена' });
+        }
+        const currentItem = existingItemRes.rows[0];
+
+        // Определяем финальные идентификаторы (если не переданы в теле, берем старые)
+        const targetRealizationId = realization_id || currentItem.realization_id;
+        const targetZaphastiId = zaphasti_id !== undefined ? zaphasti_id : currentItem.zaphasti_id;
+        const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
+
+        // 2. Узнаем склад, МОЛ и клиента для этой реализации
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id FROM realizations WHERE id = $1`;
+        const realizationRes = await client.query(realizationQuery, [targetRealizationId]);
+        
+        if (realizationRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
+
+        const { sklad_id, mol_id, customer_id } = realizationRes.rows[0];
+
+        // 3. Считаем остаток на складе с учетом того, что текущая строка уже зарезервировала часть товара 
+        // (чтобы при редактировании "вверх" не выдавало ошибку нехватки собственного товара)
+        const stockCheckQuery = `
+            WITH warehouse_stocks AS (
+                SELECT ri.zaphasti_id, r.warehouse_id, r.mol_id, SUM(ri.quantity) as qty
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                WHERE r.warehouse_id IS NOT NULL
+                GROUP BY ri.zaphasti_id, r.warehouse_id, r.mol_id
+
+                UNION ALL
+
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.mol_to_id AS mol_id, SUM(mi.quantity) as qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE m.warehouse_to_id IS NOT NULL
+                GROUP BY mi.zaphasti_id, m.warehouse_to_id, m.mol_to_id
+
+                UNION ALL
+
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.mol_from_id AS mol_id, -SUM(mi.quantity) as qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE m.warehouse_from_id IS NOT NULL
+                GROUP BY mi.zaphasti_id, m.warehouse_from_id, m.mol_from_id
+
+                UNION ALL
+
+                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.mol_id, -SUM(rep_i.quantity) as qty
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep.warehouse_id IS NOT NULL
+                GROUP BY rep_i.zaphast_id, rep.warehouse_id, rep.mol_id
+
+                UNION ALL
+
+                -- Считаем все реализации, КРОМЕ текущей редактируемой позиции (чтобы вернуть её объем на склад для проверки)
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, r_rel.mol_id, -SUM(ri_rel.quantity) as qty
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                WHERE r_rel.sklad_id IS NOT NULL AND ri_rel.id != $4
+                GROUP BY ri_rel.zaphasti_id, r_rel.sklad_id, r_rel.mol_id
+            )
+            SELECT COALESCE(SUM(qty), 0) as current_stock
+            FROM warehouse_stocks
+            WHERE zaphasti_id = $1 AND warehouse_id = $2 AND ($3::int IS NULL OR mol_id = $3)
+        `;
+
+        const stockRes = await client.query(stockCheckQuery, [targetZaphastiId, sklad_id, mol_id, id]);
+        const currentStock = Number(stockRes.rows[0]?.current_stock || 0);
+
+        // 4. Проверяем остаток
+        if (currentStock < requestedQty) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно товара на складе! На складе доступно: ${currentStock} шт., а запрашивается: ${requestedQty} шт.` 
+            });
+        }
+
+        // 5. Получаем справочные данные запчасти
+        const zaphastiQuery = `SELECT * FROM zaphasti WHERE id = $1`;
+        const zaphastiRes = await client.query(zaphastiQuery, [targetZaphastiId]);
+
+        if (zaphastiRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запчасть не найдена в справочнике' });
+        }
+
+        const zap = zaphastiRes.rows[0];
+
+        // 6. Узнаем актуальную закупочную цену и документ прихода
+        const priceQuery = `
+            SELECT ri.price AS purchase_price, ri.receipt_id 
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 
+            ORDER BY (r.warehouse_id = $2) DESC, r.date DESC, ri.id DESC
+            LIMIT 1
+        `;
+        const priceRes = await client.query(priceQuery, [targetZaphastiId, sklad_id]);
+        
+        let purchase_price = 0;
+        let income_document_id = null;
+
+        if (priceRes.rows.length > 0) {
+            purchase_price = Number(priceRes.rows[0].purchase_price) || 0;
+            income_document_id = priceRes.rows[0].receipt_id;
+        }
+
+        // 7. Считаем розницу и скидку
+        const baseRetailPrice = Number((purchase_price * 1.30).toFixed(2));
+
+        let discountPercent = 0;
+        let discountText = 'Розница (0%)';
+
+        if (customer_id) {
+            const customerDiscountQuery = `
+                SELECT pd.name, pd.discount_percent 
+                FROM customers c
+                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                WHERE c.id = $1
+            `;
+            const cdRes = await client.query(customerDiscountQuery, [customer_id]);
+            
+            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                const discountName = cdRes.rows[0].name || 'Скидка';
+                discountText = `${discountName} (${discountPercent}%)`;
+            }
+        }
+
+        const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
+        const total_rub = Number((requestedQty * finalPrice).toFixed(2));
+        const finalDescription = description !== undefined ? description : currentItem.description;
+
+        // 8. Обновляем запись в базе
+        const updateQuery = `
+            UPDATE realization_items 
+            SET realization_id = $1, 
+                zaphasti_id = $2, 
+                article = $3, 
+                code = $4, 
+                name = $5, 
+                quantity = $6, 
+                unit = $7, 
+                purchase_price = $8, 
+                retail_price = $9, 
+                price = $10, 
+                discount = $11, 
+                total_rub = $12, 
+                description = $13, 
+                income_document_id = $14
+            WHERE id = $15
+            RETURNING *
+        `;
+        
+        const values = [
+            targetRealizationId, 
+            targetZaphastiId, 
+            zap.article, 
+            zap.code, 
+            zap.name, 
+            requestedQty, 
+            zap.unit || 'шт', 
+            purchase_price, 
+            baseRetailPrice, 
+            finalPrice, 
+            discountText, 
+            total_rub, 
+            finalDescription, 
+            income_document_id,
+            id
+        ];
+
+        const result = await client.query(updateQuery, values);
+
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Ошибка при обновлении запчасти в реализации:', err);
+        res.status(500).json({ error: 'Ошибка сервера при обновлении запчасти: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
 // ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
     const { id } = req.query;
@@ -2788,6 +2994,7 @@ router.delete('/realization_items/:id', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при удалении запчасти' });
     }
 });
+
 
 
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
