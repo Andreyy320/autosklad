@@ -2775,6 +2775,122 @@ router.delete('/realization_items/:id', async (req, res) => {
 });
 
 
+
+
+
+
+// ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
+router.get('/realization_works', async (req, res) => {
+    const { realization_id } = req.query;
+    try {
+        const query = `
+            SELECT rw.*, 
+                   COALESCE(rw.name, vr.name) AS name,
+                   COALESCE(rw.retail_price, vr.price, 0) AS retail_price
+            FROM realization_works rw
+            LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
+            WHERE rw.realization_id = $1 
+            ORDER BY rw.id DESC
+        `;
+        const result = await pool.query(query, [realization_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка при получении услуг реализации:', err);
+        res.status(500).json({ error: 'Ошибка сервера при получении услуг реализации' });
+    }
+});
+
+// ==================== ДОБАВИТЬ УСЛУГУ В РЕАЛИЗАЦИЮ ====================
+router.post('/realization_works', async (req, res) => {
+    const { realization_id, vidy_rabot_id, quantity, description } = req.body;
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Узнаем клиента реализации для применения его скидки
+        const realizationRes = await client.query(
+            `SELECT customer_id FROM realizations WHERE id = $1`, 
+            [realization_id]
+        );
+        
+        if (realizationRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
+
+        const { customer_id } = realizationRes.rows[0];
+        const requestedQty = Number(quantity) || 1;
+
+        // 2. Берем наименование и базовую розничную цену из справочника видов работ (vidy_rabot)
+        const workRes = await client.query(`SELECT name, price FROM vidy_rabot WHERE id = $1`, [vidy_rabot_id]);
+        if (workRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Вид работы не найден в справочнике' });
+        }
+
+        const work = workRes.rows[0];
+        const retailPrice = Number(work.price) || 0; // Базовая розница из справочника
+
+        // 3. Узнаем скидку клиента
+        let discountPercent = 0;
+        let discountText = 'Розница (0%)';
+
+        if (customer_id) {
+            const cdRes = await client.query(`
+                SELECT pd.name, pd.discount_percent 
+                FROM customers c
+                LEFT JOIN part_discounts pd ON c.discount_part_id = pd.id
+                WHERE c.id = $1
+            `, [customer_id]);
+            
+            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                const discountName = cdRes.rows[0].name || 'Скидка';
+                discountText = `${discountName} (${discountPercent}%)`;
+            }
+        }
+
+        // 4. Считаем цену реализации со скидкой и общую сумму
+        const realizationPrice = Number((retailPrice * (1 - discountPercent / 100)).toFixed(2));
+        const total_rub = Number((requestedQty * realizationPrice).toFixed(2));
+
+        // 5. Вставляем в базу с учетом vidy_rabot_id
+        const insertQuery = `
+            INSERT INTO realization_works (
+                realization_id, vidy_rabot_id, name, quantity, retail_price, price, discount, total_rub, description
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            RETURNING *
+        `;
+        
+        const values = [
+            realization_id, 
+            vidy_rabot_id,
+            work.name, 
+            requestedQty, 
+            retailPrice,          // Розница из справочника
+            realizationPrice,     // Реализация со скидкой
+            discountText,         // Скидка
+            total_rub,            // Сумма РУБ
+            description
+        ];
+
+        const result = await client.query(insertQuery, values);
+
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Ошибка при добавлении услуги:', err);
+        res.status(500).json({ error: 'Ошибка сервера при добавлении услуги: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
