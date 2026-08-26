@@ -777,7 +777,22 @@ router.get('/vidy_rabot', async (req, res) => {
     }
 });
 
-
+// ПОЛУЧЕНИЕ ВИДА РАБОТЫ ПО ID
+router.get('/vidy_rabot/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('SELECT * FROM vidy_rabot WHERE id = $1', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Вид работ не найден' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Ошибка при получении вида работ:", err.message);
+        res.status(500).send('Ошибка сервера');
+    }
+});
 
 // ==================== GET РОУТЫ ====================
 router.get('/receipts', async (req, res) => {
