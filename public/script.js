@@ -1790,7 +1790,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2098,21 +2097,26 @@ async function openEntityForm(entity, item = null, parentId = null) {
         });
     }
 
-    // Автозаполнение цены реализации при выборе услуги (vidy_rabot)
+    // Автозаполнение цены реализации при выборе услуги (vidy_rabot) — только если поле цены пустое
     if (vidyRabotSelect) {
         vidyRabotSelect.addEventListener('change', async () => {
             const selectedWorkId = vidyRabotSelect.value;
             if (!selectedWorkId) return;
 
+            const priceInput = formElement.querySelector('[name="price"]');
+            
+            // Если пользователь уже ввёл значение вручную, ничего не перезаписываем
+            if (priceInput && priceInput.value.trim() !== '') {
+                return; 
+            }
+
             try {
                 const response = await fetch(`/api/vidy_rabot/${selectedWorkId}`);
                 if (response.ok) {
                     const workData = await response.json();
-                    const priceInput = formElement.querySelector('[name="price"]');
-                    
                     const targetPrice = workData.price !== undefined ? workData.price : workData.retail_price;
 
-                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
+                    if (priceInput && targetPrice !== undefined) {
                         priceInput.value = targetPrice;
                     }
                 }
