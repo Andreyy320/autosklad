@@ -3498,7 +3498,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-// Обязательно должно быть с подчеркиваниями:
 router.get('/money_receipts_works_detail', async (req, res) => {
     try {
         const { customer_id, sklad_id } = req.query;
@@ -3513,7 +3512,7 @@ router.get('/money_receipts_works_detail', async (req, res) => {
                 rw.retail_price::numeric AS retail_price,
                 rw.price::numeric AS final_unit_price,
                 COALESCE(rw.discount, 'Розница (0%)')::text AS discount_label,
-                rw.total_sum::numeric AS total_rub,
+                rw.total_rub::numeric AS total_rub,
                 COALESCE(rw.description, '')::text AS description
             FROM realization_works rw
             JOIN realizations real ON rw.realization_id = real.id
