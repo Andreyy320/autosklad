@@ -3526,8 +3526,13 @@ router.get('/money_receipts_works_detail', async (req, res) => {
         const result = await pool.query(query, [customer_id, sklad_id || null]);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка при получении детальных услуг:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
+        // ВЫВОДИМ ПОЛНЫЙ ОБЪЕКТ ОШИБКИ И САМО ИМЯ КОЛОНКИ/ТАБЛИЦЫ
+        console.error('--- ОШИБКА В SQL ЗАПРОСЕ ---');
+        console.error('Сообщение:', err.message);
+        console.error('Детали (какая колонка/таблица упала):', err.column || err.table || err.where);
+        console.error('Полный объект ошибки:', err);
+        
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
 
