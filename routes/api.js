@@ -1826,6 +1826,21 @@ router.get('/stock_batches', async (req, res) => {
                     FROM repair_items rep_i
                     JOIN repairs rep ON rep_i.repair_id = rep.id
                     WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2
+
+                    UNION ALL
+
+                    -- Реализации (продажи) с этого склада (отрицательное кол-во)
+                    SELECT 
+                        ri_rel.zaphasti_id,
+                        CONCAT('Реализация №', r_rel.id) AS document_name,
+                        COALESCE(r_rel.doc_date, NOW()) AS doc_date,
+                        ri_rel.description,
+                        (-1 * ri_rel.quantity) AS qty,
+                        ri_rel.purchase_price AS price,
+                        'Рубль ПМР' AS currency
+                    FROM realization_items ri_rel
+                    JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                    WHERE ri_rel.zaphasti_id = $1 AND r_rel.sklad_id = $2
                 ) docs
                 JOIN zaphasti z ON docs.zaphasti_id = z.id
                 ORDER BY docs.doc_date DESC;
@@ -1859,6 +1874,11 @@ router.get('/stock_batches', async (req, res) => {
                     
                     SELECT rep_i.zaphast_id AS zaphasti_id, CONCAT('Списание в ремонт №', rep.id) AS document_name, COALESCE(rep.doc_date, NOW()) AS doc_date, rep_i.description, (-1 * rep_i.quantity) AS qty, rep_i.price, 'Рубль ПМР' AS currency
                     FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1
+
+                    UNION ALL
+
+                    SELECT ri_rel.zaphasti_id, CONCAT('Реализация №', r_rel.id) AS document_name, COALESCE(r_rel.doc_date, NOW()) AS doc_date, ri_rel.description, (-1 * ri_rel.quantity) AS qty, ri_rel.purchase_price AS price, 'Рубль ПМР' AS currency
+                    FROM realization_items ri_rel JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id WHERE ri_rel.zaphasti_id = $1
                 ) all_docs
                 JOIN zaphasti z ON all_docs.zaphasti_id = z.id
                 ORDER BY all_docs.doc_date DESC;
