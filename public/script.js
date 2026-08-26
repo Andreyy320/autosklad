@@ -909,8 +909,9 @@ stock_batches: {
         { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
         { field: 'purchase_price', label: 'Цена закуп.', width: '90px', align: 'right' },
-        { field: 'currency', label: 'Валюта', width: '80px', align: 'center' },
-        { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' }
+        { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' },
+                { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
+
     ],
     render: (item) => {
         if (!item) return '';
