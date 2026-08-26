@@ -3781,16 +3781,21 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
+                // Если в onclick передают общие реализации, мапим их на аналитические таблицы money_receipts
+                if (match[1] === 'realization_works') return 'money_receipts_works';
+                if (match[1] === 'realization_items') return 'money_receipts_detail';
                 return match[1];
             }
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
+                if (dataTab === 'realization_works') return 'money_receipts_works';
+                if (dataTab === 'realization_items') return 'money_receipts_detail';
                 return dataTab;
             }
         }
 
         const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
-        if (activeText.toLowerCase().includes('услуг')) {
+        if (activeText.toLowerCase().includes('услуг') || activeText.toLowerCase().includes('работ')) {
             return 'money_receipts_works';
         }
 
@@ -3821,7 +3826,7 @@ function getCurrentDetailEntity() {
         }
 
         const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
-        if (activeText.toLowerCase().includes('услуг')) {
+        if (activeText.toLowerCase().includes('услуг') || activeText.toLowerCase().includes('работ')) {
             return 'realization_works';
         }
 
