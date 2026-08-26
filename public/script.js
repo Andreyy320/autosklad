@@ -4398,18 +4398,18 @@ async function loadDetailData(entity, parentId) {
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'money_receipts') {
-        // Логика для нижней детализации нашего нового отчета по покупателям и складам
+        // Исправлено: добавлен префикс /api/ и передача sklad_id на бэкенд
         let customerId = '';
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
             customerId = parentId.customer_id || '';
-            skladId = parentId.sklad_id || parentId.sklad_name || ''; 
+            skladId = parentId.sklad_id || ''; 
         } else {
             customerId = parentId;
         }
         
-        fetchUrl = `/money_receipts_detail?customer_id=${customerId}`;
+        fetchUrl = `/api/money_receipts_detail?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
     } else if (entity === 'counterparty_contacts') {
