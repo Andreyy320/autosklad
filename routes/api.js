@@ -2908,6 +2908,158 @@ router.post('/realization_works', async (req, res) => {
 });
 
 
+// ==================== ИЗМЕНИТЬ УСЛУГУ В РЕАЛИЗАЦИИ ====================
+router.put('/realization_works/:id', async (req, res) => {
+    const { id } = req.params;
+    const { realization_id, vidy_rabot_id, quantity, price: userPrice, description } = req.body;
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Проверяем существование записи услуги
+        const existingWorkRes = await client.query(`SELECT * FROM realization_works WHERE id = $1`, [id]);
+        if (existingWorkRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Услуга в реализации не найдена' });
+        }
+        const currentWork = existingWorkRes.rows.fetchone || existingWorkRes.rows[0];
+
+        // Определяем реализацию (если realization_id не передан в теле, берем из существующей записи)
+        const targetRealizationId = realization_id || currentWork.realization_id;
+
+        // 2. Узнаем клиента реализации
+        const realizationRes = await client.query(
+            `SELECT customer_id FROM realizations WHERE id = $1`, 
+            [targetRealizationId]
+        );
+        
+        if (realizationRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
+
+        const { customer_id } = realizationRes.rows[0];
+        const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentWork.quantity);
+        const targetVidyRabotId = vidy_rabot_id !== undefined ? vidy_rabot_id : currentWork.vidy_rabot_id;
+
+        // 3. Берем наименование и базовую розничную цену из справочника видов работ
+        const workRes = await client.query(`SELECT name, price FROM vidy_rabot WHERE id = $1`, [targetVidyRabotId]);
+        if (workRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Вид работы не найден в справочнике' });
+        }
+
+        const work = workRes.rows[0];
+        const retailPrice = Number(work.price) || 0;
+
+        // 4. Узнаем скидку клиента НА УСЛУГИ
+        let discountPercent = 0;
+        let discountText = 'Розница (0%)';
+
+        if (customer_id) {
+            const cdRes = await client.query(`
+                SELECT sd.name, sd.discount_percent 
+                FROM customers c
+                LEFT JOIN service_discounts sd ON c.discount_services = sd.name
+                WHERE c.id = $1
+            `, [customer_id]);
+            
+            if (cdRes.rows.length > 0 && cdRes.rows[0].discount_percent !== null) {
+                discountPercent = Number(cdRes.rows[0].discount_percent) || 0;
+                const discountName = cdRes.rows[0].name || 'Скидка';
+                discountText = `${discountName} (${discountPercent}%)`;
+            }
+        }
+
+        // 5. Считаем цену реализации
+        let realizationPrice;
+        if (userPrice !== undefined && userPrice !== null && String(userPrice).trim() !== '') {
+            realizationPrice = Number(userPrice);
+        } else {
+            realizationPrice = Number((retailPrice * (1 - discountPercent / 100)).toFixed(2));
+        }
+
+        const total_rub = Number((requestedQty * realizationPrice).toFixed(2));
+        const finalDescription = description !== undefined ? description : currentWork.description;
+
+        // 6. Обновляем запись в базе
+        const updateQuery = `
+            UPDATE realization_works 
+            SET realization_id = $1, 
+                vidy_rabot_id = $2, 
+                name = $3, 
+                quantity = $4, 
+                retail_price = $5, 
+                price = $6, 
+                discount = $7, 
+                total_rub = $8, 
+                description = $9
+            WHERE id = $10
+            RETURNING *
+        `;
+        
+        const values = [
+            targetRealizationId, 
+            targetVidyRabotId,
+            work.name, 
+            requestedQty, 
+            retailPrice, 
+            realizationPrice, 
+            discountText, 
+            total_rub, 
+            finalDescription,
+            id
+        ];
+
+        const result = await client.query(updateQuery, values);
+
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Ошибка при обновлении услуги:', err);
+        res.status(500).json({ error: 'Ошибка сервера при обновлении услуги: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==================== УДАЛИТЬ УСЛУГУ ИЗ РЕАЛИЗАЦИИ ====================
+router.delete('/realization_works/:id', async (req, res) => {
+    const { id } = req.params;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Проверяем существование записи перед удалением
+        const checkRes = await client.query(`SELECT id FROM realization_works WHERE id = $1`, [id]);
+        if (checkRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Услуга в реализации не найдена' });
+        }
+
+        // Удаляем запись (триггер в БД автоматически пересчитаетсуммы в realizations)
+        await client.query(`DELETE FROM realization_works WHERE id = $1`, [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Услуга успешно удалена' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Ошибка при удалении услуги:', err);
+        res.status(500).json({ error: 'Ошибка сервера при удалении услуги: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
