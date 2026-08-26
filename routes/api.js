@@ -2527,6 +2527,7 @@ router.delete('/car_details/:id', async (req, res) => {
     }
 });
 
+
 router.get('/realizations', async (req, res) => {
     try {
         const query = `
@@ -2591,7 +2592,6 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
-
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
     const { 
@@ -2604,8 +2604,8 @@ router.post('/realization_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Узнаем склад, МОЛ и клиента для этой реализации
-        const realizationQuery = `SELECT sklad_id, mol_id, customer_id FROM realizations WHERE id = $1`;
+        // 1. Узнаем склад, МОЛ, клиента и статус проведения для этой реализации
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`;
         const realizationRes = await client.query(realizationQuery, [realization_id]);
         
         if (realizationRes.rows.length === 0) {
@@ -2613,7 +2613,14 @@ router.post('/realization_items', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, mol_id, customer_id } = realizationRes.rows[0];
+        const { sklad_id, mol_id, customer_id, is_posted } = realizationRes.rows[0];
+
+        // Проверяем, проведена ли реализация
+        if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенную реализацию!' });
+        }
+
         const requestedQty = Number(quantity) || 1;
 
         // 2. Считаем текущий остаток этой запчасти на конкретном складе и у конкретного МОЛ
@@ -2771,8 +2778,6 @@ router.post('/realization_items', async (req, res) => {
     }
 });
 
-
-
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
     const { id } = req.params;
@@ -2791,13 +2796,35 @@ router.put('/realization_items/:id', async (req, res) => {
         }
         const currentItem = existingItemRes.rows[0];
 
+        // Проверяем, не проведена ли исходная реализация, которой принадлежит эта позиция
+        const sourceRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        if (sourceRealizationCheck.rows.length > 0) {
+            const { is_posted } = sourceRealizationCheck.rows[0];
+            if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенной реализации!' });
+            }
+        }
+
         // Определяем финальные идентификаторы (если не переданы в теле, берем старые)
         const targetRealizationId = realization_id || currentItem.realization_id;
         const targetZaphastiId = zaphasti_id !== undefined ? zaphasti_id : currentItem.zaphasti_id;
         const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
 
-        // 2. Узнаем склад, МОЛ и клиента для этой реализации
-        const realizationQuery = `SELECT sklad_id, mol_id, customer_id FROM realizations WHERE id = $1`;
+        // Если целевая реализация отличается от исходной, проверяем также и её статус
+        if (targetRealizationId !== currentItem.realization_id) {
+            const targetRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [targetRealizationId]);
+            if (targetRealizationCheck.rows.length > 0) {
+                const { is_posted } = targetRealizationCheck.rows[0];
+                if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Нельзя переносить запчасти в уже проведенную реализацию!' });
+                }
+            }
+        }
+
+        // 2. Узнаем склад, МОЛ и клиента для этой реализации с блокировкой строки FOR UPDATE
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`;
         const realizationRes = await client.query(realizationQuery, [targetRealizationId]);
         
         if (realizationRes.rows.length === 0) {
@@ -2805,7 +2832,13 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, mol_id, customer_id } = realizationRes.rows[0];
+        const { sklad_id, mol_id, customer_id, is_posted } = realizationRes.rows[0];
+
+        // Дополнительная проверка статуса целевой реализации
+        if (is_posted === true || is_posted === 'true' || is_posted === 2) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенной реализации!' });
+        }
 
         // 3. Считаем остаток на складе с учетом того, что текущая строка уже зарезервировала часть товара 
         // (чтобы при редактировании "вверх" не выдавало ошибку нехватки собственного товара)
