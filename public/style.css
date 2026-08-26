@@ -351,7 +351,8 @@ tr.selected-row {
 .car-tab-btn, 
 .accident-tab-btn, 
 .repair-tab-btn,
-.customer-tab-btn {
+.customer-tab-btn,
+.realization-tab-btn {
     background: #cfd8dc;
     border: 1px solid var(--border);
     border-bottom: none;
@@ -368,14 +369,16 @@ tr.selected-row {
 .car-tab-btn:hover, 
 .accident-tab-btn:hover, 
 .repair-tab-btn:hover,
-.customer-tab-btn:hover {
+.customer-tab-btn:hover,
+.realization-tab-btn:hover  {
     background: #e0e0e0;
 }
 
 .car-tab-btn.active, 
 .accident-tab-btn.active, 
 .repair-tab-btn.active,
-.customer-tab-btn.active {
+.customer-tab-btn.active,
+.realization-tab-btn.active {
     background: #ffffff;
     color: var(--primary);
     font-weight: 600;
