@@ -2994,6 +2994,7 @@ async function refreshData() {
         }
     }
 }
+
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -3273,6 +3274,8 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
+
 async function loadData(entity, title, customParams = {}) {
     currentEntity = entity;
     selectedItem = null;
@@ -3771,9 +3774,19 @@ function getCurrentDetailEntity() {
         return ''; // Верхний уровень складов детализации не требует
     }
     if (currentEntity === 'money_receipts') {
+        // Сначала проверяем data-tab у активной кнопки (самый точный способ)
+        const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) {
+                if (dataTab === 'realization_works') return 'money_receipts_works_detail';
+                if (dataTab === 'realization_items') return 'money_receipts_detail';
+                return dataTab;
+            }
+        }
+
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) return currentMoneyReceiptSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
             if (text.includes('услуг') || text.includes('работ')) {
@@ -3790,12 +3803,6 @@ function getCurrentDetailEntity() {
                 if (match[1] === 'realization_items') return 'money_receipts_detail';
                 return match[1];
             }
-            const dataTab = activeTab.getAttribute('data-tab');
-            if (dataTab) {
-                if (dataTab === 'realization_works') return 'money_receipts_works_detail';
-                if (dataTab === 'realization_items') return 'money_receipts_detail';
-                return dataTab;
-            }
         }
 
         const activeText = document.querySelector('#tabs-for-money-receipts button.active')?.innerText || '';
@@ -3806,9 +3813,14 @@ function getCurrentDetailEntity() {
         return 'money_receipts_detail';
     }
     if (currentEntity === 'realizations') {
+        const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) return dataTab;
+        }
+
         if (typeof currentRealizationSubTab !== 'undefined' && currentRealizationSubTab) return currentRealizationSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .active');
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
             if (text.includes('услуг') || text.includes('работ')) {
@@ -3823,10 +3835,6 @@ function getCurrentDetailEntity() {
             if (match && match[1]) {
                 return match[1];
             }
-            const dataTab = activeTab.getAttribute('data-tab');
-            if (dataTab) {
-                return dataTab;
-            }
         }
 
         const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
@@ -3837,29 +3845,32 @@ function getCurrentDetailEntity() {
         return 'realization_items'; 
     }
     if (currentEntity === 'customers') {
-        // Проверяем сохраненную переменную текущей вкладки покупателя
+        const activeTab = document.querySelector('#tabs-for-customers button.active, #tabs-for-customers .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) return dataTab;
+        }
+
         if (typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab) return currentCustomerSubTab;
 
-        // Либо ищем активную кнопку на панели вкладок покупателей
-        const activeTab = document.querySelector('#tabs-for-customers button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchCustomerTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
-            // Также поддерживаем data-tab, если он используется
-            const dataTab = activeTab.getAttribute('data-tab');
-            if (dataTab) {
-                return dataTab;
-            }
         }
         return 'customer_contacts'; 
     }
     if (currentEntity === 'accidents') {
+        const activeTab = document.querySelector('#tabs-for-accidents button.active, #tabs-for-accidents .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) return dataTab;
+        }
+
         if (typeof currentAccidentSubTab !== 'undefined' && currentAccidentSubTab) return currentAccidentSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-accidents button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchAccidentTab)\(['"]([^'"]+)['"]/);
@@ -3870,9 +3881,14 @@ function getCurrentDetailEntity() {
         return 'accident_invoices'; 
     }
     if (currentEntity === 'repairs') {
+        const activeTab = document.querySelector('#tabs-for-repairs button.active, #tabs-for-repairs .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) return dataTab;
+        }
+
         if (typeof currentRepairSubTab !== 'undefined' && currentRepairSubTab) return currentRepairSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-repairs button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchRepairTab)\(['"]([^'"]+)['"]/);
@@ -3883,9 +3899,14 @@ function getCurrentDetailEntity() {
         return 'repair_items'; 
     }
     if (currentEntity === 'car_cards') {
+        const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) return dataTab;
+        }
+
         if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) return currentCarSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-cars button.active');
         if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/loadDetailData\(['"]([^'"]+)['"]/);
@@ -4448,10 +4469,11 @@ function switchMoneyReceiptTab(tabName, btnElement) {
 
     const container = document.getElementById('tabs-for-money-receipts');
     if (container) {
-        container.querySelectorAll('.money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
     }
     if (btnElement) {
         btnElement.classList.add('active');
+        btnElement.setAttribute('data-tab', tabName);
     }
 
     const detailToolbar = document.getElementById('detail-toolbar');
@@ -4459,7 +4481,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         detailToolbar.style.display = 'flex';
     }
 
-    if (selectedItem && selectedItem.id) {
+    if (selectedItem) {
         loadDetailData(tabName, selectedItem);
     } else {
         const detailBody = document.getElementById('detail-body');
