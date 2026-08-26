@@ -4462,7 +4462,8 @@ async function loadDetailData(entity, parentId) {
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || '';
+            // Поддерживаем как customer_id, так и id из таблицы customers
+            customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || parentId.client_id || '';
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || ''; 
         } else {
             customerId = parentId;
