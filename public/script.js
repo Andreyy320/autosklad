@@ -3463,7 +3463,7 @@ async function loadData(entity, title, customParams = {}) {
                     // Клик по складу: проваливаемся внутрь — загружаем покупателей этого склада в эту же верхнюю таблицу
                     loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
                 } else if (entity === 'money_receipts') {
-                    const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                    const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
                     loadDetailData(detailEntity, item);
                 } else if (entity === 'cars') {
@@ -3489,6 +3489,7 @@ async function loadData(entity, title, customParams = {}) {
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForCustomers = document.getElementById('tabs-for-customers');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -3496,6 +3497,7 @@ async function loadData(entity, title, customParams = {}) {
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (tabsForCustomers) tabsForCustomers.style.display = 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+            if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
 
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
@@ -3571,19 +3573,19 @@ async function loadData(entity, title, customParams = {}) {
                 }
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
                 
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    if (tabsForRealizations) {
-                        const firstBtn = tabsForRealizations.querySelector('button');
+                    if (tabsForMoneyReceipts) {
+                        const firstBtn = tabsForMoneyReceipts.querySelector('button');
                         if (firstBtn) {
-                            tabsForRealizations.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                            tabsForMoneyReceipts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                             firstBtn.classList.add('active');
                         }
                     }
                     if (entity === 'money_receipts') {
-                        const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                        const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
                         loadDetailData(detailEntity, selectedItem);
                     }
@@ -3768,11 +3770,11 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'money_receipts') {
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) return currentMoneyReceiptSubTab;
 
-        const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .active');
+        const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
             if (text.includes('услуг') || text.includes('работ')) {
-                return 'money_receipts_works';
+                return 'money_receipts_works_detail';
             }
             if (text.includes('запчаст')) {
                 return 'money_receipts_detail';
@@ -3781,22 +3783,21 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                // Если в onclick передают общие реализации, мапим их на аналитические таблицы money_receipts
-                if (match[1] === 'realization_works') return 'money_receipts_works';
+                if (match[1] === 'realization_works') return 'money_receipts_works_detail';
                 if (match[1] === 'realization_items') return 'money_receipts_detail';
                 return match[1];
             }
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                if (dataTab === 'realization_works') return 'money_receipts_works';
+                if (dataTab === 'realization_works') return 'money_receipts_works_detail';
                 if (dataTab === 'realization_items') return 'money_receipts_detail';
                 return dataTab;
             }
         }
 
-        const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
+        const activeText = document.querySelector('#tabs-for-money-receipts button.active')?.innerText || '';
         if (activeText.toLowerCase().includes('услуг') || activeText.toLowerCase().includes('работ')) {
-            return 'money_receipts_works';
+            return 'money_receipts_works_detail';
         }
 
         return 'money_receipts_detail';
@@ -4098,6 +4099,8 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
+
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4489,8 +4492,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
             openDetailForm('edit'); 
         }
     });
-}
-async function loadDetailData(entity, parentId) {
+}async function loadDetailData(entity, parentId) {
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
         const readOnlyEntities = [
@@ -4893,6 +4895,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
@@ -4936,26 +4939,37 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
             } else if (entity === 'accidents') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
             } else if (entity === 'repairs') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            } else if (entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'realizations') {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
             }
         } else {
             if (detailContainer) detailContainer.style.display = 'none';
@@ -4965,6 +4979,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
@@ -4981,7 +4996,6 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         }
     });
 });
-
 
 
 
