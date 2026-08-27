@@ -3669,33 +3669,56 @@ router.get('/expenses_by_suppliers', async (req, res) => {
 
 router.get('/expense_items', async (req, res) => {
     try {
-        // Принимаем как receipt_id, так и expense_id на случай разных запросов с фронта
-        const receiptId = req.query.receipt_id || req.query.expense_id;
+        // Принимаем все возможные варианты параметров с фронта
+        const postavhikId = req.query.postavhik_id;
+        const skladId = req.query.sklad_id;
+        const expenseId = req.query.expense_id || req.query.receipt_id;
 
-        const query = `
+        // Базовый запрос: соединяем строки расходов с каталогом запчастей
+        // (При необходимости замените имя таблицы 'expense_items' или 'expenses' на ваше реальное)
+        let query = `
             SELECT 
-                ri.id AS id,
+                ei.id AS id,
                 COALESCE(z.name, 'Запчасть')::text AS part_name,
                 COALESCE(z.article, '—')::text AS article,
-                ri.quantity::numeric AS quantity,
-                ri.price_rub::numeric AS purchase_price,
-                ri.total_rub::numeric AS total_rub
-            FROM receipt_items ri
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-            WHERE ri.receipt_id = $1
-            ORDER BY ri.id ASC;
+                ei.quantity::numeric AS quantity,
+                ei.price_rub::numeric AS purchase_price,
+                ei.total_rub::numeric AS total_rub
+            FROM expense_items ei
+            LEFT JOIN zaphasti z ON ei.zaphasti_id = z.id
+            WHERE 1=1
         `;
+
+        const queryParams = [];
+
+        // Динамически добавляем фильтры в зависимости от того, что передал фронтенд
+        if (expenseId) {
+            queryParams.push(expenseId);
+            query += ` AND ei.expense_id = $${queryParams.length}`;
+        }
         
-        const result = await pool.query(query, [receiptId || null]);
+        if (postavhikId) {
+            queryParams.push(postavhikId);
+            query += ` AND ei.postavhik_id = $${queryParams.length}`;
+        }
+
+        if (skladId) {
+            queryParams.push(skladId);
+            // Если в таблице элементов расходов склад называется иначе (например, warehouse_id или id_sklad), замените тут:
+            query += ` AND ei.sklad_id = $${queryParams.length}`;
+        }
+
+        query += ` ORDER BY ei.id ASC;`;
+
+        console.log(`🔍 [API /expense_items] SQL:`, query, `Params:`, queryParams);
+
+        const result = await pool.query(query, queryParams);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения деталей закупки (expense_items):', err);
+        console.error('❌ Ошибка получения деталей расходов (expense_items):', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
