@@ -3718,6 +3718,68 @@ router.get('/expense_items', async (req, res) => {
     }
 });
 
+
+
+router.get('/expenses_by_receipts', async (req, res) => {
+    try {
+        const { sklad_id, postavhik_id } = req.query;
+
+        let query = `
+            SELECT 
+                rec.id AS id,
+                rec.id AS receipt_id,
+                COALESCE(rec.doc_number, 'Без номера')::text AS doc_number,
+                p.id AS postavhik_id,
+                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                sk.name::text AS sklad_name,
+                rec.date,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+            FROM receipts rec
+            JOIN postavhik p ON rec.supplier_id = p.id
+            LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
+            LEFT JOIN (
+                SELECT 
+                    ri.receipt_id, 
+                    SUM(ri.quantity) AS total_qty, 
+                    SUM(ri.total_rub) AS total_sum
+                FROM receipt_items ri
+                GROUP BY ri.receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            WHERE rec.is_posted = true
+        `;
+
+        const queryParams = [];
+
+        // Фильтр по складу, если передан
+        const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
+        if (sId) {
+            queryParams.push(sId);
+            query += ` AND rec.warehouse_id = $${queryParams.length}`;
+        }
+
+        // Фильтр по поставщику, если передан
+        const pId = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
+        if (pId) {
+            queryParams.push(pId);
+            query += ` AND rec.supplier_id = $${queryParams.length}`;
+        }
+
+        query += ` ORDER BY rec.date DESC;`;
+
+        console.log(`🔍 [API /expenses_by_receipts] SQL:`, query, `Params:`, queryParams);
+
+        const result = await pool.query(query, queryParams);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения списка накладных (expenses_by_receipts):', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
