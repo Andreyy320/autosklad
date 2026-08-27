@@ -3110,41 +3110,22 @@ async function refreshData() {
             loadDetailData(detailEntity, payload);
         } else if (currentEntity === 'expenses_by_sklad') {
             console.log('📂 [refreshData] Уровень расходов по складам — сбрасываем выбор, детали не грузим.');
-            selectedItem = null; // Принудительно сбрасываем, чтобы единица не подставлялась
+            selectedItem = null; 
             if (typeof emptyDetailBody === 'function') {
                 emptyDetailBody();
             }
         } else if (currentEntity === 'expenses_by_suppliers') {
-            if (!selectedItem || (!selectedItem.sklad_id && !selectedItem.id)) {
-                console.log('⚠️ Нет ID склада для загрузки поставщиков расходов');
-                return;
-            }
-            console.log('📂 [refreshData] Загрузка expenses_by_receipts для поставщика');
+            console.log('📂 [refreshData] Уровень списка поставщиков по складу — обновление списка по выбранному складу.');
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
-            const payload = {
-                postavhik_id: selectedItem.postavhik_id || selectedItem.id,
-                sklad_id: targetSkladId
-            };
-            loadDetailData('expenses_by_receipts', payload);
-        } else if (currentEntity === 'expenses_by_receipts') {
-            if (!selectedItem || (!selectedItem.receipt_id && !selectedItem.id)) {
-                console.log('⚠️ Нет ID накладной для загрузки позиций расходов');
-                return;
+            if (targetSkladId) {
+                window.currentSkladId = targetSkladId;
+                loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: targetSkladId });
             }
-            console.log('📂 [refreshData] Загрузка expense_items для накладной');
-            const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
-            const payload = {
-                receipt_id: selectedItem.receipt_id || selectedItem.id,
-                postavhik_id: selectedItem.postavhik_id || window.currentPostavhikId,
-                sklad_id: targetSkladId
-            };
-            loadDetailData('expense_items', payload);
         }
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
-
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -3424,7 +3405,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -3459,7 +3439,7 @@ async function loadData(entity, title, customParams = {}) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -3474,11 +3454,11 @@ async function loadData(entity, title, customParams = {}) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts') {
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -3642,26 +3622,7 @@ async function loadData(entity, title, customParams = {}) {
                     window.currentSkladId = item.sklad_id;
                     loadData('expenses_by_suppliers', `Поставщики склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
                 } else if (entity === 'expenses_by_suppliers') {
-                    console.log('📦 [Клик expenses_by_suppliers] Загружаем накладные в верхнюю таблицу для поставщика:', item.postavhik_id || item.id);
-                    const skladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
-                    const postavhikId = item.postavhik_id || item.id;
-                    loadData('expenses_by_receipts', `Накладные поставщика`, { postavhik_id: postavhikId, sklad_id: skladId });
-                } else if (entity === 'expenses_by_receipts') {
-                    // Используем стандартный дефолтный эндпоинт для деталей расходов, если вкладки отсутствуют
-                    const detailEntity = 'expense_items';
-
-                    const targetSkladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
-                    if (targetSkladId) {
-                        window.currentSkladId = targetSkladId;
-                    }
-
-                    const payload = {
-                        receipt_id: item.receipt_id || item.id,
-                        postavhik_id: item.postavhik_id || customParams.postavhik_id || '',
-                        sklad_id: targetSkladId
-                    };
-                    console.log('🔍 [Клик по накладной в expenses_by_receipts] Отправляем payload в loadDetailData:', { detailEntity, payload });
-                    loadDetailData(detailEntity, payload);
+                    console.log('📦 [Клик по поставщику расходов] Поставщик выбран:', item.postavhik_id || item.id);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3723,8 +3684,7 @@ async function loadData(entity, title, customParams = {}) {
                     window.currentSkladId = customParams.sklad_id;
                 }
                 if (typeof emptyDetailBody === 'function') emptyDetailBody();
-            } else if (entity === 'expenses_by_suppliers' || entity === 'expenses_by_sklad' || entity === 'expenses_by_receipts') {
-                // Убираем показ панели табов для расходов, так как их нет
+            } else if (entity === 'expenses_by_suppliers' || entity === 'expenses_by_sklad') {
                 carTabsBar.style.display = 'none';
                 selectedItem = null;
                 if (customParams.sklad_id) {
@@ -3751,8 +3711,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -3813,7 +3771,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -3833,8 +3790,8 @@ function getCurrentDetailEntity() {
         return res;
     }
 
-    // ИСПРАВЛЕНИЕ ДЛЯ РАСХОДОВ: 
-    // На уровнях складов и поставщиков возвращаем пустую строку (''), 
+    // ИСПРАВЛЕНИЕ ДЛЯ РАСХОДОВ (2 уровня: Склады -> Поставщики): 
+    // На обоих уровнях возвращаем пустую строку (''), 
     // чтобы нижняя таблица ждала клика и не уходила в автозапрос.
     if (currentEntity === 'expenses_by_sklad') {
         const res = ''; 
@@ -3844,12 +3801,6 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'expenses_by_suppliers') {
         const res = ''; 
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: (пусто)`);
-        return res;
-    }
-    // Когда дошли до накладных — внизу сразу показываем запчасти
-    if (currentEntity === 'expenses_by_receipts') {
-        const res = 'expense_items';
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_receipts: ${res}`);
         return res;
     }
 
@@ -4057,7 +4008,6 @@ function getCurrentDetailEntity() {
     return 'receipt_items';
 }
 
-
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
@@ -4262,6 +4212,7 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -4445,9 +4396,10 @@ if (tableBody) {
                     }
                     window.currentSkladId = selectedItem.sklad_id;
                     window.currentPostavhikId = null; 
+                    // Переход на 2-й уровень: Поставщики выбранного склада
                     loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                 } else if (currentEntity === 'expenses_by_suppliers') {
-                    // Разрешаем переход ТОЛЬКО при реальном клике пользователя
+                    // Разрешаем показ деталей/загрузку при клике на поставщика
                     if (!e.isTrusted) {
                         console.log('🛡️ Пропущен программный клик по поставщику');
                         return;
@@ -4457,7 +4409,10 @@ if (tableBody) {
                     const skladId = selectedItem.sklad_id || window.currentSkladId || '';
                     window.currentPostavhikId = postavhikId;
 
-                    loadData('expenses_by_receipts', `Накладные поставщика`, {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    
+                    // Загружаем список накладных по выбранному поставщику и складу в нижнюю таблицу
+                    loadDetailData('expenses_by_receipts', {
                         postavhik_id: postavhikId,
                         sklad_id: skladId
                     });
@@ -4494,42 +4449,6 @@ if (tableBody) {
             }
         }
     });
-}
-function handleExpenseClick(selectedItem) {
-    if (currentEntity === 'expenses_by_sklad') {
-        // Шаг 1: Кликнули по складу -> открываем поставщиков этого склада
-        window.currentSkladId = selectedItem.sklad_id;
-        window.currentPostavhikId = null; 
-        loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { 
-            sklad_id: selectedItem.sklad_id 
-        });
-    } 
-    else if (currentEntity === 'expenses_by_suppliers') {
-        // Шаг 2: Кликнули по поставщику -> открываем накладные
-        const postavhikId = selectedItem.postavhik_id || selectedItem.id;
-        const skladId = selectedItem.sklad_id || window.currentSkladId || '';
-        window.currentPostavhikId = postavhikId;
-
-        loadData('expenses_by_receipts', `Накладные поставщика`, {
-            postavhik_id: postavhikId,
-            sklad_id: skladId
-        });
-    } 
-    else if (currentEntity === 'expenses_by_receipts') {
-        // Шаг 3: Кликнули по накладной -> загружаем финальные позиции (запчасти) в нижний блок деталей
-        const receiptId = selectedItem.receipt_id || selectedItem.id;
-        const postavhikId = window.currentPostavhikId || selectedItem.postavhik_id || '';
-        const skladId = window.currentSkladId || selectedItem.sklad_id || '';
-
-        const detailContainer = document.getElementById('detail-container');
-        if (detailContainer) detailContainer.style.display = 'flex'; 
-
-        loadDetailData('expense_items', {
-            receipt_id: receiptId,
-            postavhik_id: postavhikId,
-            sklad_id: skladId
-        });
-    }
 }
 
 tableBody.addEventListener('dblclick', (e) => {
@@ -4772,8 +4691,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
 }
 
 
-
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -4827,7 +4744,7 @@ async function loadDetailData(entity, parentId) {
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
-    const allowedWithoutId = ['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail', 'expenses_by_sklad'];
+    const allowedWithoutId = ['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail', 'expenses_by_sklad', 'expenses_by_suppliers'];
     
     const hasValidParam = parentId && (typeof parentId === 'object' || String(parentId).trim() !== '');
     if (!hasValidParam && !allowedWithoutId.includes(entity) && !allowedWithoutId.includes(activeEntity)) {
@@ -4848,7 +4765,7 @@ async function loadDetailData(entity, parentId) {
     if (entity === 'move_items') {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
-        // Шаг 4: Спецификация позиций конкретной накладной
+        // Шаг 4: Спецификация позиций конкретной накладной расходов
         let postavhikId = window.currentPostavhikId || '';
         let skladId = window.currentSkladId || '';
         let receiptId = '';
@@ -4870,7 +4787,7 @@ async function loadDetailData(entity, parentId) {
             fetchUrl = `/api/expense_items`;
         }
     } else if (entity === 'expenses_by_receipts') {
-        // Шаг 3: Накладные выбранного поставщика на выбранном складе
+        // Шаг 3: Накладные выбранного поставщика на выбранном складе (отображаются внизу при клике на поставщика)
         let postavhikId = '';
         let skladId = window.currentSkladId || '';
 
@@ -4894,7 +4811,7 @@ async function loadDetailData(entity, parentId) {
             fetchUrl = `/api/expenses_by_receipts`;
         }
     } else if (entity === 'expenses_by_suppliers') {
-        // Шаг 2: Поставщики по выбранному складу
+        // Шаг 2: Поставщики по выбранному складу (загружается через loadData, но на всякий случай обработаем)
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
@@ -5255,7 +5172,6 @@ function updateFilterPanels(entity) {
         movementFilter.style.display = 'flex';
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -5297,6 +5213,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
                     'expenses',
                     'expenses_by_sklad',
                     'expenses_by_suppliers',
+                    'expenses_by_receipts',
                     'expense_items'
                 ];
                 
