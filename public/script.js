@@ -3808,12 +3808,11 @@ async function loadData(entity, title, customParams = {}) {
                         }
                     }
                     if (entity === 'expenses_by_suppliers') {
-                        const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
-                        const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
-
-                        const receiptId = selectedItem.postavhik_id || selectedItem.id;
-                        console.log('📌 [Автозагрузка первой строки expenses_by_suppliers] receiptId:', receiptId);
-                        loadDetailData(detailEntity, receiptId);
+                        // ИЗМЕНЕНИЕ: Не вызываем автозагрузку детальных данных для первой строки, 
+                        // а просто сбрасываем/очищаем нижнюю часть, чтобы ждать клика пользователя.
+                        if (typeof emptyDetailBody === 'function') {
+                            emptyDetailBody();
+                        }
                     }
                 } else {
                     emptyDetailBody();
