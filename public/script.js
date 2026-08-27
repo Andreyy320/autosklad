@@ -4362,7 +4362,7 @@ tableBody.addEventListener('click', async (e) => {
     // НАДЕЖНЫЙ ПОИСК: Сначала ищем по стандартному id, если нет — пробуем по customer_id или sklad_id, либо по индексу строки
     if (currentEntity === 'money_receipts') {
         selectedItem = currentItems.find(i => i.id == id || i.customer_id == id);
-    } else if (currentEntity === 'money_receipts_by_sklad') {
+    } else if (currentEntity === 'money_receipts_by_sklad' || currentEntity === 'expenses_by_sklad') {
         selectedItem = currentItems.find(i => i.id == id || i.sklad_id == id);
     } else {
         selectedItem = currentItems.find(i => i.id == id);
@@ -4485,6 +4485,10 @@ tableBody.addEventListener('click', async (e) => {
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = 'repair_items';
                 loadDetailData('repair_items', selectedItem.id);
             }
+        } else if (currentEntity === 'expenses_by_sklad') {
+            // Проваливаемся из складов расходов к списку поставщиков этого склада
+            console.log('📦 [Клик по складу расходов] Проваливаемся к поставщикам склада:', selectedItem.sklad_id);
+            loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
         } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
             console.log(`💰 [Клик] Обработка финансовой/реализационной сущности: ${currentEntity}`);
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
@@ -4554,11 +4558,11 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
             } else if (currentEntity === 'expenses_by_suppliers') {
-                // Исправлено: передаем объект с поставщиком и складом для корректной фильтрации
+                // ИСПРАВЛЕНО: Передаем объект с postavhik_id и sklad_id, чтобы загрузить накладные конкретного поставщика
                 const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                 const skladId = selectedItem.sklad_id || selectedItem.warehouse_id || '';
                 
-                console.log(`📦 [Клик expenses_by_suppliers] Поставщик: ${postavhikId}, Склад: ${skladId}`);
+                console.log(`📦 [Клик expenses_by_suppliers] Загружаем детали для поставщика: ${postavhikId}, склада: ${skladId}`);
                 
                 loadDetailData('expenses_by_suppliers', {
                     postavhik_id: postavhikId,
@@ -4896,6 +4900,7 @@ async function loadDetailData(entity, parentId) {
         }
 
         queryParamName = 'postavhik_id';
+        // ИСПРАВЛЕНО: Корректно формируем параметры для бэкенда, чтобы он понимал, что запрашиваются детали конкретного поставщика
         fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${pId}${sId ? '&sklad_id=' + sId : ''}`;
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
