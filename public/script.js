@@ -3966,7 +3966,9 @@ function filterTable() {
 }
 
 let selectedDetailItem = null;
-let currentDetailItems = []; function getCurrentDetailEntity() {
+let currentDetailItems = []; 
+
+function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
     if (currentEntity === 'moves') {
@@ -3985,8 +3987,7 @@ let currentDetailItems = []; function getCurrentDetailEntity() {
         return res;
     }
 
-    // ИСПРАВЛЕНИЕ ДЛЯ РАСХОДОВ: 
-    // На промежуточных уровнях складов и поставщиков мы возвращаем пустую строку (''), 
+    // На промежуточных уровнях складов и поставщиков возвращаем пустую строку (''), 
     // чтобы система останавливалась и не проваливалась дальше автоматически.
     if (currentEntity === 'expenses_by_sklad') {
         const res = ''; 
@@ -3994,14 +3995,48 @@ let currentDetailItems = []; function getCurrentDetailEntity() {
         return res;
     }
     if (currentEntity === 'expenses_by_suppliers') {
-        const res = ''; // Было 'expenses_by_receipts', из-за чего шёл автокликинг дальше
+        const res = ''; 
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: (пусто)`);
         return res;
     }
+
+    // Обработка расходов с учетом нового свитча (по аналогии с money_receipts и realizations)
     if (currentEntity === 'expenses_by_receipts') {
-        const res = 'expense_items';
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_receipts: ${res}`);
-        return res;
+        if (typeof currentExpenseSubTab !== 'undefined' && currentExpenseSubTab) {
+            console.log(`⚙️ [getCurrentDetailEntity:expenses_by_receipts] Найдено через currentExpenseSubTab: ${currentExpenseSubTab}`);
+            return currentExpenseSubTab;
+        }
+
+        const activeTab = document.querySelector('#tabs-for-expenses button.active, #tabs-for-expenses .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) {
+                console.log(`🔘 [getCurrentDetailEntity:expenses_by_receipts] Найден data-tab у кнопки: ${dataTab}`);
+                return dataTab;
+            }
+        }
+
+        if (activeTab) {
+            const text = activeTab.innerText.trim().toLowerCase();
+            if (text.includes('услуг') || text.includes('работ')) {
+                console.log(`📝 [getCurrentDetailEntity:expenses_by_receipts] Определено по тексту кнопки (услуг/работ): expense_works`);
+                return 'expense_works';
+            }
+            if (text.includes('запчаст')) {
+                console.log(`📝 [getCurrentDetailEntity:expenses_by_receipts] Определено по тексту кнопки (запчаст): expense_items`);
+                return 'expense_items';
+            }
+
+            const onclickAttr = activeTab.getAttribute('onclick') || '';
+            const match = onclickAttr.match(/(?:loadDetailData|switchExpenseTab)\(['"]([^'"]+)['"]/);
+            if (match && match[1]) {
+                console.log(`🔗 [getCurrentDetailEntity:expenses_by_receipts] Определено по onclick: ${match[1]}`);
+                return match[1];
+            }
+        }
+
+        console.log(`📌 [getCurrentDetailEntity:expenses_by_receipts] Возвращаем дефолтное значение: expense_items`);
+        return 'expense_items';
     }
 
     if (currentEntity === 'cars') {
@@ -4207,7 +4242,6 @@ let currentDetailItems = []; function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
@@ -4900,6 +4934,43 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     }
 }
+
+
+function switchExpenseTab(tabName, btnElement) {
+    console.log(`🔀 [switchExpenseTab] Переключение вкладки расходов на: ${tabName}`);
+
+    // Переключаем класс active у кнопок внутри панели расходов
+    const parentBar = document.getElementById('tabs-for-expenses');
+    if (parentBar) {
+        parentBar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    }
+    if (btnElement) {
+        btnElement.classList.add('active');
+    }
+
+    // Если у нас выбран элемент в верхней таблице, подгружаем детали для него
+    if (selectedItem) {
+        const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
+        
+        let payload;
+        if (currentEntity === 'expenses_by_receipts') {
+            payload = {
+                receipt_id: selectedItem.receipt_id || selectedItem.id,
+                postavhik_id: selectedItem.postavhik_id || '',
+                sklad_id: targetSkladId
+            };
+        } else {
+            payload = selectedItem.id || selectedItem;
+        }
+
+        console.log(`📦 [switchExpenseTab] Загружаем детальные данные (${tabName}) с payload:`, payload);
+        loadDetailData(tabName, payload);
+    } else {
+        console.warn('⚠️ [switchExpenseTab] Строка в верхней таблице не выбрана, детали не загружаем.');
+    }
+}
+
+
 
     const detailBody = document.getElementById('detail-body');
 
