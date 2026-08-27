@@ -3370,7 +3370,7 @@ async function applyMovementFilters() {
 
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
-    
+
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
@@ -3402,7 +3402,7 @@ async function loadData(entity, title, customParams = {}) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -3412,16 +3412,16 @@ async function loadData(entity, title, customParams = {}) {
             btnDelete.style.display = 'inline-block';
         }
     }
- 
+
     const detailContainer = document.getElementById('detail-container');
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad') {
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -3477,18 +3477,18 @@ async function loadData(entity, title, customParams = {}) {
         });
 
         if (!response.ok) throw new Error('Ошибка сервера');
-        
+
         currentItems = await response.json();
         console.log(`📦 [loadData] Данные получены для ${entity}. Количество строк: ${currentItems.length}`, currentItems);
 
         const headerTr = document.getElementById('table-headers');
         const tbody = document.getElementById('table-body');
-        
+
         tbody.innerHTML = '';
-        
+
         const thead = headerTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
-        
+
         if (entity === 'car_cards') {
             if (filterRow) {
                 filterRow.remove();
@@ -3568,7 +3568,7 @@ async function loadData(entity, title, customParams = {}) {
                 } else if (entity === 'money_receipts') {
                     const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-                    
+
                     const targetSkladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
                     if (targetSkladId) {
                         window.currentSkladId = targetSkladId;
@@ -3583,22 +3583,20 @@ async function loadData(entity, title, customParams = {}) {
                 } else if (entity === 'expenses_by_sklad') {
                     console.log('📦 [Клик по складу расходов] Проваливаемся к поставщикам склада:', item.sklad_id);
                     window.currentSkladId = item.sklad_id;
-                    loadData('expenses', `Поставщики склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
-                } else if (entity === 'expenses') {
+                    loadData('expenses_by_suppliers', `Поставщики склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
+                } else if (entity === 'expenses_by_suppliers') {
                     const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
-                    
+
                     const targetSkladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
                     if (targetSkladId) {
                         window.currentSkladId = targetSkladId;
                     }
 
-                    const payload = {
-                        postavhik_id: item.postavhik_id || item.id,
-                        sklad_id: targetSkladId
-                    };
-                    console.log('🔍 [Клик по поставщику в expenses] Отправляем payload в loadDetailData:', { detailEntity, payload });
-                    loadDetailData(detailEntity, payload);
+                    // Передаем receipt_id (или id строки), так как бэкенд ждет receipt_id для expense_items
+                    const receiptId = item.id; 
+                    console.log('🔍 [Клик по поставщику в expenses_by_suppliers] Отправляем receipt_id в loadDetailData:', { detailEntity, receiptId });
+                    loadDetailData(detailEntity, receiptId);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3637,7 +3635,7 @@ async function loadData(entity, title, customParams = {}) {
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
@@ -3653,7 +3651,7 @@ async function loadData(entity, title, customParams = {}) {
             } else if (entity === 'accidents') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
@@ -3669,17 +3667,17 @@ async function loadData(entity, title, customParams = {}) {
             } else if (entity === 'repairs') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
-                    
+
                     const firstBtn = tabsForRepairs.querySelector('button');
                     if (firstBtn) {
                         tabsForRepairs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                         firstBtn.classList.add('active');
                     }
-                    
+
                     loadDetailData('repair_items', activeId);
                 } else {
                     emptyDetailBody();
@@ -3687,11 +3685,11 @@ async function loadData(entity, title, customParams = {}) {
             } else if (entity === 'realizations') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
-                    
+
                     if (tabsForRealizations) {
                         const firstBtn = tabsForRealizations.querySelector('button');
                         if (firstBtn) {
@@ -3699,7 +3697,7 @@ async function loadData(entity, title, customParams = {}) {
                             firstBtn.classList.add('active');
                         }
                     }
-                    
+
                     const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                     loadDetailData(detailEntity, activeId);
@@ -3709,10 +3707,10 @@ async function loadData(entity, title, customParams = {}) {
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    
+
                     if (customParams.sklad_id) {
                         window.currentSkladId = customParams.sklad_id;
                     } else if (selectedItem.sklad_id) {
@@ -3729,7 +3727,7 @@ async function loadData(entity, title, customParams = {}) {
                     if (entity === 'money_receipts') {
                         const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-                        
+
                         const payload = {
                             customer_id: selectedItem.customer_id || selectedItem.id,
                             sklad_id: selectedItem.sklad_id || customParams.sklad_id || window.currentSkladId || ''
@@ -3740,13 +3738,13 @@ async function loadData(entity, title, customParams = {}) {
                 } else {
                     emptyDetailBody();
                 }
-            } else if (entity === 'expenses' || entity === 'expenses_by_sklad') {
+            } else if (entity === 'expenses_by_suppliers' || entity === 'expenses_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
-                    
+
                     if (customParams.sklad_id) {
                         window.currentSkladId = customParams.sklad_id;
                     } else if (selectedItem.sklad_id) {
@@ -3760,16 +3758,13 @@ async function loadData(entity, title, customParams = {}) {
                             firstBtn.classList.add('active');
                         }
                     }
-                    if (entity === 'expenses') {
+                    if (entity === 'expenses_by_suppliers') {
                         const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
-                        
-                        const payload = {
-                            postavhik_id: selectedItem.postavhik_id || selectedItem.id,
-                            sklad_id: selectedItem.sklad_id || customParams.sklad_id || window.currentSkladId || ''
-                        };
-                        console.log('📌 [Автозагрузка первой строки expenses] payload:', payload);
-                        loadDetailData(detailEntity, payload);
+
+                        const receiptId = selectedItem.id;
+                        console.log('📌 [Автозагрузка первой строки expenses_by_suppliers] receiptId:', receiptId);
+                        loadDetailData(detailEntity, receiptId);
                     }
                 } else {
                     emptyDetailBody();
@@ -3777,11 +3772,11 @@ async function loadData(entity, title, customParams = {}) {
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
-                    
+
                     if (tabsForCustomers) {
                         const firstBtn = tabsForCustomers.querySelector('button');
                         if (firstBtn) {
@@ -3789,7 +3784,7 @@ async function loadData(entity, title, customParams = {}) {
                             firstBtn.classList.add('active');
                         }
                     }
-                    
+
                     const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
                     loadDetailData(activeSubTab, activeId);
                 } else {
@@ -3797,7 +3792,7 @@ async function loadData(entity, title, customParams = {}) {
                 }
             } else if (entity === 'stock_balances') {
                 carTabsBar.style.display = 'none';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     const zId = currentItems[0].zaphasti_id || currentItems[0].id;
@@ -3812,7 +3807,7 @@ async function loadData(entity, title, customParams = {}) {
                 }
             } else if (entity === 'stock_movement') {
                 carTabsBar.style.display = 'none';
-                
+
                 if (currentItems.length > 0) {
                     selectedItem = currentItems[0];
                     loadDetailData('part_movement_details', selectedItem);
@@ -3845,7 +3840,7 @@ async function loadData(entity, title, customParams = {}) {
                 }
             } else {
                 carTabsBar.style.display = 'none';
-                
+
                 if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves')) {
                     selectedItem = currentItems[0];
                     const activeId = currentItems[0].id;
