@@ -4357,7 +4357,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -4414,7 +4413,10 @@ if (tableBody) {
                 currentEntity === 'money_receipts' ||
                 currentEntity === 'money_receipts_by_sklad' ||
                 currentEntity === 'money_receipts_detail' ||
-                currentEntity === 'money_receipts_works_detail'
+                currentEntity === 'money_receipts_works_detail' ||
+                currentEntity === 'expenses_by_sklad' ||
+                currentEntity === 'expenses_by_suppliers' ||
+                currentEntity === 'expenses_by_receipts'
             ) {
                 actionButtonsBar.style.display = 'none';
             } else {
@@ -4520,7 +4522,14 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
-                if (currentEntity === 'receipts') {
+                // Интегрированные уровни расходов
+                if (currentEntity === 'expenses_by_sklad') {
+                    loadExpenseMainData('expenses_by_suppliers', selectedItem);
+                } else if (currentEntity === 'expenses_by_suppliers') {
+                    loadExpenseMainData('expenses_by_receipts', selectedItem);
+                } else if (currentEntity === 'expenses_by_receipts') {
+                    loadExpenseMainData('expense_items', selectedItem);
+                } else if (currentEntity === 'receipts') {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', selectedItem.id);
                 } else if (currentEntity === 'moves') {
@@ -4540,7 +4549,6 @@ if (tableBody) {
         }
     });
 }
-
 
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
