@@ -4349,7 +4349,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4555,9 +4554,16 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
             } else if (currentEntity === 'expenses_by_suppliers') {
-                // Исправлено: передаем правильный ID поставщика вместо некорректного вызова
+                // Исправлено: передаем объект с поставщиком и складом для корректной фильтрации
                 const postavhikId = selectedItem.postavhik_id || selectedItem.id;
-                loadDetailData('expenses_by_suppliers', postavhikId);
+                const skladId = selectedItem.sklad_id || selectedItem.warehouse_id || '';
+                
+                console.log(`📦 [Клик expenses_by_suppliers] Поставщик: ${postavhikId}, Склад: ${skladId}`);
+                
+                loadDetailData('expenses_by_suppliers', {
+                    postavhik_id: postavhikId,
+                    sklad_id: skladId
+                });
             } else if (currentEntity === 'postavhik') {
                 loadDetailData('postavhik_contacts', selectedItem.id);
             } else if (currentEntity === 'counterparties') {
@@ -4838,7 +4844,7 @@ async function loadDetailData(entity, parentId) {
 
     // Безопасное извлечение ID, если передан объект (с поддержкой postavhik_id для expenses_by_suppliers)
     let cleanParentId = parentId;
-    if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'].includes(entity) && !['money_receipts_detail', 'money_receipts_works_detail'].includes(activeEntity)) {
+    if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail', 'expenses_by_suppliers'].includes(entity) && !['money_receipts_detail', 'money_receipts_works_detail'].includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.expense_id || parentId.postavhik_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     }
     console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
@@ -4857,7 +4863,7 @@ async function loadDetailData(entity, parentId) {
 
     const allowedWithoutId = ['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
     
-    // Проверка на наличие ID или объекта параметров для money_receipts
+    // Проверка на наличие ID или объекта параметров для money_receipts / expenses_by_suppliers
     const hasValidParam = parentId && (typeof parentId === 'object' || String(parentId).trim() !== '');
     if (!hasValidParam && !allowedWithoutId.includes(entity) && !allowedWithoutId.includes(activeEntity)) {
         console.warn(`⚠️ [loadDetailData] Отменено: нет валидного ID или параметра для сущности "${entity}"`);
@@ -4879,7 +4885,18 @@ async function loadDetailData(entity, parentId) {
     } else if (entity === 'expense_items') {
         queryParamName = 'expense_id';
     } else if (entity === 'expenses_by_suppliers') {
-        queryParamName = 'postavhik_id'; // Исправлено: для поставщиков корректный параметр postavhik_id
+        let pId = '';
+        let sId = '';
+
+        if (parentId && typeof parentId === 'object') {
+            pId = parentId.postavhik_id || parentId.id || '';
+            sId = parentId.sklad_id || parentId.warehouse_id || '';
+        } else {
+            pId = parentId;
+        }
+
+        queryParamName = 'postavhik_id';
+        fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${pId}${sId ? '&sklad_id=' + sId : ''}`;
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
