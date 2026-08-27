@@ -3692,49 +3692,61 @@ async function loadData(entity, title, customParams = {}) {
 }
 
 
-// Отдельная функция загрузки и провала (drill-down) для расходов в главной таблице
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
-    console.log(`💰 [loadExpenseMainData] Загрузка: entity="${entity}", parentId:`, parentId);
+    console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
     let currentExpenseView = entity;
 
-    // Определяем URL в зависимости от уровня вложенности расходов
+    const detailContainer = document.getElementById('detail-container');
+    const mainTableBody = document.getElementById('table-body');
+    const mainHeaderTr = document.getElementById('table-headers');
+
+    // 1. Уровень складов
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
         fetchUrl = `/api/expenses_by_sklad`;
-    } else if (currentExpenseView === 'expenses_by_suppliers') {
+        if (detailContainer) detailContainer.style.display = 'none';
+    } 
+    // 2. Уровень поставщиков (фильтруем по выбранному складу)
+    else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         window.currentSkladId = skladId || window.currentSkladId;
-        fetchUrl = `/api/expenses_by_suppliers${skladId ? '?sklad_id=' + skladId : ''}`;
-    } else if (currentExpenseView === 'expenses_by_receipts') {
+        fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+        if (detailContainer) detailContainer.style.display = 'none';
+    } 
+    // 3. Уровень накладных (фильтруем по поставщику И складу)
+    else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
-        let skladId = window.currentSkladId || '';
         if (postavhikId) window.currentPostavhikId = postavhikId;
-        fetchUrl = `/api/expenses_by_receipts?postavhik_id=${postavhikId}${skladId ? '&sklad_id=' + skladId : ''}`;
-    } else if (currentExpenseView === 'expense_items') {
-        let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
-        let postavhikId = window.currentPostavhikId || '';
-        let skladId = window.currentSkladId || '';
-        fetchUrl = `/api/expense_items?receipt_id=${receiptId}${postavhikId ? '&postavhik_id=' + postavhikId : ''}${skladId ? '&sklad_id=' + skladId : ''}`;
-    }
 
-    console.log(`🌐 [loadExpenseMainData] Fetch URL: ${fetchUrl}`);
+        let skladId = window.currentSkladId || '';
+        let currentPostavhik = window.currentPostavhikId || '';
+
+        fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
+        if (detailContainer) detailContainer.style.display = 'none';
+    } 
+    // 4. Уровень позиций (финальный — передаем ВСЕ фильтры в детальную таблицу)
+    else if (currentExpenseView === 'expense_items') {
+        let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
+        if (receiptId) window.currentReceiptId = receiptId;
+
+        let skladId = window.currentSkladId || '';
+        let postavhikId = window.currentPostavhikId || '';
+        let currentReceipt = window.currentReceiptId || '';
+
+        fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+
+        if (detailContainer) detailContainer.style.display = 'flex';
+        loadExpenseDetailTable(fetchUrl);
+        return; 
+    }
 
     const config = getConfig(currentExpenseView);
-    const mainTableBody = document.getElementById('table-body');
-    const mainHeaderTr = document.getElementById('table-headers');
-    const detailContainer = document.getElementById('detail-container');
-
-    // На первом уровне расходов нижняя панель деталей нам не нужна — скрываем её
-    if (detailContainer) {
-        detailContainer.style.display = 'none';
-    }
-
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
-    // Рисуем шапку главной таблицы по конфигу колонок для текущего уровня расходов
+    // Рендер шапки верхней таблицы
     if (mainHeaderTr && visibleColumns.length > 0) {
         mainHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
@@ -3746,18 +3758,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     try {
         const response = await fetch(fetchUrl, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Type': 'application/json' }
         });
 
-        if (!response.ok) throw new Error(`Ошибка загрузки расходов (Статус: ${response.status})`);
+        if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
         const items = await response.json();
-        console.log(`📦 [loadExpenseMainData] Получено строк: ${items.length}`, items);
-
-        if (!mainTableBody) {
-            console.error('❌ [loadExpenseMainData] Не найден элемент #table-body!');
-            return;
-        }
+        if (!mainTableBody) return;
 
         if (items.length === 0) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
@@ -3771,7 +3778,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
-            // Четкий провал (drill-down) по клику на конкретную строку без случайного выбора первой строки
+            // Обработка клика с пробросом объекта дальше по цепочке
             tr.onclick = () => {
                 mainTableBody.querySelectorAll('tr').forEach(row => row.style.background = '');
                 tr.style.background = '#e2e8f0';
@@ -3791,11 +3798,56 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } catch (err) {
         console.error('❌ [loadExpenseMainData ОШИБКА]:', err);
         if (mainTableBody) {
-            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных расходов</td></tr>`;
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
         }
     }
 }
 
+// Функция для нижней таблицы (спецификация запчастей)
+async function loadExpenseDetailTable(fetchUrl) {
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const config = getConfig('expense_items');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 5;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error('Ошибка загрузки позиций');
+        const items = await response.json();
+
+        if (!detailBody) return;
+
+        if (items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.render(item);
+            detailBody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
+        }
+    }
+}
 
 
 function emptyDetailBody(entity) {
