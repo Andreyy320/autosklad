@@ -1906,8 +1906,8 @@ expense_items: {
             <td><b>${item.part_name || item.name || 'Запчасть'}</b></td>
             <td><span style="color: #6b7280; font-family: monospace;">${item.article || '—'}</span></td>
             <td style="text-align: right; font-weight: 500;">${qty}</td>
-            <td style="text-align: right; color: #4b5563;">${price} ₽</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">${total} ₽</td>
+            <td style="text-align: right; color: #4b5563;">${price} </td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">${total} </td>
         `;
     }
 },
@@ -1934,7 +1934,7 @@ expenses_by_receipts: {
             <td>${item.postavhik_name || '—'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${qty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
         `;
     }
 }
