@@ -4830,7 +4830,6 @@ async function loadDetailData(entity, parentId) {
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.expense_id || parentId.postavhik_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     } else if (parentId && typeof parentId === 'object' && entity === 'expense_items') {
-        // Дополнительная страховка для корректного извлечения ID из объекта накладных расходов
         cleanParentId = parentId.receipt_id || parentId.id || parentId.postavhik_id || '';
     }
     console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
@@ -4866,18 +4865,17 @@ async function loadDetailData(entity, parentId) {
     if (entity === 'move_items') {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
-        let postavhikId = '';
-        let skladId = '';
+        // Шаг 4: Спецификация позиций конкретной накладной
+        let postavhikId = window.currentPostavhikId || '';
+        let skladId = window.currentSkladId || '';
         let receiptId = '';
 
         if (parentId && typeof parentId === 'object') {
             receiptId = parentId.receipt_id || parentId.id || '';
-            postavhikId = parentId.postavhik_id || window.currentPostavhikId || '';
-            skladId = parentId.sklad_id || parentId.warehouse_id || window.currentSkladId || '';
+            if (parentId.postavhik_id) postavhikId = parentId.postavhik_id;
+            if (parentId.sklad_id || parentId.warehouse_id) skladId = parentId.sklad_id || parentId.warehouse_id;
         } else {
             receiptId = parentId;
-            postavhikId = window.currentPostavhikId || '';
-            skladId = window.currentSkladId || '';
         }
 
         queryParamName = 'receipt_id';
@@ -4889,15 +4887,19 @@ async function loadDetailData(entity, parentId) {
             fetchUrl = `/api/expense_items`;
         }
     } else if (entity === 'expenses_by_receipts') {
+        // Шаг 3: Накладные выбранного поставщика на выбранном складе
         let postavhikId = '';
-        let skladId = '';
+        let skladId = window.currentSkladId || '';
 
         if (parentId && typeof parentId === 'object') {
             postavhikId = parentId.postavhik_id || parentId.id || '';
-            skladId = parentId.sklad_id || parentId.warehouse_id || window.currentSkladId || '';
+            if (parentId.sklad_id || parentId.warehouse_id) skladId = parentId.sklad_id || parentId.warehouse_id;
         } else {
             postavhikId = parentId;
-            skladId = window.currentSkladId || '';
+        }
+
+        if (postavhikId) {
+            window.currentPostavhikId = postavhikId;
         }
 
         queryParamName = 'postavhik_id';
@@ -4909,21 +4911,21 @@ async function loadDetailData(entity, parentId) {
             fetchUrl = `/api/expenses_by_receipts`;
         }
     } else if (entity === 'expenses_by_suppliers') {
-        let postavhikId = '';
+        // Шаг 2: Поставщики по выбранному складу
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            postavhikId = parentId.postavhik_id || parentId.id || '';
-            skladId = parentId.sklad_id || parentId.warehouse_id || window.currentSkladId || '';
+            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id || '';
         } else {
-            postavhikId = parentId;
-            skladId = window.currentSkladId || '';
+            skladId = parentId;
         }
 
-        queryParamName = 'postavhik_id';
-        if (postavhikId) {
-            fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${postavhikId}${skladId ? '&sklad_id=' + skladId : ''}`;
-        } else if (skladId) {
+        if (skladId) {
+            window.currentSkladId = skladId;
+        }
+
+        queryParamName = 'sklad_id';
+        if (skladId) {
             fetchUrl = `/api/expenses_by_suppliers?sklad_id=${skladId}`;
         } else {
             fetchUrl = `/api/expenses_by_suppliers`;
@@ -5154,7 +5156,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
@@ -5243,19 +5244,18 @@ const navMap = {
     'Изображения ДТП':'accident_images',
     'Скидки на запчасти': 'part_discounts',
     'Скидки на услуги': 'service_discounts',
-    'Реализация':'realizations',
+ 'Реализация': 'realizations',
     'Запчасти реализации': 'realization_items',
     'Услуги реализации': 'realization_works',
-    'Приходы':'money_receipts',
-    'Детали приходов':'money_receipts_detail',
-    'Аналитика по складам':'money_receipts_by_sklad',
-    'Детали услуг':'money_receipts_works_detail',
-    'Расходы по складам':'expenses_by_sklad',
-    'Расходы':'expenses_by_suppliers',
-    'Детали расходов':'expense_items',
-    'Накладные поставщика':'expenses_by_receipts'
+    'Приходы': 'money_receipts',
+    'Детали приходов': 'money_receipts_detail',
+    'Аналитика по складам': 'money_receipts_by_sklad',
+    'Детали услуг': 'money_receipts_works_detail',
+    'Расходы по складам': 'expenses_by_sklad',
+    'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
+    'Накладные поставщика': 'expenses_by_receipts',
+    'Спецификация расходов': 'expense_items'         // Поменяли "Детали расходов" для единообразия
 };
-
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
