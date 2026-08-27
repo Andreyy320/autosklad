@@ -3763,7 +3763,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     try {
         const response = await fetch(fetchUrl, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' } // Исправлено с 'Type' на 'Content-Type'
+            headers: { 'Content-Type': 'application/json' }
         });
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
@@ -3783,10 +3783,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
-            // Обработка клика с пробросом объекта дальше по цепочке
+            // Обработка клика с четким использованием currentExpenseView
             tr.onclick = () => {
                 mainTableBody.querySelectorAll('tr').forEach(row => row.style.background = '');
                 tr.style.background = '#e2e8f0';
+
+                console.log(`👆 [КЛИК В ТАБЛИЦЕ] Уровень: ${currentExpenseView}`, item);
 
                 if (currentExpenseView === 'expenses_by_sklad') {
                     loadExpenseMainData('expenses_by_suppliers', item);
@@ -3853,7 +3855,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
