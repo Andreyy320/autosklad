@@ -3053,7 +3053,6 @@ function logout() {
     location.reload();
 }
 
-
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -3111,7 +3110,7 @@ async function refreshData() {
                 emptyDetailBody();
             }
         } else if (currentEntity === 'expenses_by_suppliers') {
-            // 🆕 Шаг 2 -> 3: Кликнули по поставщику, теперь грузим список накладных (expenses_by_receipts)
+            // Шаг с поставщиков расходов к списку накладных расходов (expenses_by_receipts)
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
                 postavhik_id: selectedItem.postavhik_id || selectedItem.id,
@@ -3119,7 +3118,7 @@ async function refreshData() {
             };
             loadDetailData('expenses_by_receipts', payload);
         } else if (currentEntity === 'expenses_by_receipts') {
-            // 🆕 Шаг 3 -> 4: Кликнули по конкретной накладной, теперь грузим товары этой накладной (expense_items)
+            // Шаг из накладных расходов к конкретным позициям/запчастям (expense_items)
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
                 expense_id: selectedItem.receipt_id || selectedItem.id,
@@ -3968,6 +3967,7 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -3986,13 +3986,13 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses: ${res}`);
         return res;
     }
-    // Исправление для расходов по поставщикам:
+    // Шаг 1: с поставщиков расходов переходим к списку накладных расходов по поставщику
     if (currentEntity === 'expenses_by_suppliers') {
         const res = 'expenses_by_receipts';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: ${res}`);
         return res;
     }
-    // Новая промежуточная сущность для списка накладных расходов:
+    // Шаг 2: из списка накладных переходим к конкретным позициям расходов (запчастям/услугам)
     if (currentEntity === 'expenses_by_receipts') {
         const res = 'expense_items';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_receipts: ${res}`);
@@ -4029,12 +4029,11 @@ function getCurrentDetailEntity() {
         return res;
     }
     if (currentEntity === 'expenses_by_sklad') {
-        const res = ''; // Верхний уровень складов расходов детализации не требует (ведет к списку поставщиков)
+        const res = ''; // Верхний уровень складов расходов ведет к списку поставщиков
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
         return res;
     }
     if (currentEntity === 'money_receipts') {
-        // Сначала проверяем глобальную переменную состояния (самый быстрый и надежный способ для тумблеров)
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
             console.log(`⚙️ [getCurrentDetailEntity:money_receipts] Найдено через currentMoneyReceiptSubTab: ${currentMoneyReceiptSubTab}`);
             if (currentMoneyReceiptSubTab === 'realization_works') return 'money_receipts_works_detail';
@@ -4042,7 +4041,6 @@ function getCurrentDetailEntity() {
             return currentMoneyReceiptSubTab;
         }
 
-        // Затем проверяем data-tab у активной кнопки
         const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
