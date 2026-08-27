@@ -3726,7 +3726,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
     } 
-    // 4. Уровень позиций (финальный — передаем ВСЕ фильтры в детальную таблицу)
+    // 4. Уровень позиций
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
         if (receiptId) window.currentReceiptId = receiptId;
@@ -3737,26 +3737,53 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
 
-        // Синхронизируем глобальную сущность перед выходом
         currentEntity = currentExpenseView; 
         if (detailContainer) detailContainer.style.display = 'flex';
         loadExpenseDetailTable(fetchUrl);
         return; 
     }
 
-    // Синхронизируем глобальное состояние текущей сущности расходов
     currentEntity = currentExpenseView;
 
     const config = getConfig(currentExpenseView);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
-    // Рендер шапки верхней таблицы
+    // Рендер шапки верхней таблицы И СТРОКИ ФИЛЬТРОВ
     if (mainHeaderTr && visibleColumns.length > 0) {
+        // 1. Отрисовка названий колонок
         mainHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+
+        // 2. 🆕 Отрисовка полей ввода фильтров (по каждому столбцу текущей сущности)
+        const thead = mainHeaderTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, mainHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, mainHeaderTr);
+        }
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
         }).join('');
     }
 
@@ -3768,7 +3795,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
-        // Сохраняем элементы в global переменную, чтобы ваш отдельный кликер мог их найти через currentItems.find()
         currentItems = await response.json();
         if (!mainTableBody) return;
 
@@ -3783,9 +3809,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             tr.dataset.id = item.id || '';
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
-
-            // ❌ УДАЛИЛИ старый tr.onclick! 
-            // Теперь всю работу по клику выполняет ваш независимый слушатель (addEventListener('click')) сверху.
 
             mainTableBody.appendChild(tr);
         });
