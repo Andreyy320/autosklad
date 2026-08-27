@@ -3052,6 +3052,8 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
+
+
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -3417,7 +3419,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -3643,7 +3644,6 @@ async function loadData(entity, title, customParams = {}) {
                         window.currentSkladId = targetSkladId;
                     }
 
-                    // Безопасно берем ID поставщика или ID строки
                     const receiptId = item.postavhik_id || item.id; 
                     console.log('🔍 [Клик по поставщику в expenses_by_suppliers] Отправляем receipt_id в loadDetailData:', { detailEntity, receiptId });
                     loadDetailData(detailEntity, receiptId);
@@ -3812,7 +3812,6 @@ async function loadData(entity, title, customParams = {}) {
                         const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
 
-                        // Безопасно берем ID поставщика или ID строки при автозагрузке
                         const receiptId = selectedItem.postavhik_id || selectedItem.id;
                         console.log('📌 [Автозагрузка первой строки expenses_by_suppliers] receiptId:', receiptId);
                         loadDetailData(detailEntity, receiptId);
@@ -3909,7 +3908,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
