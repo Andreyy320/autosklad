@@ -3597,7 +3597,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
     try {
         const { sklad_id, postavhik_id } = req.query;
 
-        // Если передан postavhik_id, отдаем детали (список накладных этого поставщика)
+        // Если передан postavhik_id — отдаем конкретные накладные (детали)
         if (postavhik_id) {
             const detailQuery = `
                 SELECT 
@@ -3621,18 +3621,21 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     GROUP BY ri.receipt_id
                 ) sub_i ON rec.id = sub_i.receipt_id
                 WHERE rec.is_posted = true
-                  AND p.id = $1
-                  AND ($2::integer IS NULL OR rec.warehouse_id = $2)
+                  AND p.id = $1::integer
+                  AND ($2::integer IS NULL OR rec.warehouse_id = $2::integer)
                 ORDER BY rec.created_at DESC;
             `;
-            const detailResult = await pool.query(detailQuery, [postavhik_id, sklad_id || null]);
+            
+            // Передаем параметры строго по порядку
+            const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
+            const detailResult = await pool.query(detailQuery, [postavhik_id, sId]);
             return res.json(detailResult.rows);
         }
 
-        // Иначе (если postavhik_id нет) — отдаем список поставщиков для верхней таблицы
+        // Иначе — отдаем общий список поставщиков для склада
         const listQuery = `
             SELECT 
-                p.id AS id, -- Важно: поле id должно быть, чтобы таблица знала строку
+                p.id AS id,
                 p.id AS postavhik_id,
                 COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                 sk.name::text AS sklad_name,
@@ -3651,11 +3654,13 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
             WHERE rec.is_posted = true
-              AND ($1::integer IS NULL OR rec.warehouse_id = $1)
+              AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
             GROUP BY p.id, p.name, sk.name
             ORDER BY total_expense_sum DESC;
         `;
-        const listResult = await pool.query(listQuery, [sklad_id || null]);
+        
+        const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
+        const listResult = await pool.query(listQuery, [sIdList]);
         res.json(listResult.rows);
 
     } catch (err) {
