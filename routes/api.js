@@ -3565,7 +3565,6 @@ router.get('/money_receipts_works_detail', async (req, res) => {
 
 
 
-
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3574,18 +3573,16 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
-            FROM receipts rec
-            LEFT JOIN skladi sk ON rec.sklad_id = sk.id
-            -- Подзапрос для суммирования количества и суммы по накладным прихода
+                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum
+            FROM skladi sk
+            LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
             LEFT JOIN (
                 SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                 FROM receipt_items ri
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
-            WHERE rec.is_posted = true
-            GROUP BY sk.id, sk.name, sub_i.total_qty, sub_i.total_sum
+            GROUP BY sk.id, sk.name
             ORDER BY total_expense_sum DESC;
         `;
         const result = await pool.query(query);
@@ -3607,11 +3604,11 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                 sk.name::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum
             FROM receipts rec
-            JOIN postavhiki p ON rec.postavhik_id = p.id
-            LEFT JOIN skladi sk ON rec.sklad_id = sk.id
+            JOIN postavhik p ON rec.supplier_id = p.id
+            LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
             LEFT JOIN (
                 SELECT 
                     ri.receipt_id, 
@@ -3621,8 +3618,8 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
             WHERE rec.is_posted = true
-              AND ($1::integer IS NULL OR rec.sklad_id = $1)
-            GROUP BY p.id, p.name, sk.name, sub_i.total_qty, sub_i.total_sum
+              AND ($1::integer IS NULL OR rec.warehouse_id = $1)
+            GROUP BY p.id, p.name, sk.name
             ORDER BY total_expense_sum DESC;
         `;
         const result = await pool.query(query, [sklad_id || null]);
@@ -3634,7 +3631,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
 });
 
 
-
 router.get('/expense_items', async (req, res) => {
     try {
         const { receipt_id } = req.query;
@@ -3642,13 +3638,13 @@ router.get('/expense_items', async (req, res) => {
         const query = `
             SELECT 
                 ri.id AS id,
-                COALESCE(p.name, ri.part_name, 'Запчасть')::text AS part_name,
-                COALESCE(p.article, ri.article, '—')::text AS article,
+                COALESCE(z.name, 'Запчасть')::text AS part_name,
+                COALESCE(z.article, '—')::text AS article,
                 ri.quantity::numeric AS quantity,
-                ri.purchase_price::numeric AS purchase_price,
+                ri.price_rub::numeric AS purchase_price,
                 ri.total_rub::numeric AS total_rub
             FROM receipt_items ri
-            LEFT JOIN parts p ON ri.part_id = p.id
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
             WHERE ri.receipt_id = $1
             ORDER BY ri.id ASC;
         `;
@@ -3660,8 +3656,6 @@ router.get('/expense_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-
 
 
 
