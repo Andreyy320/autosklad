@@ -4544,11 +4544,6 @@ if (tableBody) {
                 const subTab = match ? match[1] : 'repair_items';
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
                 loadDetailData(subTab, selectedItem.id);
-            } else if (currentEntity === 'expenses_by_sklad') {
-                if (!e.isTrusted) return; // Защита от автоклика
-                window.currentSkladId = selectedItem.sklad_id;
-                window.currentPostavhikId = null; 
-                loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
             } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
@@ -4596,11 +4591,11 @@ if (tableBody) {
                 if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
 
                 if (carTabsPanel) {
-                    carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts' || currentEntity === 'customers') ? 'flex' : 'none';
+                    carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_sklad' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
                 if (tabsForExpenses) {
-                    tabsForExpenses.style.display = (currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts') ? 'flex' : 'none';
+                    tabsForExpenses.style.display = (currentEntity === 'expenses_by_sklad' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts') ? 'flex' : 'none';
                 }
 
                 if (currentEntity === 'receipts') {
@@ -4609,8 +4604,17 @@ if (tableBody) {
                 } else if (currentEntity === 'moves') {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', selectedItem.id);
+                } else if (currentEntity === 'expenses_by_sklad') {
+                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО СКЛАДУ
+                    if (!e.isTrusted) {
+                        console.log('🛡️ Пропущен программный авто-клик по складу расходов');
+                        return;
+                    }
+                    window.currentSkladId = selectedItem.sklad_id;
+                    window.currentPostavhikId = null; 
+                    loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                 } else if (currentEntity === 'expenses_by_suppliers') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК, ЕСЛИ ОН СРАБОТАЛ САМ ПРИ РЕНДЕРЕ
+                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО ПОСТАВЩИКУ
                     if (!e.isTrusted) {
                         console.log('🛡️ Пропущен программный авто-клик по поставщику');
                         return;
@@ -4625,7 +4629,7 @@ if (tableBody) {
                         sklad_id: skladId
                     });
                 } else if (currentEntity === 'expenses_by_receipts') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО НАКЛАДНОЙ ПРИ ПЕРВОМ РЕНДЕРЕ
+                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО НАКЛАДНОЙ
                     if (!e.isTrusted) {
                         console.log('🛡️ Пропущен программный авто-клик по накладной');
                         return;
