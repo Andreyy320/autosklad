@@ -3053,12 +3053,17 @@ function logout() {
     location.reload();
 }
 async function refreshData() {
+    console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
+    console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
+
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
     
     await loadData(currentEntity, title);
 
     if (selectedItem) {
+        console.log('📌 [refreshData] Есть выбранный элемент (selectedItem):', selectedItem);
+
         if (currentEntity === 'receipts' && selectedItem.id) {
             loadDetailData('receipt_items', selectedItem.id);
         } else if (currentEntity === 'moves' && selectedItem.id) {
@@ -3104,12 +3109,12 @@ async function refreshData() {
             };
             loadDetailData(detailEntity, payload);
         } else if (currentEntity === 'expenses_by_sklad') {
-            // Уровень складов расходов — детали нижние не грузим напрямую, очищаем тело при необходимости
+            console.log('📂 [refreshData] Уровень expenses_by_sklad — детали не грузим автоматически.');
             if (typeof emptyDetailBody === 'function') {
                 emptyDetailBody();
             }
         } else if (currentEntity === 'expenses_by_suppliers') {
-            // Шаг с поставщиков расходов к списку накладных расходов (expenses_by_receipts)
+            console.log('📂 [refreshData] Загрузка expenses_by_receipts для поставщика');
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
                 postavhik_id: selectedItem.postavhik_id || selectedItem.id,
@@ -3117,7 +3122,7 @@ async function refreshData() {
             };
             loadDetailData('expenses_by_receipts', payload);
         } else if (currentEntity === 'expenses_by_receipts') {
-            // Шаг из накладных расходов к конкретным позициям/запчастям (expense_items)
+            console.log('📂 [refreshData] Загрузка expense_items для накладной');
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
                 receipt_id: selectedItem.receipt_id || selectedItem.id,
@@ -3136,6 +3141,8 @@ async function refreshData() {
             };
             loadDetailData(detailEntity, payload);
         }
+    } else {
+        console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
 
