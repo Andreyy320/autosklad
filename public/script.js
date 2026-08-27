@@ -3628,6 +3628,7 @@ async function loadData(entity, title, customParams = {}) {
                         customer_id: item.customer_id || item.id,
                         sklad_id: targetSkladId
                     };
+                    console.log('🔍 [Клик по покупателю в money_receipts] Отправляем payload в loadDetailData:', { detailEntity, payload });
                     loadDetailData(detailEntity, payload);
                 } else if (entity === 'expenses_by_sklad') {
                     console.log('📦 [Клик по складу расходов] Проваливаемся к поставщикам склада:', item.sklad_id);
@@ -3652,6 +3653,7 @@ async function loadData(entity, title, customParams = {}) {
                         postavhik_id: item.postavhik_id || customParams.postavhik_id || '',
                         sklad_id: targetSkladId
                     };
+                    console.log('🔍 [Клик по накладной в expenses_by_receipts] Отправляем payload в loadDetailData:', { detailEntity, payload });
                     loadDetailData(detailEntity, payload);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
@@ -3688,136 +3690,40 @@ async function loadData(entity, title, customParams = {}) {
             if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
             if (tabsForExpenses) tabsForExpenses.style.display = 'none';
 
-            // Логика отображения панелей табов и первичной детальной загрузки
-            if (['expenses_by_suppliers', 'expenses_by_sklad', 'expenses_by_receipts'].includes(entity)) {
-                carTabsBar.style.display = 'flex';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
-                
-                if (currentItems.length > 0) {
-                    if (customParams.sklad_id) window.currentSkladId = customParams.sklad_id;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody();
-                } else {
-                    emptyDetailBody();
-                }
-            } else if (entity === 'car_cards') {
+            if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const firstBtn = tabsForCars.querySelector('button');
-                    if (firstBtn) {
-                        tabsForCars.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    loadDetailData('tehosmotr', activeId);
-                } else {
-                    emptyDetailBody();
-                }
             } else if (entity === 'accidents') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const firstBtn = tabsForAccidents.querySelector('button');
-                    if (firstBtn) {
-                        tabsForAccidents.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    loadDetailData('accident_invoices', activeId);
-                } else {
-                    emptyDetailBody();
-                }
             } else if (entity === 'repairs') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const firstBtn = tabsForRepairs.querySelector('button');
-                    if (firstBtn) {
-                        tabsForRepairs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    loadDetailData('repair_items', activeId);
-                } else {
-                    emptyDetailBody();
-                }
             } else if (entity === 'realizations') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const firstBtn = tabsForRealizations.querySelector('button');
-                    if (firstBtn) {
-                        tabsForRealizations.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
-                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
-                    loadDetailData(detailEntity, activeId);
-                } else {
-                    emptyDetailBody();
-                }
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    if (customParams.sklad_id) window.currentSkladId = customParams.sklad_id;
-                    else if (selectedItem.sklad_id) window.currentSkladId = selectedItem.sklad_id;
-
-                    const firstBtn = tabsForMoneyReceipts.querySelector('button');
-                    if (firstBtn) {
-                        tabsForMoneyReceipts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    if (entity === 'money_receipts') {
-                        const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
-                        const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-                        const payload = {
-                            customer_id: selectedItem.customer_id || selectedItem.id,
-                            sklad_id: selectedItem.sklad_id || customParams.sklad_id || window.currentSkladId || ''
-                        };
-                        loadDetailData(detailEntity, payload);
-                    }
-                } else {
-                    emptyDetailBody();
+                if (customParams.sklad_id) {
+                    window.currentSkladId = customParams.sklad_id;
+                }
+            } else if (entity === 'expenses_by_suppliers' || entity === 'expenses_by_sklad' || entity === 'expenses_by_receipts') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
+                if (customParams.sklad_id) {
+                    window.currentSkladId = customParams.sklad_id;
                 }
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
-
-                if (currentItems.length > 0) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const firstBtn = tabsForCustomers.querySelector('button');
-                    if (firstBtn) {
-                        tabsForCustomers.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
-                    const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
-                    loadDetailData(activeSubTab, activeId);
-                } else {
-                    emptyDetailBody();
-                }
             } else {
                 carTabsBar.style.display = 'none';
-                if (currentItems.length > 0 && (entity === 'receipts' || entity === 'moves')) {
-                    selectedItem = currentItems[0];
-                    const activeId = currentItems[0].id;
-                    const detailEntity = entity === 'receipts' ? 'receipt_items' : 'move_items';
-                    loadDetailData(detailEntity, activeId);
-                } else {
-                    emptyDetailBody();
-                }
+            }
+
+            // Очищаем детали/нижнюю таблицу при переключении вкладки, без автовыбора первой строки
+            if (typeof emptyDetailBody === 'function') {
+                emptyDetailBody();
             }
         }
 
