@@ -4349,6 +4349,7 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4410,6 +4411,9 @@ tableBody.addEventListener('click', async (e) => {
     }
 
     if (selectedItem) {
+        // Универсальная поддержка извлечения ID для разных сущностей (включая postavhik_id)
+        const selectedId = selectedItem.id || selectedItem.expense_id || selectedItem.postavhik_id || selectedItem.realization_id || selectedItem.receipt_id;
+
         if (currentEntity === 'cars') {
             console.log('🚗 [Клик] Обработка сущности: cars');
             if (carTabsPanel) carTabsPanel.style.display = 'none';
@@ -4529,10 +4533,10 @@ tableBody.addEventListener('click', async (e) => {
                 if (activeRealizationTab) {
                     const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
                     if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-                    loadDetailData(subTabName, selectedItem.id);
+                    loadDetailData(subTabName, selectedId);
                 } else {
                     if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = 'realization_items';
-                    loadDetailData('realization_items', selectedItem.id);
+                    loadDetailData('realization_items', selectedId);
                 }
             }
         } else {
@@ -4550,22 +4554,21 @@ tableBody.addEventListener('click', async (e) => {
             }
 
             if (currentEntity === 'receipts') {
-                loadDetailData('receipt_items', selectedItem.id);
+                loadDetailData('receipt_items', selectedId);
             } else if (currentEntity === 'moves') {
-                loadDetailData('move_items', selectedItem.id);
+                loadDetailData('move_items', selectedId);
             } else if (currentEntity === 'expenses_by_suppliers') {
-                loadDetailData('expense_items', selectedItem.id);
+                loadDetailData('expenses_by_suppliers', selectedItem);
             } else if (currentEntity === 'postavhik') {
-                loadDetailData('postavhik_contacts', selectedItem.id);
+                loadDetailData('postavhik_contacts', selectedId);
             } else if (currentEntity === 'counterparties') {
-                loadDetailData('counterparty_contacts', selectedItem.id);
+                loadDetailData('counterparty_contacts', selectedId);
             } else if (currentEntity === 'customers') {
-                loadDetailData('customer_contacts', selectedItem.id);
+                loadDetailData('customer_contacts', selectedId);
             }
         }
     }
 });
-
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -4834,10 +4837,10 @@ async function loadDetailData(entity, parentId) {
     }
     console.log(`📌 [loadDetailData] activeEntity определен как: "${activeEntity}"`);
 
-    // Безопасное извлечение ID, если передан объект
+    // Безопасное извлечение ID, если передан объект (с поддержкой postavhik_id для expenses_by_suppliers)
     let cleanParentId = parentId;
     if (parentId && typeof parentId === 'object' && !['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'].includes(entity) && !['money_receipts_detail', 'money_receipts_works_detail'].includes(activeEntity)) {
-        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.expense_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
+        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.expense_id || parentId.postavhik_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
     }
     console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
 
@@ -4874,7 +4877,7 @@ async function loadDetailData(entity, parentId) {
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
-    } else if (entity === 'expense_items') {
+    } else if (entity === 'expense_items' || entity === 'expenses_by_suppliers') {
         queryParamName = 'expense_id';
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
@@ -4921,6 +4924,7 @@ async function loadDetailData(entity, parentId) {
             skladId = window.currentSkladId || '';
         }
         
+        // Используем activeEntity, чтобы точно знать, запрашиваем мы товары или услуги
         let apiRoute = activeEntity;
         if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
@@ -4952,10 +4956,6 @@ async function loadDetailData(entity, parentId) {
                 fetchUrl = `/api/accident_images?accident_id=${cleanParentId}`;
             }
         } else {
-            // Поддержка для expenses_by_suppliers (передает expense_id) и других сущностей
-            if (entity === 'expenses_by_suppliers') {
-                queryParamName = 'expense_id';
-            }
             fetchUrl = `/api/${entity}?${queryParamName}=${cleanParentId}`;
         }
     }
