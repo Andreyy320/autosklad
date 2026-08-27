@@ -3023,7 +3023,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
 function logout() {
     localStorage.clear(); 
     location.reload();
-}async function refreshData() {
+}
+
+async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
     
@@ -3081,7 +3083,8 @@ function logout() {
             }
         } else if (currentEntity === 'expenses' || currentEntity === 'expenses_by_suppliers') {
             const activeTabBtn = document.querySelector('#tabs-for-expenses button.active, #tabs-for-expenses .expense-tab-btn.active');
-            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
+            // ИСПРАВЛЕНО: для расходов поставщика запрашиваем сущность expenses_by_suppliers с параметрами
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expenses_by_suppliers';
             
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
@@ -3944,8 +3947,13 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses: ${res}`);
         return res;
     }
-    // Добавлено для расходов по поставщикам (без тумблеров, всегда отдаем expense_items)
+    // Добавлено для расходов по поставщикам: если выбран конкретный поставщик (проваливаемся в накладные) или список
     if (currentEntity === 'expenses_by_suppliers') {
+        // Если у тебя есть глобальная переменная или тумблеры для субвкладок расходов (аналогично реализациям/приходам)
+        if (typeof currentExpenseSubTab !== 'undefined' && currentExpenseSubTab) {
+            console.log(`⚙️ [getCurrentDetailEntity:expenses_by_suppliers] Найдено через currentExpenseSubTab: ${currentExpenseSubTab}`);
+            return currentExpenseSubTab;
+        }
         const res = 'expense_items';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: ${res}`);
         return res;
@@ -3978,6 +3986,12 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'money_receipts_by_sklad') {
         const res = ''; // Верхний уровень складов детализации не требует
         console.log(`📌 [getCurrentDetailEntity] Результат для money_receipts_by_sklad: (пусто)`);
+        return res;
+    }
+    // Добавлено зеркально для расходов по складам: верхний уровень складов детализации не требует (ведет к expenses_by_suppliers)
+    if (currentEntity === 'expenses_by_sklad') {
+        const res = ''; 
+        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
         return res;
     }
     if (currentEntity === 'money_receipts') {
