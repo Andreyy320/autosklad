@@ -4771,6 +4771,7 @@ function switchCarTab(tabName, btnElement) {
         loadDetailData(tabName, selectedItem.id);
     }
 }
+
 let currentRepairSubTab = 'repair_items';
 
 
