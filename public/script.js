@@ -5177,16 +5177,30 @@ const navMap = {
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
+    const expenseFilter = document.getElementById('expense-filter-panel'); // Если есть отдельная панель для расходов
 
     if (!partsFilter || !movementFilter) return;
 
+    // Сбрасываем отображение всех панелей
     partsFilter.style.display = 'none';
     movementFilter.style.display = 'none';
+    if (expenseFilter) expenseFilter.style.display = 'none';
 
+    // Сохраняем вашу старую логику без изменений
     if (entity === 'stock_balances') {
         partsFilter.style.display = 'flex';
     } else if (entity === 'stock_movement') {
         movementFilter.style.display = 'flex';
+    } 
+    // Добавляем поддержку расходов, чтобы они не ломали интерфейс
+    else if (entity && entity.startsWith('expenses_') || entity === 'expense_items') {
+        if (expenseFilter) {
+            expenseFilter.style.display = 'flex';
+        } else {
+            // Если отдельной панели нет, используем partsFilter как универсальную, 
+            // либо оставляем скрытой, чтобы инпуты не съезжали
+            partsFilter.style.display = 'none'; 
+        }
     }
 }
 
