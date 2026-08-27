@@ -5186,7 +5186,7 @@ async function loadDetailData(entity, parentId) {
             move_items: 'Спецификация перемещения',
             expense_items: 'Спецификация расходов',
             expenses_by_receipts: 'Накладные поставщика',
-            expenses_by_suppliers: 'Накладные поставщика',
+            expenses_by_suppliers: 'Поставщики',
             expenses_by_sklad: 'Поставщики склада',
             realization_items: 'Спецификация реализации',
             realization_works: 'Спецификация услуг',
@@ -5378,7 +5378,6 @@ function updateFilterPanels(entity) {
         movementFilter.style.display = 'flex';
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
