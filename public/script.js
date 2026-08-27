@@ -4411,12 +4411,19 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
         const tr = e.target.closest('tr');
         if (!tr) return;
+        
+        // Отладка: проверяем, реальный это клик или программный
+        if (!e.isTrusted) {
+            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик!', {
+                currentEntity,
+                stack: new Error().stack
+            });
+        }
         
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
@@ -4565,8 +4572,8 @@ if (tableBody) {
                 console.log('📦 [Клик по складу расходов] Переключаем верхнюю таблицу на поставщиков склада:', selectedItem.sklad_id);
                 window.currentSkladId = selectedItem.sklad_id;
                 
-                // Очищаем текущего поставщика, чтобы при переходе на экран поставщиков ничего не проваливалось автоматически дальше
-                window.currentPostavhikId = null; 
+                // Сбрасываем поставщика, чтобы предотвратить авто-провал дальше
+                window.currentPostavhikId = null;
 
                 loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
             } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
@@ -4645,6 +4652,12 @@ if (tableBody) {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', selectedItem.id);
                 } else if (currentEntity === 'expenses_by_suppliers') {
+                    // ЕСЛИ ЭТО ИСКУСТВЕННЫЙ/АВТОМАТИЧЕСКИЙ КЛИК — МЫ ЕГО БЛОКИРУЕМ, ЧТОБЫ НЕ ПЕРЕЛИСТЫВАЛО ДАЛЬШЕ САМО
+                    if (!e.isTrusted) {
+                        console.log('🛡️ Блокируем авто-клик по первому поставщику!');
+                        return;
+                    }
+
                     const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                     const skladId = selectedItem.sklad_id || window.currentSkladId || '';
                     
@@ -4684,6 +4697,8 @@ if (tableBody) {
         }
     });
 }
+
+
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -4921,6 +4936,10 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
+
+
+
+
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
