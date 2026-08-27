@@ -4510,8 +4510,12 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData('repair_items', selectedItem.id);
             }
         } else if (currentEntity === 'expenses_by_sklad') {
-            // Проваливаемся из складов расходов к списку поставщиков этого склада
-            console.log('📦 [Клик по складу расходов] Проваливаемся к поставщикам склада:', selectedItem.sklad_id);
+            // ШАГ 1 -> ШАГ 2: Кликнули по складу расходов, перезагружаем верхнюю таблицу на поставщиков этого склада
+            console.log('📦 [Клик по складу расходов] Переключаем верхнюю таблицу на поставщиков склада:', selectedItem.sklad_id);
+            
+            // Сохраняем текущий выбранный склад глобально, чтобы нижняя таблица знала контекст
+            window.currentSkladId = selectedItem.sklad_id;
+
             loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
         } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
             console.log(`💰 [Клик] Обработка финансовой/реализационной сущности: ${currentEntity}`);
@@ -4582,11 +4586,11 @@ tableBody.addEventListener('click', async (e) => {
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
             } else if (currentEntity === 'expenses_by_suppliers') {
-                // Проваливаемся к списку позиций/деталей выбранного поставщика внизу, не трогая верхнюю таблицу
+                // ШАГ 2 -> ШАГ 3: Кликнули по поставщику в верхней таблице, подгружаем товары в нижнюю таблицу
                 const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                 const skladId = selectedItem.sklad_id || selectedItem.warehouse_id || window.currentSkladId || '';
                 
-                console.log(`📦 [Клик expenses_by_suppliers] Загружаем детали для поставщика: ${postavhikId}, склада: ${skladId}`);
+                console.log(`📦 [Клик expenses_by_suppliers] Загружаем купленные товары в нижнюю таблицу для поставщика: ${postavhikId}, склада: ${skladId}`);
                 
                 loadDetailData('expense_items', {
                     postavhik_id: postavhikId,
@@ -4839,6 +4843,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -4910,20 +4915,23 @@ async function loadDetailData(entity, parentId) {
     if (entity === 'move_items') {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
-        let expId = '';
+        // Безопасная сборка URL для спецификации расходов с учетом поставщика и склада
+        let postavhikId = '';
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            expId = parentId.expense_id || parentId.id || parentId.postavhik_id || '';
+            postavhikId = parentId.postavhik_id || parentId.id || '';
             skladId = parentId.sklad_id || parentId.warehouse_id || window.currentSkladId || '';
         } else {
-            expId = parentId;
+            postavhikId = parentId;
             skladId = window.currentSkladId || '';
         }
 
-        queryParamName = 'expense_id';
-        if (expId) {
-            fetchUrl = `/api/expense_items?expense_id=${expId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        queryParamName = 'postavhik_id';
+        if (postavhikId) {
+            fetchUrl = `/api/expense_items?postavhik_id=${postavhikId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        } else {
+            fetchUrl = `/api/expense_items`;
         }
     } else if (entity === 'expenses_by_suppliers') {
         let postavhikId = '';
