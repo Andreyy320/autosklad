@@ -4656,7 +4656,42 @@ if (tableBody) {
         }
     });
 }
+function handleExpenseClick(selectedItem) {
+    if (currentEntity === 'expenses_by_sklad') {
+        // Шаг 1: Кликнули по складу -> открываем поставщиков этого склада
+        window.currentSkladId = selectedItem.sklad_id;
+        window.currentPostavhikId = null; 
+        loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { 
+            sklad_id: selectedItem.sklad_id 
+        });
+    } 
+    else if (currentEntity === 'expenses_by_suppliers') {
+        // Шаг 2: Кликнули по поставщику -> открываем накладные
+        const postavhikId = selectedItem.postavhik_id || selectedItem.id;
+        const skladId = selectedItem.sklad_id || window.currentSkladId || '';
+        window.currentPostavhikId = postavhikId;
 
+        loadData('expenses_by_receipts', `Накладные поставщика`, {
+            postavhik_id: postavhikId,
+            sklad_id: skladId
+        });
+    } 
+    else if (currentEntity === 'expenses_by_receipts') {
+        // Шаг 3: Кликнули по накладной -> загружаем финальные позиции (запчасти) в нижний блок деталей
+        const receiptId = selectedItem.receipt_id || selectedItem.id;
+        const postavhikId = window.currentPostavhikId || selectedItem.postavhik_id || '';
+        const skladId = window.currentSkladId || selectedItem.sklad_id || '';
+
+        const detailContainer = document.getElementById('detail-container');
+        if (detailContainer) detailContainer.style.display = 'flex'; 
+
+        loadDetailData('expense_items', {
+            receipt_id: receiptId,
+            postavhik_id: postavhikId,
+            sklad_id: skladId
+        });
+    }
+}
 
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
