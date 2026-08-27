@@ -3052,7 +3052,6 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
-
 async function refreshData() {
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
@@ -3121,8 +3120,8 @@ async function refreshData() {
             // Шаг из накладных расходов к конкретным позициям/запчастям (expense_items)
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
-                expense_id: selectedItem.receipt_id || selectedItem.id,
-                postavhik_id: selectedItem.postavhik_id,
+                receipt_id: selectedItem.receipt_id || selectedItem.id,
+                postavhik_id: selectedItem.postavhik_id || window.currentPostavhikId,
                 sklad_id: targetSkladId
             };
             loadDetailData('expense_items', payload);
@@ -3139,6 +3138,7 @@ async function refreshData() {
         }
     }
 }
+
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -3419,7 +3419,6 @@ async function applyMovementFilters() {
     }
 }
 
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -3454,7 +3453,7 @@ async function loadData(entity, title, customParams = {}) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -3469,11 +3468,11 @@ async function loadData(entity, title, customParams = {}) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -3692,7 +3691,6 @@ async function loadData(entity, title, customParams = {}) {
             if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
             if (tabsForExpenses) tabsForExpenses.style.display = 'none';
 
-            // Управляем отображением панелей вкладок без автовыбора данных
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
