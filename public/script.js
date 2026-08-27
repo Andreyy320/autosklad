@@ -3062,25 +3062,28 @@ async function refreshData() {
         } else if (currentEntity === 'stock_movement') {
             loadDetailData('part_movement_details', selectedItem);
         } else if (currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
-            // Надежное определение активной вкладки (Запчасть / Услуга) прямо из интерфейса для приходов
             const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
             const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
             
-            loadDetailData(detailEntity, selectedItem);
-        } else if (currentEntity === 'expenses_by_sklad' || currentEntity === 'expenses_by_suppliers') {
-            // Поддержка новых таблиц расходов (закупок) по аналогии с приходами
+            const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
+            const payload = {
+                customer_id: selectedItem.customer_id || selectedItem.id,
+                sklad_id: targetSkladId
+            };
+            loadDetailData(detailEntity, payload);
+        } else if (currentEntity === 'expenses_by_sklad') {
+            // Если находимся на уровне складов расходов, детали нижние не грузим (или можно оставить пустыми/информационными)
+            emptyDetailBody?.();
+        } else if (currentEntity === 'expenses' || currentEntity === 'expenses_by_suppliers') {
             const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
             const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
             
-            // Если тыкнули на склад, проваливаемся в поставщиков этого склада
-            if (currentEntity === 'expenses_by_sklad' && selectedItem.sklad_id) {
-                // Здесь передаем ID склада, чтобы подгрузить список поставщиков по нему
-                loadData('expenses_by_suppliers', 'Поставщики по складу', { sklad_id: selectedItem.sklad_id });
-            } else {
-                // Если уже в поставщиках, грузим детальный список запчастей (expense_items) в нижнюю таблицу по ID закупки (receipt_id)
-                const receiptId = selectedItem.id || selectedItem.receipt_id;
-                loadDetailData(detailEntity, receiptId);
-            }
+            const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
+            const payload = {
+                postavhik_id: selectedItem.postavhik_id || selectedItem.id,
+                sklad_id: targetSkladId
+            };
+            loadDetailData(detailEntity, payload);
         }
     }
 }
@@ -5100,6 +5103,8 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
@@ -5195,9 +5200,9 @@ const navMap = {
     'Детали приходов':'money_receipts_detail',
     'Аналитика по складам':'money_receipts_by_sklad',
     'Детали услуг':'money_receipts_works_detail',
-     'Расходы по складам':'expenses_by_sklad',
-     'Расходы':'expenses_by_suppliers',
-     'Детали расходов':'expense_items'
+    'Расходы по складам':'expenses_by_sklad',
+    'Расходы':'expenses_by_suppliers',
+    'Детали расходов':'expense_items'
 };
 
 function updateFilterPanels(entity) {
@@ -5216,7 +5221,6 @@ function updateFilterPanels(entity) {
     }
 }
 
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -5232,8 +5236,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity = 'money_receipts_by_sklad';
         }
         
-        // Если кликнули на Расходы (expenses), подменяем на уровень складов расходов
-        if (entity === 'expenses') {
+        // Если кликнули на Расходы (expenses или expenses_by_suppliers), всегда подменяем на первый уровень (склады расходов)
+        if (entity === 'expenses' || entity === 'expenses_by_suppliers') {
             entity = 'expenses_by_sklad';
         }
         
@@ -5366,7 +5370,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         loadData(entity, text);
     });
 });
-
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
