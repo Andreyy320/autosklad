@@ -4608,18 +4608,18 @@ if (tableBody) {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', selectedItem.id);
                 } else if (currentEntity === 'expenses_by_sklad') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО СКЛАДУ
+                    // Разрешаем переход ТОЛЬКО при реальном клике пользователя
                     if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по складу расходов');
+                        console.log('🛡️ Пропущен программный клик по складу расходов');
                         return;
                     }
                     window.currentSkladId = selectedItem.sklad_id;
                     window.currentPostavhikId = null; 
                     loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                 } else if (currentEntity === 'expenses_by_suppliers') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО ПОСТАВЩИКУ
+                    // Разрешаем переход ТОЛЬКО при реальном клике пользователя
                     if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по поставщику');
+                        console.log('🛡️ Пропущен программный клик по поставщику');
                         return;
                     }
 
@@ -4632,9 +4632,9 @@ if (tableBody) {
                         sklad_id: skladId
                     });
                 } else if (currentEntity === 'expenses_by_receipts') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО НАКЛАДНОЙ
+                    // Разрешаем загрузку состава накладной ТОЛЬКО при реальном клике пользователя
                     if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по накладной');
+                        console.log('🛡️ Пропущен программный клик по накладной');
                         return;
                     }
 
@@ -4644,7 +4644,10 @@ if (tableBody) {
 
                     if (detailContainer) detailContainer.style.display = 'flex'; 
 
-                    loadDetailData('expense_items', {
+                    const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
+                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
+
+                    loadDetailData(detailEntity, {
                         receipt_id: receiptId,
                         postavhik_id: postavhikId,
                         sklad_id: skladId
