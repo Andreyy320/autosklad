@@ -4242,19 +4242,18 @@ async function postReceipt(receiptId) {
 }
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
-    // Флаг для защиты от случайных или двойных срабатываний клика
     let isHandlingClick = false;
 
     tableBody.addEventListener('click', async (e) => {
-        if (isHandlingClick) return; // Если уже обрабатываем клик — игнорируем остальные
+        if (isHandlingClick) return;
 
         const tr = e.target.closest('tr');
         if (!tr) return;
         
-        // Отладка
+        // ЖЕСТКИЙ ЗАПРЕТ: Если клик программный (не от реального пользователя мышей) — прерываем!
         if (!e.isTrusted) {
-            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик для сущности:', currentEntity);
-            return; // Жестко прерываем искусственные клики
+            console.warn('🛡️ Заблокирован фальшивый/программный клик для:', currentEntity);
+            return;
         }
 
         isHandlingClick = true;
@@ -4427,14 +4426,12 @@ if (tableBody) {
                     } else if (currentEntity === 'expenses_by_sklad') {
                         window.currentSkladId = selectedItem.sklad_id;
                         window.currentPostavhikId = null; 
-                        // Переход на 2-й уровень: Поставщики выбранного склада
                         await loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                     } else if (currentEntity === 'expenses_by_suppliers') {
                         const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                         const skladId = selectedItem.sklad_id || window.currentSkladId || '';
                         window.currentPostavhikId = postavhikId;
 
-                        // Переход на 3-й уровень: Накладные поставщика
                         await loadData('expenses_by_receipts', `Накладные поставщика: ${selectedItem.postavhik_name || selectedItem.name || 'Поставщик'}`, {
                             postavhik_id: postavhikId,
                             sklad_id: skladId
@@ -4442,7 +4439,7 @@ if (tableBody) {
                     } else if (currentEntity === 'expenses_by_receipts') {
                         const receiptId = selectedItem.receipt_id || selectedItem.id;
                         const postavhikId = window.currentPostavhikId || selectedItem.postavhik_id || '';
-                        const skladId = window.currentSkladId || selectedItem.sklad_id || '';
+                        const skladId = window.currentSkladId || selectedItem.skld_id || '';
 
                         if (detailContainer) detailContainer.style.display = 'flex'; 
 
@@ -4464,10 +4461,9 @@ if (tableBody) {
                 }
             }
         } finally {
-            // Снимаем блокировку через небольшой таймаут, чтобы избежать дребезга кликов
             setTimeout(() => {
                 isHandlingClick = false;
-            }, 300);
+            }, 400);
         }
     });
 }
