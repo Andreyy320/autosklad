@@ -4360,6 +4360,12 @@ async function postReceipt(receiptId) {
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
+        // 🛑 ЗАЩИТА: Если мы находимся в разделах расходов, глобальный клик 
+        // полностью отключается, так как там работает своя изолированная логика loadExpenseMainData!
+        if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentEntity)) {
+            return; 
+        }
+
         const tr = e.target.closest('tr');
         if (!tr) return;
         
@@ -4522,15 +4528,8 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
-                // Интегрированные уровни расходов и ваша кастомная детализация
-                if (currentEntity === 'expenses_by_sklad') {
-                    loadExpenseMainData('expenses_by_suppliers', selectedItem);
-                } else if (currentEntity === 'expenses_by_suppliers') {
-                    loadExpenseMainData('expenses_by_receipts', selectedItem);
-                } else if (currentEntity === 'expenses_by_receipts') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
-                    loadExpenseMainData('expense_items', selectedItem); 
-                } else if (currentEntity === 'receipts') {
+                // Стандартные ветки для других разделов
+                if (currentEntity === 'receipts') {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', selectedItem.id);
                 } else if (currentEntity === 'moves') {
@@ -5183,6 +5182,7 @@ const navMap = {
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items'         // Поменяли "Детали расходов" для единообразия
 };
+
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
