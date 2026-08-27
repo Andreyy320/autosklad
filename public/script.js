@@ -4368,6 +4368,7 @@ async function postReceipt(receiptId) {
         }
     );
 }
+
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4512,8 +4513,8 @@ tableBody.addEventListener('click', async (e) => {
             // Проваливаемся из складов расходов к списку поставщиков этого склада
             console.log('📦 [Клик по складу расходов] Проваливаемся к поставщикам склада:', selectedItem.sklad_id);
             loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
-        } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
-            console.log(`💰 [Клик] Обработка финансовой/реализационной сущности: ${currentEntity}`);
+        } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad' || currentEntity === 'expenses_by_suppliers') {
+            console.log(`💰 [Клик] Обработка финансовой/иерархической сущности: ${currentEntity}`);
             if (carTabsPanel) carTabsPanel.style.display = 'flex';
             if (tabsForCars) tabsForCars.style.display = 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -4525,7 +4526,7 @@ tableBody.addEventListener('click', async (e) => {
             const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
             
             if (realizationsTabs) realizationsTabs.style.display = (currentEntity === 'realizations') ? 'flex' : 'none';
-            if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts') ? 'flex' : 'none';
+            if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts' || currentEntity === 'expenses_by_suppliers') ? 'flex' : 'none';
 
             if (currentEntity === 'money_receipts_by_sklad') {
                 console.log('📦 [Проваливаемся в склад]:', selectedItem.sklad_id);
@@ -4547,6 +4548,18 @@ tableBody.addEventListener('click', async (e) => {
                 loadDetailData(subTabName, {
                     customer_id: selectedItem.customer_id,
                     sklad_id: selectedItem.sklad_id
+                });
+            } else if (currentEntity === 'expenses_by_suppliers') {
+                // Аналогично приходам денег: загружаем детали (например, накладные/позиции) для выбранного поставщика и склада, не ломая верхнюю таблицу
+                const postavhikId = selectedItem.postavhik_id || selectedItem.id;
+                const skladId = selectedItem.sklad_id || selectedItem.warehouse_id || window.currentSkladId || '';
+                
+                const subTabName = 'expense_items';
+                console.log(`📦 [Клик expenses_by_suppliers] Загружаем детали для поставщика: ${postavhikId}, склада: ${skladId}`);
+                
+                loadDetailData(subTabName, {
+                    postavhik_id: postavhikId,
+                    sklad_id: skladId
                 });
             } else {
                 if (realizationsTabs) realizationsTabs.style.display = 'flex';
@@ -4573,24 +4586,13 @@ tableBody.addEventListener('click', async (e) => {
             if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
 
             if (carTabsPanel) {
-                carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'customers') ? 'flex' : 'none';
+                carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
             }
 
             if (currentEntity === 'receipts') {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
-            } else if (currentEntity === 'expenses_by_suppliers') {
-                // Проваливаемся к списку накладных выбранного поставщика
-                const postavhikId = selectedItem.postavhik_id || selectedItem.id;
-                const skladId = selectedItem.sklad_id || selectedItem.warehouse_id || window.currentSkladId || '';
-                
-                console.log(`📦 [Клик expenses_by_suppliers] Загружаем накладные для поставщика: ${postavhikId}, склада: ${skladId}`);
-                
-                loadDetailData('expenses_by_suppliers', {
-                    postavhik_id: postavhikId,
-                    sklad_id: skladId
-                });
             } else if (currentEntity === 'postavhik') {
                 loadDetailData('postavhik_contacts', selectedItem.id);
             } else if (currentEntity === 'counterparties') {
