@@ -3532,7 +3532,7 @@ async function loadData(entity, title, customParams = {}) {
 
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
-            tr.dataset.id = item.id || '';
+            tr.dataset.id = item.id || item.postavhik_id || '';
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
@@ -3593,8 +3593,8 @@ async function loadData(entity, title, customParams = {}) {
                         window.currentSkladId = targetSkladId;
                     }
 
-                    // Передаем receipt_id (или id строки), так как бэкенд ждет receipt_id для expense_items
-                    const receiptId = item.id; 
+                    // Безопасно берем ID поставщика или ID строки
+                    const receiptId = item.postavhik_id || item.id; 
                     console.log('🔍 [Клик по поставщику в expenses_by_suppliers] Отправляем receipt_id в loadDetailData:', { detailEntity, receiptId });
                     loadDetailData(detailEntity, receiptId);
                 } else if (entity === 'cars') {
@@ -3762,7 +3762,8 @@ async function loadData(entity, title, customParams = {}) {
                         const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
 
-                        const receiptId = selectedItem.id;
+                        // Безопасно берем ID поставщика или ID строки при автозагрузке
+                        const receiptId = selectedItem.postavhik_id || selectedItem.id;
                         console.log('📌 [Автозагрузка первой строки expenses_by_suppliers] receiptId:', receiptId);
                         loadDetailData(detailEntity, receiptId);
                     }
@@ -3919,6 +3920,8 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
