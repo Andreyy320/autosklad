@@ -4522,13 +4522,14 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
-                // Интегрированные уровни расходов
+                // Интегрированные уровни расходов и ваша кастомная детализация
                 if (currentEntity === 'expenses_by_sklad') {
                     loadExpenseMainData('expenses_by_suppliers', selectedItem);
                 } else if (currentEntity === 'expenses_by_suppliers') {
                     loadExpenseMainData('expenses_by_receipts', selectedItem);
                 } else if (currentEntity === 'expenses_by_receipts') {
-                    loadExpenseMainData('expense_items', selectedItem);
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadExpenseMainData('expense_items', selectedItem); 
                 } else if (currentEntity === 'receipts') {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', selectedItem.id);
