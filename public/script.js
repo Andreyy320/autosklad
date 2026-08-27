@@ -3921,7 +3921,6 @@ function filterTable() {
 let selectedDetailItem = null;
 let currentDetailItems = []; 
 
-
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -3938,6 +3937,12 @@ function getCurrentDetailEntity() {
     if (currentEntity === 'expenses') {
         const res = 'expense_items';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses: ${res}`);
+        return res;
+    }
+    // Добавлено для расходов по поставщикам (без тумблеров, всегда отдаем expense_items)
+    if (currentEntity === 'expenses_by_suppliers') {
+        const res = 'expense_items';
+        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: ${res}`);
         return res;
     }
     if (currentEntity === 'cars') {
@@ -4344,7 +4349,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 tableBody.addEventListener('click', async (e) => {
     const tr = e.target.closest('tr');
@@ -4542,14 +4546,14 @@ tableBody.addEventListener('click', async (e) => {
             if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
 
             if (carTabsPanel) {
-                carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses' || currentEntity === 'customers') ? 'flex' : 'none';
+                carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'customers') ? 'flex' : 'none';
             }
 
             if (currentEntity === 'receipts') {
                 loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
                 loadDetailData('move_items', selectedItem.id);
-            } else if (currentEntity === 'expenses') {
+            } else if (currentEntity === 'expenses_by_suppliers') {
                 loadDetailData('expense_items', selectedItem.id);
             } else if (currentEntity === 'postavhik') {
                 loadDetailData('postavhik_contacts', selectedItem.id);
@@ -4561,6 +4565,7 @@ tableBody.addEventListener('click', async (e) => {
         }
     }
 });
+
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -4798,7 +4803,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -4917,7 +4921,6 @@ async function loadDetailData(entity, parentId) {
             skladId = window.currentSkladId || '';
         }
         
-        // Используем activeEntity, чтобы точно знать, запрашиваем мы товары или услуги
         let apiRoute = activeEntity;
         if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
@@ -4949,6 +4952,10 @@ async function loadDetailData(entity, parentId) {
                 fetchUrl = `/api/accident_images?accident_id=${cleanParentId}`;
             }
         } else {
+            // Поддержка для expenses_by_suppliers (передает expense_id) и других сущностей
+            if (entity === 'expenses_by_suppliers') {
+                queryParamName = 'expense_id';
+            }
             fetchUrl = `/api/${entity}?${queryParamName}=${cleanParentId}`;
         }
     }
@@ -5025,6 +5032,7 @@ async function loadDetailData(entity, parentId) {
             receipt_items: 'Спецификация прихода',
             move_items: 'Спецификация перемещения',
             expense_items: 'Спецификация расходов',
+            expenses_by_suppliers: 'Спецификация расходов',
             realization_items: 'Спецификация реализации',
             realization_works: 'Спецификация услуг',
             realization_payments: 'Платежи реализации',
@@ -5038,7 +5046,7 @@ async function loadDetailData(entity, parentId) {
             customer_cars: 'Автомобили клиента',
             car_details: 'Детали автомобиля'
         };
-        const prettyEntityName = entityTitles[activeEntity] || config.title || activeEntity;
+        const prettyEntityName = entityTitles[activeEntity] || entityTitles[entity] || config.title || activeEntity;
 
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
@@ -5101,8 +5109,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
-
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
