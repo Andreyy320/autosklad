@@ -3702,11 +3702,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const mainTableBody = document.getElementById('table-body');
     const mainHeaderTr = document.getElementById('table-headers');
 
-    // Если это самый первый уровень (Склады) или второй (Поставщики) или третий (Накладные)
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
         fetchUrl = `/api/expenses_by_sklad`;
-        if (detailContainer) detailContainer.style.display = 'none'; // Скрываем низ пока не дошли до запчастей
+        if (detailContainer) detailContainer.style.display = 'none';
     } else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         window.currentSkladId = skladId || window.currentSkladId;
@@ -3719,17 +3718,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${postavhikId}${skladId ? '&sklad_id=' + skladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
     } 
-    // САМЫЙ НИЖНИЙ УРОВЕНЬ: Запчасти (выводим в нижнюю таблицу, как в приходах!)
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
         let postavhikId = window.currentPostavhikId || '';
         let skladId = window.currentSkladId || '';
         fetchUrl = `/api/expense_items?receipt_id=${receiptId}${postavhikId ? '&postavhik_id=' + postavhikId : ''}${skladId ? '&sklad_id=' + skladId : ''}`;
 
-        // Показываем нижний контейнер для запчастей
         if (detailContainer) detailContainer.style.display = 'flex';
-        
-        // Загружаем спецификацию в нижнюю таблицу точно так же, как для приходов
         loadExpenseDetailTable(fetchUrl);
         return; 
     }
@@ -3749,13 +3744,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     try {
         const response = await fetch(fetchUrl, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Type': 'application/json' }
         });
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
         const items = await response.json();
-        console.log(`📦 [loadExpenseMainData] Получено для ${currentExpenseView}:`, items);
 
         if (!mainTableBody) return;
 
@@ -3780,7 +3774,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 } else if (currentExpenseView === 'expenses_by_suppliers') {
                     loadExpenseMainData('expenses_by_receipts', item);
                 } else if (currentExpenseView === 'expenses_by_receipts') {
-                    // Переход к показу запчастей в нижней таблице!
                     loadExpenseMainData('expense_items', item);
                 }
             };
@@ -3796,13 +3789,26 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 }
 
-// Вспомогательная функция для заполнения НИЖНЕЙ таблицы запчастями расходов
+// Функция для нижней таблицы с корректной генерацией шапки по вашему конфигу `expense_items`
 async function loadExpenseDetailTable(fetchUrl) {
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    if (detailTitle) detailTitle.innerText = 'Спецификация расходной накладной';
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
+    const config = getConfig('expense_items');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    // Динамически выстраиваем шапку нижней таблицы под ваш конфиг
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 5;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
 
     try {
         const response = await fetch(fetchUrl);
@@ -3812,33 +3818,20 @@ async function loadExpenseDetailTable(fetchUrl) {
         if (!detailBody) return;
 
         if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
             return;
         }
 
-        // Используем конфиг для элемента расхода (например, 'expense_items')
-        const config = getConfig('expense_items');
-        
         detailBody.innerHTML = '';
         items.forEach(item => {
             const tr = document.createElement('tr');
-            tr.innerHTML = config ? config.render(item) : `
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.artikul || ''}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.code || ''}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.name || ''}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: center;">${item.qty || 0}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.unit || ''}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${item.price || 0}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.currency || ''}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: right;">${item.sum || 0}</td>
-                <td style="padding: 6px; border-bottom: 1px solid #eee;">${item.description || ''}</td>
-            `;
+            tr.innerHTML = config.render(item); // Использует ваш точный рендер из конфига expense_items
             detailBody.appendChild(tr);
         });
     } catch (err) {
         console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
         if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
         }
     }
 }
