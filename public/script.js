@@ -4872,7 +4872,7 @@ async function loadDetailData(entity, parentId) {
     console.log(`📌 [loadDetailData] activeEntity определен как: "${activeEntity}"`);
 
     let cleanParentId = parentId;
-    const skipObjectCleaning = ['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail', 'expenses_by_sklad', 'expenses_by_suppliers'];
+    const skipObjectCleaning = ['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail', 'expenses_by_sklad', 'expenses_by_suppliers', 'expense_items'];
     
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.expense_id || parentId.postavhik_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
@@ -4910,7 +4910,21 @@ async function loadDetailData(entity, parentId) {
     if (entity === 'move_items') {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
+        let expId = '';
+        let skladId = '';
+
+        if (parentId && typeof parentId === 'object') {
+            expId = parentId.expense_id || parentId.id || parentId.postavhik_id || '';
+            skladId = parentId.sklad_id || parentId.warehouse_id || window.currentSkladId || '';
+        } else {
+            expId = parentId;
+            skladId = window.currentSkladId || '';
+        }
+
         queryParamName = 'expense_id';
+        if (expId) {
+            fetchUrl = `/api/expense_items?expense_id=${expId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        }
     } else if (entity === 'expenses_by_suppliers') {
         let postavhikId = '';
         let skladId = '';
