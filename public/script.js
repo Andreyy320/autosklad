@@ -3109,11 +3109,16 @@ async function refreshData() {
             };
             loadDetailData(detailEntity, payload);
         } else if (currentEntity === 'expenses_by_sklad') {
-            console.log('📂 [refreshData] Уровень expenses_by_sklad — детали не грузим автоматически.');
+            console.log('📂 [refreshData] Уровень расходов по складам — сбрасываем выбор, детали не грузим.');
+            selectedItem = null; // Принудительно сбрасываем, чтобы единица не подставлялась
             if (typeof emptyDetailBody === 'function') {
                 emptyDetailBody();
             }
         } else if (currentEntity === 'expenses_by_suppliers') {
+            if (!selectedItem || (!selectedItem.sklad_id && !selectedItem.id)) {
+                console.log('⚠️ Нет ID склада для загрузки поставщиков расходов');
+                return;
+            }
             console.log('📂 [refreshData] Загрузка expenses_by_receipts для поставщика');
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
@@ -3122,6 +3127,10 @@ async function refreshData() {
             };
             loadDetailData('expenses_by_receipts', payload);
         } else if (currentEntity === 'expenses_by_receipts') {
+            if (!selectedItem || (!selectedItem.receipt_id && !selectedItem.id)) {
+                console.log('⚠️ Нет ID накладной для загрузки позиций расходов');
+                return;
+            }
             console.log('📂 [refreshData] Загрузка expense_items для накладной');
             const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             const payload = {
@@ -3130,16 +3139,6 @@ async function refreshData() {
                 sklad_id: targetSkladId
             };
             loadDetailData('expense_items', payload);
-        } else if (currentEntity === 'expenses') {
-            const activeTabBtn = document.querySelector('#tabs-for-expenses button.active, #tabs-for-expenses .expense-tab-btn.active');
-            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expenses_by_suppliers';
-            
-            const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
-            const payload = {
-                postavhik_id: selectedItem.postavhik_id || selectedItem.id,
-                sklad_id: targetSkladId
-            };
-            loadDetailData(detailEntity, payload);
         }
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
@@ -3648,8 +3647,8 @@ async function loadData(entity, title, customParams = {}) {
                     const postavhikId = item.postavhik_id || item.id;
                     loadData('expenses_by_receipts', `Накладные поставщика`, { postavhik_id: postavhikId, sklad_id: skladId });
                 } else if (entity === 'expenses_by_receipts') {
-                    const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
-                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
+                    // Используем стандартный дефолтный эндпоинт для деталей расходов, если вкладки отсутствуют
+                    const detailEntity = 'expense_items';
 
                     const targetSkladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
                     if (targetSkladId) {
@@ -3687,7 +3686,6 @@ async function loadData(entity, title, customParams = {}) {
         const tabsForCustomers = document.getElementById('tabs-for-customers');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
         const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
-        const tabsForExpenses = document.getElementById('tabs-for-expenses');
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -3696,7 +3694,6 @@ async function loadData(entity, title, customParams = {}) {
             if (tabsForCustomers) tabsForCustomers.style.display = 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = 'none';
             if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-            if (tabsForExpenses) tabsForExpenses.style.display = 'none';
 
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
@@ -3727,18 +3724,11 @@ async function loadData(entity, title, customParams = {}) {
                 }
                 if (typeof emptyDetailBody === 'function') emptyDetailBody();
             } else if (entity === 'expenses_by_suppliers' || entity === 'expenses_by_sklad' || entity === 'expenses_by_receipts') {
-                carTabsBar.style.display = 'flex';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
+                // Убираем показ панели табов для расходов, так как их нет
+                carTabsBar.style.display = 'none';
                 selectedItem = null;
                 if (customParams.sklad_id) {
                     window.currentSkladId = customParams.sklad_id;
-                }
-                if (tabsForExpenses) {
-                    const firstBtn = tabsForExpenses.querySelector('button');
-                    if (firstBtn) {
-                        tabsForExpenses.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        firstBtn.classList.add('active');
-                    }
                 }
                 if (typeof emptyDetailBody === 'function') {
                     emptyDetailBody();
@@ -3761,7 +3751,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 function emptyDetailBody(entity) {
@@ -4317,7 +4306,6 @@ if (tableBody) {
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        const tabsForExpenses = document.getElementById('tabs-for-expenses');
         const detailContainer = document.getElementById('detail-container');
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -4352,7 +4340,6 @@ if (tableBody) {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
                 loadDetailData('car_details', selectedItem.id);
             } else if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
@@ -4361,7 +4348,6 @@ if (tableBody) {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
                 
                 const activeCarTab = document.querySelector('.car-tab-btn.active') || document.querySelector('.car-tab-btn');
@@ -4376,7 +4362,6 @@ if (tableBody) {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 const activeAccidentTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
@@ -4390,7 +4375,6 @@ if (tableBody) {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 const activeRepairTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
@@ -4404,7 +4388,6 @@ if (tableBody) {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 const realizationsTabs = document.getElementById('tabs-for-realizations');
@@ -4446,10 +4429,6 @@ if (tableBody) {
 
                 if (carTabsPanel) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_sklad' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts' || currentEntity === 'customers') ? 'flex' : 'none';
-                }
-
-                if (tabsForExpenses) {
-                    tabsForExpenses.style.display = (currentEntity === 'expenses_by_sklad' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts') ? 'flex' : 'none';
                 }
 
                 if (currentEntity === 'receipts') {
@@ -4495,8 +4474,7 @@ if (tableBody) {
 
                     if (detailContainer) detailContainer.style.display = 'flex'; 
 
-                    const activeTabBtn = document.querySelector('#tabs-for-expenses button.active');
-                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'expense_items';
+                    const detailEntity = 'expense_items';
 
                     loadDetailData(detailEntity, {
                         receipt_id: receiptId,
@@ -5278,8 +5256,7 @@ function updateFilterPanels(entity) {
     }
 }
 
-
-    document.querySelectorAll('.nav-link').forEach(link => {
+document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             
@@ -5308,7 +5285,6 @@ function updateFilterPanels(entity) {
             const tabsForRepairs = document.getElementById('tabs-for-repairs');
             const tabsForRealizations = document.getElementById('tabs-for-realizations');
             const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
-            const tabsForExpenses = document.getElementById('tabs-for-expenses');
 
             const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
             if (actionButtonsBar) {
@@ -5376,49 +5352,42 @@ function updateFilterPanels(entity) {
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 } else if (entity === 'accidents') {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 } else if (entity === 'repairs') {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 } else if (entity === 'realizations') {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 } else if (entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
                 } else {
                     if (tabsForCars) tabsForCars.style.display = 'none';
                     if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                     if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                     if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                     if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
                 }
             } else {
                 if (detailContainer) detailContainer.style.display = 'none';
