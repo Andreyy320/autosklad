@@ -3563,7 +3563,7 @@ router.get('/money_receipts_works_detail', async (req, res) => {
 });
 
 
-
+// 1. Расходы по складам (уровень 1)
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3592,45 +3592,11 @@ router.get('/expenses_by_sklad', async (req, res) => {
     }
 });
 
+// 2. Список поставщиков для конкретного склада (уровень 2)
 router.get('/expenses_by_suppliers', async (req, res) => {
     try {
-        const { sklad_id, postavhik_id } = req.query;
+        const { sklad_id } = req.query;
 
-        // Если передан postavhik_id — отдаем конкретные накладные (детали)
-        if (postavhik_id) {
-            const detailQuery = `
-                SELECT 
-                    rec.id AS id,
-                    rec.id AS receipt_id,
-                    p.id AS postavhik_id,
-                    COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-                    sk.name::text AS sklad_name,
-                    rec.date,
-                    COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                    COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
-                FROM receipts rec
-                JOIN postavhik p ON rec.supplier_id = p.id
-                LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
-                LEFT JOIN (
-                    SELECT 
-                        ri.receipt_id, 
-                        SUM(ri.quantity) AS total_qty, 
-                        SUM(ri.total_rub) AS total_sum
-                    FROM receipt_items ri
-                    GROUP BY ri.receipt_id
-                ) sub_i ON rec.id = sub_i.receipt_id
-                WHERE rec.is_posted = true
-                  AND p.id = $1::integer
-                  AND ($2::integer IS NULL OR rec.warehouse_id = $2::integer)
-                ORDER BY rec.date DESC;
-            `;
-            
-            const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
-            const detailResult = await pool.query(detailQuery, [postavhik_id, sId]);
-            return res.json(detailResult.rows);
-        }
-
-        // Иначе — отдаем общий список поставщиков для склада
         const listQuery = `
             SELECT 
                 p.id AS id,
@@ -3666,14 +3632,68 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+// 3. Список накладных по поставщику и складу (уровень 3)
+router.get('/expenses_by_receipts', async (req, res) => {
+    try {
+        const { sklad_id, postavhik_id } = req.query;
+
+        let query = `
+            SELECT 
+                rec.id AS id,
+                rec.id AS receipt_id,
+                COALESCE(rec.doc_number, 'Без номера')::text AS doc_number,
+                p.id AS postavhik_id,
+                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                sk.name::text AS sklad_name,
+                rec.date,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+            FROM receipts rec
+            JOIN postavhik p ON rec.supplier_id = p.id
+            LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
+            LEFT JOIN (
+                SELECT 
+                    ri.receipt_id, 
+                    SUM(ri.quantity) AS total_qty, 
+                    SUM(ri.total_rub) AS total_sum
+                FROM receipt_items ri
+                GROUP BY ri.receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            WHERE rec.is_posted = true
+        `;
+
+        const queryParams = [];
+
+        const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
+        if (sId) {
+            queryParams.push(sId);
+            query += ` AND rec.warehouse_id = $${queryParams.length}`;
+        }
+
+        const pId = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
+        if (pId) {
+            queryParams.push(pId);
+            query += ` AND rec.supplier_id = $${queryParams.length}`;
+        }
+
+        query += ` ORDER BY rec.date DESC;`;
+
+        const result = await pool.query(query, queryParams);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения списка накладных (expenses_by_receipts):', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4. Детали (позиции) конкретной накладной (уровень 4 / таблица деталей)
 router.get('/expense_items', async (req, res) => {
     try {
         const postavhikId = req.query.postavhik_id;
         const skladId = req.query.sklad_id;
         const expenseId = req.query.expense_id || req.query.receipt_id;
 
-        // Забираем строки из receipt_items, привязанные к накладным (receipts), 
-        // которые фильтруются по поставщику и складу
         let query = `
             SELECT 
                 ri.id AS id,
@@ -3708,8 +3728,6 @@ router.get('/expense_items', async (req, res) => {
 
         query += ` ORDER BY ri.id ASC;`;
 
-        console.log(`🔍 [API /expense_items] SQL:`, query, `Params:`, queryParams);
-
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
     } catch (err) {
@@ -3717,66 +3735,6 @@ router.get('/expense_items', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
-
-router.get('/expenses_by_receipts', async (req, res) => {
-    try {
-        const { sklad_id, postavhik_id } = req.query;
-
-        let query = `
-            SELECT 
-                rec.id AS id,
-                rec.id AS receipt_id,
-                COALESCE(rec.doc_number, 'Без номера')::text AS doc_number,
-                p.id AS postavhik_id,
-                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-                sk.name::text AS sklad_name,
-                rec.date,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
-            FROM receipts rec
-            JOIN postavhik p ON rec.supplier_id = p.id
-            LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
-            LEFT JOIN (
-                SELECT 
-                    ri.receipt_id, 
-                    SUM(ri.quantity) AS total_qty, 
-                    SUM(ri.total_rub) AS total_sum
-                FROM receipt_items ri
-                GROUP BY ri.receipt_id
-            ) sub_i ON rec.id = sub_i.receipt_id
-            WHERE rec.is_posted = true
-        `;
-
-        const queryParams = [];
-
-        // Фильтр по складу, если передан
-        const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
-        if (sId) {
-            queryParams.push(sId);
-            query += ` AND rec.warehouse_id = $${queryParams.length}`;
-        }
-
-        // Фильтр по поставщику, если передан
-        const pId = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
-        if (pId) {
-            queryParams.push(pId);
-            query += ` AND rec.supplier_id = $${queryParams.length}`;
-        }
-
-        query += ` ORDER BY rec.date DESC;`;
-
-        console.log(`🔍 [API /expenses_by_receipts] SQL:`, query, `Params:`, queryParams);
-
-        const result = await pool.query(query, queryParams);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('❌ Ошибка получения списка накладных (expenses_by_receipts):', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
 
 
 
