@@ -4564,6 +4564,10 @@ if (tableBody) {
             } else if (currentEntity === 'expenses_by_sklad') {
                 console.log('📦 [Клик по складу расходов] Переключаем верхнюю таблицу на поставщиков склада:', selectedItem.sklad_id);
                 window.currentSkladId = selectedItem.sklad_id;
+                
+                // Очищаем текущего поставщика, чтобы при переходе на экран поставщиков ничего не проваливалось автоматически дальше
+                window.currentPostavhikId = null; 
+
                 loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
             } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
                 console.log(`💰 [Клик] Обработка финансовой/реализационной сущности: ${currentEntity}`);
@@ -4630,7 +4634,6 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
-                // Управление отображением панели вкладок расходов при клике на поставщиков/накладные расходов
                 if (tabsForExpenses) {
                     tabsForExpenses.style.display = (currentEntity === 'expenses_by_suppliers' || currentEntity === 'expenses_by_receipts') ? 'flex' : 'none';
                 }
