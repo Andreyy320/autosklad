@@ -3449,6 +3449,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3560,6 +3561,111 @@ router.get('/money_receipts_works_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
+
+
+
+
+router.get('/expenses_by_sklad', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                sk.id AS id,
+                sk.id AS sklad_id,
+                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
+                COUNT(DISTINCT rec.id)::integer AS total_receipts,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+            FROM receipts rec
+            LEFT JOIN skladi sk ON rec.sklad_id = sk.id
+            -- Подзапрос для суммирования количества и суммы по накладным прихода
+            LEFT JOIN (
+                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+                FROM receipt_items ri
+                GROUP BY ri.receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            WHERE rec.is_posted = true
+            GROUP BY sk.id, sk.name, sub_i.total_qty, sub_i.total_sum
+            ORDER BY total_expense_sum DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения расходов по складам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
+router.get('/expenses_by_suppliers', async (req, res) => {
+    try {
+        const { sklad_id } = req.query;
+
+        const query = `
+            SELECT 
+                p.id AS postavhik_id,
+                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                sk.name::text AS sklad_name,
+                COUNT(DISTINCT rec.id)::integer AS total_receipts,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+            FROM receipts rec
+            JOIN postavhiki p ON rec.postavhik_id = p.id
+            LEFT JOIN skladi sk ON rec.sklad_id = sk.id
+            LEFT JOIN (
+                SELECT 
+                    ri.receipt_id, 
+                    SUM(ri.quantity) AS total_qty, 
+                    SUM(ri.total_rub) AS total_sum
+                FROM receipt_items ri
+                GROUP BY ri.receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            WHERE rec.is_posted = true
+              AND ($1::integer IS NULL OR rec.sklad_id = $1)
+            GROUP BY p.id, p.name, sk.name, sub_i.total_qty, sub_i.total_sum
+            ORDER BY total_expense_sum DESC;
+        `;
+        const result = await pool.query(query, [sklad_id || null]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения расходов по поставщикам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
+
+router.get('/expense_items', async (req, res) => {
+    try {
+        const { receipt_id } = req.query;
+
+        const query = `
+            SELECT 
+                ri.id AS id,
+                COALESCE(p.name, ri.part_name, 'Запчасть')::text AS part_name,
+                COALESCE(p.article, ri.article, '—')::text AS article,
+                ri.quantity::numeric AS quantity,
+                ri.purchase_price::numeric AS purchase_price,
+                ri.total_rub::numeric AS total_rub
+            FROM receipt_items ri
+            LEFT JOIN parts p ON ri.part_id = p.id
+            WHERE ri.receipt_id = $1
+            ORDER BY ri.id ASC;
+        `;
+        
+        const result = await pool.query(query, [receipt_id || null]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения деталей закупки (expense_items):', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
