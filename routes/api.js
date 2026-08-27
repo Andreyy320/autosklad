@@ -3669,7 +3669,8 @@ router.get('/expenses_by_suppliers', async (req, res) => {
 
 router.get('/expense_items', async (req, res) => {
     try {
-        const { receipt_id } = req.query;
+        // Принимаем как receipt_id, так и expense_id на случай разных запросов с фронта
+        const receiptId = req.query.receipt_id || req.query.expense_id;
 
         const query = `
             SELECT 
@@ -3685,7 +3686,7 @@ router.get('/expense_items', async (req, res) => {
             ORDER BY ri.id ASC;
         `;
         
-        const result = await pool.query(query, [receipt_id || null]);
+        const result = await pool.query(query, [receiptId || null]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения деталей закупки (expense_items):', err);

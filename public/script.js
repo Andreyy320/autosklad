@@ -3947,12 +3947,13 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses: ${res}`);
         return res;
     }
-    // Добавлено для расходов по поставщикам: если выбран конкретный поставщик (проваливаемся в накладные) или список
+    // Исправление для расходов по поставщикам:
     if (currentEntity === 'expenses_by_suppliers') {
-        // Если у тебя есть глобальная переменная или тумблеры для субвкладок расходов (аналогично реализациям/приходам)
-        if (typeof currentExpenseSubTab !== 'undefined' && currentExpenseSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:expenses_by_suppliers] Найдено через currentExpenseSubTab: ${currentExpenseSubTab}`);
-            return currentExpenseSubTab;
+        // Если уже выбран конкретный поставщик, то деталями должны быть позиции (expense_items)
+        if (typeof window !== 'undefined' && window.currentPostavhikId) {
+            const res = 'expense_items';
+            console.log(`📌 [getCurrentDetailEntity] Результат для накладных поставщика (expenses_by_suppliers): ${res}`);
+            return res;
         }
         const res = 'expense_items';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: ${res}`);
@@ -3988,9 +3989,8 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для money_receipts_by_sklad: (пусто)`);
         return res;
     }
-    // Добавлено зеркально для расходов по складам: верхний уровень складов детализации не требует (ведет к expenses_by_suppliers)
     if (currentEntity === 'expenses_by_sklad') {
-        const res = ''; 
+        const res = ''; // Верхний уровень складов расходов детализации не требует (ведет к списку поставщиков)
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
         return res;
     }
