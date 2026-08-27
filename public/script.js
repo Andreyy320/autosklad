@@ -4631,7 +4631,7 @@ if (tableBody) {
                 } else if (currentEntity === 'expenses_by_receipts') {
                     // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО НАКЛАДНОЙ
                     if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по накладной расходов');
+                        console.log('🛡️ Пропущен программный авто-клик по накладной');
                         return;
                     }
 
