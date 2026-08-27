@@ -5404,7 +5404,7 @@ const navMap = {
     'Расходы по складам':'expenses_by_sklad',
     'Расходы':'expenses_by_suppliers',
     'Детали расходов':'expense_items',
-    'Документы приходов для расходов':'expenses_by_receipts'
+    'Накладные поставщика':'expenses_by_receipts'
 };
 
 function updateFilterPanels(entity) {
