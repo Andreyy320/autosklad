@@ -3973,8 +3973,7 @@ function filterTable() {
 }
 
 let selectedDetailItem = null;
-let currentDetailItems = []; 
-function getCurrentDetailEntity() {
+let currentDetailItems = []; function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
     if (currentEntity === 'moves') {
@@ -3992,18 +3991,26 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses: ${res}`);
         return res;
     }
-    // Шаг 1: с поставщиков расходов переходим к списку накладных расходов по поставщику
-    if (currentEntity === 'expenses_by_suppliers') {
-        const res = 'expenses_by_receipts';
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: ${res}`);
+
+    // ИСПРАВЛЕНИЕ ДЛЯ РАСХОДОВ: 
+    // На промежуточных уровнях складов и поставщиков мы возвращаем пустую строку (''), 
+    // чтобы система останавливалась и не проваливалась дальше автоматически.
+    if (currentEntity === 'expenses_by_sklad') {
+        const res = ''; 
+        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
         return res;
     }
-    // Шаг 2: из списка накладных переходим к конкретным позициям расходов (запчастям/услугам)
+    if (currentEntity === 'expenses_by_suppliers') {
+        const res = ''; // Было 'expenses_by_receipts', из-за чего шёл автокликинг дальше
+        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: (пусто)`);
+        return res;
+    }
     if (currentEntity === 'expenses_by_receipts') {
         const res = 'expense_items';
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_receipts: ${res}`);
         return res;
     }
+
     if (currentEntity === 'cars') {
         const res = 'car_details';
         console.log(`📌 [getCurrentDetailEntity] Результат для cars: ${res}`);
@@ -4034,11 +4041,7 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity] Результат для money_receipts_by_sklad: (пусто)`);
         return res;
     }
-    if (currentEntity === 'expenses_by_sklad') {
-        const res = ''; // Верхний уровень складов расходов ведет к списку поставщиков
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
-        return res;
-    }
+
     if (currentEntity === 'money_receipts') {
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
             console.log(`⚙️ [getCurrentDetailEntity:money_receipts] Найдено через currentMoneyReceiptSubTab: ${currentMoneyReceiptSubTab}`);
@@ -4088,6 +4091,7 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity:money_receipts] Возвращаем дефолтное значение: money_receipts_detail`);
         return 'money_receipts_detail';
     }
+
     if (currentEntity === 'realizations') {
         const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .active');
         if (activeTab) {
@@ -4130,6 +4134,7 @@ function getCurrentDetailEntity() {
         console.log(`📌 [getCurrentDetailEntity:realizations] Дефолт -> realization_items`);
         return 'realization_items'; 
     }
+
     if (currentEntity === 'customers') {
         const activeTab = document.querySelector('#tabs-for-customers button.active, #tabs-for-customers .active');
         if (activeTab) {
@@ -4148,6 +4153,7 @@ function getCurrentDetailEntity() {
         }
         return 'customer_contacts'; 
     }
+
     if (currentEntity === 'accidents') {
         const activeTab = document.querySelector('#tabs-for-accidents button.active, #tabs-for-accidents .active');
         if (activeTab) {
@@ -4166,6 +4172,7 @@ function getCurrentDetailEntity() {
         }
         return 'accident_invoices'; 
     }
+
     if (currentEntity === 'repairs') {
         const activeTab = document.querySelector('#tabs-for-repairs button.active, #tabs-for-repairs .active');
         if (activeTab) {
@@ -4184,6 +4191,7 @@ function getCurrentDetailEntity() {
         }
         return 'repair_items'; 
     }
+
     if (currentEntity === 'car_cards') {
         const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active');
         if (activeTab) {
@@ -5371,6 +5379,8 @@ function updateFilterPanels(entity) {
         movementFilter.style.display = 'flex';
     }
 }
+
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
