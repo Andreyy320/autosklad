@@ -4425,9 +4425,10 @@ if (tableBody) {
         const tr = e.target.closest('tr');
         if (!tr) return;
         
-        // Отладка
+        // ЖЕСТКАЯ ЗАЩИТА: Если клик не настоящий (программный/автоматический), сразу прерываемся!
         if (!e.isTrusted) {
-            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик для сущности:', currentEntity);
+            console.warn('🛡️ [ЗАЩИТА] Заблокирован фейковый/автоматический клик для сущности:', currentEntity);
+            return;
         }
         
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
@@ -4456,7 +4457,7 @@ if (tableBody) {
         
         selectedDetailItem = null;  
 
-        console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
+        console.log(`👆 [РЕАЛЬНЫЙ КЛИК ПОЛЬЗОВАТЕЛЯ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
         const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
@@ -4560,7 +4561,6 @@ if (tableBody) {
                 if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts') ? 'flex' : 'none';
 
                 if (currentEntity === 'money_receipts_by_sklad') {
-                    if (!e.isTrusted) return;
                     loadData('money_receipts', `Покупатели склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                 } else if (currentEntity === 'money_receipts') {
                     const activeMoneyTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
@@ -4605,21 +4605,12 @@ if (tableBody) {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', selectedItem.id);
                 } else if (currentEntity === 'expenses_by_sklad') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО СКЛАДУ
-                    if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по складу расходов');
-                        return;
-                    }
+                    // Жесткий шаг 1: Клик по складу -> ведет к поставщикам этого склада
                     window.currentSkladId = selectedItem.sklad_id;
                     window.currentPostavhikId = null; 
                     loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
                 } else if (currentEntity === 'expenses_by_suppliers') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО ПОСТАВЩИКУ
-                    if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по поставщику');
-                        return;
-                    }
-
+                    // Жесткий шаг 2: Клик по поставщику -> ведет к накладным этого поставщика
                     const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                     const skladId = selectedItem.sklad_id || window.currentSkladId || '';
                     window.currentPostavhikId = postavhikId;
@@ -4629,12 +4620,7 @@ if (tableBody) {
                         sklad_id: skladId
                     });
                 } else if (currentEntity === 'expenses_by_receipts') {
-                    // БЛОКИРУЕМ АВТОМАТИЧЕСКИЙ КЛИК ПО НАКЛАДНОЙ
-                    if (!e.isTrusted) {
-                        console.log('🛡️ Пропущен программный авто-клик по накладной');
-                        return;
-                    }
-
+                    // Жесткий шаг 3: Клик по накладной -> открывает позиции накладной внизу
                     const receiptId = selectedItem.receipt_id || selectedItem.id;
                     const postavhikId = window.currentPostavhikId || selectedItem.postavhik_id || '';
                     const skladId = window.currentSkladId || selectedItem.sklad_id || '';
