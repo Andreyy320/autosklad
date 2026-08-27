@@ -5179,6 +5179,7 @@ function filterDetailTable() {
         row.style.display = isVisible ? '' : 'none';
     });
 }
+
 const navMap = {
     'Пользователи': 'users',
     'Бренды': 'brands',
@@ -5249,7 +5250,7 @@ const navMap = {
     'Детали приходов': 'money_receipts_detail',
     'Аналитика по складам': 'money_receipts_by_sklad',
     'Детали услуг': 'money_receipts_works_detail',
-    'Расходы по складам': 'expenses_by_sklad',
+    'Расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
     'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items'         // Поменяли "Детали расходов" для единообразия
@@ -5271,155 +5272,155 @@ function updateFilterPanels(entity) {
 }
 
 
-document.querySelectorAll('.nav-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
-
-        const text = link.innerText.trim();
-        let entity = navMap[text] || text.toLowerCase();
-        
-        // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
-        if (entity === 'money_receipts') {
-            entity = 'money_receipts_by_sklad';
-        }
-        
-        // Если кликнули на Расходы (expenses или expenses_by_suppliers), всегда подменяем на первый уровень (склады расходов)
-        if (entity === 'expenses' || entity === 'expenses_by_suppliers') {
-            entity = 'expenses_by_sklad';
-        }
-        
-        updateFilterPanels(entity);
-
-        const detailContainer = document.getElementById('detail-container');
-        const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
-        const tabsForCars = document.getElementById('tabs-for-cars');
-        const tabsForAccidents = document.getElementById('tabs-for-accidents');
-        const tabsForRepairs = document.getElementById('tabs-for-repairs');
-        const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
-        const tabsForExpenses = document.getElementById('tabs-for-expenses');
-
-        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-        if (actionButtonsBar) {
-            const readOnlyMainEntities = [
-                'stock_balances', 
-                'stock_movement', 
-                'money_receipts', 
-                'money_receipts_by_sklad', 
-                'money_receipts_detail',
-                'expenses',
-                'expenses_by_sklad',
-                'expenses_by_suppliers',
-                'expense_items'
-            ];
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
             
-            if (readOnlyMainEntities.includes(entity)) {
-                actionButtonsBar.style.setProperty('display', 'none', 'important');
-            } else {
-                actionButtonsBar.style.setProperty('display', 'flex', 'important');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+
+            const text = link.innerText.trim();
+            let entity = navMap[text] || text.toLowerCase();
+            
+            // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
+            if (entity === 'money_receipts') {
+                entity = 'money_receipts_by_sklad';
             }
-        }
-
-        if (
-            entity === 'receipts' || 
-            entity === 'moves' || 
-            entity === 'expenses' ||
-            entity === 'expenses_by_sklad' ||
-            entity === 'expenses_by_suppliers' ||
-            entity === 'cars' || 
-            entity === 'car_cards' || 
-            entity === 'accidents' || 
-            entity === 'repairs' || 
-            entity === 'realizations' || 
-            entity === 'money_receipts' || 
-            entity === 'money_receipts_by_sklad' ||
-            entity === 'stock_balances' || 
-            entity === 'stock_movement' || 
-            entity === 'postavhik' || 
-            entity === 'counterparties' || 
-            entity === 'customers'
-        ) {
-            if (detailContainer) detailContainer.style.display = 'flex';
             
-            if (carTabsBar) {
-                if (
-                    entity === 'car_cards' || 
-                    entity === 'accidents' || 
-                    entity === 'repairs' || 
-                    entity === 'realizations' || 
-                    entity === 'money_receipts' || 
-                    entity === 'money_receipts_by_sklad' ||
-                    entity === 'expenses' ||
-                    entity === 'expenses_by_sklad' ||
-                    entity === 'expenses_by_suppliers'
-                ) {
-                    carTabsBar.style.display = 'flex';
+            // Если кликнули на Расходы (expenses или expenses_by_suppliers), всегда подменяем на первый уровень (склады расходов)
+            if (entity === 'expenses' || entity === 'expenses_by_suppliers') {
+                entity = 'expenses_by_sklad';
+            }
+            
+            updateFilterPanels(entity);
+
+            const detailContainer = document.getElementById('detail-container');
+            const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
+            const tabsForCars = document.getElementById('tabs-for-cars');
+            const tabsForAccidents = document.getElementById('tabs-for-accidents');
+            const tabsForRepairs = document.getElementById('tabs-for-repairs');
+            const tabsForRealizations = document.getElementById('tabs-for-realizations');
+            const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
+            const tabsForExpenses = document.getElementById('tabs-for-expenses');
+
+            const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+            if (actionButtonsBar) {
+                const readOnlyMainEntities = [
+                    'stock_balances', 
+                    'stock_movement', 
+                    'money_receipts', 
+                    'money_receipts_by_sklad', 
+                    'money_receipts_detail',
+                    'expenses',
+                    'expenses_by_sklad',
+                    'expenses_by_suppliers',
+                    'expense_items'
+                ];
+                
+                if (readOnlyMainEntities.includes(entity)) {
+                    actionButtonsBar.style.setProperty('display', 'none', 'important');
                 } else {
-                    carTabsBar.style.display = 'none';
+                    actionButtonsBar.style.setProperty('display', 'flex', 'important');
                 }
             }
 
-            if (entity === 'car_cards') {
-                if (tabsForCars) tabsForCars.style.display = 'flex';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
-            } else if (entity === 'accidents') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
-            } else if (entity === 'repairs') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
-            } else if (entity === 'realizations') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
-            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
-            } else if (entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
+            if (
+                entity === 'receipts' || 
+                entity === 'moves' || 
+                entity === 'expenses' ||
+                entity === 'expenses_by_sklad' ||
+                entity === 'expenses_by_suppliers' ||
+                entity === 'cars' || 
+                entity === 'car_cards' || 
+                entity === 'accidents' || 
+                entity === 'repairs' || 
+                entity === 'realizations' || 
+                entity === 'money_receipts' || 
+                entity === 'money_receipts_by_sklad' ||
+                entity === 'stock_balances' || 
+                entity === 'stock_movement' || 
+                entity === 'postavhik' || 
+                entity === 'counterparties' || 
+                entity === 'customers'
+            ) {
+                if (detailContainer) detailContainer.style.display = 'flex';
+                
+                if (carTabsBar) {
+                    if (
+                        entity === 'car_cards' || 
+                        entity === 'accidents' || 
+                        entity === 'repairs' || 
+                        entity === 'realizations' || 
+                        entity === 'money_receipts' || 
+                        entity === 'money_receipts_by_sklad' ||
+                        entity === 'expenses' ||
+                        entity === 'expenses_by_sklad' ||
+                        entity === 'expenses_by_suppliers'
+                    ) {
+                        carTabsBar.style.display = 'flex';
+                    } else {
+                        carTabsBar.style.display = 'none';
+                    }
+                }
+
+                if (entity === 'car_cards') {
+                    if (tabsForCars) tabsForCars.style.display = 'flex';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                } else if (entity === 'accidents') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                } else if (entity === 'repairs') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                } else if (entity === 'realizations') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                } else if (entity === 'expenses' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'flex';
+                } else {
+                    if (tabsForCars) tabsForCars.style.display = 'none';
+                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+                    if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                }
             } else {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                if (tabsForExpenses) tabsForExpenses.style.display = 'none';
+                if (detailContainer) detailContainer.style.display = 'none';
+                if (carTabsBar) carTabsBar.style.display = 'none';
             }
-        } else {
-            if (detailContainer) detailContainer.style.display = 'none';
-            if (carTabsBar) carTabsBar.style.display = 'none';
-        }
-        
-        loadData(entity, text);
+            
+            loadData(entity, text);
+        });
     });
-});
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
