@@ -3564,7 +3564,6 @@ router.get('/money_receipts_works_detail', async (req, res) => {
 
 
 
-
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3606,7 +3605,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     p.id AS postavhik_id,
                     COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                     sk.name::text AS sklad_name,
-                    rec.created_at,
+                    rec.date,
                     COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
                     COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
                 FROM receipts rec
@@ -3623,10 +3622,9 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 WHERE rec.is_posted = true
                   AND p.id = $1::integer
                   AND ($2::integer IS NULL OR rec.warehouse_id = $2::integer)
-                ORDER BY rec.created_at DESC;
+                ORDER BY rec.date DESC;
             `;
             
-            // Передаем параметры строго по порядку
             const sId = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
             const detailResult = await pool.query(detailQuery, [postavhik_id, sId]);
             return res.json(detailResult.rows);
@@ -3669,7 +3667,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
     }
 });
 
-
 router.get('/expense_items', async (req, res) => {
     try {
         const { receipt_id } = req.query;
@@ -3695,7 +3692,6 @@ router.get('/expense_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 
 
