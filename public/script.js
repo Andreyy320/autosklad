@@ -3422,7 +3422,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -3640,16 +3639,13 @@ async function loadData(entity, title, customParams = {}) {
                     window.currentSkladId = item.sklad_id;
                     loadData('expenses_by_suppliers', `Поставщики склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
                 } else if (entity === 'expenses_by_suppliers') {
-                    console.log('📦 [Клик по поставщику расходов] Проваливаемся к накладным поставщика:', item.postavhik_id || item.id);
+                    console.log('📦 [Клик по поставщику расходов] Выбран поставщик:', item.postavhik_id || item.id);
                     const postavhikId = item.postavhik_id || item.id;
                     const skladId = item.sklad_id || window.currentSkladId || '';
                     window.currentPostavhikId = postavhikId;
                     
-                    // ИСПРАВЛЕНО: Вызываем loadData вместо loadDetailData, так как expenses_by_receipts — это верхняя таблица списка
-                    loadData('expenses_by_receipts', `Накладные поставщика: ${item.postavhik_name || item.name || 'Поставщик'}`, {
-                        postavhik_id: postavhikId,
-                        sklad_id: skladId
-                    });
+                    // Автоматический вызов loadData('expenses_by_receipts', ...) убран,
+                    // чтобы накладные не открывались сами по себе без клика.
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -3738,7 +3734,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 function emptyDetailBody(entity) {
