@@ -3593,19 +3593,20 @@ router.get('/expenses_by_sklad', async (req, res) => {
     }
 });
 
-
 router.get('/expenses_by_suppliers', async (req, res) => {
     try {
-        const { sklad_id } = req.query;
+        const { sklad_id, postavhik_id } = req.query;
 
         const query = `
             SELECT 
+                rec.id AS id,
+                rec.id AS receipt_id,
                 p.id AS postavhik_id,
                 COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                 sk.name::text AS sklad_name,
-                COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum
+                rec.created_at,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
             FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -3619,10 +3620,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
             ) sub_i ON rec.id = sub_i.receipt_id
             WHERE rec.is_posted = true
               AND ($1::integer IS NULL OR rec.warehouse_id = $1)
-            GROUP BY p.id, p.name, sk.name
-            ORDER BY total_expense_sum DESC;
+              AND ($2::integer IS NULL OR p.id = $2)
+            ORDER BY rec.created_at DESC;
         `;
-        const result = await pool.query(query, [sklad_id || null]);
+        const result = await pool.query(query, [sklad_id || null, postavhik_id || null]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения расходов по поставщикам:', err);
