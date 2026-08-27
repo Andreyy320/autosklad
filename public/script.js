@@ -4554,8 +4554,7 @@ if (tableBody) {
                     loadDetailData('repair_items', selectedItem.id);
                 }
             } else if (currentEntity === 'expenses_by_sklad') {
-                // ШАГ 1 -> ШАГ 2: Клик по складу -> загружаем поставщиков в верхнюю таблицу
-                console.log('📦 [Шаг 1] Клик по складу расходов, переключаем верхнюю таблицу на поставщиков склада:', selectedItem.sklad_id);
+                console.log('📦 [Клик по складу расходов] Переключаем верхнюю таблицу на поставщиков склада:', selectedItem.sklad_id);
                 window.currentSkladId = selectedItem.sklad_id;
                 loadData('expenses_by_suppliers', `Поставщики склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
             } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
@@ -4623,29 +4622,31 @@ if (tableBody) {
                 }
 
                 if (currentEntity === 'receipts') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', selectedItem.id);
                 } else if (currentEntity === 'moves') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', selectedItem.id);
                 } else if (currentEntity === 'expenses_by_suppliers') {
-                    // ШАГ 2 -> ШАГ 3: Клик по поставщику -> загружаем накладные этого поставщика в верхнюю таблицу
                     const postavhikId = selectedItem.postavhik_id || selectedItem.id;
                     const skladId = selectedItem.sklad_id || window.currentSkladId || '';
                     
                     window.currentPostavhikId = postavhikId;
 
-                    console.log(`📦 [Шаг 2] Клик по поставщику, загружаем накладные в верхнюю таблицу: поставщик ${postavhikId}, склад ${skladId}`);
+                    console.log(`📦 [Клик expenses_by_suppliers] Загружаем накладные в верхнюю таблицу для поставщика: ${postavhikId}, склада: ${skladId}`);
                     
                     loadData('expenses_by_receipts', `Накладные поставщика`, {
                         postavhik_id: postavhikId,
                         sklad_id: skladId
                     });
                 } else if (currentEntity === 'expenses_by_receipts') {
-                    // ШАГ 3 -> ШАГ 4: Клик по накладной -> загружаем запчасти в НИЖНЮЮ таблицу
                     const receiptId = selectedItem.receipt_id || selectedItem.id;
                     const postavhikId = window.currentPostavhikId || selectedItem.postavhik_id || '';
                     const skladId = window.currentSkladId || selectedItem.sklad_id || '';
 
-                    console.log(`📦 [Шаг 3] Клик по накладной, загружаем позиции в нижнюю таблицу: накладная ${receiptId}`);
+                    console.log(`📦 [Клик expenses_by_receipts] Загружаем позиции накладной в нижнюю таблицу: накладная ${receiptId}`);
+
+                    if (detailContainer) detailContainer.style.display = 'flex'; // Делаем нижнюю таблицу видимой
 
                     loadDetailData('expense_items', {
                         receipt_id: receiptId,
@@ -4653,10 +4654,13 @@ if (tableBody) {
                         sklad_id: skladId
                     });
                 } else if (currentEntity === 'postavhik') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('postavhik_contacts', selectedItem.id);
                 } else if (currentEntity === 'counterparties') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('counterparty_contacts', selectedItem.id);
                 } else if (currentEntity === 'customers') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('customer_contacts', selectedItem.id);
                 }
             }
@@ -4900,7 +4904,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -5264,7 +5267,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
