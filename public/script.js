@@ -3737,10 +3737,15 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
 
+        // Синхронизируем глобальную сущность перед выходом
+        currentEntity = currentExpenseView; 
         if (detailContainer) detailContainer.style.display = 'flex';
         loadExpenseDetailTable(fetchUrl);
         return; 
     }
+
+    // Синхронизируем глобальное состояние текущей сущности расходов
+    currentEntity = currentExpenseView;
 
     const config = getConfig(currentExpenseView);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
@@ -3758,7 +3763,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     try {
         const response = await fetch(fetchUrl, {
             method: 'GET',
-            headers: { 'Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' } // Исправлено с 'Type' на 'Content-Type'
         });
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
@@ -3848,7 +3853,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-
 
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
@@ -4360,12 +4364,6 @@ async function postReceipt(receiptId) {
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
-        // 🛑 ЗАЩИТА: Если мы находимся в разделах расходов, глобальный клик 
-        // полностью отключается, так как там работает своя изолированная логика loadExpenseMainData!
-        if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentEntity)) {
-            return; 
-        }
-
         const tr = e.target.closest('tr');
         if (!tr) return;
         
@@ -4528,8 +4526,15 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
-                // Стандартные ветки для других разделов
-                if (currentEntity === 'receipts') {
+                // Интегрированные уровни расходов и ваша кастомная детализация
+                if (currentEntity === 'expenses_by_sklad') {
+                    loadExpenseMainData('expenses_by_suppliers', selectedItem);
+                } else if (currentEntity === 'expenses_by_suppliers') {
+                    loadExpenseMainData('expenses_by_receipts', selectedItem);
+                } else if (currentEntity === 'expenses_by_receipts') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadExpenseMainData('expense_items', selectedItem); 
+                } else if (currentEntity === 'receipts') {
                     if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', selectedItem.id);
                 } else if (currentEntity === 'moves') {
