@@ -4411,9 +4411,6 @@ tableBody.addEventListener('click', async (e) => {
     }
 
     if (selectedItem) {
-        // Универсальная поддержка извлечения ID для разных сущностей (включая postavhik_id)
-        const selectedId = selectedItem.id || selectedItem.expense_id || selectedItem.postavhik_id || selectedItem.realization_id || selectedItem.receipt_id;
-
         if (currentEntity === 'cars') {
             console.log('🚗 [Клик] Обработка сущности: cars');
             if (carTabsPanel) carTabsPanel.style.display = 'none';
@@ -4533,10 +4530,10 @@ tableBody.addEventListener('click', async (e) => {
                 if (activeRealizationTab) {
                     const subTabName = activeRealizationTab.getAttribute('data-tab') || 'realization_items';
                     if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-                    loadDetailData(subTabName, selectedId);
+                    loadDetailData(subTabName, selectedItem.id);
                 } else {
                     if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = 'realization_items';
-                    loadDetailData('realization_items', selectedId);
+                    loadDetailData('realization_items', selectedItem.id);
                 }
             }
         } else {
@@ -4554,17 +4551,19 @@ tableBody.addEventListener('click', async (e) => {
             }
 
             if (currentEntity === 'receipts') {
-                loadDetailData('receipt_items', selectedId);
+                loadDetailData('receipt_items', selectedItem.id);
             } else if (currentEntity === 'moves') {
-                loadDetailData('move_items', selectedId);
+                loadDetailData('move_items', selectedItem.id);
             } else if (currentEntity === 'expenses_by_suppliers') {
-                loadDetailData('expenses_by_suppliers', selectedItem);
+                // Исправлено: передаем правильный ID поставщика вместо некорректного вызова
+                const postavhikId = selectedItem.postavhik_id || selectedItem.id;
+                loadDetailData('expenses_by_suppliers', postavhikId);
             } else if (currentEntity === 'postavhik') {
-                loadDetailData('postavhik_contacts', selectedId);
+                loadDetailData('postavhik_contacts', selectedItem.id);
             } else if (currentEntity === 'counterparties') {
-                loadDetailData('counterparty_contacts', selectedId);
+                loadDetailData('counterparty_contacts', selectedItem.id);
             } else if (currentEntity === 'customers') {
-                loadDetailData('customer_contacts', selectedId);
+                loadDetailData('customer_contacts', selectedItem.id);
             }
         }
     }
@@ -4877,8 +4876,10 @@ async function loadDetailData(entity, parentId) {
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
-    } else if (entity === 'expense_items' || entity === 'expenses_by_suppliers') {
+    } else if (entity === 'expense_items') {
         queryParamName = 'expense_id';
+    } else if (entity === 'expenses_by_suppliers') {
+        queryParamName = 'postavhik_id'; // Исправлено: для поставщиков корректный параметр postavhik_id
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
@@ -4924,7 +4925,6 @@ async function loadDetailData(entity, parentId) {
             skladId = window.currentSkladId || '';
         }
         
-        // Используем activeEntity, чтобы точно знать, запрашиваем мы товары или услуги
         let apiRoute = activeEntity;
         if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
