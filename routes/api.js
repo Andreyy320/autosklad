@@ -3449,6 +3449,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3838,10 +3840,10 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
-// POST /api/move_items - добавление позиции перемещения с проверкой остатков и статуса проведения документа
+// POST /api/move_items - добавление позиции перемещения с проверкой остатков, статуса и автоматическим FIFO списанием по партиям
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items)`);
+    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items) с FIFO`);
     console.log(`[BODY]:`, req.body);
 
     const { zaphasti_id, currency, quantity, description, move_id } = req.body;
@@ -3868,7 +3870,6 @@ router.post('/move_items', async (req, res) => {
 
         const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
 
-        // Проверка: если документ уже проведен, изменять/добавлять позиции нельзя
         if (isPosted) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя добавлять позиции в уже проведенный документ перемещения.' });
@@ -3884,8 +3885,7 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Расчет реального остатка конкретно на складе-источнике
-        // Учитываем: Приходы + Внутренние перемещения НА склад - Перемещения СО склада - Расходы на ремонт с этого склада
+        // 2. Проверяем общий доступный остаток на складе-источнике
         const balanceQuery = `
             SELECT 
                 (
@@ -3902,7 +3902,6 @@ router.post('/move_items', async (req, res) => {
         const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId]);
         const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
 
-        // Считаем, сколько этого товара уже добавлено именно в этот документ перемещения (черновик)
         const currentDocQuery = `
             SELECT SUM(quantity) as sum 
             FROM move_items 
@@ -3911,7 +3910,6 @@ router.post('/move_items', async (req, res) => {
         const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
         const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
 
-        // Доступно для добавления = Чистый остаток - то, что уже висит в строках этого же перемещения
         const availableStock = pureStock - alreadyInThisDoc;
 
         console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в документе: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
@@ -3923,26 +3921,91 @@ router.post('/move_items', async (req, res) => {
             });
         }
 
-        // 3. Автоматический поиск партии (FIFO) и цены именно со склада-источника
-        const docQuery = `
-            SELECT RI.receipt_id, RI.price, RI.price_rub 
-            FROM receipt_items RI
-            JOIN receipts R ON RI.receipt_id = R.id
-            WHERE RI.zaphasti_id = $1 AND R.warehouse_id = $2
-            ORDER BY R.date ASC, R.id ASC
-            LIMIT 1
+        // 3. Получаем доступные партии (приходы) на складе-источнике в порядке FIFO (старые сверху)
+        // Для каждой партии рассчитываем остаток с учетом уже ушедших по перемещениям/ремонтам и пришедших со смежных складов
+        const batchesQuery = `
+            SELECT 
+                r.id AS receipt_id,
+                r.date AS receipt_date,
+                ri.price,
+                ri.price_rub,
+                ri.quantity AS initial_qty,
+                -- Вычисляем сколько из этого прихода уже было списано по проведенным перемещениям и ремонтам
+                (
+                    COALESCE((SELECT SUM(mi.quantity) FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE mi.income_document_id = r.id AND mi.zaphasti_id = ri.zaphasti_id AND m.warehouse_from_id = r.warehouse_id AND m.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.income_document_id = r.id AND rep_i.zaphast_id = ri.zaphasti_id AND rep.warehouse_id = r.warehouse_id), 0)
+                ) AS spent_qty
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            ORDER BY r.date ASC, r.id ASC
         `;
-        const docResult = await client.query(docQuery, [zaphasti_id, warehouseFromId]);
-        
-        let income_document_id = null;
-        let fetchedPrice = 0;
 
-        if (docResult.rows.length > 0) {
-            income_document_id = docResult.rows[0].receipt_id;
-            fetchedPrice = Number(docResult.rows[0].price_rub !== undefined && docResult.rows[0].price_rub !== null ? docResult.rows[0].price_rub : docResult.rows[0].price) || 0;
-        } else {
-            // Если на складе-источнике лог приходов пуст (например, товар туда попал через другое перемещение), 
-            // ищем цену из последнего прихода по всей базе или из справочника запчастей
+        const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId]);
+        let batches = batchesRes.rows.map(b => ({
+            receipt_id: b.receipt_id,
+            price: Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0,
+            available: Number(b.initial_qty) - Number(b.spent_qty)
+        })).filter(b => b.available > 0);
+
+        let remainingToDistribute = requestedQty;
+        const createdRecords = [];
+        const curr = currency || 'Рубль ПМР';
+        const userId = req.headers['user-id'] || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        // Если партии найдены на складе-источнике — распределяем по FIFO
+        if (batches.length > 0) {
+            for (const batch of batches) {
+                if (remainingToDistribute <= 0) break;
+
+                const takeQty = Math.min(remainingToDistribute, batch.available);
+                const totalRub = takeQty * batch.price;
+
+                const insertQuery = `
+                    INSERT INTO "move_items" 
+                    ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                    RETURNING *;
+                `;
+
+                const values = [
+                    zaphasti_id, 
+                    batch.price, 
+                    curr, 
+                    takeQty, 
+                    batch.price, 
+                    totalRub, 
+                    description || null, 
+                    move_id, 
+                    batch.receipt_id 
+                ];
+
+                const result = await client.query(insertQuery, values);
+                const newRecord = result.rows[0];
+                createdRecords.push(newRecord);
+
+                // Логирование каждой созданной строки в audit_logs
+                try {
+                    await client.query(
+                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
+                        [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, income_document_id: batch.receipt_id }), clientIp]
+                    );
+                } catch (logErr) {
+                    console.error('Ошибка записи audit_logs:', logErr.message);
+                }
+
+                remainingToDistribute -= takeQty;
+            }
+        }
+
+        // Если остаток еще остался (например, партии на складе не зафиксированы через receipts, а товар есть по остаткам), 
+        // создаем досылающую строку без привязки к конкретной партии (или по последней известной цене)
+        if (remainingToDistribute > 0) {
+            let fallbackPrice = 0;
+            let fallbackReceiptId = null;
+
             const fallbackDocQuery = `
                 SELECT RI.receipt_id, RI.price, RI.price_rub 
                 FROM receipt_items RI
@@ -3954,62 +4017,56 @@ router.post('/move_items', async (req, res) => {
             const fallbackDocRes = await client.query(fallbackDocQuery, [zaphasti_id]);
             
             if (fallbackDocRes.rows.length > 0) {
-                income_document_id = fallbackDocRes.rows[0].receipt_id;
-                fetchedPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) || 0;
+                fallbackReceiptId = fallbackDocRes.rows[0].receipt_id;
+                fallbackPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) || 0;
             } else {
                 const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphasti_id]);
                 if (zaphRes.rows.length > 0) {
                     const z = zaphRes.rows[0];
-                    fetchedPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
+                    fallbackPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
                 }
             }
-        }
 
-        const numPrice = fetchedPrice;
-        const priceRub = numPrice; 
-        const totalRub = requestedQty * priceRub;
-        const curr = currency || 'Рубль ПМР';
+            const totalRub = remainingToDistribute * fallbackPrice;
 
-        // 4. Вставка позиции в move_items с фиксацией цены и прихода (сохранение истории)
-        const insertQuery = `
-            INSERT INTO "move_items" 
-            ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-            RETURNING *;
-        `;
+            const insertQuery = `
+                INSERT INTO "move_items" 
+                ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                RETURNING *;
+            `;
 
-        const values = [
-            zaphasti_id, 
-            numPrice, 
-            curr, 
-            requestedQty, 
-            priceRub, 
-            totalRub, 
-            description || null, 
-            move_id, 
-            income_document_id 
-        ];
-        
-        const result = await client.query(insertQuery, values);
-        const newRecord = result.rows[0];
+            const values = [
+                zaphasti_id, 
+                fallbackPrice, 
+                curr, 
+                remainingToDistribute, 
+                fallbackPrice, 
+                totalRub, 
+                description || null, 
+                move_id, 
+                fallbackReceiptId 
+            ];
 
-        // 5. Логирование в audit_logs
-        try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify(req.body), clientIp]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs:', logErr.message);
+            const result = await client.query(insertQuery, values);
+            const newRecord = result.rows[0];
+            createdRecords.push(newRecord);
+
+            try {
+                await client.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: remainingToDistribute, income_document_id: fallbackReceiptId }), clientIp]
+                );
+            } catch (logErr) {
+                console.error('Ошибка записи audit_logs:', logErr.message);
+            }
         }
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id} (Цена: ${numPrice}, Источник прихода: ${income_document_id})`);
-        return res.status(201).json(newRecord);
+        console.log(`[SUCCESS] Успешно создано строк перемещения (FIFO сплит): ${createdRecords.length}`);
+        return res.status(201).json(createdRecords.length === 1 ? createdRecords[0] : createdRecords);
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -4020,7 +4077,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 // POST /api/repair_items - добавление запчасти в ремонт (с жесткой проверкой остатков и FIFO)
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
