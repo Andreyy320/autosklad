@@ -3837,7 +3837,7 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
-// POST /api/move_items - добавление позиции перемещения с проверкой остатков и сохранением исторической цены
+// POST /api/move_items - добавление позиции перемещения с проверкой остатков и статуса проведения документа
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
     console.log(`[POST REQUEST] Добавление позиции перемещения (move_items)`);
@@ -3858,15 +3858,20 @@ router.post('/move_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Проверяем склад-источник и склад-получатель в шапке документа moves
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted)
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
         }
 
-        const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
-        const warehouseToId = moveCheck.rows[0].warehouse_to_id;
+        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+
+        // Проверка: если документ уже проведен, изменять/добавлять позиции нельзя
+        if (isPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя добавлять позиции в уже проведенный документ перемещения.' });
+        }
 
         if (!warehouseFromId) {
             await client.query('ROLLBACK');
@@ -4014,6 +4019,10 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
+
+
+
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
