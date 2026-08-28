@@ -4882,7 +4882,6 @@ async function loadExpenseDetailTable(fetchUrl) {
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
     tableBodyForExpenses.addEventListener('click', async (e) => {
-        // Срабатывает только если мы находимся на одном из уровней расходов
         if (
             currentEntity !== 'expenses_by_sklad' && 
             currentEntity !== 'expenses_by_suppliers' && 
@@ -4894,15 +4893,9 @@ if (tableBodyForExpenses) {
         const tr = e.target.closest('tr');
         if (!tr) return;
         
-        // Отладка
-        if (!e.isTrusted) {
-            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик для расходов:', currentEntity);
-        }
-        
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // 🛠 Ищем элемент строго по индексу строки в таблице (решает проблему путаницы ID документов)
         const rowsArray = Array.from(tableBodyForExpenses.querySelectorAll('tr'));
         const rowIndex = rowsArray.indexOf(tr);
 
@@ -4925,7 +4918,6 @@ if (tableBodyForExpenses) {
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
         const detailContainer = document.getElementById('detail-container');
 
-        // Скрываем лишние вкладки и панели на уровнях расходов
         if (carTabsPanel) carTabsPanel.style.display = 'none';
         if (tabsForCars) tabsForCars.style.display = 'none';
         if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -4943,8 +4935,20 @@ if (tableBodyForExpenses) {
             } else if (currentEntity === 'expenses_by_suppliers') {
                 loadExpenseMainData('expenses_by_receipts', selectedItem);
             } else if (currentEntity === 'expenses_by_receipts') {
+                // 🛠 Прямое обновление нижней таблицы без прогона через loadExpenseMainData
+                let receiptId = selectedItem.receipt_id || selectedItem.id || id;
+                if (receiptId) {
+                    window.currentReceiptId = receiptId;
+                }
+
+                let skladId = window.currentSkladId || '';
+                let postavhikId = window.currentPostavhikId || '';
+                let currentReceipt = window.currentReceiptId || '';
+
+                const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+
                 if (detailContainer) detailContainer.style.display = 'flex';
-                loadExpenseMainData('expense_items', selectedItem); 
+                loadExpenseDetailTable(fetchUrl);
             }
         }
     });
