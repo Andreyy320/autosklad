@@ -3121,7 +3121,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
                     try {
                         const response = await fetch(`/api/${entity}/${item.id}`, {
                             method: 'DELETE',
-                            headers: {
+                        headers: {
                                 'Content-Type': 'application/json',
                                 'x-user-id': currentUserId
                             }
@@ -3160,22 +3160,30 @@ async function openMoveForm(entity, item = null, parentId = null) {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
+        
+        // --- ДЕТАЛЬНЫЕ ЛОГИ ВСЕХ ПОЛЕЙ ИЗ ФОРМЫ ---
+        const rawEntries = Array.from(formData.entries());
+        console.group('[DEBUG FORM SUBMIT] Содержимое FormData по полям:');
+        rawEntries.forEach(([key, val]) => {
+            console.log(`%c[Field] ${key}:`, 'color: #0066cc; font-weight: bold;', val);
+        });
+        console.groupEnd();
 
-        console.log('[SUBMIT] Собрано из формы (formData):', data);
+        const data = Object.fromEntries(formData.entries());
+        console.log('[SUBMIT] Собрано в объект (Object.fromEntries):', data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
         if (entity === 'move_items') {
-            // Исправление: надежно подтягиваем parentId из аргументов функции или из дата-атрибута формы
             const currentParentId = parentId || formElement.getAttribute('data-parent-id');
+            console.log('[SUBMIT] Проверка move_id:', { parentIdArg: parentId, attrParentId: formElement.getAttribute('data-parent-id'), resolved: currentParentId });
+            
             if (currentParentId) {
                 data.move_id = currentParentId;
             }
             
-            // Если поле селекта поменяло имя или называется zaphasti, гарантируем наличие zaphasti_id
             if (data.zaphasti && !data.zaphasti_id) {
                 data.zaphasti_id = data.zaphasti;
             }
@@ -3183,7 +3191,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
             data.currency = 'Рубль ПМР';
         }
 
-        console.log('[SUBMIT] Итоговый объект отправки (data):', data);
+        console.log('[SUBMIT] Итоговый JSON для отправки на сервер (data):', data);
 
         try {
             const isEdit = item && item.id;
@@ -3191,7 +3199,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            console.log(`[SUBMIT] Отправка запроса: ${method} ${url}`, { body: data, headers: { 'x-user-id': currentUserId } });
+            console.log(`[SUBMIT] Отправка запроса: ${method} ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -3203,7 +3211,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
-                console.log('[SUBMIT] Успешно сохранено');
+                console.log('[SUBMIT] Ответ сервера: Успешно (200-299)');
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
@@ -3214,13 +3222,13 @@ async function openMoveForm(entity, item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                console.error('[SUBMIT] Ошибка сервера:', response.status, errData);
+                console.error(`[SUBMIT ERROR] Сервер вернул ошибку ${response.status}:`, errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error('[SUBMIT] Сетевая ошибка:', err);
+            console.error('[SUBMIT EXCEPTION] Сетевая или программная ошибка при отправке:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
