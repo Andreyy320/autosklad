@@ -2674,6 +2674,7 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
+
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ ====================
 router.post('/realization_items', async (req, res) => {
     const { 
@@ -3885,7 +3886,7 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
+        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO с учетом всех расходов (перемещения, реализации, ремонты)
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -3894,15 +3895,35 @@ router.post('/move_items', async (req, res) => {
                 ri.price,
                 ri.price_rub,
                 ri.quantity AS initial_qty,
-                COALESCE((
-                    SELECT SUM(mi.quantity) 
-                    FROM move_items mi 
-                    JOIN moves m ON mi.move_id = m.id 
-                    WHERE mi.income_document_id = r.id 
-                      AND mi.zaphasti_id = ri.zaphasti_id 
-                      AND m.warehouse_from_id = r.warehouse_id 
-                      AND m.is_posted = true
-                ), 0) AS spent_qty
+                (
+                    COALESCE((
+                        SELECT SUM(mi.quantity) 
+                        FROM move_items mi 
+                        JOIN moves m ON mi.move_id = m.id 
+                        WHERE mi.income_document_id = r.id 
+                          AND mi.zaphasti_id = ri.zaphasti_id 
+                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND m.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rel_i.quantity) 
+                        FROM realization_items rel_i 
+                        JOIN realizations rel ON rel_i.realization_id = rel.id 
+                        WHERE rel_i.income_document_id = r.id 
+                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                          AND rel.sklad_id = r.warehouse_id 
+                          AND rel.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rep_i.quantity) 
+                        FROM repair_items rep_i 
+                        JOIN repairs rep ON rep_i.repair_id = rep.id 
+                        WHERE rep_i.receipt_id = r.id 
+                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                          AND rep.warehouse_id = r.warehouse_id 
+                          AND rep.is_posted = true
+                    ), 0)
+                ) AS spent_qty
             FROM receipt_items ri
             JOIN receipts r ON ri.receipt_id = r.id
             WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
