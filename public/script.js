@@ -3301,6 +3301,12 @@ async function openRepairForm(item = null, parentId = null) {
         if ((col.update === false || col.edit === false) && item && item.id) return '';
         if (col.field === 'receipt_id') return '';
 
+        // Поле price скрываем из формы ввода, но оставляем логику отправки цены на бэкенд скрытым полем
+        if (col.field === 'price') {
+            let hiddenVal = item && item.price !== undefined ? item.price : '';
+            return `<input type="hidden" name="price" value="${hiddenVal}">`;
+        }
+
         const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
         if (!allowedFields.includes(col.field)) {
             return '';
@@ -3395,6 +3401,8 @@ async function openRepairForm(item = null, parentId = null) {
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+    const quantityInput = formElement.querySelector('[name="quantity"]');
+    const priceInput = formElement.querySelector('[name="price"]');
 
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
@@ -3402,18 +3410,64 @@ async function openRepairForm(item = null, parentId = null) {
             if (!selectedZaphastiId) return;
 
             try {
-                const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
-                if (response.ok) {
-                    const itemData = await response.json();
-                    const priceInput = formElement.querySelector('[name="price"]');
-                    const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
+                // Получаем информацию о текущем ремонте, чтобы узнать склад (warehouse_id)
+                let warehouseId = null;
+                if (parentId) {
+                    const repairRes = await fetch(`/api/repairs/${parentId}`);
+                    if (repairRes.ok) {
+                        const repairData = await repairRes.json();
+                        warehouseId = repairData.warehouse_id || repairData.sklads_id || repairData.warehouse || null;
+                    }
+                }
 
-                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
-                        priceInput.value = targetPrice;
+                // 1. Подтягиваем актуальную цену и остаток со склада через бэкенд-эндпоинт (или общие остатки/партии)
+                let queryUrl = `/api/warehouse_stock?zaphasti_id=${selectedZaphastiId}`;
+                if (warehouseId) {
+                    queryUrl += `&warehouse_id=${warehouseId}`;
+                }
+
+                const stockRes = await fetch(queryUrl);
+                if (stockRes.ok) {
+                    const stockData = await stockRes.json();
+                    // Ожидаем структуру вроде { price: 150, quantity: 10 } или массив партий
+                    let availableQty = 0;
+                    let autoPrice = 0;
+
+                    if (Array.isArray(stockData)) {
+                        // Суммируем остатки или берем первую подходящую партию с ценой прихода/перемещения
+                        availableQty = stockData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                        if (stockData.length > 0) {
+                            autoPrice = stockData[0].price !== undefined ? stockData[0].price : 0;
+                        }
+                    } else if (stockData && typeof stockData === 'object') {
+                        availableQty = stockData.quantity !== undefined ? Number(stockData.quantity) : 0;
+                        autoPrice = stockData.price !== undefined ? stockData.price : 0;
+                    }
+
+                    // Проверка наличия достаточного количества на складе
+                    if (quantityInput) {
+                        const currentEnteredQty = Number(quantityInput.value) || 1;
+                        if (currentEnteredQty > availableQty) {
+                            showAppNotification(`Внимание! На складе доступно всего ${availableQty} шт.`, 'warning');
+                        }
+                    }
+
+                    if (priceInput) {
+                        priceInput.value = autoPrice;
+                    }
+                } else {
+                    // Запасной вариант через стандартный эндпоинт запчасти, если складской метод недоступен
+                    const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
+                    if (response.ok) {
+                        const itemData = await response.json();
+                        const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
+                        if (priceInput && targetPrice !== undefined) {
+                            priceInput.value = targetPrice;
+                        }
                     }
                 }
             } catch (err) {
-                console.error('Ошибка при автозаполнении данных запчасти:', err);
+                console.error('Ошибка при автозаполнении цены и проверки остатков запчасти:', err);
             }
         });
     }
@@ -3512,7 +3566,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
-
 
 
 
