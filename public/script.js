@@ -2015,6 +2015,7 @@ function closeDrawer() {
     }
 
 }
+
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2633,6 +2634,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
