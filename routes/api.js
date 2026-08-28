@@ -3812,23 +3812,6 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Логирование действия в audit_logs
-        const userId = req.headers['x-user-id'] || null;
-        const ipAddress = req.ip || req.headers['x-forwarded-for'] || null;
-
-        await client.query(
-            `INSERT INTO audit_logs (user_id, action, entity, entity_id, details, ip_address) 
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-                userId ? Number(userId) : null,
-                'CREATE',
-                'receipt_items',
-                createdItem.id,
-                JSON.stringify({ receipt_id, zaphasti_id, quantity: numQty, total_rub: totalRub }),
-                ipAddress
-            ]
-        );
-
         await client.query('COMMIT');
 
         return res.status(201).json({

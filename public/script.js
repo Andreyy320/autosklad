@@ -2015,7 +2015,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
         const config = getConfig(entity);
         const drawer = getOrCreateDrawer();
@@ -2339,7 +2338,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 const priceInput = formElement.querySelector('[name="price"]');
 
-                // Если пользователь уже ввёл значение вручную, ничего не перезаписываем
                 if (priceInput && priceInput.value.trim() !== '') {
                     return; 
                 }
@@ -2599,14 +2597,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 });
 
                 if (response.ok) {
-                    const responseData = await response.json().catch(() => ({}));
-                    const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
-                    const actionType = isEdit ? 'UPDATE' : 'INSERT';
-
-                    await sendLog(entity, actionType, savedId, data);
-
                     closeDrawer();
                     showAppNotification('Данные успешно сохранены', 'success');
+
                     const detailEntities = [
                         'receipt_items', 'move_items', 'realization_items', 'realization_works', 'accident_invoices', 
                         'accident_payments', 'accident_events', 'accident_items', 
@@ -2617,7 +2610,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     if (detailEntities.includes(entity) && parentId) {
                         loadDetailData(entity, parentId);
                     } else {
-                        refreshedData();
+                        refreshData();
                     }
                 } else {
                     const errData = await response.json().catch(() => ({}));
@@ -2634,6 +2627,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         });
 }
+
+
 
 
 async function openReceiptForm(entity, item = null) {
@@ -2915,12 +2910,6 @@ async function openReceiptForm(entity, item = null) {
             });
 
             if (response.ok) {
-                const responseData = await response.json().catch(() => ({}));
-                const savedId = item && item.id ? item.id : (responseData.id || responseData.insertedId || null);
-                const actionType = isEdit ? 'UPDATE' : 'INSERT';
-
-                await sendLog('receipts', actionType, savedId, data);
-
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
                 refreshData();
@@ -2937,8 +2926,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
-
 
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
