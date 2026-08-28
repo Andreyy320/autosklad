@@ -3885,47 +3885,11 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Проверяем общий доступный остаток на складе-источнике
-        const balanceQuery = `
-            SELECT 
-                (
-                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                    COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
-                ) - 
-                (
-                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
-                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                ) 
-            AS pure_stock
-        `;
-        
-        const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId]);
-        const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
-
-        const currentDocQuery = `
-            SELECT SUM(quantity) as sum 
-            FROM move_items 
-            WHERE move_id = $1 AND zaphasti_id = $2
-        `;
-        const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
-        const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
-
-        const availableStock = pureStock - alreadyInThisDoc;
-
-        console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в документе: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
-
-        if (requestedQty > availableStock) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь перенести: ${requestedQty} шт.` 
-            });
-        }
-
-        // 3. Получаем доступные партии (приходы) на складе-источнике в порядке FIFO
-        // Учитываем списания только по проведенным перемещениям через income_document_id
+        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
+                r.doc_number AS receipt_doc_number,
                 r.date AS receipt_date,
                 ri.price,
                 ri.price_rub,
@@ -3946,11 +3910,42 @@ router.post('/move_items', async (req, res) => {
         `;
 
         const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId]);
-        let batches = batchesRes.rows.map(b => ({
-            receipt_id: b.receipt_id,
-            price: Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0,
-            available: Number(b.initial_qty) - Number(b.spent_qty)
-        })).filter(b => b.available > 0);
+        
+        let batches = batchesRes.rows.map(b => {
+            const initial = Number(b.initial_qty) || 0;
+            const spent = Number(b.spent_qty) || 0;
+            const available = initial - spent;
+            const price = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            return {
+                receipt_id: b.receipt_id,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                price: price,
+                available: available > 0 ? available : 0
+            };
+        }).filter(b => b.available > 0);
+
+        const totalAvailableByBatches = batches.reduce((sum, b) => sum + b.available, 0);
+
+        // Учитываем то, что уже добавлено в текущем документе
+        const currentDocQuery = `
+            SELECT SUM(quantity) as sum 
+            FROM move_items 
+            WHERE move_id = $1 AND zaphasti_id = $2
+        `;
+        const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
+        const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
+
+        const availableStock = totalAvailableByBatches - alreadyInThisDoc;
+
+        console.log(`[FIFO DEBUG] Запрошено: ${requestedQty} шт. Доступно на складе (по партиям): ${totalAvailableByBatches} шт. Уже в текущем документе: ${alreadyInThisDoc} шт. Итого доступно: ${availableStock} шт.`);
+        console.log(`[FIFO DEBUG] Доступные партии:`, batches);
+
+        if (requestedQty > availableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock > 0 ? availableStock : 0} шт., а вы пытаетесь перенести: ${requestedQty} шт.` 
+            });
+        }
 
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
@@ -3958,13 +3953,17 @@ router.post('/move_items', async (req, res) => {
         const userId = req.headers['user-id'] || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-        // Если по партиям доступно меньше, чем нужно (или партий нет вообще), распределяем то что есть, остальное через fallback
+        // 3. Распределяем по партиям FIFO с подробным выводом в консоль
         if (batches.length > 0) {
             for (const batch of batches) {
                 if (remainingToDistribute <= 0) break;
 
                 const takeQty = Math.min(remainingToDistribute, batch.available);
+                if (takeQty <= 0) continue;
+
                 const totalRub = takeQty * batch.price;
+
+                console.log(`➡️ [FIFO STEP] Берем из документа прихода "${batch.doc_number}" (ID: ${batch.receipt_id}): нужно ${remainingToDistribute}, в партии есть ${batch.available}, забираем: ${takeQty} шт. по цене ${batch.price}`);
 
                 const insertQuery = `
                     INSERT INTO "move_items" 
@@ -3989,7 +3988,6 @@ router.post('/move_items', async (req, res) => {
                 const newRecord = result.rows[0];
                 createdRecords.push(newRecord);
 
-                // Безопасное логирование в audit_logs (используем только существующие колонки)
                 try {
                     await client.query(
                         `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
@@ -4004,7 +4002,7 @@ router.post('/move_items', async (req, res) => {
             }
         }
 
-        // Если остаток еще остался (или партии вообще не были зафиксированы в receipts), добиваем по последней цене
+        // Если остался хвостик
         if (remainingToDistribute > 0) {
             let fallbackPrice = 0;
             let fallbackReceiptId = null;
@@ -4029,6 +4027,8 @@ router.post('/move_items', async (req, res) => {
                     fallbackPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
                 }
             }
+
+            console.log(`⚠️ [FIFO FALLBACK] Остаток ${remainingToDistribute} шт. проведен по последней цене: ${fallbackPrice}`);
 
             const totalRub = remainingToDistribute * fallbackPrice;
 
