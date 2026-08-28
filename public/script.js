@@ -2832,6 +2832,8 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
+
+
 async function openMoveForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2870,6 +2872,9 @@ async function openMoveForm(entity, item = null, parentId = null) {
 
         if (entity === 'move_items') {
             item.currency = 'Рубль ПМР';
+            if (parentId) {
+                item.move_id = parentId;
+            }
         }
 
         config.columns.forEach(col => {
@@ -2878,8 +2883,13 @@ async function openMoveForm(entity, item = null, parentId = null) {
             }
         });
     } else {
-        if (entity === 'move_items' && !item.currency) {
-            item.currency = 'Рубль ПМР';
+        if (entity === 'move_items') {
+            if (!item.currency) {
+                item.currency = 'Рубль ПМР';
+            }
+            if (parentId && !item.move_id) {
+                item.move_id = parentId;
+            }
         }
     }
 
@@ -2893,13 +2903,19 @@ async function openMoveForm(entity, item = null, parentId = null) {
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
+    if (entity === 'move_items') {
+        const activeMoveId = parentId || (item ? item.move_id : '');
+        html += `<input type="hidden" name="move_id" value="${activeMoveId}">`;
+        html += `<input type="hidden" name="currency" value="Рубль ПМР">`;
+    }
+
     for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'move_id') continue;
+        if (col.field === 'id' || col.field === 'move_id' || col.field === 'currency') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
 
         if (entity === 'move_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'description', 'currency'];
+            const allowedFields = ['zaphasti_id', 'quantity', 'description'];
             if (!allowedFields.includes(col.field)) {
                 continue;
             }
@@ -2925,10 +2941,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
             if (val && typeof val === 'object' && val.id !== undefined) {
                 val = val.id;
             }
-        }
-
-        if (entity === 'move_items' && col.field === 'currency' && !val) {
-            val = 'Рубль ПМР';
         }
 
         let inputHtml = '';
@@ -3152,8 +3164,9 @@ async function openMoveForm(entity, item = null, parentId = null) {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        if (entity === 'move_items' && parentId) {
-            data.move_id = parentId; 
+        if (entity === 'move_items') {
+            if (parentId) data.move_id = parentId;
+            data.currency = 'Рубль ПМР';
         }
 
         try {
@@ -3193,6 +3206,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
         }
     });
 }
+
 
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
