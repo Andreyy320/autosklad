@@ -3736,8 +3736,8 @@ router.get('/expense_items', async (req, res) => {
     }
 });
 
-// POST /api/receipt-items - добавление новой запчасти/позиции в приход
-router.post('/receipt-items', async (req, res) => {
+// POST /api/receipts/items - добавление позиции в приход (новый эндпоинт)
+router.post('/receipts/items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -3774,7 +3774,7 @@ router.post('/receipt-items', async (req, res) => {
         // 3. Подготовка и расчёт числовых полей
         const numPrice = Number(price) || 0;
         const numQty = Number(quantity) || 0;
-        const priceRub = numPrice; // При необходимости сюда можно добавить логику конвертации по курсу валюты
+        const priceRub = numPrice; 
         const totalRub = numPrice * numQty;
         const curr = currency || 'RUB';
 
@@ -3808,8 +3808,8 @@ router.post('/receipt-items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Логирование действия в audit_logs (если таблица используется)
-        const userId = req.user ? req.user.id : null; // Зависит от вашей системы авторизации (например, JWT / passport)
+        // 5. Логирование действия в audit_logs
+        const userId = req.user ? req.user.id : null;
         const ipAddress = req.ip || req.headers['x-forwarded-for'] || null;
 
         await client.query(
@@ -4302,7 +4302,110 @@ router.post('/:entity', async (req, res) => {
     }
 });
 
+// POST /api/receipts/items - добавление позиции в приход (новый эндпоинт)
+router.post('/receipts/items', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
 
+        const {
+            receipt_id,
+            zaphasti_id,
+            price,
+            currency,
+            quantity,
+            description
+        } = req.body;
+
+        // 1. Проверяем обязательные поля
+        if (!receipt_id || !zaphasti_id) {
+            return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
+        }
+
+        // 2. Проверяем, проведен ли уже родительский документ (receipts)
+        const receiptCheck = await client.query(
+            'SELECT is_posted FROM receipts WHERE id = $1',
+            [receipt_id]
+        );
+
+        if (receiptCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Указанный приход не найден.' });
+        }
+
+        const isPostedVal = receiptCheck.rows[0].is_posted;
+        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
+        }
+
+        // 3. Подготовка и расчёт числовых полей
+        const numPrice = Number(price) || 0;
+        const numQty = Number(quantity) || 0;
+        const priceRub = numPrice; 
+        const totalRub = numPrice * numQty;
+        const curr = currency || 'RUB';
+
+        // 4. Вставка позиции в таблицу receipt_items
+        const insertQuery = `
+            INSERT INTO receipt_items (
+                receipt_id, 
+                zaphasti_id, 
+                price, 
+                currency, 
+                quantity, 
+                description, 
+                price_rub, 
+                total_rub
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+            RETURNING *;
+        `;
+
+        const values = [
+            receipt_id,
+            zaphasti_id,
+            numPrice,
+            curr,
+            numQty,
+            description || null,
+            priceRub,
+            totalRub
+        ];
+
+        const newItemResult = await client.query(insertQuery, values);
+        const createdItem = newItemResult.rows[0];
+
+        // 5. Логирование действия в audit_logs
+        const userId = req.user ? req.user.id : null;
+        const ipAddress = req.ip || req.headers['x-forwarded-for'] || null;
+
+        await client.query(
+            `INSERT INTO audit_logs (user_id, action, entity, entity_id, details, ip_address) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+                userId,
+                'CREATE',
+                'receipt_items',
+                createdItem.id,
+                JSON.stringify({ receipt_id, zaphasti_id, quantity: numQty, total_rub: totalRub }),
+                ipAddress
+            ]
+        );
+
+        await client.query('COMMIT');
+
+        return res.status(201).json({
+            message: 'Позиция успешно добавлена в приход',
+            item: createdItem
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Ошибка при добавлении позиции в приход:', error);
+        return res.status(500).json({ error: 'Внутренняя ошибка сервера при добавлении позиции.' });
+    } finally {
+        client.release();
+    }
+});
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
