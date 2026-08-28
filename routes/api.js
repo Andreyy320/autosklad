@@ -1741,6 +1741,7 @@ router.get('/stock_balances', async (req, res) => {
     }
 });
 
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
@@ -3411,7 +3412,6 @@ router.delete('/realization_works/:id', async (req, res) => {
     }
 });
 
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3420,26 +3420,26 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
-                COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
+                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(sub_i.parts_sum), 0)::numeric AS parts_sum,
+                COALESCE(SUM(sub_w.works_sum), 0)::numeric AS works_sum,
+                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum
             FROM realizations real
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
-            -- Подзапрос для точного суммирования запчастей и количества по складу
+            -- Подзапрос для суммирования запчастей по конкретной реализации
             LEFT JOIN (
                 SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
                 FROM realization_items ri
                 GROUP BY ri.realization_id
             ) sub_i ON real.id = sub_i.realization_id
-            -- Подзапрос для точного суммирования услуг по складу
+            -- Подзапрос для суммирования услуг по конкретной реализации
             LEFT JOIN (
                 SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
-            GROUP BY sk.id, sk.name, sub_i.total_qty, sub_i.parts_sum, sub_w.works_sum
+            GROUP BY sk.id, sk.name
             ORDER BY total_realization_sum DESC;
         `;
         const result = await pool.query(query);
@@ -3449,7 +3449,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3561,6 +3560,8 @@ router.get('/money_receipts_works_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
+
 
 
 // 1. Расходы по складам (уровень 1)
