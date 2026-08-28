@@ -2281,15 +2281,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     }
 
-    // Добавляем блок выбора типа запчасти / работы для универсальности (если это сущность ремонта)
-    if (entity === 'repair_items') {
-        html += `
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button type="button" id="select-zaphast-btn" style="flex: 1; background: #e2e8f0; color: #334155; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">Выбрать из каталога запчастей</button>
-            </div>
-        `;
-    }
-
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
@@ -5131,6 +5122,8 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
+
+
 function openDetailForm(mode) {
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
