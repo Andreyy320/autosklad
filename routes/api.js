@@ -3736,6 +3736,8 @@ router.get('/expense_items', async (req, res) => {
     }
 });
 
+
+
 // POST /api/receipts/items - добавление позиции в приход (новый эндпоинт)
 router.post('/receipts/items', async (req, res) => {
     const client = await pool.connect();
@@ -4036,54 +4038,6 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        if (entity === 'receipt_items') {
-            const { zaphasti_id, price, currency, quantity, description, receipt_id } = req.body;
-            
-            if (receipt_id) {
-                const receiptCheck = await pool.query('SELECT is_posted FROM receipts WHERE id = $1', [receipt_id]);
-                if (receiptCheck.rows.length > 0) {
-                    const isPostedVal = receiptCheck.rows[0].is_posted;
-                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка изменить проведенный документ прихода ID: ${receipt_id}`);
-                        return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
-                    }
-                }
-            }
-
-            const numPrice = Number(price) || 0;
-            const numQty = Number(quantity) || 0;
-            const priceRub = numPrice; 
-            const totalRub = numPrice * numQty;
-
-            const query = `
-                INSERT INTO "receipt_items" 
-                ("zaphasti_id", "price", "currency", "quantity", "description", "receipt_id", "price_rub", "total_rub") 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-                RETURNING *;
-            `;
-            
-            const values = [zaphasti_id, numPrice, currency, numQty, description, receipt_id, priceRub, totalRub];
-            const result = await pool.query(query, values);
-            const newRecord = result.rows[0];
-
-            // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (receipt_items) ====================
-            try {
-                const userId = req.headers['user-id'] || req.body.user_id || null;
-                const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-                await pool.query(
-                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [userId, 'INSERT', 'receipt_items', newRecord.id, JSON.stringify(req.body), clientIp]
-                );
-            } catch (logErr) {
-                console.error('Ошибка записи audit_logs:', logErr.message);
-            }
-            // =========================================================================
-
-            console.log(`[SUCCESS] Успешно добавлена строка прихода ID: ${newRecord.id}`);
-            return res.status(201).json(newRecord);
-        }
-
         if (entity === 'move_items') {
             const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
             const requestedQty = Number(quantity) || 0;
@@ -4102,7 +4056,6 @@ router.post('/:entity', async (req, res) => {
                         const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
 
                         if (warehouseFromId) {
-                            // Считаем общий чистый остаток на складе-источнике (исключая прошлые строки *других* документов, но учитывая приходы и списания)
                             const balanceQuery = `
                                 SELECT 
                                     (
@@ -4119,7 +4072,6 @@ router.post('/:entity', async (req, res) => {
                             const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
                             const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
 
-                            // Узнаем, сколько единиц этой запчасти УЖЕ добавлено в текущий документ перемещения (в черновик)
                             const currentDocQuery = `
                                 SELECT SUM(quantity) as sum 
                                 FROM move_items 
@@ -4128,7 +4080,6 @@ router.post('/:entity', async (req, res) => {
                             const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
                             const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
 
-                            // Доступно прямо сейчас = Реальный остаток минус то, что уже накидали в этот же черновик
                             const availableStock = pureStock - alreadyInThisDoc;
 
                             console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в черновике: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
@@ -4302,110 +4253,10 @@ router.post('/:entity', async (req, res) => {
     }
 });
 
-// POST /api/receipts/items - добавление позиции в приход (новый эндпоинт)
-router.post('/receipts/items', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
 
-        const {
-            receipt_id,
-            zaphasti_id,
-            price,
-            currency,
-            quantity,
-            description
-        } = req.body;
 
-        // 1. Проверяем обязательные поля
-        if (!receipt_id || !zaphasti_id) {
-            return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
-        }
 
-        // 2. Проверяем, проведен ли уже родительский документ (receipts)
-        const receiptCheck = await client.query(
-            'SELECT is_posted FROM receipts WHERE id = $1',
-            [receipt_id]
-        );
 
-        if (receiptCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Указанный приход не найден.' });
-        }
-
-        const isPostedVal = receiptCheck.rows[0].is_posted;
-        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
-        }
-
-        // 3. Подготовка и расчёт числовых полей
-        const numPrice = Number(price) || 0;
-        const numQty = Number(quantity) || 0;
-        const priceRub = numPrice; 
-        const totalRub = numPrice * numQty;
-        const curr = currency || 'RUB';
-
-        // 4. Вставка позиции в таблицу receipt_items
-        const insertQuery = `
-            INSERT INTO receipt_items (
-                receipt_id, 
-                zaphasti_id, 
-                price, 
-                currency, 
-                quantity, 
-                description, 
-                price_rub, 
-                total_rub
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-            RETURNING *;
-        `;
-
-        const values = [
-            receipt_id,
-            zaphasti_id,
-            numPrice,
-            curr,
-            numQty,
-            description || null,
-            priceRub,
-            totalRub
-        ];
-
-        const newItemResult = await client.query(insertQuery, values);
-        const createdItem = newItemResult.rows[0];
-
-        // 5. Логирование действия в audit_logs
-        const userId = req.user ? req.user.id : null;
-        const ipAddress = req.ip || req.headers['x-forwarded-for'] || null;
-
-        await client.query(
-            `INSERT INTO audit_logs (user_id, action, entity, entity_id, details, ip_address) 
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-                userId,
-                'CREATE',
-                'receipt_items',
-                createdItem.id,
-                JSON.stringify({ receipt_id, zaphasti_id, quantity: numQty, total_rub: totalRub }),
-                ipAddress
-            ]
-        );
-
-        await client.query('COMMIT');
-
-        return res.status(201).json({
-            message: 'Позиция успешно добавлена в приход',
-            item: createdItem
-        });
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Ошибка при добавлении позиции в приход:', error);
-        return res.status(500).json({ error: 'Внутренняя ошибка сервера при добавлении позиции.' });
-    } finally {
-        client.release();
-    }
-});
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
