@@ -3739,7 +3739,7 @@ router.get('/expense_items', async (req, res) => {
 
 
 // POST /api/receipts/items - добавление позиции в приход (новый эндпоинт)
-router.post('/receipts/items', async (req, res) => {
+router.post('/receipts_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
