@@ -3837,7 +3837,138 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
+// POST /api/move_items - добавление позиции перемещения с проверкой остатков
+router.post('/move_items', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items)`);
+    console.log(`[BODY]:`, req.body);
 
+    const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
+    const requestedQty = Number(quantity) || 0;
+    const numPrice = Number(price) || 0;
+
+    if (!zaphasti_id || !move_id) {
+        return res.status(400).json({ error: 'Не указан ID запчасти (zaphasti_id) или ID документа перемещения (move_id).' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Проверяем склад-источник в шапке документа moves и блокируем строку
+        const moveCheck = await client.query('SELECT warehouse_from_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        if (moveCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
+        }
+
+        const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
+
+        if (warehouseFromId) {
+            // 2. Расчет доступного чистого остатка на складе-источнике
+            const balanceQuery = `
+                SELECT 
+                    (
+                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
+                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
+                    ) - 
+                    (
+                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND (m_from.id != $3 OR m_from.id IS NULL)), 0) +
+                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
+                    ) 
+                AS pure_stock
+            `;
+            
+            const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
+            const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
+
+            const currentDocQuery = `
+                SELECT SUM(quantity) as sum 
+                FROM move_items 
+                WHERE move_id = $1 AND zaphasti_id = $2
+            `;
+            const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
+            const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
+
+            const availableStock = pureStock - alreadyInThisDoc;
+
+            console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в черновике: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+
+            if (requestedQty > availableStock) {
+                console.log(`[ERROR] Недостаточно остатка на складе! Доступно с учетом черновика: ${availableStock}, запрошено: ${requestedQty}`);
+                await client.query('ROLLBACK');
+                return res.status(400).json({ 
+                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт. (с учетом текущего документа), а вы пытаетесь добавить: ${requestedQty} шт.` 
+                });
+            }
+        }
+
+        // 3. Автоматический поиск документа прихода (income_document_id)
+        const docQuery = `
+            SELECT RI.receipt_id 
+            FROM receipt_items RI
+            JOIN receipts R ON RI.receipt_id = R.id
+            WHERE RI.zaphasti_id = $1
+            ORDER BY R.date ASC, R.id ASC
+            LIMIT 1
+        `;
+        const docResult = await client.query(docQuery, [zaphasti_id]);
+        const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
+
+        const priceRub = numPrice; 
+        const totalRub = requestedQty * priceRub;
+        const curr = currency || 'Рубль ПМР';
+
+        // 4. Вставка позиции в move_items
+        const insertQuery = `
+            INSERT INTO "move_items" 
+            ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            RETURNING *;
+        `;
+        
+        const values = [
+            zaphasti_id, 
+            numPrice, 
+            curr, 
+            requestedQty, 
+            priceRub, 
+            totalRub, 
+            description || null, 
+            move_id, 
+            income_document_id 
+        ];
+        
+        const result = await client.query(insertQuery, values);
+        const newRecord = result.rows[0];
+
+        // 5. Логирование в audit_logs
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify(req.body), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id}`);
+        return res.status(201).json(newRecord);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при добавлении позиции перемещения: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
@@ -3869,7 +4000,7 @@ router.post('/:entity', async (req, res) => {
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'move_items', 'statuses', 'tehosmotr', 
+            'moves', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
             'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
@@ -4031,126 +4162,6 @@ router.post('/:entity', async (req, res) => {
                         return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
                     }
                 }
-            }
-        }
-
-        if (entity === 'move_items') {
-            const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
-            const requestedQty = Number(quantity) || 0;
-            const numPrice = Number(price) || 0;
-            
-            console.log(`[MOVE_ITEMS] Проверка перемещения запчасти ID=${zaphasti_id}, запрошено кол-во=${requestedQty}`);
-
-            // Открываем транзакцию для безопасной проверки остатков при перемещении
-            const client = await pool.connect();
-            try {
-                await client.query('BEGIN');
-
-                if (move_id) {
-                    const moveCheck = await client.query('SELECT warehouse_from_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
-                    if (moveCheck.rows.length > 0) {
-                        const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
-
-                        if (warehouseFromId) {
-                            const balanceQuery = `
-                                SELECT 
-                                    (
-                                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
-                                    ) - 
-                                    (
-                                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND (m_from.id != $3 OR m_from.id IS NULL)), 0) +
-                                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                                    ) 
-                                AS pure_stock
-                            `;
-                            
-                            const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
-                            const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
-
-                            const currentDocQuery = `
-                                SELECT SUM(quantity) as sum 
-                                FROM move_items 
-                                WHERE move_id = $1 AND zaphasti_id = $2
-                            `;
-                            const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
-                            const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
-
-                            const availableStock = pureStock - alreadyInThisDoc;
-
-                            console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в черновике: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
-
-                            if (requestedQty > availableStock) {
-                                console.log(`[ERROR] Недостаточно остатка на складе! Доступно с учетом черновика: ${availableStock}, запрошено: ${requestedQty}`);
-                                await client.query('ROLLBACK');
-                                return res.status(400).json({ 
-                                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт. (с учетом текущего документа), а вы пытаетесь добавить: ${requestedQty} шт.` 
-                                });
-                            }
-                        }
-                    }
-                }
-
-                const docQuery = `
-                    SELECT RI.receipt_id 
-                    FROM receipt_items RI
-                    JOIN receipts R ON RI.receipt_id = R.id
-                    WHERE RI.zaphasti_id = $1
-                    ORDER BY R.date ASC, R.id ASC
-                    LIMIT 1
-                `;
-                const docResult = await client.query(docQuery, [zaphasti_id]);
-                const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
-
-                const priceRub = numPrice; 
-                const totalRub = requestedQty * priceRub;
-
-                const query = `
-                    INSERT INTO "move_items" 
-                    ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                    RETURNING *;
-                `;
-                
-                const values = [
-                    zaphasti_id, 
-                    numPrice, 
-                    currency || 'Рубль ПМР', 
-                    requestedQty, 
-                    priceRub, 
-                    totalRub, 
-                    description, 
-                    move_id, 
-                    income_document_id 
-                ];
-                
-                const result = await client.query(query, values);
-                const newRecord = result.rows[0];
-
-                // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (move_items) ====================
-                try {
-                    const userId = req.headers['user-id'] || req.body.user_id || null;
-                    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-                    await client.query(
-                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                         VALUES ($1, $2, $3, $4, $5, $6)`,
-                        [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify(req.body), clientIp]
-                    );
-                } catch (logErr) {
-                    console.error('Ошибка записи audit_logs:', logErr.message);
-                }
-                // =========================================================================
-
-                await client.query('COMMIT');
-                client.release();
-
-                console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id}`);
-                return res.status(201).json(newRecord);
-
-            } catch (txErr) {
-                await client.query('ROLLBACK');
-                client.release();
-                throw txErr;
             }
         }
 
