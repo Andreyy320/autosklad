@@ -3249,6 +3249,8 @@ async function openMoveForm(entity, item = null, parentId = null) {
     });
 }
 async function openRepairForm(item = null, parentId = null) {
+    console.log('[openRepairForm] СТАРТ. item:', item, 'parentId:', parentId);
+
     const entity = 'repair_items';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -3266,6 +3268,7 @@ async function openRepairForm(item = null, parentId = null) {
         let prefix = 'РЕМ-';
 
         try {
+            console.log(`[openRepairForm] Запрос автонумерации для /api/${entity}`);
             const response = await fetch(`/api/${entity}`);
             if (response.ok) {
                 const records = await response.json();
@@ -3302,13 +3305,11 @@ async function openRepairForm(item = null, parentId = null) {
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    // Явно добавляем скрытое поле repair_id в разметку формы, чтобы FormData и бэкенд его видели
     const currentRepairId = parentId || (item ? item.repair_id : '') || '';
     html += `<input type="hidden" name="repair_id" value="${currentRepairId}">`;
 
     async function renderField(col) {
         if (col.field === 'id') return '';
-        // Пропускаем поле repair_id из конфига, так как мы его уже добавили вручную выше
         if (col.field === 'repair_id') return '';
 
         if (col.insert === false) return '';
@@ -3348,6 +3349,7 @@ async function openRepairForm(item = null, parentId = null) {
 
         if (col.ref) {
             const referenceName = col.ref;
+            console.log(`[openRepairForm] Загрузка справочника для поля ${col.field}:`, referenceName);
             let refItems = await fetchReferenceData(referenceName);
 
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -3366,7 +3368,6 @@ async function openRepairForm(item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            // Поддерживаем оба возможных имени поля для запчасти в конфиге
             const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.field === 'description') {
@@ -3413,6 +3414,7 @@ async function openRepairForm(item = null, parentId = null) {
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
             const selectedZaphastiId = zaphastiSelect.value;
+            console.log('[zaphastiSelect change] Выбран ID запчасти:', selectedZaphastiId);
             if (!selectedZaphastiId) return;
 
             try {
@@ -3525,16 +3527,30 @@ async function openRepairForm(item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        // Принудительно дублируем/перезаписываем repair_id из аргумента parentId, чтобы гарантировать его отправку
         if (parentId) {
             data.repair_id = parentId;
         }
+
+        // --- ЛОГИРОВАНИЕ ДАННЫХ ПЕРЕД ОТПРАВКОЙ НА СЕРВЕР ---
+        console.group('[Form Submit] Отправка данных на сервер');
+        console.log('Entity:', entity);
+        console.log('Parent ID (argument):', parentId);
+        console.log('Item ID (if editing):', item && item.id ? item.id : 'NEW');
+        console.log('FormData entries:');
+        for (let pair of formData.entries()) {
+            console.log(`  %c${pair[0]}%c:`, 'color: #2563eb; font-weight: bold;', 'color: inherit;', pair[1]);
+        }
+        console.log('Итоговый объект data для JSON.stringify:', data);
+        console.groupEnd();
+        // ----------------------------------------------------
 
         try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            console.log(`[Form Submit] Выполняется ${method} запрос на ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -3545,7 +3561,12 @@ async function openRepairForm(item = null, parentId = null) {
                 body: JSON.stringify(data)
             });
 
+            console.log(`[Form Submit] Ответ сервера статус:`, response.status, response.statusText);
+
             if (response.ok) {
+                const responseBody = await response.json().catch(() => ({}));
+                console.log('[Form Submit] Успешный ответ сервера:', responseBody);
+
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
@@ -3556,11 +3577,13 @@ async function openRepairForm(item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
+                console.error('[Form Submit] Ошибка от сервера (не OK):', response.status, errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
+            console.error('[Form Submit] Исключение сети или кода во время fetch:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;

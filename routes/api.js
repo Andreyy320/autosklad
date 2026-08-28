@@ -4020,7 +4020,6 @@ router.post('/move_items', async (req, res) => {
     }
 });
 
-
 // POST /api/repair_items - добавление запчасти в ремонт (с жесткой проверкой остатков и FIFO)
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4071,7 +4070,7 @@ router.post('/repair_items', async (req, res) => {
                     COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
                 ) - 
                 (
-                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_to.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
                     COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep_i.repair_id != $3), 0)
                 ) 
             AS available_qty
