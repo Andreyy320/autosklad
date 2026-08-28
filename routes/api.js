@@ -4021,6 +4021,186 @@ router.post('/move_items', async (req, res) => {
 });
 
 
+// POST /api/repair_items - добавление запчасти в ремонт (с жесткой проверкой склада и остатков)
+router.post('/repair_items', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[POST REQUEST] Добавление запчасти в ремонт (repair_items)`);
+    console.log(`[BODY]:`, req.body);
+
+    const { zaphast_id, price, quantity, description, repair_id, receipt_id, currency } = req.body;
+    const requestedQty = Number(quantity) || 0;
+    const numPrice = Number(price) || 0;
+
+    if (!zaphast_id || !repair_id) {
+        return res.status(400).json({ error: 'Не указан ID запчасти (zaphast_id) или ID документа ремонта (repair_id).' });
+    }
+
+    if (requestedQty <= 0) {
+        return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Проверяем документ ремонта, его склад и статус проведения
+        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        if (repairCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Указанный документ ремонта не найден.' });
+        }
+
+        const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
+
+        // Защита от добавления в проведенный документ
+        if (isPosted === true || isPosted === 'true' || isPosted === 2 || isPosted === '2' || isPosted === 1) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
+        }
+
+        if (!warehouseId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
+        }
+
+        // 2. Расчет реального доступного остатка на складе с учетом всех приходов, перемещений и других ремонтов
+        const balanceQuery = `
+            SELECT 
+                (
+                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 and r.warehouse_id = $2), 0) +
+                    COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
+                ) - 
+                (
+                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep_i.id != COALESCE(NULL, 0)), 0)
+                ) 
+            AS available_qty
+        `;
+        
+        const balanceRes = await client.query(balanceQuery, [zaphast_id, warehouseId]);
+        const pureStock = Number(balanceRes.rows[0].available_qty) || 0;
+
+        // Считаем, сколько этого товара уже добавлено именно в этот текущий документ ремонта (черновик)
+        const currentDocQuery = `
+            SELECT SUM(quantity) as sum 
+            FROM repair_items 
+            WHERE repair_id = $1 AND zaphast_id = $2
+        `;
+        const currentDocRes = await client.query(currentDocQuery, [repair_id, zaphast_id]);
+        const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
+
+        // Реально доступное количество для добавления
+        const availableStock = pureStock - alreadyInThisDoc;
+
+        console.log(`[STOCK DEBUG REPAIR] Склад ID=${warehouseId}, чистый остаток: ${pureStock}, уже в документе: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+
+        // Жесткая проверка: если запрашивают больше, чем есть — откатываем транзакцию и возвращаем ошибку
+        if (requestedQty > availableStock) {
+            await client.query('ROLLBACK');
+            console.warn(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
+            return res.status(400).json({ 
+                error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь добавить: ${requestedQty} шт.` 
+            });
+        }
+
+        // 3. Автоматический поиск партии (FIFO) и цены со склада ремонта
+        let targetReceiptId = receipt_id;
+        let fetchedPrice = numPrice;
+
+        if (!targetReceiptId || fetchedPrice === 0) {
+            const docQuery = `
+                SELECT RI.receipt_id, RI.price, RI.price_rub 
+                FROM receipt_items RI
+                JOIN receipts R ON RI.receipt_id = R.id
+                WHERE RI.zaphasti_id = $1 AND R.warehouse_id = $2
+                ORDER BY R.date ASC, R.id ASC
+                LIMIT 1
+            `;
+            const docResult = await client.query(docQuery, [zaphast_id, warehouseId]);
+            
+            if (docResult.rows.length > 0) {
+                targetReceiptId = docResult.rows[0].receipt_id;
+                if (fetchedPrice === 0) {
+                    fetchedPrice = Number(docResult.rows[0].price_rub !== undefined && docResult.rows[0].price_rub !== null ? docResult.rows[0].price_rub : docResult.rows[0].price) || 0;
+                }
+            } else {
+                // Резервный поиск по всей базе, если на конкретном складе прихода не было
+                const fallbackDocQuery = `
+                    SELECT RI.receipt_id, RI.price, RI.price_rub 
+                    FROM receipt_items RI
+                    JOIN receipts R ON RI.receipt_id = R.id
+                    WHERE RI.zaphasti_id = $1
+                    ORDER BY R.date DESC, R.id DESC
+                    LIMIT 1
+                `;
+                const fallbackDocRes = await client.query(fallbackDocQuery, [zaphast_id]);
+                if (fallbackDocRes.rows.length > 0) {
+                    targetReceiptId = fallbackDocRes.rows[0].receipt_id;
+                    if (fetchedPrice === 0) {
+                        fetchedPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) ||0;
+                    }
+                } else if (fetchedPrice === 0) {
+                    const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphast_id]);
+                    if (zaphRes.rows.length > 0) {
+                        const z = zaphRes.rows[0];
+                        fetchedPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
+                    }
+                }
+            }
+        }
+
+        const finalPrice = fetchedPrice;
+        const totalSum = finalPrice * requestedQty;
+
+        // 4. Вставка записи в repair_items
+        const insertQuery = `
+            INSERT INTO "repair_items" 
+            ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) 
+            RETURNING *;
+        `;
+        
+        const values = [
+            zaphast_id, 
+            finalPrice, 
+            requestedQty, 
+            description || null, 
+            repair_id, 
+            totalSum, 
+            targetReceiptId || null
+        ];
+        
+        const result = await client.query(insertQuery, values);
+        const newRecord = result.rows[0];
+
+        // 5. Логирование в audit_logs
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'INSERT', 'repair_items', newRecord.id, JSON.stringify(req.body), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${newRecord.id} (Цена: ${finalPrice}, Источник: ${targetReceiptId})`);
+        return res.status(201).json(newRecord);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при добавлении запчасти в ремонт: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
@@ -4085,123 +4265,8 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        if (entity === 'repair_items') {
-            const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
-            const requestedQty = Number(quantity) || 0;
-            const numPrice = Number(price) || 0;
-                
-            console.log(`[REPAIR_ITEMS] Проверка списания запчасти ID=${zaphast_id}, запрошено кол-во=${requestedQty}`);
-
-            // Открываем транзакцию для безопасной проверки и списания
-            const client = await pool.connect();
-            try {
-                await client.query('BEGIN');
-
-                if (repair_id) {
-                    const repairCheck = await client.query('SELECT is_posted, warehouse_id FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
-                    if (repairCheck.rows.length > 0) {
-                        const isPostedVal = repairCheck.rows[0].is_posted;
-                        const warehouseId = repairCheck.rows[0].warehouse_id;
-
-                        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                            console.log(`[ERROR] Попытка изменить проведенный документ ремонта ID: ${repair_id}`);
-                            await client.query('ROLLBACK');
-                            return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
-                        }
-
-                        if (warehouseId) {
-                            const balanceQuery = `
-                                SELECT 
-                                    (
-                                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
-                                    ) - 
-                                    (
-                                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2), 0) +
-                                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                                    ) 
-                                AS available_qty
-                            `;
-                            
-                            const balanceRes = await client.query(balanceQuery, [zaphast_id, warehouseId]);
-                            const availableStock = Number(balanceRes.rows[0].available_qty) || 0;
-
-                            console.log(`[STOCK DEBUG] Склад ремонта ID=${warehouseId}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
-
-                            if (requestedQty > availableStock) {
-                                console.log(`[ERROR] Недостаточно остатка на складе ремонта! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
-                                await client.query('ROLLBACK');
-                                return res.status(400).json({ 
-                                    error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
-                                });
-                            }
-                        }
-                    }
-                }
-
-                let targetReceiptId = receipt_id;
-                if (!targetReceiptId) {
-                    const docQuery = `
-                        SELECT RI.receipt_id 
-                        FROM receipt_items RI
-                        JOIN receipts R ON RI.receipt_id = R.id
-                        WHERE RI.zaphasti_id = $1
-                        ORDER BY R.date ASC, R.id ASC
-                        LIMIT 1
-                    `;
-                    const docResult = await client.query(docQuery, [zaphast_id]);
-                    if (docResult.rows.length > 0) {
-                        targetReceiptId = docResult.rows[0].receipt_id;
-                    }
-                }
-
-                const totalSum = numPrice * requestedQty;
-                const query = `
-                    INSERT INTO "repair_items" 
-                    ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7) 
-                    RETURNING *;
-                `;
-                
-                const values = [
-                    zaphast_id || null, 
-                    numPrice, 
-                    requestedQty, 
-                    description || null, 
-                    repair_id || null, 
-                    totalSum, 
-                    targetReceiptId || null
-                ];
-                
-                const result = await client.query(query, values);
-                const newRecord = result.rows[0];
-
-                // ==================== ПОЛНОЕ ЛОГИРОВАНИЕ (repair_items) ====================
-                try {
-                    const userId = req.headers['user-id'] || req.body.user_id || null;
-                    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-                    await client.query(
-                        `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                         VALUES ($1, $2, $3, $4, $5, $6)`,
-                        [userId, 'INSERT', 'repair_items', newRecord.id, JSON.stringify(req.body), clientIp]
-                    );
-                } catch (logErr) {
-                    console.error('Ошибка записи audit_logs:', logErr.message);
-                }
-                // =========================================================================
-
-                await client.query('COMMIT');
-                client.release();
-
-                console.log(`[SUCCESS] Успешно добавлена запчасть в ремонт ID: ${newRecord.id}`);
-                return res.status(201).json(newRecord);
-
-            } catch (txErr) {
-                await client.query('ROLLBACK');
-                client.release();
-                throw txErr;
-            }
-        }
+        // Блок с логикой для repair_items полностью убран отсюда, 
+        // так как теперь для него используется отдельный выделенный роут выше.
 
         if (entity === 'repair_works') {
             const { repair_id } = req.body;
@@ -4312,8 +4377,6 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-
-
 
 
 
