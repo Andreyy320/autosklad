@@ -3740,7 +3740,6 @@ router.get('/expense_items', async (req, res) => {
 
 
 
-
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
     const client = await pool.connect();
@@ -3839,8 +3838,17 @@ router.post('/receipt_items', async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Ошибка при добавлении позиции в приход:', error);
-        return res.status(500).json({ error: 'Внутренняя ошибка сервера при добавлении позиции.' });
+        console.error('ПОЛНАЯ ОШИБКА БД при добавлении позиции:', {
+            message: error.message,
+            detail: error.detail,
+            hint: error.hint,
+            code: error.code,
+            position: error.position
+        });
+        return res.status(500).json({ 
+            error: 'Внутренняя ошибка сервера при добавлении позиции.',
+            details: error.message 
+        });
     } finally {
         client.release();
     }
