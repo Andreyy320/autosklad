@@ -1303,7 +1303,8 @@ repairs: {
             <td>${postedText}</td>
         `;
     }
-},repair_items: {
+},
+repair_items: {
     title: 'Список запчастей в ремонте',
     columns: [
         { field: 'zaphast_id', label: 'Запчасть', width: '0px', ref: 'zaphasti', insert: true, table: false },
@@ -1312,11 +1313,10 @@ repairs: {
         { field: 'name', label: 'Наименование', width: '220px', insert: false, table: true },
         { field: 'quantity', label: 'Кол-во', width: '80px', insert: true, table: true },
         { field: 'unit', label: 'Ед. изм', width: '70px', insert: false, table: true },
-        { field: 'price', label: 'Цена за штуку', width: '90px', insert: true, table: true },
+        { field: 'price', label: 'Цена за штуку', width: '90px', insert: false, table: true }, // Скрываем из формы, цена подставится сама
         { field: 'total', label: 'Сумма', width: '90px', insert: false, table: true },
         { field: 'description', label: 'Описание', width: '150px', insert: true, table: true },
-        { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: true, table: true },
-        
+        { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: false, table: true }, // Скрываем из формы, бэкенд подхватит со склада
     ],
     render: (item) => {
         const price = Number(item.price) || 0;
@@ -3300,13 +3300,6 @@ async function openRepairForm(item = null, parentId = null) {
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
         
-        // Оставляем видимыми строго: zaphasti_id (запчасть), quantity (кол-во), description (описание). 
-        // Остальное (цена, документ прихода и т.д.) скрываем из интерфейса.
-        const allowedFields = ['zaphasti_id', 'quantity', 'description'];
-        if (!allowedFields.includes(col.field)) {
-            return '';
-        }
-
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -3359,7 +3352,7 @@ async function openRepairForm(item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
+            const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
@@ -3379,7 +3372,6 @@ async function openRepairForm(item = null, parentId = null) {
         html += await renderField(col);
     }
 
-    // Скрытое поле для цены, чтобы бэкенд получал её автоматически под капотом
     let currentPriceVal = item && item.price !== undefined ? item.price : '';
     html += `<input type="hidden" name="price" id="hidden-price-input" value="${currentPriceVal}">`;
 
