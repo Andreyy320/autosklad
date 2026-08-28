@@ -2033,8 +2033,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             if (entity === 'receipts') {
                 prefix = 'ПР-';
-            } else if (entity === 'moves' || entity === 'move_items' || entity === 'sklad_movements') {
-                prefix = 'ПМ-';
             } else if (entity === 'tehosmotr') {
                 prefix = 'ТО-';
             } else if (entity === 'autostrahovanie') {
@@ -2067,7 +2065,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 is_posted: false 
             };
 
-            if (entity === 'move_items' || entity === 'realization_items') {
+            if (entity === 'realization_items') {
                 item.currency = 'Рубль ПМР';
             }
 
@@ -2081,7 +2079,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 item.autoservice = 'Евроавтотест';
             }
         } else {
-            if ((entity === 'move_items' || entity === 'realization_items') && !item.currency) {
+            if (entity === 'realization_items' && !item.currency) {
                 item.currency = 'Рубль ПМР';
             }
         }
@@ -2104,16 +2102,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
             html += `<input type="hidden" name="car_id" value="${parentId}">`;
         }
 
-        // Вспомогательная функция для рендеринга отдельного поля ввода формы
         async function renderField(col) {
-            if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id') return '';
+            if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'repair_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id') return '';
             if (col.field === 'car_id' && parentId) return '';
             if (col.insert === false) return '';
             if ((col.update === false || col.edit === false) && item && item.id) return '';
             if (entity === 'repair_items' && col.field === 'receipt_id') return '';
             if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
 
-            // Жесткая фильтрация полей для realization_items
             if (entity === 'realization_items') {
                 const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
                 if (!allowedFields.includes(col.field)) {
@@ -2121,15 +2117,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             }
 
-            // Жесткая фильтрация полей для move_items (убираем цену)
-            if (entity === 'move_items') {
-                const allowedFields = ['zaphasti_id', 'quantity', 'description', 'currency'];
-                if (!allowedFields.includes(col.field)) {
-                    return '';
-                }
-            }
-
-            // Жесткая фильтрация полей для realization_works (услуга, количество, цена реализации, описание)
             if (entity === 'realization_works') {
                 const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
                 if (!allowedFields.includes(col.field)) {
@@ -2159,7 +2146,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             }
 
-            if ((entity === 'move_items' || entity === 'realization_items') && col.field === 'currency' && !val) {
+            if (entity === 'realization_items' && col.field === 'currency' && !val) {
                 val = 'Рубль ПМР';
             }
 
@@ -2306,7 +2293,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         const zaphastiSelect = formElement.querySelector('#zaphasti-select');
         const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
 
-        // Автозаполнение цены при выборе запчасти
         if (zaphastiSelect) {
             zaphastiSelect.addEventListener('change', async () => {
                 const selectedZaphastiId = zaphastiSelect.value;
@@ -2317,7 +2303,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     if (response.ok) {
                         const itemData = await response.json();
                         const priceInput = formElement.querySelector('[name="price"]');
-
                         const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
 
                         if (priceInput && targetPrice !== undefined && !priceInput.value) {
@@ -2330,14 +2315,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
         }
 
-        // Автозаполнение цены реализации при выборе услуги (vidy_rabot) — только если поле цены пустое
         if (vidyRabotSelect) {
             vidyRabotSelect.addEventListener('change', async () => {
                 const selectedWorkId = vidyRabotSelect.value;
                 if (!selectedWorkId) return;
 
                 const priceInput = formElement.querySelector('[name="price"]');
-
                 if (priceInput && priceInput.value.trim() !== '') {
                     return; 
                 }
@@ -2364,15 +2347,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 const currentCarValue = carSelect.value;
 
                 carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
-
                 if (!selectedCustomerId) return;
 
                 try {
                     const response = await fetch(`/api/customer_cars?customer_id=${selectedCustomerId}`);
-                    if (!response.ok) {
-                        console.error('Ошибка загрузки автомобилей покупателя');
-                        return;
-                    }
+                    if (!response.ok) return;
                     const cars = await response.json();
 
                     cars.forEach(car => {
@@ -2409,70 +2388,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
         }
 
-        if (formElement) {
-            const pairs = [
-                { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
-                { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-                { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-                { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
-            ];
-
-            pairs.forEach(({ warehouse, mol }) => {
-                if (!warehouse || !mol) return;
-
-                async function filterMols() {
-                    const selectedWarehouseId = warehouse.value;
-                    const currentMolValue = mol.value;
-
-                    try {
-                        const [molRes, usersRes] = await Promise.all([
-                            fetch('/api/mol'),
-                            fetch('/api/mol_users')
-                        ]);
-
-                        if (!molRes.ok) {
-                            console.error('Ошибка загрузки справочника МОЛ, статус:', molRes.status);
-                            return;
-                        }
-                        const mols = await molRes.json();
-                        const users = usersRes.ok ? await usersRes.json() : [];
-
-                        const usersMap = {};
-                        users.forEach(u => {
-                            usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                        });
-
-                        mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
-                        mols.forEach(m => {
-                            if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
-                                const option = document.createElement('option');
-                                option.value = m.id;
-                                const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-                                option.textContent = userName;
-
-                                if (String(m.id) === String(currentMolValue)) {
-                                    option.selected = true;
-                                }
-                                mol.appendChild(option);
-                            }
-                        });
-                    } catch (err) {
-                        console.error('Ошибка при фильтрации МОЛ:', err);
-                    }
-                }
-
-                warehouse.addEventListener('change', () => {
-                    mol.value = '';
-                    filterMols();
-                });
-
-                if (warehouse.value) {
-                    filterMols();
-                }
-            });
-        }
-
         const deleteBtn = drawer.querySelector('#delete-btn');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', async () => {
@@ -2496,7 +2411,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                                 showAppNotification('Запись успешно удалена', 'success');
 
                                 const detailEntities = [
-                                    'receipt_items', 'move_items', 'realization_items', 'realization_works', 'accident_invoices', 
+                                    'receipt_items', 'realization_items', 'realization_works', 'accident_invoices', 
                                     'accident_payments', 'accident_events', 'accident_items', 
                                     'repair_items', 'repair_works', 'entity_contacts', 
                                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2509,11 +2424,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
                                 }
                             } else {
                                 const errData = await response.json().catch(() => ({}));
-                                console.error('Ошибка при удалении на сервере:', errData);
                                 showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
                             }
                         } catch (err) {
-                            console.error('Ошибка соединения при удалении:', err);
                             showAppNotification('Ошибка соединения с сервером', 'error');
                         }
                     }
@@ -2526,10 +2439,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         formElement.addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            if (isSubmitting) {
-                console.warn("Попытка повторной отправки заблокирована!");
-                return; 
-            }
+            if (isSubmitting) return; 
             isSubmitting = true;
 
             const saveButton = formElement.querySelector('#save-btn');
@@ -2544,8 +2454,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             if (entity === 'receipt_items' && parentId) {
                 data.receipt_id = parentId;
-            } else if (entity === 'move_items' && parentId) {
-                data.move_id = parentId; 
             } else if (entity === 'realization_items' && parentId) {
                 data.realization_id = parentId;
             } else if (entity === 'realization_works' && parentId) {
@@ -2580,10 +2488,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             try {
                 const isEdit = item && item.id;
-                const url = isEdit 
-                    ? `/api/${entity}/${item.id}` 
-                    : `/api/${entity}`;
-
+                const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
                 const method = isEdit ? 'PUT' : 'POST';
                 const currentUserId = localStorage.getItem('currentUserId') || '';
 
@@ -2601,7 +2506,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     showAppNotification('Данные успешно сохранены', 'success');
 
                     const detailEntities = [
-                        'receipt_items', 'move_items', 'realization_items', 'realization_works', 'accident_invoices', 
+                        'receipt_items', 'realization_items', 'realization_works', 'accident_invoices', 
                         'accident_payments', 'accident_events', 'accident_items', 
                         'repair_items', 'repair_works', 'entity_contacts', 
                         'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2614,13 +2519,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     }
                 } else {
                     const errData = await response.json().catch(() => ({}));
-                    console.error('Ошибка сохранения от сервера:', errData);
                     showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                     isSubmitting = false; 
                     if (saveButton) saveButton.disabled = false;
                 }
             } catch (err) {
-                console.error('Ошибка соединения при отправке формы:', err);
                 showAppNotification('Ошибка соединения с сервером', 'error');
                 isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
@@ -2916,6 +2819,391 @@ async function openReceiptForm(entity, item = null) {
             } else {
                 const errData = await response.json().catch(() => ({}));
                 showAppNotification(errData.error || 'Ошибка при сохранении прихода', 'error');
+                isSubmitting = false; 
+                if (saveButton) saveButton.disabled = false;
+            }
+        } catch (err) {
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+        }
+    });
+}
+
+async function openMoveForm(entity, item = null, parentId = null) {
+    const config = getConfig(entity);
+    const drawer = getOrCreateDrawer();
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    if (!item || !item.id) {
+        let nextId = 1;
+        let prefix = 'ПМ-';
+
+        try {
+            const response = await fetch(`/api/${entity}`);
+            if (response.ok) {
+                const records = await response.json();
+                if (records.length > 0) {
+                    const maxId = Math.max(...records.map(r => r.id || 0));
+                    nextId = maxId + 1;
+                }
+            } else {
+                console.warn(`Сервер вернул не OK при автонумерации: ${response.status}`);
+            }
+        } catch (e) {
+            console.error('Не удалось получить список для автонумерации', e);
+        }
+
+        item = { 
+            doc_number: `${prefix}${nextId}`,
+            is_posted: false 
+        };
+
+        if (entity === 'move_items') {
+            item.currency = 'Рубль ПМР';
+        }
+
+        config.columns.forEach(col => {
+            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                item[col.field] = currentDateTime;
+            }
+        });
+    } else {
+        if (entity === 'move_items' && !item.currency) {
+            item.currency = 'Рубль ПМР';
+        }
+    }
+
+    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
+    `;
+
+    for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'move_id') continue;
+        if (col.insert === false) continue;
+        if ((col.update === false || col.edit === false) && item && item.id) continue;
+
+        if (entity === 'move_items') {
+            const allowedFields = ['zaphasti_id', 'quantity', 'description', 'currency'];
+            if (!allowedFields.includes(col.field)) {
+                continue;
+            }
+        }
+
+        let val = '';
+        if (item) {
+            const possibleKeys = [
+                col.field, 
+                col.field.replace('_id', ''), 
+                col.field + '_id',
+                col.ref,
+                col.ref ? col.ref.slice(0, -1) : ''
+            ];
+
+            for (const k of possibleKeys) {
+                if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
+                    val = item[k];
+                    break;
+                }
+            }
+
+            if (val && typeof val === 'object' && val.id !== undefined) {
+                val = val.id;
+            }
+        }
+
+        if (entity === 'move_items' && col.field === 'currency' && !val) {
+            val = 'Рубль ПМР';
+        }
+
+        let inputHtml = '';
+        let fieldReadonly = col.readonly;
+        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+            fieldReadonly = true;
+        }
+
+        const controlStyle = fieldReadonly 
+            ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
+            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+        if (col.field === 'is_posted') {
+            const statusItems = await fetchReferenceData('statuses');
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+
+            statusItems.forEach(st => {
+                const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
+                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+            });
+
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.ref) {
+            const referenceName = col.ref;
+            let refItems = await fetchReferenceData(referenceName);
+
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+
+            refItems.forEach(refItem => {
+                let displayName = '';
+                if (referenceName === 'zaphasti') {
+                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const nm = refItem.name || refItem.title || '';
+                    displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                } else {
+                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                }
+
+                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+            });
+
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            let formattedVal = '';
+            if (col.field === 'fact_date' && !val && isPosted) {
+                val = currentDateTime;
+            }
+
+            if (val) {
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const minutes = String(d.getMinutes()).padStart(2, '0');
+                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        } else if (col.field === 'description') {
+            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else {
+            inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        }
+
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${col.label}:
+                ${inputHtml}
+            </label>
+        `;
+    }
+
+    html += `
+                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                </div>
+            </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    let rawFormElement = drawer.querySelector('#entity-form');
+    const formElement = rawFormElement.cloneNode(true);
+    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', async () => {
+            const selectedZaphastiId = zaphastiSelect.value;
+            if (!selectedZaphastiId) return;
+
+            try {
+                const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
+                if (response.ok) {
+                    const itemData = await response.json();
+                    const priceInput = formElement.querySelector('[name="price"]');
+                    const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
+
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
+                        priceInput.value = targetPrice;
+                    }
+                }
+            } catch (err) {
+                console.error('Ошибка при автозаполнении данных запчасти:', err);
+            }
+        });
+    }
+
+    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
+    const factDateInput = formElement.querySelector('[name="fact_date"]');
+
+    if (isPostedSelect && factDateInput) {
+        isPostedSelect.addEventListener('change', () => {
+            if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
+                factDateInput.value = currentDateTime;
+            } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
+                factDateInput.value = '';
+            }
+        });
+    }
+
+    if (formElement) {
+        const pairs = [
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+            { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        ];
+
+        pairs.forEach(({ warehouse, mol }) => {
+            if (!warehouse || !mol) return;
+
+            async function filterMols() {
+                const selectedWarehouseId = warehouse.value;
+                const currentMolValue = mol.value;
+
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+
+                    if (!molRes.ok) return;
+                    const mols = await molRes.json();
+                    const users = usersRes.ok ? await usersRes.json() : [];
+
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
+
+                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                    mols.forEach(m => {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = userName;
+
+                            if (String(m.id) === String(currentMolValue)) {
+                                option.selected = true;
+                            }
+                            mol.appendChild(option);
+                        }
+                    });
+                } catch (err) {
+                    console.error('Ошибка при фильтрации МОЛ:', err);
+                }
+            }
+
+            warehouse.addEventListener('change', () => {
+                mol.value = '';
+                filterMols();
+            });
+
+            if (warehouse.value) {
+                filterMols();
+            }
+        });
+    }
+
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить эту запись?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
+
+                    try {
+                        const response = await fetch(`/api/${entity}/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
+
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Запись успешно удалена', 'success');
+
+                            if (entity === 'move_items' && parentId) {
+                                loadDetailData(entity, parentId);
+                            } else {
+                                refreshData();
+                            }
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                        }
+                    } catch (err) {
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                }
+            );
+        });
+    }
+
+    let isSubmitting = false;
+
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (isSubmitting) return; 
+        isSubmitting = true;
+
+        const saveButton = formElement.querySelector('#save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+
+        if (entity === 'move_items' && parentId) {
+            data.move_id = parentId; 
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Данные успешно сохранены', 'success');
+
+                if (entity === 'move_items' && parentId) {
+                    loadDetailData(entity, parentId);
+                } else {
+                    refreshData();
+                }
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
