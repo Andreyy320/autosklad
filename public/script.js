@@ -2016,7 +2016,6 @@ function closeDrawer() {
 
 }
 
-
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
