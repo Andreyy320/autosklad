@@ -4069,7 +4069,7 @@ router.post('/move_items', async (req, res) => {
         await client.query('COMMIT');
 
         console.log(`[SUCCESS] Успешно создано строк перемещения (FIFO сплит): ${createdRecords.length}`);
-        return res.status(201).json(createdRecords.length === 1 ? createdRecords[0] : createdRecords);
+        return res.status(201).json(createdRecords);
 
     } catch (err) {
         await client.query('ROLLBACK');
