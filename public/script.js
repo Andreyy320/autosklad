@@ -2835,6 +2835,8 @@ async function openReceiptForm(entity, item = null) {
 
 
 async function openMoveForm(entity, item = null, parentId = null) {
+    console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
+
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -3160,20 +3162,36 @@ async function openMoveForm(entity, item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        console.log('[SUBMIT] Собрано из формы (formData):', data);
+
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
         if (entity === 'move_items') {
-            if (parentId) data.move_id = parentId;
+            // Исправление: надежно подтягиваем parentId из аргументов функции или из дата-атрибута формы
+            const currentParentId = parentId || formElement.getAttribute('data-parent-id');
+            if (currentParentId) {
+                data.move_id = currentParentId;
+            }
+            
+            // Если поле селекта поменяло имя или называется zaphasti, гарантируем наличие zaphasti_id
+            if (data.zaphasti && !data.zaphasti_id) {
+                data.zaphasti_id = data.zaphasti;
+            }
+
             data.currency = 'Рубль ПМР';
         }
+
+        console.log('[SUBMIT] Итоговый объект отправки (data):', data);
 
         try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            console.log(`[SUBMIT] Отправка запроса: ${method} ${url}`, { body: data, headers: { 'x-user-id': currentUserId } });
 
             const response = await fetch(url, {
                 method: method,
@@ -3185,6 +3203,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
+                console.log('[SUBMIT] Успешно сохранено');
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
@@ -3195,11 +3214,13 @@ async function openMoveForm(entity, item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
+                console.error('[SUBMIT] Ошибка сервера:', response.status, errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
+            console.error('[SUBMIT] Сетевая ошибка:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
