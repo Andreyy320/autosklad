@@ -4689,7 +4689,6 @@ async function loadData(entity, title, customParams = {}) {
     }
 }
 
-
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -4727,7 +4726,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     // 4. Уровень позиций
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
-        if (receiptId) window.currentReceiptId = receiptId;
+        
+        // 🛠 Исправление: если передан новый ID, обновляем глобальную переменную, а если пустой — берем старую
+        if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
+            window.currentReceiptId = receiptId;
+        }
 
         let skladId = window.currentSkladId || '';
         let postavhikId = window.currentPostavhikId || '';
