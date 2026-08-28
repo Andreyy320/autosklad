@@ -2505,7 +2505,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            // --- ЛОГИРОВАНИЕ ДАННЫХ В КОНСОЛЬ БРАУЗЕРА ---
             console.group('--- ОТПРАВКА ДАННЫХ ФОРМЫ ---');
             console.log('Сущность (entity):', entity);
             console.log('ID родителя (parentId):', parentId);
@@ -2543,14 +2542,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             } else {
                 const errData = await response.json().catch(() => ({}));
                 
-                // --- ВИДИМЫЕ ЛОГИ ОШИБКИ В БРАУЗЕРЕ (Выводятся на экран пользователю) ---
                 const errorMsg = errData.error || errData.message || `Ошибка сервера: ${response.status} ${response.statusText}`;
                 console.error('Ошибка ответа сервера:', response.status, errData);
                 
-                // Выводим текст ошибки прямо в инспектор/на экран в виде уведомления
                 showAppNotification(errorMsg, 'error');
                 
-                // Дополнительно можно вывести детальный алерты/вывод ошибки прямо в интерфейс формы, если нужно:
                 let errorContainer = formElement.querySelector('#form-error-banner');
                 if (!errorContainer) {
                     errorContainer = document.createElement('div');
@@ -3400,8 +3396,10 @@ async function openRepairForm(item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
+            // Исправление: используем именно zaphast_id для выпадающего списка
             const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
-            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            const fieldNameForSelect = (col.field === 'zaphasti_id') ? 'zaphast_id' : col.field;
+            inputHtml = `<select name="${fieldNameForSelect}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else {
@@ -3561,6 +3559,12 @@ async function openRepairForm(item = null, parentId = null) {
 
         if (parentId) {
             data.repair_id = parentId;
+        }
+
+        // Принудительное выравнивание ключей под требования базы данных (zaphast_id)
+        if (data.zaphasti_id !== undefined && data.zaphast_id === undefined) {
+            data.zaphast_id = data.zaphasti_id;
+            delete data.zaphasti_id;
         }
 
         // --- ЛОГИРОВАНИЕ ДАННЫХ ПЕРЕД ОТПРАВКОЙ НА СЕРВЕР ---

@@ -4052,7 +4052,8 @@ router.post('/repair_items', async (req, res) => {
         const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
 
         // Защита от добавления в проведенный документ
-        if (isPosted === true || isPosted === 'true' || isPosted === 2 || isPosted === '2' || isPosted === 1) {
+        const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === 1 || isPosted === '1' || isPosted === 2 || isPosted === '2';
+        if (isDocumentPosted) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный ремонт!' });
         }
@@ -4076,7 +4077,6 @@ router.post('/repair_items', async (req, res) => {
             AS available_qty
         `;
         
-        // Исправлено: передаем repair_id в качестве третьего параметра ($3), чтобы исключить текущий документ из вычитания чужих расходов, но учесть его черновик ниже
         const balanceRes = await client.query(balanceQuery, [zaphast_id, warehouseId, repair_id]);
         const pureStock = Number(balanceRes.rows[0].available_qty) || 0;
 
@@ -4174,7 +4174,7 @@ router.post('/repair_items', async (req, res) => {
 
         // 5. Логирование в audit_logs
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
@@ -4199,7 +4199,6 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
-
 
 
 
