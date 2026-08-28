@@ -2019,7 +2019,7 @@ function closeDrawer() {
 async function openEntityForm(entity, item = null, parentId = null) {
         const config = getConfig(entity);
         const drawer = getOrCreateDrawer();
-        
+
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -2068,7 +2068,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 is_posted: false 
             };
 
-            if (entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') {
+            if (entity === 'move_items' || entity === 'realization_items') {
                 item.currency = 'Рубль ПМР';
             }
 
@@ -2082,7 +2082,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 item.autoservice = 'Евроавтотест';
             }
         } else {
-            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') && !item.currency) {
+            if ((entity === 'move_items' || entity === 'realization_items') && !item.currency) {
                 item.currency = 'Рубль ПМР';
             }
         }
@@ -2113,7 +2113,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if ((col.update === false || col.edit === false) && item && item.id) return '';
             if (entity === 'repair_items' && col.field === 'receipt_id') return '';
             if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
-            
+
             // Жесткая фильтрация полей для realization_items
             if (entity === 'realization_items') {
                 const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
@@ -2147,20 +2147,20 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     col.ref,
                     col.ref ? col.ref.slice(0, -1) : ''
                 ];
-                
+
                 for (const k of possibleKeys) {
                     if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
                         val = item[k];
                         break;
                     }
                 }
-                
+
                 if (val && typeof val === 'object' && val.id !== undefined) {
                     val = val.id;
                 }
             }
 
-            if ((entity === 'receipt_items' || entity === 'move_items' || entity === 'realization_items') && col.field === 'currency' && !val) {
+            if ((entity === 'move_items' || entity === 'realization_items') && col.field === 'currency' && !val) {
                 val = 'Рубль ПМР';
             }
 
@@ -2177,15 +2177,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (col.field === 'is_posted') {
                 const statusItems = await fetchReferenceData('statuses');
                 let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-                
+
                 statusItems.forEach(st => {
                     const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
                     optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
                 });
 
                 inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-            } else if (col.ref || col.field === 'receipt_id') {
-                const referenceName = col.ref || (col.field === 'receipt_id' ? 'receipts' : '');
+            } else if (col.ref) {
+                const referenceName = col.ref;
                 let refItems = [];
 
                 if (referenceName === 'customer_cars') {
@@ -2213,7 +2213,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
 
                 let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-                
+
                 refItems.forEach(refItem => {
                     let displayName = '';
                     if (referenceName === 'customer_cars' || referenceName === 'cars') {
@@ -2318,7 +2318,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     if (response.ok) {
                         const itemData = await response.json();
                         const priceInput = formElement.querySelector('[name="price"]');
-                        
+
                         const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
 
                         if (priceInput && targetPrice !== undefined && !priceInput.value) {
@@ -2338,7 +2338,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (!selectedWorkId) return;
 
                 const priceInput = formElement.querySelector('[name="price"]');
-                
+
                 // Если пользователь уже ввёл значение вручную, ничего не перезаписываем
                 if (priceInput && priceInput.value.trim() !== '') {
                     return; 
@@ -2400,7 +2400,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         const isPostedSelect = formElement.querySelector('[name="is_posted"]');
         const factDateInput = formElement.querySelector('[name="fact_date"]');
-        
+
         if (isPostedSelect && factDateInput) {
             isPostedSelect.addEventListener('change', () => {
                 if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
@@ -2527,7 +2527,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         formElement.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             if (isSubmitting) {
                 console.warn("Попытка повторной отправки заблокирована!");
                 return; 
@@ -2574,7 +2574,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     data.entity_id = parentId;
                     data.entity_type = window.currentEntity || window.activeEntity || 'customers';
                 }
-                
+
                 if (!data.entity_type || data.entity_type === 'entity_contacts') {
                     data.entity_type = window.currentEntity || window.activeEntity || 'customers';
                 }
@@ -2585,7 +2585,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 const url = isEdit 
                     ? `/api/${entity}/${item.id}` 
                     : `/api/${entity}`;
-                
+
                 const method = isEdit ? 'PUT' : 'POST';
                 const currentUserId = localStorage.getItem('currentUserId') || '';
 
@@ -2617,7 +2617,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     if (detailEntities.includes(entity) && parentId) {
                         loadDetailData(entity, parentId);
                     } else {
-                        refreshData();
+                        refreshedData();
                     }
                 } else {
                     const errData = await response.json().catch(() => ({}));
@@ -2633,7 +2633,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (saveButton) saveButton.disabled = false;
             }
         });
-    }
+}
 
 
 async function openReceiptForm(entity, item = null) {
