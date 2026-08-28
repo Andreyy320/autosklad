@@ -2103,10 +2103,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     } else if (entity === 'move_items' && parentId) {
         html += `<input type="hidden" name="move_id" value="${parentId}">`;
+    } else if (entity === 'repair_items' && parentId) {
+        html += `<input type="hidden" name="repair_id" value="${parentId}">`;
     }
 
     async function renderField(col) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id') return '';
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id') return '';
         if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
@@ -2420,7 +2422,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'receipt_items', 'realization_items', 'realization_works', 'move_items', 'accident_invoices', 
+                                'receipt_items', 'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2469,6 +2471,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.realization_id = parentId;
         } else if (entity === 'move_items' && parentId) {
             data.move_id = parentId;
+        } else if (entity === 'repair_items' && parentId) {
+            data.repair_id = parentId;
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
             data.dtp_id = parentId;
         } else if (entity === 'counterparty_contacts' && parentId) {
@@ -2501,6 +2505,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
+            // --- ЛОГИРОВАНИЕ ДАННЫХ В КОНСОЛЬ БРАУЗЕРА ---
+            console.group('--- ОТПРАВКА ДАННЫХ ФОРМЫ ---');
+            console.log('Сущность (entity):', entity);
+            console.log('ID родителя (parentId):', parentId);
+            console.log('Метод запроса (method):', method);
+            console.log('URL запроса:', url);
+            console.log('Тело запроса (payload):', data);
+            console.groupEnd();
+
             const response = await fetch(url, {
                 method: method,
                 headers: { 
@@ -2511,11 +2524,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
+                console.log('Успешный ответ сервера.');
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'receipt_items', 'realization_items', 'realization_works', 'move_items', 'accident_invoices', 
+                    'receipt_items', 'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2528,18 +2542,45 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
+                
+                // --- ВИДИМЫЕ ЛОГИ ОШИБКИ В БРАУЗЕРЕ (Выводятся на экран пользователю) ---
+                const errorMsg = errData.error || errData.message || `Ошибка сервера: ${response.status} ${response.statusText}`;
+                console.error('Ошибка ответа сервера:', response.status, errData);
+                
+                // Выводим текст ошибки прямо в инспектор/на экран в виде уведомления
+                showAppNotification(errorMsg, 'error');
+                
+                // Дополнительно можно вывести детальный алерты/вывод ошибки прямо в интерфейс формы, если нужно:
+                let errorContainer = formElement.querySelector('#form-error-banner');
+                if (!errorContainer) {
+                    errorContainer = document.createElement('div');
+                    errorContainer.id = 'form-error-banner';
+                    errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
+                    formElement.prepend(errorContainer);
+                }
+                errorContainer.innerHTML = `<strong>Ошибка (${response.status}):</strong> ${errorMsg}`;
+
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            showAppNotification('Ошибка соединения с сервером', 'error');
+            console.error('Ошибка сети или исключение в JS:', err);
+            showAppNotification('Ошибка соединения с сервером: ' + err.message, 'error');
+            
+            let errorContainer = formElement.querySelector('#form-error-banner');
+            if (!errorContainer) {
+                errorContainer = document.createElement('div');
+                errorContainer.id = 'form-error-banner';
+                errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
+                formElement.prepend(errorContainer);
+            }
+            errorContainer.innerHTML = `<strong>Сетевая ошибка:</strong> ${err.message}`;
+
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
     });
 }
-
 
 async function openReceiptForm(entity, item = null) {
     const config = getConfig('receipts');
