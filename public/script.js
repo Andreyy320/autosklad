@@ -3628,6 +3628,7 @@ async function openRepairForm(item = null, parentId = null) {
 }
 
 
+
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
@@ -4689,6 +4690,10 @@ async function loadData(entity, title, customParams = {}) {
     }
 }
 
+
+
+
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -4727,7 +4732,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
         
-        // 🛠 Исправление: если передан новый ID, обновляем глобальную переменную, а если пустой — берем старую
+        // Обновляем ID, если передан новый
         if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
             window.currentReceiptId = receiptId;
         }
@@ -4759,7 +4764,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
 
-        // 2. 🆕 Отрисовка полей ввода фильтров (по каждому столбцу текущей сущности)
+        // 2. Отрисовка полей ввода фильтров
         const thead = mainHeaderTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
 
@@ -4807,7 +4812,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         mainTableBody.innerHTML = '';
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
-            tr.dataset.id = item.id || '';
+            
+            // Универсальное определение ID для атрибута
+            tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
+            
+            // Сохраняем весь объект прямо в строке, чтобы кликер не ошибался при поиске
+            tr._itemData = item;
+
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
@@ -4867,6 +4878,88 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
+
+// ==========================================
+// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
+// ==========================================
+const tableBodyForExpenses = document.getElementById('table-body');
+if (tableBodyForExpenses) {
+    tableBodyForExpenses.addEventListener('click', async (e) => {
+        // Срабатывает только если мы находимся на одном из уровней расходов
+        if (
+            currentEntity !== 'expenses_by_sklad' && 
+            currentEntity !== 'expenses_by_suppliers' && 
+            currentEntity !== 'expenses_by_receipts'
+        ) {
+            return;
+        }
+
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        
+        // Отладка
+        if (!e.isTrusted) {
+            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик для расходов:', currentEntity);
+        }
+        
+        document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+        tr.style.background = '#e2e8f0';
+
+        // Берем данные напрямую из строки (исключает сбои индексов и путаницу с ID)
+        selectedItem = tr._itemData; 
+
+        // Запасной вариант поиска, если _itemData вдруг не оказалось
+        if (!selectedItem) {
+            const id = tr.getAttribute('data-id');
+            selectedItem = currentItems.find(i => i.id == id || i.receipt_id == id);
+            if (!selectedItem) {
+                const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
+                if (rowIndex >= 0 && currentItems[rowIndex]) {
+                    selectedItem = currentItems[rowIndex];
+                }
+            }
+        }
+        
+        selectedDetailItem = null;  
+
+        const id = tr.getAttribute('data-id');
+        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
+
+        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
+        const tabsForCars = document.getElementById('tabs-for-cars');
+        const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const detailContainer = document.getElementById('detail-container');
+
+        // Скрываем лишние вкладки и панели на уровнях расходов
+        if (carTabsPanel) carTabsPanel.style.display = 'none';
+        if (tabsForCars) tabsForCars.style.display = 'none';
+        if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+        if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+        if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+
+        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+        if (actionButtonsBar) {
+            actionButtonsBar.style.display = 'none';
+        }
+
+        if (selectedItem) {
+            if (currentEntity === 'expenses_by_sklad') {
+                loadExpenseMainData('expenses_by_suppliers', selectedItem);
+            } else if (currentEntity === 'expenses_by_suppliers') {
+                loadExpenseMainData('expenses_by_receipts', selectedItem);
+            } else if (currentEntity === 'expenses_by_receipts') {
+                if (detailContainer) detailContainer.style.display = 'flex';
+                loadExpenseMainData('expense_items', selectedItem); 
+            }
+        }
+    });
+}
+
+
+
+
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -5375,7 +5468,10 @@ async function postReceipt(receiptId) {
             }
         }
     );
-}const tableBody = document.getElementById('table-body');
+}
+
+
+const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
         const tr = e.target.closest('tr');
@@ -5559,77 +5655,6 @@ if (tableBody) {
 }
 
 
-// ==========================================
-// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
-// ==========================================
-const tableBodyForExpenses = document.getElementById('table-body');
-if (tableBodyForExpenses) {
-    tableBodyForExpenses.addEventListener('click', async (e) => {
-        // Срабатывает только если мы находимся на одном из уровней расходов
-        if (
-            currentEntity !== 'expenses_by_sklad' && 
-            currentEntity !== 'expenses_by_suppliers' && 
-            currentEntity !== 'expenses_by_receipts'
-        ) {
-            return;
-        }
-
-        const tr = e.target.closest('tr');
-        if (!tr) return;
-        
-        // Отладка
-        if (!e.isTrusted) {
-            console.warn('⚠️ ВНИМАНИЕ: Сработал программный (искусственный) клик для расходов:', currentEntity);
-        }
-        
-        document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
-        tr.style.background = '#e2e8f0';
-
-        const id = tr.getAttribute('data-id');
-        selectedItem = currentItems.find(i => i.id == id);
-
-        if (!selectedItem) {
-            const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
-            if (rowIndex >= 0 && currentItems[rowIndex]) {
-                selectedItem = currentItems[rowIndex];
-            }
-        }
-        
-        selectedDetailItem = null;  
-
-        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
-
-        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-        const tabsForCars = document.getElementById('tabs-for-cars');
-        const tabsForAccidents = document.getElementById('tabs-for-accidents');
-        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
-        const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        const detailContainer = document.getElementById('detail-container');
-
-        // Скрываем лишние вкладки и панели на уровнях расходов
-        if (carTabsPanel) carTabsPanel.style.display = 'none';
-        if (tabsForCars) tabsForCars.style.display = 'none';
-        if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-        if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-        if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-
-        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-        if (actionButtonsBar) {
-            actionButtonsBar.style.display = 'none';
-        }
-
-        if (selectedItem) {
-            if (currentEntity === 'expenses_by_sklad') {
-                loadExpenseMainData('expenses_by_suppliers', selectedItem);
-            } else if (currentEntity === 'expenses_by_suppliers') {
-                loadExpenseMainData('expenses_by_receipts', selectedItem);
-            } else if (currentEntity === 'expenses_by_receipts') {
-                if (detailContainer) detailContainer.style.display = 'flex';
-                loadExpenseMainData('expense_items', selectedItem); 
-            }
-        }
-    });
-}
 
 
 
