@@ -4719,7 +4719,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } 
     // 3. Уровень накладных (фильтруем по поставщику И складу)
     else if (currentExpenseView === 'expenses_by_receipts') {
-        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
+        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.supplier_id || parentId.id) : parentId;
         if (postavhikId) window.currentPostavhikId = postavhikId;
 
         let skladId = window.currentSkladId || '';
@@ -4730,9 +4730,15 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } 
     // 4. Уровень позиций
     else if (currentExpenseView === 'expense_items') {
-        let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id) : parentId;
+        // 🛠 Всесторонний поиск ID накладной в объекте parentId
+        let receiptId = '';
+        if (parentId && typeof parentId === 'object') {
+            receiptId = parentId.receipt_id || parentId.id || parentId.document_id || parentId.expense_id;
+        } else {
+            receiptId = parentId;
+        }
         
-        // Обновляем ID, если передан новый
+        // Принудительно обновляем глобальный ID накладной
         if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
             window.currentReceiptId = receiptId;
         }
@@ -4816,7 +4822,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             // Универсальное определение ID для атрибута
             tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
             
-            // Сохраняем весь объект прямо в строке, чтобы кликер не ошибался при поиске
+            // Сохраняем весь объект прямо в строке
             tr._itemData = item;
 
             tr.style.cursor = 'pointer';
@@ -4905,7 +4911,7 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // Берем данные напрямую из строки (исключает сбои индексов и путаницу с ID)
+        // Берем данные напрямую из строки
         selectedItem = tr._itemData; 
 
         // Запасной вариант поиска, если _itemData вдруг не оказалось
