@@ -3843,9 +3843,8 @@ router.post('/move_items', async (req, res) => {
     console.log(`[POST REQUEST] Добавление позиции перемещения (move_items)`);
     console.log(`[BODY]:`, req.body);
 
-    const { zaphasti_id, price, currency, quantity, description, move_id } = req.body;
+    const { zaphasti_id, currency, quantity, description, move_id } = req.body;
     const requestedQty = Number(quantity) || 0;
-    const numPrice = Number(price) || 0;
 
     if (!zaphasti_id || !move_id) {
         return res.status(400).json({ error: 'Не указан ID запчасти (zaphasti_id) или ID документа перемещения (move_id).' });
@@ -3903,30 +3902,60 @@ router.post('/move_items', async (req, res) => {
             }
         }
 
-        // 3. Автоматический поиск документа прихода (income_document_id)
+        // 3. Автоматический поиск документа прихода (income_document_id) и цены из прихода (FIFO)
         const docQuery = `
-            SELECT RI.receipt_id 
+            SELECT RI.receipt_id, RI.price, RI.price_rub 
             FROM receipt_items RI
             JOIN receipts R ON RI.receipt_id = R.id
-            WHERE RI.zaphasti_id = $1
+            WHERE RI.zaphasti_id = $1 AND (R.warehouse_id = $2 OR $2 IS NULL)
             ORDER BY R.date ASC, R.id ASC
             LIMIT 1
         `;
-        const docResult = await client.query(docQuery, [zaphasti_id]);
-        const income_document_id = docResult.rows.length > 0 ? docResult.rows[0].receipt_id : null;
+        const docResult = await client.query(docQuery, [zaphasti_id, warehouseFromId]);
+        
+        let income_document_id = null;
+        let fetchedPrice = 0;
 
+        if (docResult.rows.length > 0) {
+            income_document_id = docResult.rows[0].receipt_id;
+            fetchedPrice = Number(docResult.rows[0].price_rub !== undefined && docResult.rows[0].price_rub !== null ? docResult.rows[0].price_rub : docResult.rows[0].price) || 0;
+        } else {
+            // Запасной вариант: если в приходах не нашлось, попытаемся взять из справочника запчастей
+            const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphasti_id]);
+            if (zaphRes.rows.length > 0) {
+                const z = zaphRes.rows[0];
+                fetchedPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
+            }
+        }
+
+        const numPrice = fetchedPrice;
         const priceRub = numPrice; 
         const totalRub = requestedQty * priceRub;
         const curr = currency || 'Рубль ПМР';
 
         // 4. Вставка позиции в move_items
         const insertQuery = `
+            SELECT * FROM insert_move_item(
+                $1::integer, -- zaphasti_id
+                $2::numeric, -- price
+                $3::text,    -- currency
+                $4::numeric, -- quantity
+                $5::numeric, -- price_rub
+                $6::numeric, -- total_rub
+                $7::text,    -- description
+                $8::integer, -- move_id
+                $9::integer  -- income_document_id
+            )
+        `;
+        
+        // Если функция не используется в БД, оставляем стандартный INSERT через подзапрос:
+        const fallbackInsertQuery = `
             INSERT INTO "move_items" 
             ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
             RETURNING *;
         `;
-        
+
         const values = [
             zaphasti_id, 
             numPrice, 
@@ -3939,7 +3968,7 @@ router.post('/move_items', async (req, res) => {
             income_document_id 
         ];
         
-        const result = await client.query(insertQuery, values);
+        const result = await client.query(fallbackInsertQuery, values);
         const newRecord = result.rows[0];
 
         // 5. Логирование в audit_logs
@@ -3957,7 +3986,7 @@ router.post('/move_items', async (req, res) => {
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id}`);
+        console.log(`[SUCCESS] Строка перемещения успешно создана с ID: ${newRecord.id} (Цена: ${numPrice}, Источник прихода: ${income_document_id})`);
         return res.status(201).json(newRecord);
 
     } catch (err) {
@@ -3969,7 +3998,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);

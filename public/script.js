@@ -2015,6 +2015,9 @@ function closeDrawer() {
     }
 
 }
+
+
+
 async function openEntityForm(entity, item = null, parentId = null) {
         const config = getConfig(entity);
         const drawer = getOrCreateDrawer();
@@ -2829,7 +2832,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 async function openMoveForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -3018,29 +3020,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
-
-    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
-    if (zaphastiSelect) {
-        zaphastiSelect.addEventListener('change', async () => {
-            const selectedZaphastiId = zaphastiSelect.value;
-            if (!selectedZaphastiId) return;
-
-            try {
-                const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
-                if (response.ok) {
-                    const itemData = await response.json();
-                    const priceInput = formElement.querySelector('[name="price"]');
-                    const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
-
-                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
-                        priceInput.value = targetPrice;
-                    }
-                }
-            } catch (err) {
-                console.error('Ошибка при автозаполнении данных запчасти:', err);
-            }
-        });
-    }
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
