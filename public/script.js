@@ -3295,7 +3295,13 @@ async function openRepairForm(item = null, parentId = null) {
     `;
 
     async function renderField(col) {
-        if (col.field === 'id' || col.field === 'repair_id') return '';
+        if (col.field === 'id') return '';
+        // Если это поле repair_id, рендерим его скрытым, чтобы оно гарантированно было в форме и отправлялось
+        if (col.field === 'repair_id') {
+            const valToUse = parentId || (item ? item.repair_id : '') || '';
+            return `<input type="hidden" name="repair_id" value="${valToUse}">`;
+        }
+
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
         
@@ -3509,6 +3515,7 @@ async function openRepairForm(item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        // Принудительно устанавливаем repair_id из аргумента parentId, если он есть
         if (parentId) {
             data.repair_id = parentId;
         }
@@ -3872,6 +3879,8 @@ async function sendLog(entity, action, recordId, detailsData) {
         console.error('Не удалось отправить лог:', err);
     }
 }
+
+
 function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
@@ -4038,6 +4047,7 @@ async function refreshData() {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
+
 
 
 function showAppNotification(message, type = 'info') {
