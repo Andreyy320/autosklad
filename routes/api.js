@@ -4021,13 +4021,13 @@ router.post('/move_items', async (req, res) => {
 });
 
 
-// POST /api/repair_items - добавление запчасти в ремонт (с жесткой проверкой склада и остатков)
+// POST /api/repair_items - добавление запчасти в ремонт (с жесткой проверкой остатков и FIFO)
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
     console.log(`[POST REQUEST] Добавление запчасти в ремонт (repair_items)`);
     console.log(`[BODY]:`, req.body);
 
-    const { zaphast_id, price, quantity, description, repair_id, receipt_id, currency } = req.body;
+    const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
     const requestedQty = Number(quantity) || 0;
     const numPrice = Number(price) || 0;
 
@@ -4063,24 +4063,25 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
         }
 
-        // 2. Расчет реального доступного остатка на складе с учетом всех приходов, перемещений и других ремонтов
+        // 2. Расчет реального остатка на складе ремонта (Приходы + Вх.перемещения - Исх.перемещения - Другие ремонты)
         const balanceQuery = `
             SELECT 
                 (
-                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 and r.warehouse_id = $2), 0) +
+                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
                     COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
                 ) - 
                 (
-                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
-                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep_i.id != COALESCE(NULL, 0)), 0)
+                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_to.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep_i.repair_id != $3), 0)
                 ) 
             AS available_qty
         `;
         
-        const balanceRes = await client.query(balanceQuery, [zaphast_id, warehouseId]);
+        // Исправлено: передаем repair_id в качестве третьего параметра ($3), чтобы исключить текущий документ из вычитания чужих расходов, но учесть его черновик ниже
+        const balanceRes = await client.query(balanceQuery, [zaphast_id, warehouseId, repair_id]);
         const pureStock = Number(balanceRes.rows[0].available_qty) || 0;
 
-        // Считаем, сколько этого товара уже добавлено именно в этот текущий документ ремонта (черновик)
+        // Считаем, сколько этого товара уже добавлено в этот же текущий документ ремонта (если пользователь добавляет второй строкой)
         const currentDocQuery = `
             SELECT SUM(quantity) as sum 
             FROM repair_items 
@@ -4089,17 +4090,16 @@ router.post('/repair_items', async (req, res) => {
         const currentDocRes = await client.query(currentDocQuery, [repair_id, zaphast_id]);
         const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
 
-        // Реально доступное количество для добавления
         const availableStock = pureStock - alreadyInThisDoc;
 
         console.log(`[STOCK DEBUG REPAIR] Склад ID=${warehouseId}, чистый остаток: ${pureStock}, уже в документе: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
 
-        // Жесткая проверка: если запрашивают больше, чем есть — откатываем транзакцию и возвращаем ошибку
+        // Жесткая проверка: если запросили больше, чем есть — откатываем транзакцию
         if (requestedQty > availableStock) {
             await client.query('ROLLBACK');
-            console.warn(`[ERROR] Недостаточно остатка на складе! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
+            console.warn(`[ERROR] Недостаточно остатка! Доступно: ${availableStock}, запрошено: ${requestedQty}`);
             return res.status(400).json({ 
-                error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь добавить: ${requestedQty} шт.` 
+                error: `Недостаточно запчастей на складе этого ремонта! Доступно: ${availableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
             });
         }
 
@@ -4124,7 +4124,7 @@ router.post('/repair_items', async (req, res) => {
                     fetchedPrice = Number(docResult.rows[0].price_rub !== undefined && docResult.rows[0].price_rub !== null ? docResult.rows[0].price_rub : docResult.rows[0].price) || 0;
                 }
             } else {
-                // Резервный поиск по всей базе, если на конкретном складе прихода не было
+                // Резервный поиск по всей базе
                 const fallbackDocQuery = `
                     SELECT RI.receipt_id, RI.price, RI.price_rub 
                     FROM receipt_items RI
@@ -4137,7 +4137,7 @@ router.post('/repair_items', async (req, res) => {
                 if (fallbackDocRes.rows.length > 0) {
                     targetReceiptId = fallbackDocRes.rows[0].receipt_id;
                     if (fetchedPrice === 0) {
-                        fetchedPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) ||0;
+                        fetchedPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) || 0;
                     }
                 } else if (fetchedPrice === 0) {
                     const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphast_id]);
@@ -4200,6 +4200,19 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
