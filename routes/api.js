@@ -3837,7 +3837,7 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
-// POST /api/move_items - добавление позиции перемещения с проверкой остатков
+// POST /api/move_items - добавление позиции перемещения с проверкой остатков и сохранением исторической цены
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
     console.log(`[POST REQUEST] Добавление позиции перемещения (move_items)`);
@@ -3850,64 +3850,79 @@ router.post('/move_items', async (req, res) => {
         return res.status(400).json({ error: 'Не указан ID запчасти (zaphasti_id) или ID документа перемещения (move_id).' });
     }
 
+    if (requestedQty <= 0) {
+        return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
+    }
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Проверяем склад-источник в шапке документа moves и блокируем строку
-        const moveCheck = await client.query('SELECT warehouse_from_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        // 1. Проверяем склад-источник и склад-получатель в шапке документа moves
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
         }
 
         const warehouseFromId = moveCheck.rows[0].warehouse_from_id;
+        const warehouseToId = moveCheck.rows[0].warehouse_to_id;
 
-        if (warehouseFromId) {
-            // 2. Расчет доступного чистого остатка на складе-источнике
-            const balanceQuery = `
-                SELECT 
-                    (
-                        COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
-                        COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2), 0)
-                    ) - 
-                    (
-                        COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND (m_from.id != $3 OR m_from.id IS NULL)), 0) +
-                        COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
-                    ) 
-                AS pure_stock
-            `;
-            
-            const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId, move_id]);
-            const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
-
-            const currentDocQuery = `
-                SELECT SUM(quantity) as sum 
-                FROM move_items 
-                WHERE move_id = $1 AND zaphasti_id = $2
-            `;
-            const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
-            const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
-
-            const availableStock = pureStock - alreadyInThisDoc;
-
-            console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в черновике: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
-
-            if (requestedQty > availableStock) {
-                console.log(`[ERROR] Недостаточно остатка на складе! Доступно с учетом черновика: ${availableStock}, запрошено: ${requestedQty}`);
-                await client.query('ROLLBACK');
-                return res.status(400).json({ 
-                    error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт. (с учетом текущего документа), а вы пытаетесь добавить: ${requestedQty} шт.` 
-                });
-            }
+        if (!warehouseFromId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе перемещения не указан склад-источник (откуда перемещать).' });
         }
 
-        // 3. Автоматический поиск документа прихода (income_document_id) и цены из прихода (FIFO)
+        if (warehouseFromId === warehouseToId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
+        }
+
+        // 2. Расчет реального остатка конкретно на складе-источнике
+        // Учитываем: Приходы + Внутренние перемещения НА склад - Перемещения СО склада - Расходы на ремонт с этого склада
+        const balanceQuery = `
+            SELECT 
+                (
+                    COALESCE((SELECT SUM(ri.quantity) FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2), 0) +
+                    COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
+                ) - 
+                (
+                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2), 0)
+                ) 
+            AS pure_stock
+        `;
+        
+        const balanceRes = await client.query(balanceQuery, [zaphasti_id, warehouseFromId]);
+        const pureStock = Number(balanceRes.rows[0].pure_stock) || 0;
+
+        // Считаем, сколько этого товара уже добавлено именно в этот документ перемещения (черновик)
+        const currentDocQuery = `
+            SELECT SUM(quantity) as sum 
+            FROM move_items 
+            WHERE move_id = $1 AND zaphasti_id = $2
+        `;
+        const currentDocRes = await client.query(currentDocQuery, [move_id, zaphasti_id]);
+        const alreadyInThisDoc = Number(currentDocRes.rows[0].sum) || 0;
+
+        // Доступно для добавления = Чистый остаток - то, что уже висит в строках этого же перемещения
+        const availableStock = pureStock - alreadyInThisDoc;
+
+        console.log(`[STOCK DEBUG] Склад-источник ID=${warehouseFromId}, чистый остаток: ${pureStock}, уже в документе: ${alreadyInThisDoc}, доступно: ${availableStock}, запрошено: ${requestedQty}`);
+
+        if (requestedQty > availableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно товара на выбранном складе! Доступно: ${availableStock} шт., а вы пытаетесь перенести: ${requestedQty} шт.` 
+            });
+        }
+
+        // 3. Автоматический поиск партии (FIFO) и цены именно со склада-источника
         const docQuery = `
             SELECT RI.receipt_id, RI.price, RI.price_rub 
             FROM receipt_items RI
             JOIN receipts R ON RI.receipt_id = R.id
-            WHERE RI.zaphasti_id = $1 AND (R.warehouse_id = $2 OR $2 IS NULL)
+            WHERE RI.zaphasti_id = $1 AND R.warehouse_id = $2
             ORDER BY R.date ASC, R.id ASC
             LIMIT 1
         `;
@@ -3920,11 +3935,27 @@ router.post('/move_items', async (req, res) => {
             income_document_id = docResult.rows[0].receipt_id;
             fetchedPrice = Number(docResult.rows[0].price_rub !== undefined && docResult.rows[0].price_rub !== null ? docResult.rows[0].price_rub : docResult.rows[0].price) || 0;
         } else {
-            // Запасной вариант: если в приходах не нашлось, попытаемся взять из справочника запчастей
-            const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphasti_id]);
-            if (zaphRes.rows.length > 0) {
-                const z = zaphRes.rows[0];
-                fetchedPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
+            // Если на складе-источнике лог приходов пуст (например, товар туда попал через другое перемещение), 
+            // ищем цену из последнего прихода по всей базе или из справочника запчастей
+            const fallbackDocQuery = `
+                SELECT RI.receipt_id, RI.price, RI.price_rub 
+                FROM receipt_items RI
+                JOIN receipts R ON RI.receipt_id = R.id
+                WHERE RI.zaphasti_id = $1
+                ORDER BY R.date DESC, R.id DESC
+                LIMIT 1
+            `;
+            const fallbackDocRes = await client.query(fallbackDocQuery, [zaphasti_id]);
+            
+            if (fallbackDocRes.rows.length > 0) {
+                income_document_id = fallbackDocRes.rows[0].receipt_id;
+                fetchedPrice = Number(fallbackDocRes.rows[0].price_rub !== undefined && fallbackDocRes.rows[0].price_rub !== null ? fallbackDocRes.rows[0].price_rub : fallbackDocRes.rows[0].price) || 0;
+            } else {
+                const zaphRes = await client.query('SELECT price, sale_price, retail_price FROM zaphasti WHERE id = $1', [zaphasti_id]);
+                if (zaphRes.rows.length > 0) {
+                    const z = zaphRes.rows[0];
+                    fetchedPrice = Number(z.price !== undefined && z.price !== null ? z.price : (z.sale_price !== undefined && z.sale_price !== null ? z.sale_price : z.retail_price)) || 0;
+                }
             }
         }
 
@@ -3933,23 +3964,8 @@ router.post('/move_items', async (req, res) => {
         const totalRub = requestedQty * priceRub;
         const curr = currency || 'Рубль ПМР';
 
-        // 4. Вставка позиции в move_items
+        // 4. Вставка позиции в move_items с фиксацией цены и прихода (сохранение истории)
         const insertQuery = `
-            SELECT * FROM insert_move_item(
-                $1::integer, -- zaphasti_id
-                $2::numeric, -- price
-                $3::text,    -- currency
-                $4::numeric, -- quantity
-                $5::numeric, -- price_rub
-                $6::numeric, -- total_rub
-                $7::text,    -- description
-                $8::integer, -- move_id
-                $9::integer  -- income_document_id
-            )
-        `;
-        
-        // Если функция не используется в БД, оставляем стандартный INSERT через подзапрос:
-        const fallbackInsertQuery = `
             INSERT INTO "move_items" 
             ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
@@ -3968,7 +3984,7 @@ router.post('/move_items', async (req, res) => {
             income_document_id 
         ];
         
-        const result = await client.query(fallbackInsertQuery, values);
+        const result = await client.query(insertQuery, values);
         const newRecord = result.rows[0];
 
         // 5. Логирование в audit_logs
