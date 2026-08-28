@@ -4719,7 +4719,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } 
     // 3. Уровень накладных (фильтруем по поставщику И складу)
     else if (currentExpenseView === 'expenses_by_receipts') {
-        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.supplier_id || parentId.id) : parentId;
+        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
         if (postavhikId) window.currentPostavhikId = postavhikId;
 
         let skladId = window.currentSkladId || '';
@@ -4730,15 +4730,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } 
     // 4. Уровень позиций
     else if (currentExpenseView === 'expense_items') {
-        // 🛠 Всесторонний поиск ID накладной в объекте parentId
-        let receiptId = '';
-        if (parentId && typeof parentId === 'object') {
-            receiptId = parentId.receipt_id || parentId.id || parentId.document_id || parentId.expense_id;
-        } else {
-            receiptId = parentId;
-        }
+        let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
         
-        // Принудительно обновляем глобальный ID накладной
+        // 🛠 Исправление: если передан новый ID, обязательно обновляем глобальную переменную
         if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
             window.currentReceiptId = receiptId;
         }
@@ -4757,7 +4751,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
     currentEntity = currentExpenseView;
 
-    const config = getConfig(currentExpenseView);
+    const config = getConfig(currentEntity);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
@@ -4819,12 +4813,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
             
-            // Универсальное определение ID для атрибута
+            // 🛠 Универсальный сбор ID, чтобы у каждого документа точно проставился правильный data-id
             tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
             
-            // Сохраняем весь объект прямо в строке
-            tr._itemData = item;
-
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
@@ -4911,25 +4902,21 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // Берем данные напрямую из строки
-        selectedItem = tr._itemData; 
+        // 🛠 Ищем элемент строго по индексу строки в таблице (решает проблему путаницы ID документов)
+        const rowsArray = Array.from(tableBodyForExpenses.querySelectorAll('tr'));
+        const rowIndex = rowsArray.indexOf(tr);
 
-        // Запасной вариант поиска, если _itemData вдруг не оказалось
-        if (!selectedItem) {
+        if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
+            selectedItem = currentItems[rowIndex];
+        } else {
             const id = tr.getAttribute('data-id');
-            selectedItem = currentItems.find(i => i.id == id || i.receipt_id == id);
-            if (!selectedItem) {
-                const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
-                if (rowIndex >= 0 && currentItems[rowIndex]) {
-                    selectedItem = currentItems[rowIndex];
-                }
-            }
+            selectedItem = currentItems.find(i => String(i.id || i.receipt_id) === String(id));
         }
         
         selectedDetailItem = null;  
 
         const id = tr.getAttribute('data-id');
-        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
+        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", Индекс: ${rowIndex}, ID строки: ${id}`, selectedItem);
 
         const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
