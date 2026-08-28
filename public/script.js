@@ -2582,9 +2582,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         try {
             const isEdit = item && item.id;
+            
+            // Заменяем имя сущности на точное, если это приходы, 
+            // чтобы запрос шел на /api/receipt_items вместо общего обработчика
+            let targetEntity = entity;
+            if (entity === 'receipt_items') {
+                targetEntity = 'receipt_items';
+            }
+
             const url = isEdit 
-                ? `/api/${entity}/${item.id}` 
-                : `/api/${entity}`;
+                ? `/api/${targetEntity}/${item.id}` 
+                : `/api/${targetEntity}`;
             
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
@@ -2634,7 +2642,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 //ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
