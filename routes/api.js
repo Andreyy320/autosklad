@@ -3886,7 +3886,7 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO с учетом всех расходов (перемещения, реализации, ремонты)
+        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO с учетом всех расходов
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -3903,7 +3903,7 @@ router.post('/move_items', async (req, res) => {
                         WHERE mi.income_document_id = r.id 
                           AND mi.zaphasti_id = ri.zaphasti_id 
                           AND m.warehouse_from_id = r.warehouse_id 
-                          AND m.is_posted = true
+                          AND (m.is_posted = true OR m.id = $3)
                     ), 0) +
                     COALESCE((
                         SELECT SUM(rel_i.quantity) 
@@ -3930,7 +3930,7 @@ router.post('/move_items', async (req, res) => {
             ORDER BY r.date ASC, r.id ASC
         `;
 
-        const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId]);
+        const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId, move_id]);
         
         let batches = batchesRes.rows.map(b => {
             const initial = Number(b.initial_qty) || 0;
