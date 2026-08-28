@@ -3921,8 +3921,8 @@ router.post('/move_items', async (req, res) => {
             });
         }
 
-        // 3. Получаем доступные партии (приходы) на складе-источнике в порядке FIFO (старые сверху)
-        // Для каждой партии рассчитываем остаток с учетом уже ушедших по перемещениям/ремонтам и пришедших со смежных складов
+        // 3. Получаем доступные партии (приходы) на складе-источнике в порядке FIFO
+        // Учитываем списания только по проведенным перемещениям через income_document_id
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -3930,11 +3930,15 @@ router.post('/move_items', async (req, res) => {
                 ri.price,
                 ri.price_rub,
                 ri.quantity AS initial_qty,
-                -- Вычисляем сколько из этого прихода уже было списано по проведенным перемещениям и ремонтам
-                (
-                    COALESCE((SELECT SUM(mi.quantity) FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE mi.income_document_id = r.id AND mi.zaphasti_id = ri.zaphasti_id AND m.warehouse_from_id = r.warehouse_id AND m.is_posted = true), 0) +
-                    COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.income_document_id = r.id AND rep_i.zaphast_id = ri.zaphasti_id AND rep.warehouse_id = r.warehouse_id), 0)
-                ) AS spent_qty
+                COALESCE((
+                    SELECT SUM(mi.quantity) 
+                    FROM move_items mi 
+                    JOIN moves m ON mi.move_id = m.id 
+                    WHERE mi.income_document_id = r.id 
+                      AND mi.zaphasti_id = ri.zaphasti_id 
+                      AND m.warehouse_from_id = r.warehouse_id 
+                      AND m.is_posted = true
+                ), 0) AS spent_qty
             FROM receipt_items ri
             JOIN receipts r ON ri.receipt_id = r.id
             WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
@@ -3954,7 +3958,7 @@ router.post('/move_items', async (req, res) => {
         const userId = req.headers['user-id'] || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-        // Если партии найдены на складе-источнике — распределяем по FIFO
+        // Если по партиям доступно меньше, чем нужно (или партий нет вообще), распределяем то что есть, остальное через fallback
         if (batches.length > 0) {
             for (const batch of batches) {
                 if (remainingToDistribute <= 0) break;
@@ -3985,7 +3989,7 @@ router.post('/move_items', async (req, res) => {
                 const newRecord = result.rows[0];
                 createdRecords.push(newRecord);
 
-                // Логирование каждой созданной строки в audit_logs
+                // Безопасное логирование в audit_logs (используем только существующие колонки)
                 try {
                     await client.query(
                         `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
@@ -4000,8 +4004,7 @@ router.post('/move_items', async (req, res) => {
             }
         }
 
-        // Если остаток еще остался (например, партии на складе не зафиксированы через receipts, а товар есть по остаткам), 
-        // создаем досылающую строку без привязки к конкретной партии (или по последней известной цене)
+        // Если остаток еще остался (или партии вообще не были зафиксированы в receipts), добиваем по последней цене
         if (remainingToDistribute > 0) {
             let fallbackPrice = 0;
             let fallbackReceiptId = null;
