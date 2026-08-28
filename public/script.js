@@ -2281,6 +2281,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     }
 
+    // Добавляем блок выбора типа запчасти / работы для универсальности (если это сущность ремонта)
+    if (entity === 'repair_items') {
+        html += `
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="button" id="select-zaphast-btn" style="flex: 1; background: #e2e8f0; color: #334155; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">Выбрать из каталога запчастей</button>
+            </div>
+        `;
+    }
+
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
@@ -3239,7 +3248,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 async function openRepairForm(item = null, parentId = null) {
     const entity = 'repair_items';
     const config = getConfig(entity);
@@ -3296,7 +3304,6 @@ async function openRepairForm(item = null, parentId = null) {
 
     async function renderField(col) {
         if (col.field === 'id') return '';
-        // Если это поле repair_id, рендерим его скрытым, чтобы оно гарантированно было в форме и отправлялось
         if (col.field === 'repair_id') {
             const valToUse = parentId || (item ? item.repair_id : '') || '';
             return `<input type="hidden" name="repair_id" value="${valToUse}">`;
@@ -3515,7 +3522,6 @@ async function openRepairForm(item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        // Принудительно устанавливаем repair_id из аргумента parentId, если он есть
         if (parentId) {
             data.repair_id = parentId;
         }
@@ -3557,7 +3563,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
-
 
 
 
