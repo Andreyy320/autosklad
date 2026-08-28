@@ -4027,11 +4027,7 @@ router.post('/repair_items', async (req, res) => {
     console.log(`[POST REQUEST] Добавление запчасти в ремонт (repair_items)`);
     console.log(`[BODY]:`, req.body);
 
-    // Поддерживаем разные варианты имен полей от фронтенда, скрытых инпутов и параметров URL
-    const zaphast_id = req.body.zaphast_id || req.body.zaphasti_id;
-    const repair_id = req.body.repair_id || req.body.realization_id || req.query.repair_id;
-
-    const { price, quantity, description, receipt_id } = req.body;
+    const { zaphast_id, price, quantity, description, repair_id, receipt_id } = req.body;
     const requestedQty = Number(quantity) || 0;
     const numPrice = Number(price) || 0;
 
@@ -4075,7 +4071,7 @@ router.post('/repair_items', async (req, res) => {
                     COALESCE((SELECT SUM(mi_to.quantity) FROM move_items mi_to JOIN moves m_to ON mi_to.move_id = m_to.id WHERE mi_to.zaphasti_id = $1 AND m_to.warehouse_to_id = $2 AND m_to.is_posted = true), 0)
                 ) - 
                 (
-                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_from.is_posted = true), 0) +
+                    COALESCE((SELECT SUM(mi_from.quantity) FROM move_items mi_from JOIN moves m_from ON mi_from.move_id = m_from.id WHERE mi_from.zaphasti_id = $1 AND m_from.warehouse_from_id = $2 AND m_to.is_posted = true), 0) +
                     COALESCE((SELECT SUM(rep_i.quantity) FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep_i.repair_id != $3), 0)
                 ) 
             AS available_qty
@@ -4204,6 +4200,7 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
+
 
 
 
