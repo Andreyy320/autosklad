@@ -2118,7 +2118,7 @@ router.get('/part_movement_details', async (req, res) => {
                     r.date AS op_date,
                     r.doc_number AS doc_num,
                     'Приход запчастей' AS doc_type,
-                    COALESCE(k.name, 'Поставщик не указан') AS source_info,
+                    COALESCE(p.name, 'Поставщик не указан') AS source_info,
                     CONCAT(COALESCE(s.name, 'Склад #' || r.warehouse_id), ' | МОЛ: ', COALESCE(u.name, 'не назначен')) AS dest_info,
                     ri.quantity AS qty,
                     COALESCE(ri.price_rub, ri.price, 0) AS price,
@@ -2129,7 +2129,7 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS sklad_id
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
-                LEFT JOIN counterparties k ON r.supplier_id = k.id
+                LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
                 LEFT JOIN users u ON m_mol.user_id = u.id
