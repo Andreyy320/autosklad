@@ -6016,12 +6016,13 @@ async function loadDetailData(entity, parentId) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
         }
 
+        // ЖЕСТКИЙ ПРИОРИТЕТ: если есть realization_id, запрашиваем ТОЛЬКО по нему
         if (realizationId && typeof realizationId !== 'object') {
             fetchUrl = `/api/${apiRoute}?realization_id=${realizationId}`;
-        } else if (!customerId && skladId) {
-            fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
         } else if (customerId) {
             fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+        } else if (!customerId && skladId) {
+            fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
         } else {
             fetchUrl = `/api/${apiRoute}`;
         }
