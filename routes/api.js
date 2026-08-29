@@ -3521,13 +3521,13 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             SELECT 
+                real.id AS realization_id, -- Добавили ID документа, чтобы фронтенд знал, что это за реализация
+                real.doc_number::text AS doc_number,
+                real.doc_date AS date,
                 c.id AS customer_id,
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                 sk.name::text AS sklad_name,
-                COUNT(DISTINCT real.id)::integer AS total_orders,
                 COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
-                COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
                 COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
                 COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                 (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
@@ -3538,8 +3538,6 @@ router.get('/money_receipts', async (req, res) => {
                 SELECT 
                     ri.realization_id, 
                     SUM(ri.quantity) AS total_qty, 
-                    SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
-                    SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
                     SUM(ri.total_rub) AS parts_sum
                 FROM realization_items ri
                 GROUP BY ri.realization_id
@@ -3551,8 +3549,7 @@ router.get('/money_receipts', async (req, res) => {
             ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
-            GROUP BY c.id, c.name_full, c.name_short, sk.name, sub_i.total_qty, sub_i.total_purchase_sum, sub_i.total_retail_sum, sub_i.parts_sum, sub_w.works_sum
-            ORDER BY total_realization_sum DESC;
+            ORDER BY real.doc_date DESC;
         `;
         const result = await pool.query(query, [sklad_id || null]);
         res.json(result.rows);
@@ -3562,12 +3559,14 @@ router.get('/money_receipts', async (req, res) => {
     }
 });
 
-
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
-        const { customer_id, sklad_id, realization_id } = req.query;
+        const { realization_id } = req.query;
         
+        if (!realization_id) {
+            return res.json([]); // Если документ не выбран — пустой список
+        }
+
         const query = `
             SELECT 
                 ri.id,
@@ -3582,26 +3581,17 @@ router.get('/money_receipts_detail', async (req, res) => {
                 ri.total_rub::numeric AS total_rub
             FROM realization_items ri
             JOIN realizations real ON ri.realization_id = real.id
-            WHERE real.is_posted = true 
-              AND ($1::integer IS NULL OR real.customer_id = $1)
-              AND ($2::integer IS NULL OR real.sklad_id = $2)
-              AND ($3::integer IS NULL OR real.id = $3)
-            ORDER BY real.doc_date DESC;
+            WHERE real.id = $1
+            ORDER BY ri.id ASC;
         `;
         
-        const result = await pool.query(query, [
-            customer_id || null, 
-            sklad_id || null, 
-            realization_id || null
-        ]);
-        
+        const result = await pool.query(query, [realization_id]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении детальных позиций:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 router.get('/money_receipts_works_detail', async (req, res) => {
     try {
