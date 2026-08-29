@@ -1934,14 +1934,14 @@ router.get('/stock_movement', async (req, res) => {
         // Дополнительные фильтры по складу и МОЛ
         let extraFilters = '';
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
-            queryParams.push(warehouse_id);
-            extraFilters += ` AND warehouse_id = $${paramIndex}`;
+            queryParams.push(parseInt(warehouse_id, 10));
+            extraFilters += ` AND warehouse_id = $${paramIndex}::int`;
             paramIndex++;
         }
 
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
-            queryParams.push(mol_id);
-            extraFilters += ` AND mol_id = $${paramIndex}`;
+            queryParams.push(parseInt(mol_id, 10));
+            extraFilters += ` AND mol_id = $${paramIndex}::int`;
             paramIndex++;
         }
 
@@ -2023,7 +2023,7 @@ router.get('/stock_movement', async (req, res) => {
                     (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum_out
                 FROM realization_items ri_rel
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted = true OR r_rel.is_posted = 'true' OR r_rel.is_posted = 1 OR r_rel.is_posted = '1' OR r_rel.is_posted = 2 OR r_rel.is_posted = '2')
+                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             filtered_ops AS (
                 SELECT * FROM all_operations d
@@ -2079,7 +2079,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ДЕТАЛЬНОЕ ДВИЖЕНИЕ КОНКРЕТНОЙ ЗАПЧАСТИ ====================
 router.get('/part_movement_details', async (req, res) => {
     try {
@@ -2124,8 +2123,8 @@ router.get('/part_movement_details', async (req, res) => {
                     COALESCE(k.name, 'Поставщик не указан') AS source_info,
                     CONCAT(COALESCE(s.name, 'Склад'), ' | ', COALESCE(u.name, 'МОЛ не назначен')) AS dest_info,
                     ri.quantity AS qty,
-                    COALESCE(ri.price_rub, ri.price, 0) AS price,
-                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum,
+                    COALESCE(ri.price, 0) AS price,
+                    (ri.quantity * COALESCE(ri.price, 0)) AS sum,
                     ri.description,
                     NULL::int AS warehouse_from_id,
                     r.warehouse_id AS warehouse_to_id,
@@ -2136,7 +2135,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
                 LEFT JOIN users u ON m_mol.user_id = u.id
-                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL
+                WHERE ri.zaphasti_id = $1
 
                 UNION ALL
 
@@ -2168,9 +2167,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
                 LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
                 LEFT JOIN users u_to ON mol_to.user_id = u_to.id
-                WHERE mi.zaphasti_id = $1 
-                  AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
-                  AND m.is_posted = true
+                WHERE mi.zaphasti_id = $1
 
                 UNION ALL
 
@@ -2194,9 +2191,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
                 LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
                 LEFT JOIN cars car ON rep.car_id = car.id
-                WHERE ri_rep.zaphast_id = $1 
-                  AND rep.warehouse_id IS NOT NULL 
-                  AND rep.is_posted = true
+                WHERE ri_rep.zaphast_id = $1
 
                 UNION ALL
 
@@ -2220,9 +2215,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
                 LEFT JOIN customers cust ON r_rel.customer_id = cust.id
-                WHERE ri_rel.zaphasti_id = $1 
-                  AND r_rel.sklad_id IS NOT NULL 
-                  AND (r_rel.is_posted = true OR r_rel.is_posted = 'true' OR r_rel.is_posted = 1 OR r_rel.is_posted = '1' OR r_rel.is_posted = 2 OR r_rel.is_posted = '2')
+                WHERE ri_rel.zaphasti_id = $1
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2238,6 +2231,7 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
