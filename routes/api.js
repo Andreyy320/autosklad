@@ -1707,7 +1707,6 @@ router.get('/stock_balances', async (req, res) => {
                     SUM(qty) AS total_qty
                 FROM warehouse_stocks
                 GROUP BY zaphasti_id, warehouse_id, mol_id
-                having SUM(qty) > 0 -- Показываем только то, что есть в наличии (> 0)
             )
             SELECT 
                 z.id,
@@ -1720,10 +1719,10 @@ router.get('/stock_balances', async (req, res) => {
                 z.description,
                 COALESCE(s.name, 'Основной склад') AS sklad,
                 COALESCE(u.name, 'Не назначен') AS mol,
-                st.total_qty AS qty,
+                COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(z.unit, 'шт') AS unit
-            FROM aggregated_stocks st
-            JOIN zaphasti z ON st.zaphasti_id = z.id
+            FROM zaphasti z
+            LEFT JOIN aggregated_stocks st ON z.id = st.zaphasti_id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN skladi s ON st.warehouse_id = s.id
             LEFT JOIN mol mol_table ON st.mol_id = mol_table.id
@@ -1740,7 +1739,6 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
