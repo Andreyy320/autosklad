@@ -5610,7 +5610,8 @@ if (tableBody) {
 
                     loadDetailData(subTabName, {
                         customer_id: selectedItem.customer_id,
-                        sklad_id: selectedItem.sklad_id
+                        sklad_id: selectedItem.sklad_id,
+                        realization_id: selectedItem.realization_id || selectedItem.id, // добавили поиск ID реализации
                     });
                 } else {
                     const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
@@ -6453,6 +6454,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
             loadData(entity, text);
         });
     });
+
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
