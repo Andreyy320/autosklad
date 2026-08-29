@@ -3521,17 +3521,19 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             SELECT 
+                real.id AS realization_id,
+                real.doc_number::text AS doc_number,
+                real.doc_date AS date,
                 c.id AS customer_id,
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
-                sk.id AS sklad_id,
                 sk.name::text AS sklad_name,
-                COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_purchase_sum), 0)::numeric AS total_purchase_sum,
-                COALESCE(SUM(sub_i.total_retail_sum), 0)::numeric AS total_retail_sum,
-                COALESCE(SUM(sub_i.parts_sum), 0)::numeric AS parts_sum,
-                COALESCE(SUM(sub_w.works_sum), 0)::numeric AS works_sum,
-                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum
+                1 AS total_orders,
+                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
+                COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
@@ -3552,8 +3554,7 @@ router.get('/money_receipts', async (req, res) => {
             ) sub_w ON real.id = sub_w.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
-            GROUP BY c.id, c.name_full, c.name_short, sk.id, sk.name
-            ORDER BY total_realization_sum DESC;
+            ORDER BY real.doc_date DESC;
         `;
         const result = await pool.query(query, [sklad_id || null]);
         res.json(result.rows);
