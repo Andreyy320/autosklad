@@ -3514,7 +3514,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
     }
 });
 
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3563,6 +3562,7 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         const { realization_id, customer_id, sklad_id } = req.query;
@@ -3604,7 +3604,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_works_detail', async (req, res) => {
     try {
         const { customer_id, sklad_id } = req.query;
