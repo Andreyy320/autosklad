@@ -3277,7 +3277,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
     });
 }
 
-
 async function openRepairForm(item = null, parentId = null) {
     console.log('[openRepairForm] СТАРТ. item:', item, 'parentId:', parentId);
 
