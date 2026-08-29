@@ -5468,7 +5468,6 @@ async function postReceipt(receiptId) {
     );
 }
 
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -5610,7 +5609,8 @@ if (tableBody) {
 
                     loadDetailData(subTabName, {
                         customer_id: selectedItem.customer_id,
-                        sklad_id: selectedItem.sklad_id
+                        sklad_id: selectedItem.sklad_id,
+                        realization_id: selectedItem.realization_id || selectedItem.id,
                     });
                 } else {
                     const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
