@@ -6015,7 +6015,7 @@ async function loadDetailData(entity, parentId) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
         }
 
-        if (realizationId) {
+        if (realizationId && typeof realizationId !== 'object') {
             fetchUrl = `/api/${apiRoute}?realization_id=${realizationId}`;
         } else if (!customerId && skladId) {
             fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
@@ -6189,7 +6189,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
