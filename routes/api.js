@@ -3562,13 +3562,12 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
-        const { realization_id } = req.query;
+        const { customer_id, sklad_id } = req.query;
         
-        if (!realization_id) {
-            return res.json([]); // Если документ не выбран — пустой список
+        if (!customer_id) {
+            return res.json([]);
         }
 
         const query = `
@@ -3585,11 +3584,13 @@ router.get('/money_receipts_detail', async (req, res) => {
                 ri.total_rub::numeric AS total_rub
             FROM realization_items ri
             JOIN realizations real ON ri.realization_id = real.id
-            WHERE real.id = $1
-            ORDER BY ri.id ASC;
+            WHERE real.is_posted = true 
+              AND real.customer_id = $1
+              AND ($2::integer IS NULL OR real.sklad_id = $2)
+            ORDER BY real.doc_date DESC, ri.id ASC;
         `;
         
-        const result = await pool.query(query, [realization_id]);
+        const result = await pool.query(query, [customer_id, sklad_id || null]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении детальных позиций:', err);
