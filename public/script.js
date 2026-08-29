@@ -6016,15 +6016,23 @@ async function loadDetailData(entity, parentId) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
         }
 
-        // ЖЕСТКИЙ ПРИОРИТЕТ: если есть realization_id, запрашиваем ТОЛЬКО по нему
+        if (!realizationId && window._lastLoadedRealizationId && !customerId) {
+            console.warn(`⚠️ [loadDetailData] Пропущен старый/паразитный запрос по клиенту, удерживаем realization_id=${window._lastLoadedRealizationId}`);
+            realizationId = window._lastLoadedRealizationId;
+        }
+
         if (realizationId && typeof realizationId !== 'object') {
+            window._lastLoadedRealizationId = realizationId;
             fetchUrl = `/api/${apiRoute}?realization_id=${realizationId}`;
-        } else if (customerId) {
-            fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
-        } else if (!customerId && skladId) {
-            fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
         } else {
-            fetchUrl = `/api/${apiRoute}`;
+            window._lastLoadedRealizationId = null;
+            if (!customerId && skladId) {
+                fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
+            } else if (customerId) {
+                fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
+            } else {
+                fetchUrl = `/api/${apiRoute}`;
+            }
         }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
