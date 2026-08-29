@@ -2169,7 +2169,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN users u_to ON mol_to.user_id = u_to.id
                 WHERE mi.zaphasti_id = $1 
                   AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
-                  AND m.is_posted = true
+                  AND (m.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
@@ -2195,7 +2195,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN cars car ON rep.car_id = car.id
                 WHERE ri_rep.zaphast_id = $1 
                   AND rep.warehouse_id IS NOT NULL 
-                  AND rep.is_posted = true
+                  AND (rep.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
@@ -2221,7 +2221,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN customers cust ON r_rel.customer_id = cust.id
                 WHERE ri_rel.zaphasti_id = $1 
                   AND r_rel.sklad_id IS NOT NULL 
-                  AND (r_rel.is_posted = true OR r_rel.is_posted = 'true' OR r_rel.is_posted = 1 OR r_rel.is_posted = '1' OR r_rel.is_posted = 2 OR r_rel.is_posted = '2')
+                  AND (r_rel.is_posted::text IN ('true', '1', '2'))
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2237,6 +2237,7 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
