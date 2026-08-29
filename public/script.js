@@ -5997,11 +5997,13 @@ async function loadDetailData(entity, parentId) {
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
     } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_detail') {
+        let realizationId = '';
         let customerId = '';
         let skladId = '';
 
         if (parentId && typeof parentId === 'object') {
-            customerId = parentId.customer_id || parentId.id || parentId.counterparty_id || parentId.client_id || '';
+            realizationId = parentId.realization_id || parentId.id || '';
+            customerId = parentId.customer_id || parentId.counterparty_id || parentId.client_id || '';
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || window.currentSkladId || ''; 
         } else {
             customerId = parentId;
@@ -6013,7 +6015,9 @@ async function loadDetailData(entity, parentId) {
             apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
         }
 
-        if (!customerId && skladId) {
+        if (realizationId) {
+            fetchUrl = `/api/${apiRoute}?realization_id=${realizationId}`;
+        } else if (!customerId && skladId) {
             fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
         } else if (customerId) {
             fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
@@ -6185,7 +6189,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
