@@ -1905,6 +1905,7 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1954,7 +1955,7 @@ router.get('/stock_movement', async (req, res) => {
                     r.date,
                     ri.quantity AS qty_in,
                     0 AS qty_out,
-                    (ri.quantity * COALESCE(ri.price, 0)) AS sum_in,
+                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum_in,
                     0 AS sum_out
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
@@ -1974,7 +1975,7 @@ router.get('/stock_movement', async (req, res) => {
                     0 AS sum_out
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_to_id IS NOT NULL
+                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
 
                 UNION ALL
 
@@ -1990,7 +1991,7 @@ router.get('/stock_movement', async (req, res) => {
                     (mi.quantity * COALESCE(mi.price, 0)) AS sum_out
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_from_id IS NOT NULL
+                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
 
                 UNION ALL
 
@@ -2006,7 +2007,7 @@ router.get('/stock_movement', async (req, res) => {
                     (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum_out
                 FROM repair_items rep_i
                 JOIN repairs rep ON rep_i.repair_id = rep.id
-                WHERE rep.warehouse_id IS NOT NULL
+                WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
 
                 UNION ALL
 
@@ -2022,7 +2023,7 @@ router.get('/stock_movement', async (req, res) => {
                     (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum_out
                 FROM realization_items ri_rel
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                WHERE r_rel.sklad_id IS NOT NULL
+                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted = true OR r_rel.is_posted = 'true' OR r_rel.is_posted = 1 OR r_rel.is_posted = '1' OR r_rel.is_posted = 2 OR r_rel.is_posted = '2')
             ),
             filtered_ops AS (
                 SELECT * FROM all_operations d
@@ -2033,11 +2034,11 @@ router.get('/stock_movement', async (req, res) => {
                     zaphasti_id,
                     warehouse_id,
                     
-                    -- Приход за период
+                    -- Приход за период (суммируем количества и общие суммы по разным ценам партий)
                     SUM(qty_in) AS income_qty,
                     SUM(sum_in) AS income_sum,
                     
-                    -- Расход за период (включая перемещения, ремонты и реализации)
+                    -- Расход за период (включая перемещения, ремонты и реализации по их реальным ценам)
                     SUM(qty_out) AS outcome_qty,
                     SUM(sum_out) AS outcome_sum
 
