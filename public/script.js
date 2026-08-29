@@ -4104,19 +4104,27 @@ async function refreshData() {
             const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active');
             const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
             
-            const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
-            const payload = {
-                customer_id: selectedItem.customer_id || selectedItem.id,
-                sklad_id: targetSkladId
-            };
-            loadDetailData(detailEntity, payload);
+            // Если выбран конкретный документ реализации, передаем его realization_id, чтобы не терять контекст
+            if (selectedItem.realization_id || (currentEntity === 'money_receipts' && selectedItem.id)) {
+                loadDetailData(detailEntity, {
+                    customer_id: selectedItem.customer_id,
+                    sklad_id: selectedItem.sklad_id,
+                    realization_id: selectedItem.realization_id || selectedItem.id,
+                });
+            } else {
+                const targetSkladId = selectedItem.sklad_id || window.currentSkladId || '';
+                const payload = {
+                    customer_id: selectedItem.customer_id || selectedItem.id,
+                    sklad_id: targetSkladId
+                };
+                loadDetailData(detailEntity, payload);
+            }
         }
         // Старые ветки expenses_* отсюда полностью удалены и готовы к замене на новую изолированную логику.
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
-
 
 
 function showAppNotification(message, type = 'info') {
@@ -4607,7 +4615,8 @@ async function loadData(entity, title, customParams = {}) {
 
                     const payload = {
                         customer_id: item.customer_id || item.id,
-                        sklad_id: targetSkladId
+                        sklad_id: targetSkladId,
+                        realization_id: item.realization_id || item.id
                     };
                     console.log('🔍 [Клик по покупателю в money_receipts] Отправляем payload в loadDetailData:', { detailEntity, payload });
                     loadDetailData(detailEntity, payload);
@@ -4690,7 +4699,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 
