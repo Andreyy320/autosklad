@@ -6190,6 +6190,7 @@ async function loadDetailData(entity, parentId) {
     }
 }
 
+
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
