@@ -2079,10 +2079,9 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-// ==================== ДЕТАЛЬНОЕ ДВИЖЕНИЕ КОНКРЕТНОЙ ЗАПЧАСТИ ====================
 router.get('/part_movement_details', async (req, res) => {
     try {
-        const { zaphasti_id, warehouse_id, start_date, end_date, mol_id } = req.query;
+        const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
 
         if (!zaphasti_id) {
             return res.status(400).json({ error: "Не указан zaphasti_id" });
@@ -2108,20 +2107,19 @@ router.get('/part_movement_details', async (req, res) => {
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
             currentWarehouseId = parseInt(warehouse_id, 10);
             queryParams.push(currentWarehouseId);
-            // Для реализации проверяем sklad_id, для остальных — warehouse_from_id / warehouse_to_id / warehouse_id
             warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
             paramIndex++;
         }
 
         const query = `
             WITH all_ops AS (
-                -- 1. Приходы (Поставщик -> Склад) — ВСЕГДА ПЛЮС
+                -- 1. Приходы (Поставщик -> Склад)
                 SELECT 
                     r.date AS op_date,
                     r.doc_number AS doc_num,
                     'Приход запчастей' AS doc_type,
                     COALESCE(k.name, 'Поставщик не указан') AS source_info,
-                    CONCAT(COALESCE(s.name, 'Склад'), ' | ', COALESCE(u.name, 'МОЛ не назначен')) AS dest_info,
+                    CONCAT(COALESCE(s.name, 'Склад #' || r.warehouse_id), ' | МОЛ: ', COALESCE(u.name, 'не назначен')) AS dest_info,
                     ri.quantity AS qty,
                     COALESCE(ri.price_rub, ri.price, 0) AS price,
                     (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum,
@@ -2144,8 +2142,8 @@ router.get('/part_movement_details', async (req, res) => {
                     m.date AS op_date,
                     m.doc_number AS doc_num,
                     'Перемещение' AS doc_type,
-                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | ', COALESCE(u_from.name, 'МОЛ')) AS source_info,
-                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | ', COALESCE(u_to.name, 'МОЛ')) AS dest_info,
+                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
+                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
                     CASE 
                         WHEN ${currentWarehouseId ? 'm.warehouse_from_id = ' + currentWarehouseId : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
@@ -2173,13 +2171,13 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Ремонты / Расход (Склад -> Автомобиль) — ВСЕГДА МИНУС
+                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт)
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
-                    'Ремонт база' AS doc_type,
-                    CONCAT(COALESCE(s_rep.name, 'Склад'), ' | ', COALESCE(u_rep.name, 'МОЛ')) AS source_info,
-                    CONCAT(COALESCE(car.gos_number, 'Авто'), ' | ', COALESCE(car.model, '')) AS dest_info,
+                    'Списание в ремонт' AS doc_type,
+                    CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
+                    CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
                     (-1 * ri_rep.quantity) AS qty,
                     COALESCE(ri_rep.price, 0) AS price,
                     (-1 * ri_rep.quantity * COALESCE(ri_rep.price, 0)) AS sum,
@@ -2199,16 +2197,16 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации (Продажи) (Склад -> Покупатель) — ВСЕГДА МИНУС
+                -- 4. Реализации / Продажи (Склад -> Покупатель)
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
-                    'Реализация' AS doc_type,
-                    CONCAT(COALESCE(s_rel.name, 'Склад'), ' | ', COALESCE(u_rel.name, 'МОЛ')) AS source_info,
-                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
+                    'Реализация (продажа)' AS doc_type,
+                    CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
+                    CONCAT('Покупатель: ', COALESCE(cust.name_full, cust.name, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(ri_rel.purchase_price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum,
+                    COALESCE(ri_rel.purchase_price, ri_rel.price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
                     ri_rel.description,
                     r_rel.sklad_id AS warehouse_from_id,
                     NULL::int AS warehouse_to_id,
