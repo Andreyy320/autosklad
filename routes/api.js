@@ -2734,8 +2734,9 @@ router.post('/realization_items', async (req, res) => {
         const zap = zaphastiRes.rows[0];
 
         // 3. Собираем партии с учетом исходных приходов И перемещений на этот склад (`warehouse_to_id`)
-        // Исправление: убрано условие "OR rel.id = $3" из списаний реализаций, 
-        // чтобы уже добавленные в этот же документ строки не двоились и не отнимали остаток повторно.
+        // ВНИМАНИЕ: возвращаем условие "(rel.is_posted = true OR rel.id = $3)", чтобы при расчете 
+        // доступного остатка для текущего документа учитывались уже добавленные в него строки, 
+        // но при этом старые списания из других документов не блокировали остаток повторно.
         const batchesQuery = `
             WITH all_incoming_batches AS (
                 -- Прямые приходы на склад
@@ -2767,11 +2768,11 @@ router.post('/realization_items', async (req, res) => {
                 WHERE mi.zaphasti_id = $1 AND m.warehouse_to_id = $2 AND m.is_posted = true
             ),
             spent_quantities AS (
-                -- Что уже ушло с этого склада через проведенные реализации
+                -- Что уже ушло с этого склада через проведенные реализации ИЛИ текущую черновик-реализацию ($3)
                 SELECT rel_i.income_document_id AS batch_id, SUM(rel_i.quantity) as spent_qty
                 FROM realization_items rel_i
                 JOIN realizations rel ON rel_i.realization_id = rel.id
-                WHERE rel_i.zaphasti_id = $1 AND rel.sklad_id = $2 AND rel.is_posted = true
+                WHERE rel_i.zaphasti_id = $1 AND rel.sklad_id = $2 AND (rel.is_posted = true OR rel.id = $3)
                 GROUP BY rel_i.income_document_id
 
                 UNION ALL
@@ -2796,7 +2797,7 @@ router.post('/realization_items', async (req, res) => {
             ORDER BY b.doc_date ASC, b.batch_id ASC
         `;
 
-        const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id]);
+        const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id, realization_id]);
         
         let batches = batchesRes.rows.map(b => {
             const initial = Number(b.initial_qty) || 0;
