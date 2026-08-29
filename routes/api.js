@@ -2203,7 +2203,7 @@ router.get('/part_movement_details', async (req, res) => {
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
                     'Реализация (продажа)' AS doc_type,
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
-                    CONCAT('Покупатель: ', COALESCE(cust.name_full, cust.name, 'Не указан')) AS dest_info,
+                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
                     COALESCE(ri_rel.purchase_price, ri_rel.price, 0) AS price,
                     (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
