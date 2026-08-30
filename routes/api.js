@@ -4276,8 +4276,8 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
         }
 
-        // 3. Получаем актуальные партии (приходы) по FIFO с корректным исключением ТОЛЬКО текущей редактируемой строки (`mi.id != $4`), 
-        // но с полным учетом остальных строк текущего документа (`m.id = $3`)
+        // 3. Получаем актуальные партии (приходы) по FIFO с честным остатком (учитываем все списания, 
+        // а собственное количество текущей строки вычитаем обратно, чтобы оно не блокировало саму себя)
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -4295,7 +4295,6 @@ router.put('/move_items/:id', async (req, res) => {
                           AND mi.zaphasti_id = ri.zaphasti_id 
                           AND m.warehouse_from_id = r.warehouse_id 
                           AND (m.is_posted = true OR m.id = $3)
-                          AND mi.id != $4
                     ), 0) +
                     COALESCE((
                         SELECT SUM(rel_i.quantity) 
@@ -4314,6 +4313,11 @@ router.put('/move_items/:id', async (req, res) => {
                           AND rep_i.zaphast_id = ri.zaphasti_id 
                           AND rep.warehouse_id = r.warehouse_id 
                           AND rep.is_posted = true
+                    ), 0)
+                    - COALESCE((
+                        SELECT mi_curr.quantity 
+                        FROM move_items mi_curr 
+                        WHERE mi_curr.id = $4 AND mi_curr.income_document_id = r.id
                     ), 0)
                 ) AS spent_qty
             FROM receipt_items ri
@@ -4340,7 +4344,7 @@ router.put('/move_items/:id', async (req, res) => {
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
         console.log(`[FIFO PUT DEBUG] Запрошено количество: ${requestedQty} шт.`);
-        console.log(`[FIFO PUT DEBUG] Доступно на складе (с учетом других строк текущего документа):`, totalAvailableStock);
+        console.log(`[FIFO PUT DEBUG] Доступно на складе (честный остаток):`, totalAvailableStock);
 
         if (requestedQty > totalAvailableStock) {
             await client.query('ROLLBACK');
@@ -4414,6 +4418,7 @@ router.put('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
