@@ -4406,7 +4406,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -4699,7 +4698,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 
