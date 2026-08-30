@@ -4345,8 +4345,7 @@ router.post('/:entity', async (req, res) => {
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
