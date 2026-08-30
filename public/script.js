@@ -5475,7 +5475,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -5561,7 +5560,13 @@ if (tableBody) {
                 if (activeCarTab) {
                     const onclickAttr = activeCarTab.getAttribute('onclick');
                     const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
-                    if (match && match[1]) loadDetailData(match[1], selectedItem.id);
+                    if (match && match[1]) {
+                        loadDetailData(match[1], selectedItem.id);
+                    } else {
+                        loadDetailData('car_general', selectedItem.id);
+                    }
+                } else {
+                    loadDetailData('car_general', selectedItem.id);
                 }
             } else if (currentEntity === 'accidents') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
@@ -5659,8 +5664,6 @@ if (tableBody) {
         }
     });
 }
-
-
 
 
 
@@ -6206,6 +6209,8 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
+
+
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
