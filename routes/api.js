@@ -4028,6 +4028,127 @@ router.put('/receipt_items/:id', async (req, res) => {
     }
 });
 
+// DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
+router.delete('/receipt_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[DELETE REQUEST] Удаление позиции прихода (receipt_items)`);
+    console.log(`[ID]:`, req.params.id);
+
+    const itemId = req.params.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим удаляемую позицию прихода и блокируем её
+        const itemCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция прихода не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const receipt_id = currentItem.receipt_id;
+        const zaphasti_id = currentItem.zaphasti_id;
+        const initialQty = Number(currentItem.quantity) || 0;
+
+        // 2. Проверяем родительский документ (receipts)
+        const receiptCheck = await client.query('SELECT warehouse_id, is_posted FROM receipts WHERE id = $1 FOR UPDATE', [receipt_id]);
+        if (receiptCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Родительский документ прихода не найден.' });
+        }
+
+        const { warehouse_id: warehouseId, is_posted: isPosted } = receiptCheck.rows[0];
+
+        // 3. Если документ проведен, проверяем, не были ли списаны товары из этой конкретной строки прихода
+        if (isPosted) {
+            // Считаем, сколько из этой позиции уже ушло в перемещения, реализации и ремонты
+            const spentCheckQuery = `
+                SELECT 
+                    (
+                        COALESCE((
+                            SELECT SUM(mi.quantity) 
+                            FROM move_items mi 
+                            JOIN moves m ON mi.move_id = m.id 
+                            WHERE mi.income_document_id = $1 
+                              AND mi.zaphasti_id = $2 
+                              AND m.warehouse_from_id = $3 
+                              AND m.is_posted = true
+                        ), 0) +
+                        COALESCE((
+                            SELECT SUM(rel_i.quantity) 
+                            FROM realization_items rel_i 
+                            JOIN realizations rel ON rel_i.realization_id = rel.id 
+                            WHERE rel_i.income_document_id = $1 
+                              AND rel_i.zaphasti_id = $2 
+                              AND rel.sklad_id = $3 
+                              AND rel.is_posted = true
+                        ), 0) +
+                        COALESCE((
+                            SELECT SUM(rep_i.quantity) 
+                            FROM repair_items rep_i 
+                            JOIN repairs rep ON rep_i.repair_id = rep.id 
+                            WHERE rep_i.receipt_id = $1 
+                              AND rep_i.zaphast_id = $2 
+                              AND rep.warehouse_id = $3 
+                              AND rep.is_posted = true
+                        ), 0)
+                    ) AS total_spent
+            `;
+
+            const spentRes = await client.query(spentCheckQuery, [receipt_id, zaphasti_id, warehouseId]);
+            const totalSpent = Number(spentRes.rows[0]?.total_spent) || 0;
+
+            // Если по этой партии уже что-то списано, удалять нельзя
+            if (totalSpent > 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ 
+                    error: `Нельзя удалить позицию из проведенного прихода, так как часть товара (${totalSpent} шт. из ${initialQty} шт.) уже была списана в другие документы (перемещения/продажи/ремонты).` 
+                });
+            }
+
+            // Дополнительно можно запретить удаление из проведенного документа вообще, 
+            // даже если ничего не списано (требуется отмена проведения документа):
+            /*
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного документа прихода.' });
+            */
+        }
+
+        // 4. Удаляем позицию из базы данных
+        await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
+
+        // 5. Лог аудита
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'DELETE', 'receipt_items', itemId, JSON.stringify(currentItem), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Позиция прихода успешно удалена: ID ${itemId}`);
+        return res.status(200).json({ message: 'Позиция прихода успешно удалена', id: itemId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR DELETE receipt_items]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении позиции прихода: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4419,6 +4540,80 @@ router.put('/move_items/:id', async (req, res) => {
     }
 });
 
+// DELETE /api/move_items/:id - удаление позиции перемещения с возвратом количества на склад-источник
+router.delete('/move_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[DELETE REQUEST] Удаление позиции перемещения (move_items)`);
+    console.log(`[ID]:`, req.params.id);
+
+    const itemId = req.params.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим удаляемую позицию перемещения и блокируем её
+        const itemCheck = await client.query('SELECT * FROM move_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const move_id = currentItem.move_id;
+
+        // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
+        const moveCheck = await client.query('SELECT warehouse_from_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        if (moveCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Родительский документ перемещения не найден.' });
+        }
+
+        const { is_posted: isPosted } = moveCheck.rows[0];
+
+        // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
+        if (isPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного документа перемещения. Сначала отмените проведение документа.' });
+        }
+
+        // Примечание по логике FIFO: 
+        // Так как документ не проведен, эта позиция «занимала» остаток на складе-источнике (warehouse_from_id) 
+        // через проверку в запросах (где исключался или учитывался текущий документ). 
+        // При простом удалении строки из базы её «бронь» автоматически снимается, 
+        // и товар в исходных партиях (с их родными ценами по 50 и 60 рублей) снова становится полностью доступным на складе-отправителе.
+
+        // 4. Удаляем позицию из базы данных
+        await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
+
+        // 5. Лог аудита
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'DELETE', 'move_items', itemId, JSON.stringify(currentItem), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Позиция перемещения успешно удалена: ID ${itemId}`);
+        return res.status(200).json({ message: 'Позиция перемещения успешно удалена', id: itemId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR DELETE move_items]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении позиции перемещения: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4789,7 +4984,79 @@ router.put('/repair_items/:id', async (req, res) => {
     }
 });
 
+// DELETE /api/repair_items/:id - удаление запчасти из ремонта с возвратом количества на склад
+router.delete('/repair_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[DELETE REQUEST] Удаление запчасти из ремонта (repair_items)`);
+    console.log(`[ID]:`, req.params.id);
 
+    const itemId = req.params.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим удаляемую позицию запчасти в ремонте и блокируем её
+        const itemCheck = await client.query('SELECT * FROM repair_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция запчасти в ремонте не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const repair_id = currentItem.repair_id;
+
+        // 2. Проверяем родительский документ ремонта (repairs), его статус проведения и склад
+        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        if (repairCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Родительский документ ремонта не найден.' });
+        }
+
+        const { is_posted: isPosted } = repairCheck.rows[0];
+        const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === '1' || isPosted === 1 || isPosted === '2' || isPosted === 2;
+
+        // 3. Если документ ремонта проведен, удалять из него позиции нельзя (нужна отмена проведения)
+        if (isDocumentPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалять запчасти из уже проведенного ремонта. Сначала отмените проведение документа.' });
+        }
+
+        // Примечание по логике FIFO:
+        // Поскольку документ ремонта не проведен, эта позиция учитывалась в расчетах остатков как зарезервированная.
+        // При удалении строки из таблицы `repair_items` эта «бронь» снимается, 
+        // и количество запчасти автоматически возвращается на склад (в ту самую партию по её исходной цене, например по 50 или 60 рублей).
+
+        // 4. Удаляем позицию из базы данных
+        await client.query('DELETE FROM repair_items WHERE id = $1', [itemId]);
+
+        // 5. Лог аудита
+        try {
+            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'DELETE', 'repair_items', itemId, JSON.stringify(currentItem), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Запчасть успешно удалена из ремонта: ID ${itemId}`);
+        return res.status(200).json({ message: 'Запчасть успешно удалена из ремонта', id: itemId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR DELETE repair_items]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении запчасти из ремонта: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
 
 
@@ -5245,11 +5512,10 @@ router.delete('/:entity/:id', async (req, res) => {
             'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-            'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
-            'moves', 'move_items', 'statuses', 'tehosmotr',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
+            'moves', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
             'customer_cars','part_discounts','service_discounts','realizations'
         ];
 
