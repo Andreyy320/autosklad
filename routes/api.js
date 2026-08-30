@@ -4468,7 +4468,6 @@ router.put('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4510,8 +4509,7 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
         }
 
-        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO для склада ремонта
-        // Учитываем приходы, входящие перемещения, исходящие перемещения, реализации и другие ремонты (кроме текущего)
+        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO для склада ремонта ($2)
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -4527,7 +4525,7 @@ router.post('/repair_items', async (req, res) => {
                         JOIN moves m ON mi.move_id = m.id 
                         WHERE mi.income_document_id = r.id 
                           AND mi.zaphasti_id = ri.zaphasti_id 
-                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND m.warehouse_from_id = $2 
                           AND m.is_posted = true
                     ), 0) +
                     COALESCE((
@@ -4536,7 +4534,7 @@ router.post('/repair_items', async (req, res) => {
                         JOIN realizations rel ON rel_i.realization_id = rel.id 
                         WHERE rel_i.income_document_id = r.id 
                           AND rel_i.zaphasti_id = ri.zaphasti_id 
-                          AND rel.sklad_id = r.warehouse_id 
+                          AND rel.sklad_id = $2 
                           AND rel.is_posted = true
                     ), 0) +
                     COALESCE((
@@ -4545,13 +4543,24 @@ router.post('/repair_items', async (req, res) => {
                         JOIN repairs rep ON rep_i.repair_id = rep.id 
                         WHERE rep_i.receipt_id = r.id 
                           AND rep_i.zaphast_id = ri.zaphasti_id 
-                          AND rep.warehouse_id = r.warehouse_id 
+                          AND rep.warehouse_id = $2 
                           AND (rep.is_posted = true OR rep.id = $3)
                     ), 0)
                 ) AS spent_qty
             FROM receipt_items ri
             JOIN receipts r ON ri.receipt_id = r.id
-            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            WHERE ri.zaphasti_id = $1 
+              AND (
+                  r.warehouse_id = $2 
+                  OR EXISTS (
+                      SELECT 1 FROM move_items mi_in 
+                      JOIN moves m_in ON mi_in.move_id = m_in.id 
+                      WHERE mi_in.income_document_id = r.id 
+                        AND mi_in.zaphasti_id = ri.zaphasti_id 
+                        AND m_in.warehouse_to_id = $2 
+                        AND m_in.is_posted = true
+                  )
+              )
             ORDER BY r.date ASC, r.id ASC
         `;
 
@@ -4565,6 +4574,7 @@ router.post('/repair_items', async (req, res) => {
             return {
                 receipt_id: b.receipt_id,
                 doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                receipt_date: b.receipt_date,
                 price: price,
                 available: available > 0 ? available : 0
             };
@@ -4603,7 +4613,9 @@ router.post('/repair_items', async (req, res) => {
                 INSERT INTO "repair_items" 
                 ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
                 VALUES ($1, $2, $3, $4, $5, $6, $7) 
-                RETURNING *;
+                RETURNING *, 
+                          (SELECT doc_number FROM receipts WHERE id = $7) AS receipt_doc_number,
+                          (SELECT date FROM receipts WHERE id = $7) AS receipt_date;
             `;
 
             const values = [
@@ -4652,7 +4664,6 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
-
 // PUT /api/repair_items/:id - обновление запчасти в ремонте с пересчетом FIFO, исключением текущей позиции и возвратом даты/номера прихода
 router.put('/repair_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
