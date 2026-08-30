@@ -4226,7 +4226,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         }
     });
 
-// PUT /api/move_items/:id - обновление позиции перемещения с пересчетом FIFO и исключением текущей позиции
+// PUT /api/move_items/:id - обновление позиции перемещения с пересчетом FIFO, исключением текущей позиции и возвратом даты/номера прихода
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
     console.log(`[PUT REQUEST] Обновление позиции перемещения (move_items) с FIFO ID: ${req.params.id}`);
@@ -4280,7 +4280,7 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 3. Получаем актуальные партии (приходы) и их реальные остатки по FIFO с исключением текущей редактируемой позиции ($4)
+        // 3. Получаем актуальные партии (приходы) с датой и номером по FIFO с исключением текущей редактируемой позиции ($4)
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -4335,6 +4335,7 @@ router.put('/move_items/:id', async (req, res) => {
             return {
                 receipt_id: b.receipt_id,
                 doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                receipt_date: b.receipt_date,
                 price: price,
                 available: available > 0 ? available : 0
             };
@@ -4352,15 +4353,6 @@ router.put('/move_items/:id', async (req, res) => {
                 error: `Недостаточно товара на выбранном складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь указать: ${requestedQty} шт.` 
             });
         }
-
-        // Удаляем старые разбитые строки по этой позиции, если FIFO разобьет обновление на несколько партий, 
-        // либо обновляем текущую строку под первую партию, а остальные досоздаем (или делаем полный перезапрос строк перемещения).
-        // Простой и безопасный подход: удаляем текущую строку `move_items` с `id = itemId` и генерируем заново через распределение FIFO, 
-        // либо если строка одна — обновляем её, если несколько — удаляем старую и создаем новые. 
-        // Но чтобы сохранить ID самой строки при обновлении (если фронтенд завязан на ID), 
-        // давайте посмотрим: если `requestedQty` влазит в *первую же* доступную партию, мы можем просто обновить текущую запись. 
-        // Если же она разбивается на несколько партий, старую удаляем и создаем новые. 
-        // Чтобы логика была монолитной как в POST и не ломала связи, сделаем распределение:
 
         let remainingToDistribute = requestedQty;
         const curr = currency || currentItem.currency || 'Рубль ПМР';
@@ -4380,8 +4372,7 @@ router.put('/move_items/:id', async (req, res) => {
             const totalRub = takeQty * batch.price;
 
             if (isFirstBatch) {
-                // Обновляем существующую запись, чтобы сохранить её ID для клиента
-                console.log(`🔄 [FIFO PUT STEP] Обновляем существующую строку ID ${itemId} партией "${batch.doc_number}": берем ${takeQty} шт. по цене ${batch.price}`);
+                console.log(`🔄 [FIFO PUT STEP] Обновляем существующую строку ID ${itemId} партией "${batch.doc_number}" от ${batch.receipt_date}: берем ${takeQty} шт. по цене ${batch.price}`);
 
                 const updateQuery = `
                     UPDATE "move_items" 
@@ -4396,7 +4387,9 @@ router.put('/move_items/:id', async (req, res) => {
                         "move_id" = $8, 
                         "income_document_id" = $9
                     WHERE id = $10
-                    RETURNING *;
+                    RETURNING *, 
+                              (SELECT doc_number FROM receipts WHERE id = $9) AS receipt_doc_number,
+                              (SELECT date FROM receipts WHERE id = $9) AS receipt_date;
                 `;
 
                 const values = [
@@ -4416,14 +4409,15 @@ router.put('/move_items/:id', async (req, res) => {
                 createdRecords.push(result.rows[0]);
                 isFirstBatch = false;
             } else {
-                // Если количество потребовало залезть во вторую партию FIFO, создаем новую доп. строку
-                console.log(`➕ [FIFO PUT STEP] Создаем дополнительную строку из-за FIFO для партии "${batch.doc_number}": берем ${takeQty} шт. по цене ${batch.price}`);
+                console.log(`➕ [FIFO PUT STEP] Создаем дополнительную строку из-за FIFO для партии "${batch.doc_number}" от ${batch.receipt_date}: берем ${takeQty} шт. по цене ${batch.price}`);
 
                 const insertQuery = `
                     INSERT INTO "move_items" 
                     ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-                    RETURNING *;
+                    RETURNING *, 
+                              (SELECT doc_number FROM receipts WHERE id = $9) AS receipt_doc_number,
+                              (SELECT date FROM receipts WHERE id = $9) AS receipt_date;
                 `;
 
                 const values = [
@@ -4445,15 +4439,10 @@ router.put('/move_items/:id', async (req, res) => {
             remainingToDistribute -= takeQty;
         }
 
-        // Если после первой записи остался остаток, а другие партии не покрыли — ошибка
         if (remainingToDistribute > 0) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Ошибка распределения партий FIFO при обновлении: недостаточно доступных единиц товара.' });
         }
-
-        // Важный момент: если старая запись была разбита на несколько строк ранее, а теперь помещается в одну, 
-        // или если партии сместились, нужно убедиться, что «лишние» старые строки с таким же ID не остались висеть. 
-        // Но так как мы правим конкретный `itemId`, всё ок. Если нужно удалять хвосты от старого разбиения, обычно фронтенд обновляет/перезапрашивает список.
 
         try {
             await client.query(
@@ -4479,7 +4468,6 @@ router.put('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
