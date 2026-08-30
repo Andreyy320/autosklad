@@ -4406,11 +4406,27 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
     currentEntity = entity;
     selectedItem = null;
+
+    // Сбрасываем панель деталей при переключении разделов, чтобы не висел "хвост" от прошлого раздела
+    const detailTitleEl = document.getElementById('detail-title');
+    if (detailTitleEl) detailTitleEl.innerText = `Детали: ${title}`;
+    
+    const detailTbody = document.getElementById('detail-table-body');
+    if (detailTbody) {
+        detailTbody.innerHTML = '<tr><td colspan="20" style="text-align: center; color: #888;">Выберите строку в таблице выше</td></tr>';
+    }
+    
+    if (typeof emptyDetailBody === 'function') {
+        emptyDetailBody();
+    }
+
     const config = getConfig(entity);
 
     const filterPanel = document.getElementById('parts-filter-panel');
@@ -4698,7 +4714,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
