@@ -4509,7 +4509,7 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
         }
 
-        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO для склада ремонта ($2)
+        // 2. Получаем актуальные партии и их реальные остатки (считаем суммарный приход минус суммарный расход по каждой партии для этого склада)
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -4519,6 +4519,7 @@ router.post('/repair_items', async (req, res) => {
                 ri.price_rub,
                 ri.quantity AS initial_qty,
                 (
+                    -- Исходящие перемещения с этого склада по этой партии
                     COALESCE((
                         SELECT SUM(mi.quantity) 
                         FROM move_items mi 
@@ -4528,6 +4529,7 @@ router.post('/repair_items', async (req, res) => {
                           AND m.warehouse_from_id = $2 
                           AND m.is_posted = true
                     ), 0) +
+                    -- Реализации с этого склада по этой партии
                     COALESCE((
                         SELECT SUM(rel_i.quantity) 
                         FROM realization_items rel_i 
@@ -4537,6 +4539,7 @@ router.post('/repair_items', async (req, res) => {
                           AND rel.sklad_id = $2 
                           AND rel.is_posted = true
                     ), 0) +
+                    -- Ремонты со склада по этой партии (исключая или включая текущий ремонт)
                     COALESCE((
                         SELECT SUM(rep_i.quantity) 
                         FROM repair_items rep_i 
