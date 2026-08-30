@@ -4653,7 +4653,237 @@ router.post('/repair_items', async (req, res) => {
     }
 });
 
+// PUT /api/repair_items/:id - обновление запчасти в ремонте с пересчетом FIFO, исключением текущей позиции и возвратом даты/номера прихода
+router.put('/repair_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[PUT REQUEST] Обновление запчасти в ремонте (repair_items) с FIFO ID: ${req.params.id}`);
+    console.log(`[BODY]:`, req.body);
 
+    const itemId = req.params.id;
+    const { zaphast_id, quantity, description, repair_id } = req.body;
+    const requestedQty = Number(quantity) || 0;
+
+    if (requestedQty <= 0) {
+        return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Проверяем существование обновляемой позиции и получаем её текущие данные
+        const currentItemCheck = await client.query('SELECT * FROM repair_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (currentItemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Указанная позиция ремонта не найдена.' });
+        }
+        const currentItem = currentItemCheck.rows[0];
+
+        // Определяем финальный repair_id и zaphast_id (если в теле не переданы, берем из текущей записи)
+        const targetRepairId = repair_id || currentItem.repair_id;
+        const targetZaphastId = zaphast_id !== undefined ? zaphast_id : currentItem.zaphast_id;
+
+        // 2. Проверяем документ ремонта, его склад и статус проведения
+        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [targetRepairId]);
+        if (repairCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Указанный документ ремонта не найден.' });
+        }
+
+        const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
+
+        const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === 1 || isPosted === '1' || isPosted === 2 || isPosted === '2';
+        if (isDocumentPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном ремонте!' });
+        }
+
+        if (!warehouseId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
+        }
+
+        // 3. Получаем актуальные партии (приходы) с датой и номером по FIFO с исключением текущей редактируемой позиции ($4)
+        const batchesQuery = `
+            SELECT 
+                r.id AS receipt_id,
+                r.doc_number AS receipt_doc_number,
+                r.date AS receipt_date,
+                ri.price,
+                ri.price_rub,
+                ri.quantity AS initial_qty,
+                (
+                    COALESCE((
+                        SELECT SUM(mi.quantity) 
+                        FROM move_items mi 
+                        JOIN moves m ON mi.move_id = m.id 
+                        WHERE mi.income_document_id = r.id 
+                          AND mi.zaphasti_id = ri.zaphasti_id 
+                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND m.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rel_i.quantity) 
+                        FROM realization_items rel_i 
+                        JOIN realizations rel ON rel_i.realization_id = rel.id 
+                        WHERE rel_i.income_document_id = r.id 
+                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                          AND rel.sklad_id = r.warehouse_id 
+                          AND rel.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rep_i.quantity) 
+                        FROM repair_items rep_i 
+                        JOIN repairs rep ON rep_i.repair_id = rep.id 
+                        WHERE rep_i.receipt_id = r.id 
+                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                          AND rep.warehouse_id = r.warehouse_id 
+                          AND (rep.is_posted = true OR rep.id = $3)
+                          AND rep_i.id <> $4
+                    ), 0)
+                ) AS spent_qty
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            ORDER BY r.date ASC, r.id ASC
+        `;
+
+        const batchesRes = await client.query(batchesQuery, [targetZaphastId, warehouseId, targetRepairId, itemId]);
+        
+        let batches = batchesRes.rows.map(b => {
+            const initial = Number(b.initial_qty) || 0;
+            const spent = Number(b.spent_qty) || 0;
+            const available = initial - spent;
+            const price = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            return {
+                receipt_id: b.receipt_id,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                receipt_date: b.receipt_date,
+                price: price,
+                available: available > 0 ? available : 0
+            };
+        }).filter(b => b.available > 0);
+
+        const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
+
+        console.log(`[FIFO REPAIR DEBUG PUT] Запрошено к обновлению: ${requestedQty} шт.`);
+        console.log(`[FIFO REPAIR DEBUG PUT] Доступно на складе (без учета текущей строки):`, totalAvailableStock);
+        console.log(`[FIFO REPAIR DEBUG PUT] Доступные партии:`, batches);
+
+        if (requestedQty > totalAvailableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно запчастей на складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь указать: ${requestedQty} шт.` 
+            });
+        }
+
+        let remainingToDistribute = requestedQty;
+        const finalDescription = description !== undefined ? description : currentItem.description;
+        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        const createdRecords = [];
+        let isFirstBatch = true;
+
+        for (const batch of batches) {
+            if (remainingToDistribute <= 0) break;
+
+            const takeQty = Math.min(remainingToDistribute, batch.available);
+            if (takeQty <= 0) continue;
+
+            const totalSum = takeQty * batch.price;
+
+            if (isFirstBatch) {
+                console.log(`🔄 [FIFO REPAIR PUT STEP] Обновляем существующую строку ID ${itemId} партией "${batch.doc_number}" от ${batch.receipt_date}: берем ${takeQty} шт. по цене ${batch.price}`);
+
+                const updateQuery = `
+                    UPDATE "repair_items" 
+                    SET 
+                        "zaphast_id" = $1, 
+                        "price" = $2, 
+                        "quantity" = $3, 
+                        "description" = $4, 
+                        "repair_id" = $5, 
+                        "total" = $6, 
+                        "receipt_id" = $7
+                    WHERE id = $8
+                    RETURNING *, 
+                              (SELECT doc_number FROM receipts WHERE id = $7) AS receipt_doc_number,
+                              (SELECT date FROM receipts WHERE id = $7) AS receipt_date;
+                `;
+
+                const values = [
+                    targetZaphastId,
+                    batch.price,
+                    takeQty,
+                    finalDescription || null,
+                    targetRepairId,
+                    totalSum,
+                    batch.receipt_id,
+                    itemId
+                ];
+
+                const result = await client.query(updateQuery, values);
+                createdRecords.push(result.rows[0]);
+                isFirstBatch = false;
+            } else {
+                console.log(`➕ [FIFO REPAIR PUT STEP] Создаем дополнительную строку из-за FIFO для партии "${batch.doc_number}" от ${batch.receipt_date}: берем ${takeQty} шт. по цене ${batch.price}`);
+
+                const insertQuery = `
+                    INSERT INTO "repair_items" 
+                    ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                    RETURNING *, 
+                              (SELECT doc_number FROM receipts WHERE id = $7) AS receipt_doc_number,
+                              (SELECT date FROM receipts WHERE id = $7) AS receipt_date;
+                `;
+
+                const values = [
+                    targetZaphastId,
+                    batch.price,
+                    takeQty,
+                    finalDescription || null,
+                    targetRepairId,
+                    totalSum,
+                    batch.receipt_id
+                ];
+
+                const result = await client.query(insertQuery, values);
+                createdRecords.push(result.rows[0]);
+            }
+
+            remainingToDistribute -= takeQty;
+        }
+
+        if (remainingToDistribute > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Ошибка распределения партий FIFO при обновлении ремонта: недостаточно доступных единиц запчастей.' });
+        }
+
+        try {
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'UPDATE', 'repair_items', itemId, JSON.stringify({ ...req.body, updated_records_count: createdRecords.length }), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS PUT] Успешно обновлено/распределено строк ремонта: ${createdRecords.length}`);
+        return res.status(200).json(createdRecords);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ PUT]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при обновлении запчасти в ремонте: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
 
 
@@ -4697,8 +4927,7 @@ router.post('/:entity', async (req, res) => {
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 'tehosmotr', 
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
@@ -4863,8 +5092,7 @@ router.put('/:entity/:id', async (req, res) => {
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
-            'repair_items', 'repair_works', 'mol_users', 'counterparty_contacts', 
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
