@@ -6338,7 +6338,6 @@ function updateFilterPanels(entity) {
         }
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -6466,8 +6465,13 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 return;
             }
 
-            // Для всех остальных разделов вызываем стандартный loadData
-            loadData(entity, text);
+            // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
+            loadData(entity, text, () => {
+                const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
+                if ($firstRow.length) {
+                    $firstRow.trigger('click');
+                }
+            });
         });
     });
 
@@ -6488,7 +6492,6 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         }
     });
 });
-
 
 
 

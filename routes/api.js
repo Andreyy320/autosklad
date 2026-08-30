@@ -5342,108 +5342,6 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
-        if (entity === 'move_items' || entity === 'receipt_items' || entity === 'repair_items') {
-            if (req.body.quantity !== undefined || req.body.price !== undefined) {
-                const newQty = Number(req.body.quantity !== undefined ? req.body.quantity : 0);
-                const newPrice = Number(req.body.price !== undefined ? req.body.price : 0);
-
-                if (newQty < 0) {
-                    await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Количество не может быть отрицательным' });
-                }
-
-                if (entity === 'move_items') {
-                    // Добавлен FOR UPDATE
-                    const oldItemRes = await client.query('SELECT * FROM "move_items" WHERE id = $1 FOR UPDATE', [id]);
-                    if (oldItemRes.rows.length === 0) {
-                        await client.query('ROLLBACK');
-                        return res.status(404).json({ error: 'Запись не найдена' });
-                    }
-                    const oldItem = oldItemRes.rows[0];
-                    const sparePartId = req.body.zaphasti_id || oldItem.zaphasti_id;
-
-                    if (oldItem.move_id) {
-                        const moveCheck = await client.query('SELECT is_posted FROM moves WHERE id = $1', [oldItem.move_id]);
-                        if (moveCheck.rows.length > 0) {
-                            const isPostedVal = moveCheck.rows[0].is_posted;
-                            if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                                await client.query('ROLLBACK');
-                                return res.status(400).json({ error: 'Нельзя изменять позиции в уже проведенном документе перемещения!' });
-                            }
-                        }
-                    }
-
-                    const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-                    const stockResult = await client.query(stockQuery, [sparePartId]);
-                    const totalIn = Number(stockResult.rows[0].total_in);
-
-                    const movedQuery = `SELECT COALESCE(SUM(quantity), 0) as total_moved FROM move_items WHERE zaphasti_id = $1 AND id != $2`;
-                    const movedResult = await client.query(movedQuery, [sparePartId, id]);
-                    const totalMovedOthers = Number(movedResult.rows[0].total_moved);
-
-                    const availableStock = totalIn - totalMovedOthers;
-
-                    if (newQty > availableStock) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ 
-                            error: `Недостаточно товара на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
-                        });
-                    }
-
-                    req.body.total_rub = newQty * newPrice;
-                    if (req.body.price_rub !== undefined) {
-                        req.body.price_rub = newPrice;
-                    }
-                }
-
-                if (entity === 'repair_items') {
-                    // Добавлен FOR UPDATE
-                    const oldItemRes = await client.query('SELECT * FROM "repair_items" WHERE id = $1 FOR UPDATE', [id]);
-                    if (oldItemRes.rows.length === 0) {
-                        await client.query('ROLLBACK');
-                        return res.status(404).json({ error: 'Запись не найдена' });
-                    }
-                    const oldItem = oldItemRes.rows[0];
-                    const sparePartId = req.body.zaphast_id || oldItem.zaphast_id;
-
-                    if (oldItem.repair_id) {
-                        const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [oldItem.repair_id]);
-                        if (repairCheck.rows.length > 0) {
-                            const isPostedVal = repairCheck.rows[0].is_posted;
-                            if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                                await client.query('ROLLBACK');
-                                return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном ремонте!' });
-                            }
-                        }
-                    }
-
-                    const stockQuery = `SELECT COALESCE(SUM(quantity), 0) as total_in FROM receipt_items WHERE zaphasti_id = $1`;
-                    const stockResult = await client.query(stockQuery, [sparePartId]);
-                    const totalIn = Number(stockResult.rows[0].total_in);
-
-                    const spentQuery = `SELECT COALESCE(SUM(quantity), 0) as total_spent FROM repair_items WHERE zaphast_id = $1 AND id != $2`;
-                    const spentResult = await client.query(spentQuery, [sparePartId, id]);
-                    const totalSpentOthers = Number(spentResult.rows[0].total_spent);
-
-                    const availableStock = totalIn - totalSpentOthers;
-
-                    if (newQty > availableStock) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ 
-                            error: `Недостаточно запчастей на складе! Доступно: ${availableStock} шт., а вы пытаетесь установить: ${newQty} шт.` 
-                        });
-                    }
-
-                    req.body.total = newQty * newPrice;
-                }
-
-                if (entity === 'receipt_items') {
-                    req.body.total_rub = newQty * newPrice;
-                    req.body.price_rub = newPrice;
-                }
-            }
-        }
-
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -5491,8 +5389,6 @@ router.put('/:entity/:id', async (req, res) => {
     }
 });
 
-
-
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -5535,48 +5431,6 @@ router.delete('/:entity/:id', async (req, res) => {
             if (isPosted === true || isPosted === 'true' || isPosted === 2 || isPosted === 1) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Нельзя удалить уже проведенный документ!' });
-            }
-        }
-
-        if (entity === 'receipt_items') {
-            const itemRes = await client.query('SELECT receipt_id FROM receipt_items WHERE id = $1', [id]);
-            if (itemRes.rows.length > 0 && itemRes.rows[0].receipt_id) {
-                const parentCheck = await client.query('SELECT is_posted FROM receipts WHERE id = $1', [itemRes.rows[0].receipt_id]);
-                if (parentCheck.rows.length > 0) {
-                    const pVal = parentCheck.rows[0].is_posted;
-                    if (pVal === true || pVal === 'true' || pVal === 2 || pVal === 1) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Нельзя удалять позиции из проведенного прихода!' });
-                    }
-                }
-            }
-        }
-
-        if (entity === 'move_items') {
-            const itemRes = await client.query('SELECT move_id FROM move_items WHERE id = $1', [id]);
-            if (itemRes.rows.length > 0 && itemRes.rows[0].move_id) {
-                const parentCheck = await client.query('SELECT is_posted FROM moves WHERE id = $1', [itemRes.rows[0].move_id]);
-                if (parentCheck.rows.length > 0) {
-                    const pVal = parentCheck.rows[0].is_posted;
-                    if (pVal === true || pVal === 'true' || pVal === 2 || pVal === 1) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Нельзя удалять позиции из проведенного перемещения!' });
-                    }
-                }
-            }
-        }
-
-        if (entity === 'repair_items') {
-            const itemRes = await client.query('SELECT repair_id FROM repair_items WHERE id = $1', [id]);
-            if (itemRes.rows.length > 0 && itemRes.rows[0].repair_id) {
-                const parentCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [itemRes.rows[0].repair_id]);
-                if (parentCheck.rows.length > 0) {
-                    const pVal = parentCheck.rows[0].is_posted;
-                    if (pVal === true || pVal === 'true' || pVal === 2 || pVal === 1) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Нельзя удалять запчасти из проведенного ремонта!' });
-                    }
-                }
             }
         }
 
