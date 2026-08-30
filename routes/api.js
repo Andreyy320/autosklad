@@ -4618,7 +4618,7 @@ router.put('/:entity/:id', async (req, res) => {
             'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-            'toplivo', 'ed_izmereniya', 'mol', 'receipts', 'receipt_items',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'move_items', 'statuses', 'tehosmotr',
             'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs',
