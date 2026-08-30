@@ -3918,6 +3918,119 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
+// PUT /api/receipt_items/:id - обновление позиции в приходе
+router.put('/receipt_items/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const itemId = req.params.id;
+        const {
+            receipt_id,
+            zaphasti_id,
+            price,
+            currency,
+            quantity,
+            description
+        } = req.body;
+
+        // 1. Проверяем существование изменяемой позиции и узнаем её receipt_id (если он не передан в теле)
+        const itemCheck = await client.query(
+            'SELECT * FROM receipt_items WHERE id = $1',
+            [itemId]
+        );
+
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция прихода не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const targetReceiptId = receipt_id || currentItem.receipt_id;
+
+        // 2. Проверяем, проведен ли родительский документ (receipts)
+        const receiptCheck = await client.query(
+            'SELECT is_posted FROM receipts WHERE id = $1',
+            [targetReceiptId]
+        );
+
+        if (receiptCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Указанный приход не найден.' });
+        }
+
+        const isPostedVal = receiptCheck.rows[0].is_posted;
+        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
+        }
+
+        // 3. Подготовка и расчёт числовых полей
+        const finalZaphastiId = zaphasti_id !== undefined ? zaphasti_id : currentItem.zaphasti_id;
+        const numPrice = price !== undefined ? Number(price) || 0 : Number(currentItem.price) || 0;
+        const numQty = quantity !== undefined ? Number(quantity) || 0 : Number(currentItem.quantity) || 0;
+        const priceRub = numPrice; 
+        const totalRub = numPrice * numQty;
+        const curr = currency !== undefined ? (currency || 'Рубль ПМР') : currentItem.currency;
+        const finalDescription = description !== undefined ? (description || null) : currentItem.description;
+
+        // 4. Обновление позиции в таблице receipt_items
+        const updateQuery = `
+            UPDATE receipt_items 
+            SET 
+                receipt_id = $1, 
+                zaphasti_id = $2, 
+                price = $3, 
+                currency = $4, 
+                quantity = $5, 
+                description = $6, 
+                price_rub = $7, 
+                total_rub = $8
+            WHERE id = $9
+            RETURNING *;
+        `;
+
+        const values = [
+            targetReceiptId,
+            finalZaphastiId,
+            numPrice,
+            curr,
+            numQty,
+            finalDescription,
+            priceRub,
+            totalRub,
+            itemId
+        ];
+
+        const updatedItemResult = await client.query(updateQuery, values);
+        const updatedItem = updatedItemResult.rows[0];
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+            message: 'Позиция успешно обновлена в приходе',
+            item: updatedItem
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('ПОЛНАЯ ОШИБКА БД при обновлении позиции:', {
+            message: error.message,
+            detail: error.detail,
+            hint: error.hint,
+            code: error.code,
+            position: error.position
+        });
+        return res.status(500).json({ 
+            error: 'Внутренняя ошибка сервера при обновлении позиции.',
+            details: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
+
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
