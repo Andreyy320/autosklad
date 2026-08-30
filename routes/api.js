@@ -4509,62 +4509,80 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
         }
 
-        // 2. Получаем актуальные партии и их реальные остатки (считаем суммарный приход минус суммарный расход по каждой партии для этого склада)
+        // 2. Получаем актуальные партии через CTE (учитывает родные приходы и входящие перемещения на этот склад) и считаем остатки
         const batchesQuery = `
+            WITH warehouse_batches AS (
+                -- 1. Все партии, которые пришли напрямую на этот склад
+                SELECT 
+                    r.id AS receipt_id,
+                    r.doc_number AS receipt_doc_number,
+                    r.date AS receipt_date,
+                    ri.zaphasti_id,
+                    ri.price,
+                    ri.price_rub,
+                    ri.quantity AS initial_qty
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                WHERE r.warehouse_id = $2 AND ri.zaphasti_id = $1
+
+                UNION ALL
+
+                -- 2. Или партии, которые приехали на этот склад через входящие перемещения
+                SELECT 
+                    r.id AS receipt_id,
+                    r.doc_number AS receipt_doc_number,
+                    r.date AS receipt_date,
+                    mi.zaphasti_id,
+                    ri.price,
+                    ri.price_rub,
+                    mi.quantity AS initial_qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                JOIN receipts r ON mi.income_document_id = r.id
+                JOIN receipt_items ri ON ri.receipt_id = r.id AND ri.zaphasti_id = mi.zaphasti_id
+                WHERE m.warehouse_to_id = $2 AND m.is_posted = true AND mi.zaphasti_id = $1
+            )
             SELECT 
-                r.id AS receipt_id,
-                r.doc_number AS receipt_doc_number,
-                r.date AS receipt_date,
-                ri.price,
-                ri.price_rub,
-                ri.quantity AS initial_qty,
+                b.receipt_id,
+                b.receipt_doc_number,
+                b.receipt_date,
+                b.price,
+                b.price_rub,
+                b.initial_qty,
                 (
-                    -- Исходящие перемещения с этого склада по этой партии
+                    -- Исходящие перемещения ЭТОЙ партии С ЭТОГО склада
                     COALESCE((
                         SELECT SUM(mi.quantity) 
                         FROM move_items mi 
                         JOIN moves m ON mi.move_id = m.id 
-                        WHERE mi.income_document_id = r.id 
-                          AND mi.zaphasti_id = ri.zaphasti_id 
+                        WHERE mi.income_document_id = b.receipt_id 
+                          AND mi.zaphasti_id = b.zaphasti_id 
                           AND m.warehouse_from_id = $2 
                           AND m.is_posted = true
                     ), 0) +
-                    -- Реализации с этого склада по этой партии
+                    -- Реализации ЭТОЙ партии С ЭТОГО склада
                     COALESCE((
                         SELECT SUM(rel_i.quantity) 
                         FROM realization_items rel_i 
                         JOIN realizations rel ON rel_i.realization_id = rel.id 
-                        WHERE rel_i.income_document_id = r.id 
-                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                        WHERE rel_i.income_document_id = b.receipt_id 
+                          AND rel_i.zaphasti_id = b.zaphasti_id 
                           AND rel.sklad_id = $2 
                           AND rel.is_posted = true
                     ), 0) +
-                    -- Ремонты со склада по этой партии (исключая или включая текущий ремонт)
+                    -- Ремонты ЭТОЙ партии С ЭТОГО склада (учитываем проведенные + текущий редактируемый ремонт)
                     COALESCE((
                         SELECT SUM(rep_i.quantity) 
                         FROM repair_items rep_i 
                         JOIN repairs rep ON rep_i.repair_id = rep.id 
-                        WHERE rep_i.receipt_id = r.id 
-                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                        WHERE rep_i.receipt_id = b.receipt_id 
+                          AND rep_i.zaphast_id = b.zaphasti_id 
                           AND rep.warehouse_id = $2 
                           AND (rep.is_posted = true OR rep.id = $3)
                     ), 0)
                 ) AS spent_qty
-            FROM receipt_items ri
-            JOIN receipts r ON ri.receipt_id = r.id
-            WHERE ri.zaphasti_id = $1 
-              AND (
-                  r.warehouse_id = $2 
-                  OR EXISTS (
-                      SELECT 1 FROM move_items mi_in 
-                      JOIN moves m_in ON mi_in.move_id = m_in.id 
-                      WHERE mi_in.income_document_id = r.id 
-                        AND mi_in.zaphasti_id = ri.zaphasti_id 
-                        AND m_in.warehouse_to_id = $2 
-                        AND m_in.is_posted = true
-                  )
-              )
-            ORDER BY r.date ASC, r.id ASC
+            FROM warehouse_batches b
+            ORDER BY b.receipt_date ASC, b.receipt_id ASC
         `;
 
         const batchesRes = await client.query(batchesQuery, [zaphast_id, warehouseId, repair_id]);
