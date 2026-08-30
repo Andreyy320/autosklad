@@ -3919,7 +3919,114 @@ router.post('/receipt_items', async (req, res) => {
 });
 
 
+// PUT /api/receipt_items/:id - редактирование позиции в приходе
+router.put('/receipt_items/:id', async (req, res) => {
+    const itemId = req.params.id;
+    const {
+        price,
+        currency,
+        quantity,
+        description
+    } = req.body;
 
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим саму позицию прихода и блокируем её
+        const itemCheck = await client.query(
+            'SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE',
+            [itemId]
+        );
+
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция прихода не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const receipt_id = currentItem.receipt_id;
+
+        // 2. Проверяем, проведен ли родительский документ (receipts)
+        const receiptCheck = await client.query(
+            'SELECT is_posted FROM receipts WHERE id = $1 FOR UPDATE',
+            [receipt_id]
+        );
+
+        if (receiptCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Родительский документ прихода не найден.' });
+        }
+
+        const isPostedVal = receiptCheck.rows[0].is_posted;
+        if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === '2' || isPostedVal === 1 || isPostedVal === '1') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
+        }
+
+        // 3. Подготовка и расчёт новых числовых полей (если поле не передано, оставляем старое)
+        const numPrice = price !== undefined ? Number(price) || 0 : Number(currentItem.price);
+        const numQty = quantity !== undefined ? Number(quantity) || 0 : Number(currentItem.quantity);
+        const priceRub = numPrice; 
+        const totalRub = numPrice * numQty;
+        const curr = currency !== undefined ? currency : currentItem.currency;
+        const desc = description !== undefined ? description : currentItem.description;
+
+        if (numQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
+        }
+
+        // 4. Обновление позиции в таблице receipt_items
+        const updateQuery = `
+            UPDATE receipt_items 
+            SET price = $1, 
+                currency = $2, 
+                quantity = $3, 
+                description = $4, 
+                price_rub = $5, 
+                total_rub = $6
+            WHERE id = $7 
+            RETURNING *;
+        `;
+
+        const values = [
+            numPrice,
+            curr,
+            numQty,
+            desc || null,
+            priceRub,
+            totalRub,
+            itemId
+        ];
+
+        const updateResult = await client.query(updateQuery, values);
+        const updatedItem = updateResult.rows[0];
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+            message: 'Позиция прихода успешно обновлена',
+            item: updatedItem
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('ПОЛНАЯ ОШИБКА БД при обновлении позиции прихода:', {
+            message: error.message,
+            detail: error.detail,
+            hint: error.hint,
+            code: error.code,
+            position: error.position
+        });
+        return res.status(500).json({ 
+            error: 'Внутренняя ошибка сервера при обновлении позиции.',
+            details: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
 
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
 router.post('/move_items', async (req, res) => {
@@ -4116,6 +4223,201 @@ router.post('/move_items', async (req, res) => {
     }
 });
 
+// PUT /api/move_items/:id - редактирование позиции перемещения с полноценным FIFO и проверкой склада
+router.put('/move_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[PUT REQUEST] Редактирование позиции перемещения (move_items) с FIFO`);
+    console.log(`[ID]:`, req.params.id);
+    console.log(`[BODY]:`, req.body);
+
+    const itemId = req.params.id;
+    const { quantity, price, currency, description } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим текущую позицию перемещения и блокируем её
+        const itemCheck = await client.query('SELECT * FROM move_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const move_id = currentItem.move_id;
+        const zaphasti_id = currentItem.zaphasti_id;
+
+        // 2. Проверяем документ перемещения, его склады и статус проведения (is_posted)
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        if (moveCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Документ перемещения не найден.' });
+        }
+
+        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+
+        if (isPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять позиции в уже проведенном документе перемещения.' });
+        }
+
+        if (!warehouseFromId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе перемещения не указан склад-источник.' });
+        }
+
+        // Новое количество и цена (если не переданы, берем старые)
+        const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
+        const newPrice = price !== undefined ? Number(price) : Number(currentItem.price);
+
+        if (requestedQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
+        }
+
+        // 3. Получаем актуальные партии (приходы) по FIFO, ИСКЛЮЧАЯ текущую редактируему строку из расхода текущего документа
+        const batchesQuery = `
+            SELECT 
+                r.id AS receipt_id,
+                r.doc_number AS receipt_doc_number,
+                r.date AS receipt_date,
+                ri.price,
+                ri.price_rub,
+                ri.quantity AS initial_qty,
+                (
+                    COALESCE((
+                        SELECT SUM(mi.quantity) 
+                        FROM move_items mi 
+                        JOIN moves m ON mi.move_id = m.id 
+                        WHERE mi.income_document_id = r.id 
+                          AND mi.zaphasti_id = ri.zaphasti_id 
+                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND (m.is_posted = true OR (m.id = $3 AND mi.id != $4))
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rel_i.quantity) 
+                        FROM realization_items rel_i 
+                        JOIN realizations rel ON rel_i.realization_id = rel.id 
+                        WHERE rel_i.income_document_id = r.id 
+                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                          AND rel.sklad_id = r.warehouse_id 
+                          AND rel.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rep_i.quantity) 
+                        FROM repair_items rep_i 
+                        JOIN repairs rep ON rep_i.repair_id = rep.id 
+                        WHERE rep_i.receipt_id = r.id 
+                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                          AND rep.warehouse_id = r.warehouse_id 
+                          AND rep.is_posted = true
+                    ), 0)
+                ) AS spent_qty
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            ORDER BY r.date ASC, r.id ASC
+        `;
+
+        const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId, move_id, itemId]);
+        
+        let batches = batchesRes.rows.map(b => {
+            const initial = Number(b.initial_qty) || 0;
+            const spent = Number(b.spent_qty) || 0;
+            const available = initial - spent;
+            const batchPrice = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            return {
+                receipt_id: b.receipt_id,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                price: batchPrice,
+                available: available > 0 ? available : 0
+            };
+        }).filter(b => b.available > 0);
+
+        const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
+
+        console.log(`[FIFO PUT DEBUG] Запрошено количество: ${requestedQty} шт.`);
+        console.log(`[FIFO PUT DEBUG] Доступно на складе (без учета текущей строки):`, totalAvailableStock);
+
+        if (requestedQty > totalAvailableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно товара на выбранном складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь установить: ${requestedQty} шт.` 
+            });
+        }
+
+        // Если запчасть та же, а количество изменилось, мы можем пересчитать распределение. 
+        // Самый чистый вариант для FIFO при обновлении строки — если помещается в ту же партию или распределяется заново.
+        // Проверяем, хватает ли первой подходящей партии или нужно распределить (обычно в рамках одной строки редактируется конкретная партия или остаток).
+        // Возьмем первую доступную партию с достаточным остатком или распределим по FIFO:
+        let remainingToDistribute = requestedQty;
+        let chosenBatch = batches.find(b => b.receipt_id === currentItem.income_document_id);
+        
+        // Если у старой партии не хватает на новый объем, берем первую доступную по FIFO
+        if (!chosenBatch || chosenBatch.available < requestedQty) {
+            chosenBatch = batches[0];
+        }
+
+        const finalPrice = price !== undefined ? newPrice : chosenBatch.price;
+        const totalRub = requestedQty * finalPrice;
+        const curr = currency !== undefined ? currency : (currentItem.currency || 'Рубль ПМР');
+        const desc = description !== undefined ? description : currentItem.description;
+
+        const updateQuery = `
+            UPDATE "move_items" 
+            SET "quantity" = $1, 
+                "price" = $2, 
+                "price_rub" = $3, 
+                "total_rub" = $4, 
+                "currency" = $5, 
+                "description" = $6, 
+                "income_document_id" = $7
+            WHERE id = $8 
+            RETURNING *;
+        `;
+
+        const values = [
+            requestedQty,
+            finalPrice,
+            finalPrice,
+            totalRub,
+            curr,
+            desc || null,
+            chosenBatch.receipt_id,
+            itemId
+        ];
+
+        const result = await client.query(updateQuery, values);
+        const updatedRecord = result.rows[0];
+
+        // Лог аудита
+        try {
+            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'UPDATE', 'move_items', updatedRecord.id, JSON.stringify(req.body), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Позиция перемещения успешно обновлена: ID ${itemId}`);
+        return res.status(200).json(updatedRecord);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR PUT move_items]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при обновлении позиции перемещения: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
@@ -4301,7 +4603,191 @@ router.post('/repair_items', async (req, res) => {
     }
 });
 
+// PUT /api/repair_items/:id - редактирование запчасти в ремонте с полноценным FIFO и проверкой склада
+router.put('/repair_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[PUT REQUEST] Редактирование запчасти в ремонте (repair_items) с FIFO`);
+    console.log(`[ID]:`, req.params.id);
+    console.log(`[BODY]:`, req.body);
 
+    const itemId = req.params.id;
+    const { quantity, price, description } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Находим текущую запчасть в ремонте и блокируем её
+        const itemCheck = await client.query('SELECT * FROM repair_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция запчасти в ремонте не найдена.' });
+        }
+
+        const currentItem = itemCheck.rows[0];
+        const repair_id = currentItem.repair_id;
+        const zaphast_id = currentItem.zaphast_id;
+
+        // 2. Проверяем документ ремонта, его склад и статус проведения (is_posted)
+        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        if (repairCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Документ ремонта не найден.' });
+        }
+
+        const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
+        const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === 1 || isPosted === '1' || isPosted === 2 || isPosted === '2';
+
+        if (isDocumentPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном ремонте!' });
+        }
+
+        if (!warehouseId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе ремонта не указан склад.' });
+        }
+
+        // Новое количество и цена (если не переданы, берем старые)
+        const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
+        const newPrice = price !== undefined ? Number(price) : Number(currentItem.price);
+
+        if (requestedQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
+        }
+
+        // 3. Получаем актуальные партии (приходы) по FIFO, ИСКЛЮЧАЯ текущую редактируемую строку из расхода текущего документа
+        const batchesQuery = `
+            SELECT 
+                r.id AS receipt_id,
+                r.doc_number AS receipt_doc_number,
+                r.date AS receipt_date,
+                ri.price,
+                ri.price_rub,
+                ri.quantity AS initial_qty,
+                (
+                    COALESCE((
+                        SELECT SUM(mi.quantity) 
+                        FROM move_items mi 
+                        JOIN moves m ON mi.move_id = m.id 
+                        WHERE mi.income_document_id = r.id 
+                          AND mi.zaphasti_id = ri.zaphasti_id 
+                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND m.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rel_i.quantity) 
+                        FROM realization_items rel_i 
+                        JOIN realizations rel ON rel_i.realization_id = rel.id 
+                        WHERE rel_i.income_document_id = r.id 
+                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                          AND rel.sklad_id = r.warehouse_id 
+                          AND rel.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rep_i.quantity) 
+                        FROM repair_items rep_i 
+                        JOIN repairs rep ON rep_i.repair_id = rep.id 
+                        WHERE rep_i.receipt_id = r.id 
+                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                          AND rep.warehouse_id = r.warehouse_id 
+                          AND (rep.is_posted = true OR (rep.id = $3 AND rep_i.id != $4))
+                    ), 0)
+                ) AS spent_qty
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            ORDER BY r.date ASC, r.id ASC
+        `;
+
+        const batchesRes = await client.query(batchesQuery, [zaphast_id, warehouseId, repair_id, itemId]);
+        
+        let batches = batchesRes.rows.map(b => {
+            const initial = Number(b.initial_qty) || 0;
+            const spent = Number(b.spent_qty) || 0;
+            const available = initial - spent;
+            const batchPrice = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            return {
+                receipt_id: b.receipt_id,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                price: batchPrice,
+                available: available > 0 ? available : 0
+            };
+        }).filter(b => b.available > 0);
+
+        const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
+
+        console.log(`[FIFO REPAIR PUT DEBUG] Запрошено количество: ${requestedQty} шт.`);
+        console.log(`[FIFO REPAIR PUT DEBUG] Доступно на складе (без учета текущей строки):`, totalAvailableStock);
+
+        if (requestedQty > totalAvailableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: `Недостаточно запчастей на складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь установить: ${requestedQty} шт.` 
+            });
+        }
+
+        // Подбираем партию для сохранения: стараемся оставить текущую привязку к receipt_id, если в ней хватает остатка, иначе берем первую доступную по FIFO
+        let chosenBatch = batches.find(b => b.receipt_id === currentItem.receipt_id);
+        if (!chosenBatch || chosenBatch.available < requestedQty) {
+            chosenBatch = batches[0];
+        }
+
+        const finalPrice = price !== undefined ? newPrice : chosenBatch.price;
+        const totalSum = requestedQty * finalPrice;
+        const desc = description !== undefined ? description : currentItem.description;
+
+        const updateQuery = `
+            UPDATE "repair_items" 
+            SET "quantity" = $1, 
+                "price" = $2, 
+                "total" = $3, 
+                "description" = $4, 
+                "receipt_id" = $5
+            WHERE id = $6 
+            RETURNING *;
+        `;
+
+        const values = [
+            requestedQty,
+            finalPrice,
+            totalSum,
+            desc || null,
+            chosenBatch.receipt_id,
+            itemId
+        ];
+
+        const result = await client.query(updateQuery, values);
+        const updatedRecord = result.rows[0];
+
+        // Лог аудита
+        try {
+            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'UPDATE', 'repair_items', updatedRecord.id, JSON.stringify(req.body), clientIp]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`[SUCCESS] Запчасть в ремонте успешно обновлена: ID ${itemId}`);
+        return res.status(200).json(updatedRecord);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ [CRITICAL ERROR PUT repair_items]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при обновлении запчасти в ремонте: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 
 
 
@@ -4738,6 +5224,9 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
+
+
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
