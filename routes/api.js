@@ -4159,7 +4159,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         // 1. Находим саму позицию прихода и блокируем её
         const itemCheck = await client.query(
-            'SELECT ri.*, z.name AS zaphasti_name FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id WHERE ri.id = $1 FOR UPDATE',
+            'SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE',
             [itemId]
         );
 
@@ -4170,7 +4170,10 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
-        const zaphastiName = currentItem.zaphasti_name || 'Неизвестная запчасть';
+
+        // Узнаем название запчасти для истории логов отдельным безопасным запросом
+        const partRes = await client.query('SELECT name FROM zaphasti WHERE id = $1', [currentItem.zaphasti_id]);
+        const zaphastiName = partRes.rows[0]?.name || 'Неизвестная запчасть';
 
         // 2. Проверяем, проведен ли родительский документ (receipts)
         const receiptCheck = await client.query(
@@ -4189,7 +4192,7 @@ router.put('/receipt_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенный документ!' });
         }
 
-        // 3. Подготовка и расчёт новых числовых полей
+        // 3. Подготовка и расчёт новых числовых полей (если поле не передано, оставляем старое)
         const numPrice = price !== undefined ? Number(price) || 0 : Number(currentItem.price);
         const numQty = quantity !== undefined ? Number(quantity) || 0 : Number(currentItem.quantity);
         const priceRub = numPrice; 
@@ -4228,7 +4231,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Автоматическая запись лога (INSERT новой строки в history-логу без перезаписи)
+        // 5. Автоматическая запись лога (INSERT новой строки в историю без перезаписи старых)
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || null;
@@ -4248,7 +4251,7 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            // Записываем в audit_logs чистую новую строку-историю только при наличии реальных изменений
+            // Записываем в audit_logs новую запись-историю только при наличии реальных изменений
             if (Object.keys(changes).length > 0) {
                 const detailsObj = {
                     zaphasti_name: zaphastiName,
