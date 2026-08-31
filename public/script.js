@@ -6075,36 +6075,38 @@ async function loadDetailData(entity, parentId) {
     console.log(`🌐 [loadDetailData] Сформированный fetchUrl: ${fetchUrl}`);
 
     const thead = headerTr ? headerTr.closest('thead') : null;
-    let filterRow = document.getElementById('detail-filter-row');
+    
+    // БЛОК ОТЛАДКИ И ИСПРАВЛЕНИЯ: Полностью удаляем старую строку фильтра, 
+    // чтобы она не дублировалась и не ломала верстку при смене вкладок.
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) {
+        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
+        existingFilterRow.remove();
+    }
 
+    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
+    console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
+
     if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
         if (thead && visibleColumns.length > 0) {
-            if (!filterRow) {
-                filterRow = document.createElement('tr');
-                filterRow.id = 'detail-filter-row';
-                filterRow.innerHTML = visibleColumns.map(col => {
-                    let widthStyle = col.width ? `width: ${col.width};` : '';
-                    return `
-                        <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
-                            <input type="text" 
-                                   data-column="${col.field}" 
-                                   oninput="filterDetailTable()" 
-                                   style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                        </th>
-                    `;
-                }).join('');
-                thead.insertBefore(filterRow, headerTr);
-            } else {
-                thead.insertBefore(filterRow, headerTr);
-                filterRow.style.display = ''; 
-            }
-        }
-    } else {
-        if (filterRow) {
-            filterRow.style.display = 'none';
+            filterRow = document.createElement('tr');
+            filterRow.id = 'detail-filter-row';
+            filterRow.innerHTML = visibleColumns.map(col => {
+                let widthStyle = col.width ? `width: ${col.width};` : '';
+                return `
+                    <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
+                        <input type="text" 
+                               data-column="${col.field}" 
+                               oninput="filterDetailTable()" 
+                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                    </th>
+                `;
+            }).join('');
+            thead.insertBefore(filterRow, headerTr);
+            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
         }
     }
 
