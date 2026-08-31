@@ -5498,6 +5498,40 @@ router.put('/repair_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+// Функция для записи логов ремонта в таблицу repair_logs
+async function writeRepairLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO repair_logs (
+                action, repair_id, document_number, warehouse_id, car_id, 
+                zaphast_id, quantity, price, total, receipt_id, 
+                description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                data.action,
+                data.repair_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.zaphast_id,
+                data.quantity,
+                data.price,
+                data.total,
+                data.receipt_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
+    }
+}
 // DELETE /api/repair_items/:id - удаление запчасти из ремонта с возвратом количества на склад
 router.delete('/repair_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
