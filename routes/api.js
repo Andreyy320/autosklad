@@ -2872,7 +2872,7 @@ router.get('/realization_items', async (req, res) => {
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ ВСЕГО И FIFO) ====================
 router.post('/realization_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление запчасти в реализацию с учетом перемещений, ремонтов и FIFO`);
+    console.log(`[POST REQUEST] Добавление запчасти в реализацию (realization_items) с FIFO`);
     console.log(`[BODY]:`, req.body);
 
     const { realization_id, zaphasti_id, quantity, description } = req.body;
@@ -2923,74 +2923,49 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 3. Собираем партии с учетом приходов, перемещений, реализаций и ремонтов
+        // 3. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
+        // Учитываем: уход на другие склады (перемещения), другие реализации, текущую реализацию в черновике ($3) и ремонты
         const batchesQuery = `
-            WITH all_incoming_batches AS (
-                -- Прямые приходы на склад
-                SELECT 
-                    r.id AS batch_id,
-                    r.doc_number AS doc_num,
-                    r.date AS doc_date,
-                    ri.price,
-                    ri.price_rub,
-                    ri.quantity AS qty,
-                    r.warehouse_id AS target_warehouse_id
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
-                WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
-
-                UNION ALL
-
-                -- Приходы через перемещения на этот склад
-                SELECT 
-                    mi.income_document_id AS batch_id,
-                    m.doc_number AS doc_num,
-                    m.date AS doc_date,
-                    mi.price,
-                    mi.price AS price_rub,
-                    mi.quantity AS qty,
-                    m.warehouse_to_id AS target_warehouse_id
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE mi.zaphasti_id = $1 AND m.warehouse_to_id = $2 AND m.is_posted = true
-            ),
-            spent_quantities AS (
-                -- Что ушло через проведенные реализации ИЛИ текущую черновик-реализацию ($3)
-                SELECT rel_i.income_document_id AS batch_id, SUM(rel_i.quantity) as spent_qty
-                FROM realization_items rel_i
-                JOIN realizations rel ON rel_i.realization_id = rel.id
-                WHERE rel_i.zaphasti_id = $1 AND rel.sklad_id = $2 AND (rel.is_posted = true OR rel.id = $3)
-                GROUP BY rel_i.income_document_id
-
-                UNION ALL
-
-                -- Что ушло через отправленные перемещения с этого склада
-                SELECT mi.income_document_id AS batch_id, SUM(mi.quantity) as spent_qty
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE mi.zaphasti_id = $1 AND m.warehouse_from_id = $2 AND m.is_posted = true
-                GROUP BY mi.income_document_id
-
-                UNION ALL
-
-                -- Что ушло через проведенные ремонты с этого склада
-                SELECT rep_i.receipt_id AS batch_id, SUM(rep_i.quantity) as spent_qty
-                FROM repair_items rep_i
-                JOIN repairs rep ON rep_i.repair_id = rep.id
-                WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep.is_posted = true
-                GROUP BY rep_i.receipt_id
-            )
             SELECT 
-                b.batch_id,
-                b.doc_num,
-                b.doc_date,
-                b.price,
-                b.price_rub,
-                b.qty AS initial_qty,
-                COALESCE(s.spent_qty, 0) AS spent_qty
-            FROM all_incoming_batches b
-            LEFT JOIN spent_quantities s ON b.batch_id = s.batch_id
-            ORDER BY b.doc_date ASC, b.batch_id ASC
+                r.id AS receipt_id,
+                r.doc_number AS receipt_doc_number,
+                r.date AS receipt_date,
+                ri.price,
+                ri.price_rub,
+                ri.quantity AS initial_qty,
+                (
+                    COALESCE((
+                        SELECT SUM(mi.quantity) 
+                        FROM move_items mi 
+                        JOIN moves m ON mi.move_id = m.id 
+                        WHERE mi.income_document_id = r.id 
+                          AND mi.zaphasti_id = ri.zaphasti_id 
+                          AND m.warehouse_from_id = r.warehouse_id 
+                          AND m.is_posted = true
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rel_i.quantity) 
+                        FROM realization_items rel_i 
+                        JOIN realizations rel ON rel_i.realization_id = rel.id 
+                        WHERE rel_i.income_document_id = r.id 
+                          AND rel_i.zaphasti_id = ri.zaphasti_id 
+                          AND rel.sklad_id = r.warehouse_id 
+                          AND (rel.is_posted = true OR rel.id = $3)
+                    ), 0) +
+                    COALESCE((
+                        SELECT SUM(rep_i.quantity) 
+                        FROM repair_items rep_i 
+                        JOIN repairs rep ON rep_i.repair_id = rep.id 
+                        WHERE rep_i.receipt_id = r.id 
+                          AND rep_i.zaphast_id = ri.zaphasti_id 
+                          AND rep.warehouse_id = r.warehouse_id 
+                          AND rep.is_posted = true
+                    ), 0)
+                ) AS spent_qty
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
+            ORDER BY r.date ASC, r.id ASC
         `;
 
         const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id, realization_id]);
@@ -3001,8 +2976,8 @@ router.post('/realization_items', async (req, res) => {
             const available = initial - spent;
             const purchasePrice = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
             return {
-                receipt_id: b.batch_id,
-                doc_number: b.doc_num || `ПАРТИЯ-${b.batch_id}`,
+                receipt_id: b.receipt_id,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
                 purchase_price: purchasePrice,
                 available: available > 0 ? available : 0
             };
@@ -3010,7 +2985,8 @@ router.post('/realization_items', async (req, res) => {
 
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
-        console.log(`[FIFO REALIZATION DEBUG] Запрошено: ${requestedQty}, Доступно на складе с учетом всего: ${totalAvailableStock}`);
+        console.log(`[FIFO REALIZATION DEBUG] Запрошено к добавлению: ${requestedQty} шт.`);
+        console.log(`[FIFO REALIZATION DEBUG] Реально доступно на складе с учетом текущего документа:`, totalAvailableStock);
         console.log(`[FIFO REALIZATION DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
@@ -3059,6 +3035,8 @@ router.post('/realization_items', async (req, res) => {
             const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
             const total_rub = Number((takeQty * finalPrice).toFixed(2));
 
+            console.log(`➡️ [FIFO REALIZATION STEP] Партия "${batch.doc_number}" (ID: ${batch.receipt_id}): берем ${takeQty} шт. по закупочной цене ${purchase_price}`);
+
             const insertQuery = `
                 INSERT INTO realization_items (
                     realization_id, zaphasti_id, article, code, name, 
@@ -3094,7 +3072,7 @@ router.post('/realization_items', async (req, res) => {
                 await client.query(
                     `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                      VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [userId, 'INSERT', 'realization_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, receipt_id: batch.receipt_id }), clientIp]
+                    [userId, 'INSERT', 'realization_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, income_document_id: batch.receipt_id }), clientIp]
                 );
             } catch (logErr) {
                 console.error('Ошибка записи audit_logs:', logErr.message);
@@ -3105,10 +3083,11 @@ router.post('/realization_items', async (req, res) => {
 
         if (remainingToDistribute > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество.' });
+            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий прихода.' });
         }
 
         await client.query('COMMIT');
+        console.log(`[SUCCESS] Успешно добавлено строк в реализацию: ${createdRecords.length}`);
         return res.status(201).json(createdRecords.length === 1 ? createdRecords[0] : createdRecords);
 
     } catch (err) {
@@ -3120,6 +3099,7 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
+
 
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
