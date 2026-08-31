@@ -2309,8 +2309,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     }
 
+    // Исправление: убрали добавление carCol в самый низ, если это автострахование или техосмотр
     if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
-        html += await renderField(carCol);
+        if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
+            html += await renderField(carCol);
+        }
     }
 
     html += `
@@ -2535,14 +2538,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            console.group('--- ОТПРАВКА ДАННЫХ ФОРМЫ ---');
-            console.log('Сущность (entity):', entity);
-            console.log('ID родителя (parentId):', parentId);
-            console.log('Метод запроса (method):', method);
-            console.log('URL запроса:', url);
-            console.log('Тело запроса (payload):', data);
-            console.groupEnd();
-
             const response = await fetch(url, {
                 method: method,
                 headers: { 
@@ -2553,7 +2548,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
 
             if (response.ok) {
-                console.log('Успешный ответ сервера.');
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
@@ -2571,9 +2565,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                
                 const errorMsg = errData.error || errData.message || `Ошибка сервера: ${response.status} ${response.statusText}`;
-                console.error('Ошибка ответа сервера:', response.status, errData);
                 
                 showAppNotification(errorMsg, 'error');
                 
@@ -2590,7 +2582,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error('Ошибка сети или исключение в JS:', err);
             showAppNotification('Ошибка соединения с сервером: ' + err.message, 'error');
             
             let errorContainer = formElement.querySelector('#form-error-banner');
