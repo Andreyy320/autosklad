@@ -4865,6 +4865,41 @@ router.put('/move_items/:id', async (req, res) => {
     }
 });
 
+// Функция для записи логов перемещений в таблицу move_logs
+async function writeMoveLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO move_logs (
+                action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
+                zaphasti_id, quantity, price, currency, price_rub, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            [
+                data.action,
+                data.move_id,
+                data.document_number,
+                data.warehouse_from_id,
+                data.warehouse_to_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.currency,
+                data.price_rub,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога перемещения (не критично):', logErr.message);
+    }
+}
 // DELETE /api/move_items/:id - удаление позиции перемещения с возвратом количества на склад-источник
 router.delete('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
