@@ -4323,9 +4323,9 @@ router.delete('/receipt_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим удаляемую позицию прихода и блокируем её, сразу подтягивая номер документа и ID контрагента
+        // 1. Находим удаляемую позицию прихода и блокируем её (используем doc_number и supplier_id)
         const itemCheck = await client.query(`
-            SELECT ri.*, r.receipt_number, r.counterparty_id, z.name AS zaphasti_name, z.sku AS zaphasti_sku 
+            SELECT ri.*, r.doc_number, r.supplier_id, z.name AS zaphasti_name, z.article AS zaphasti_sku 
             FROM receipt_items ri 
             JOIN receipts r ON ri.receipt_id = r.id 
             LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id 
@@ -4397,41 +4397,39 @@ router.delete('/receipt_items/:id', async (req, res) => {
             }
         }
 
-        // Узнаем имя контрагента для лога
+        // Узнаем имя контрагента через supplier_id
         let counterpartyName = null;
-        if (currentItem.counterparty_id) {
-            const cpInfo = await client.query('SELECT name FROM counterparties WHERE id = $1', [currentItem.counterparty_id]);
+        if (currentItem.supplier_id) {
+            const cpInfo = await client.query('SELECT name FROM counterparties WHERE id = $1', [currentItem.supplier_id]);
             counterpartyName = cpInfo.rows.length > 0 ? cpInfo.rows[0].name : null;
         }
 
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
 
-        // 5. Запись в inventory_logs через универсальную функцию с использованием транзакционного клиента
-        try {
-            const reasonText = `Удалена позиция прихода №${currentItem.receipt_number || receipt_id}: ${currentItem.zaphasti_name || 'запчасть'} (кол-во: ${initialQty})`;
+        // 5. Запись в inventory_logs через универсальную функцию внутри транзакции
+        const docNumStr = currentItem.doc_number ? String(currentItem.doc_number) : String(receipt_id);
+        const zaphastiName = currentItem.zaphasti_name || 'запчасть';
+        const reasonText = `Удалена позиция прихода №${docNumStr}: ${zaphastiName} (кол-во: ${initialQty})`;
 
-            await writeInventoryLog(client, {
-                operation_type: 'Приход',
-                action: 'DELETE',
-                document_id: receipt_id,
-                document_number: currentItem.receipt_number ? String(currentItem.receipt_number) : String(receipt_id),
-                user_id: userId,
-                counterparty: counterpartyName,
-                part_id: zaphasti_id,
-                part_name: currentItem.zaphasti_name || null,
-                sku: currentItem.zaphasti_sku || null,
-                quantity: initialQty,
-                price: Number(currentItem.price) || 0,
-                discount: 0,
-                total_amount: Number(currentItem.total_rub) || 0,
-                warehouse_to: null,
-                warehouse_from: null,
-                reason: reasonText
-            });
-        } catch (logErr) {
-            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
-        }
+        await writeInventoryLog(client, {
+            operation_type: 'Приход',
+            action: 'DELETE',
+            document_id: receipt_id,
+            document_number: docNumStr,
+            user_id: userId,
+            counterparty: counterpartyName,
+            part_id: zaphasti_id,
+            part_name: currentItem.zaphasti_name || null,
+            sku: currentItem.zaphasti_sku || null,
+            quantity: initialQty,
+            price: Number(currentItem.price) || 0,
+            discount: 0,
+            total_amount: Number(currentItem.total_rub) || 0,
+            warehouse_to: null,
+            warehouse_from: null,
+            reason: reasonText
+        });
 
         await client.query('COMMIT');
 
@@ -4447,7 +4445,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 
 
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
