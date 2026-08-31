@@ -6706,12 +6706,11 @@ async function checkRemindersOnStart() {
                         <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
                     </div>
                     <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">
-                        <button onclick="checkRemindersOnStart()" style="padding: 6px 14px; cursor: pointer; font-size: 14px; background: #007bff; color: #fff; border: none; border-radius: 4px;">🔄 Обновить</button>
+                        <button onclick="checkRemindersOnStart()" style="padding: 5px 12px; cursor: pointer; font-size: 13px; background: #f8f9fa; color: #333; border: 1px solid #ccc; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px;"><span style="color: #007bff; font-size: 15px;">🔄</span> Обновить</button>
                     </div>
                     <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                             <thead>
-                                <!-- Строка с инпутами для фильтрации (самая первая) -->
                                 <tr style="background: #f8f9fa; text-align: center;">
                                     <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
                                     <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
