@@ -4158,6 +4158,10 @@ document.getElementById('login-form').addEventListener('submit', async function(
             });
 
             loadData('users', 'Пользователи');
+
+            // 👉 ВЫЗЫВАЕМ ОКНО НАПОМИНАНИЙ СРАЗУ ПОСЛЕ УСПЕШНОГО ВХОДА
+            checkRemindersOnStart();
+
         } else {
             errorDiv.style.display = 'block';
             errorDiv.innerText = result.message || 'Ошибка входа';
