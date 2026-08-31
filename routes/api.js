@@ -4282,7 +4282,7 @@ router.delete('/receipt_items/:id', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Находим удаляемую позицию прихода и блокируем её
-        const itemCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE', [itemId]);
+        const itemCheck = await client.query('SELECT ri.*, z.name AS zaphasti_name FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id WHERE ri.id = $1 FOR UPDATE', [itemId]);
         if (itemCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
@@ -4348,13 +4348,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
                     error: `Нельзя удалить позицию из проведенного прихода, так как часть товара (${totalSpent} шт. из ${initialQty} шт.) уже была списана в другие документы (перемещения/продажи/ремонты).` 
                 });
             }
-
-            // Дополнительно можно запретить удаление из проведенного документа вообще, 
-            // даже если ничего не списано (требуется отмена проведения документа):
-            /*
-            await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного документа прихода.' });
-            */
         }
 
         // 4. Удаляем позицию из базы данных
@@ -4362,15 +4355,36 @@ router.delete('/receipt_items/:id', async (req, res) => {
 
         // 5. Лог аудита
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            const detailsObj = {
+                deleted_item: {
+                    id: currentItem.id,
+                    receipt_id: currentItem.receipt_id,
+                    zaphasti_id: currentItem.zaphasti_id,
+                    zaphasti_name: currentItem.zaphasti_name || 'запчасть',
+                    quantity: currentItem.quantity,
+                    price: currentItem.price,
+                    total_rub: currentItem.total_rub
+                }
+            };
+
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'DELETE', 'receipt_items', itemId, JSON.stringify(currentItem), clientIp]
+                [
+                    userId,
+                    'DELETE',
+                    'receipt_items',
+                    itemId,
+                    JSON.stringify(detailsObj),
+                    clientIp
+                ]
             );
         } catch (logErr) {
-            console.error('Ошибка записи audit_logs:', logErr.message);
+            console.error('Ошибка записи лога (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
@@ -4387,7 +4401,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 
 
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
