@@ -728,7 +728,9 @@ tehosmotr: {
             <td>${isPostedHtml}</td>
         `;
     }
-},autostrahovanie: {
+},
+
+autostrahovanie: {
     title: 'Автострахование',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '120px' },
@@ -2130,7 +2132,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     async function renderField(col) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id') return '';
-        if (col.field === 'car_id' && parentId) return '';
+        if (col.field === 'car_id' && parentId && entity !== 'tehosmotr') return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
@@ -2302,6 +2304,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (col.field === 'customer_id' && carCol) {
             html += await renderField(carCol);
         }
+    }
+
+    // Если поле car_id не было выведено вместе с customer_id (например, в техосмотре нет customer_id), выводим его здесь обычным порядком
+    if (carCol && !config.columns.some(c => c.field === 'customer_id')) {
+        html += await renderField(carCol);
     }
 
     html += `
