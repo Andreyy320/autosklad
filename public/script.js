@@ -6708,27 +6708,33 @@ async function checkRemindersOnStart() {
                     <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd; flex-shrink: 0;">
                         <button onclick="checkRemindersOnStart()" style="padding: 6px 14px; cursor: pointer; font-size: 14px; background: #007bff; color: #fff; border: none; border-radius: 4px;">🔄 Обновить</button>
                     </div>
-                    <!-- Обертка с фиксированной шапкой и скроллом для тела таблицы -->
                     <div style="padding: 15px; display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; flex-shrink: 0;">
-                            <thead>
-                                <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
-                                    <th style="padding: 10px; border: 1px solid #ccc; width: 14%;" rowspan="2">Гос. номер</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc; width: 14%;" rowspan="2">Модель</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc; width: 16%;" rowspan="2">Описание</th>
-                                </tr>
-                                <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
-                                    <th style="padding: 8px; border: 1px solid #ccc; width: 14%;">Текущий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc; width: 14%;">Следующий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc; width: 14%;">Текущий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc; width: 14%;">Следующий</th>
-                                </tr>
-                            </thead>
-                        </table>
-                        <div style="overflow-y: auto; flex-grow: 1; max-height: calc(85vh - 180px);">
+                        <div style="overflow-y: auto; flex-grow: 1;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width: 13%;">
+                                    <col style="width: 13%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 18%;">
+                                </colgroup>
+                                <thead>
+                                    <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
+                                        <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
+                                        <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
+                                        <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
+                                        <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
+                                        <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Описание</th>
+                                    </tr>
+                                    <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
+                                        <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                        <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
+                                        <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                        <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
+                                    </tr>
+                                </thead>
                                 <tbody id="reminders-tbody"></tbody>
                             </table>
                         </div>
@@ -6799,13 +6805,13 @@ async function checkRemindersOnStart() {
             };
 
             tr.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%;">${car.gos_number || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%;">${car.model_name || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 14%; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; width: 16%;">${car.description || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
             `;
             tbody.appendChild(tr);
         });
