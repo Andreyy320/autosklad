@@ -2298,7 +2298,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     for (const col of config.columns) {
         if (col.field === 'car_id') continue; 
 
-        if ((col.field === 'autoservice' || col.field === 'end_date') && carCol) {
+        if (col.field === 'autoservice' && carCol) {
             html += await renderField(carCol);
         }
 
@@ -2309,7 +2309,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     }
 
-    if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'end_date') && !config.columns.some(c => c.field === 'customer_id')) {
+    if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
         html += await renderField(carCol);
     }
 
