@@ -5203,7 +5203,6 @@ router.delete('/repair_items/:id', async (req, res) => {
 
 
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
@@ -5339,9 +5338,9 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // Автоматически подставляем user_id из заголовков (поддерживаем x-user-id и user-id)
+        // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и любых других сущностей
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-        if (entity === 'receipts' && !req.body.user_id && currentUserId) {
+        if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs')) {
             req.body.user_id = currentUserId;
         }
 
