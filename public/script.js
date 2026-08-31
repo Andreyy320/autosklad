@@ -4664,22 +4664,26 @@ async function loadData(entity, title, customParams = {}) {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-cars button.active')?.getAttribute('data-tab') || 'car_details';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else if (entity === 'accidents') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-accidents button.active')?.getAttribute('data-tab') || 'accident_items';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else if (entity === 'repairs') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-repairs button.active')?.getAttribute('data-tab') || 'repair_items';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else if (entity === 'realizations') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-realizations button.active')?.getAttribute('data-tab') || 'realization_items';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
@@ -4687,12 +4691,14 @@ async function loadData(entity, title, customParams = {}) {
                 if (customParams.sklad_id) {
                     window.currentSkladId = customParams.sklad_id;
                 }
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-money-receipts button.active')?.getAttribute('data-tab') || 'money_receipts_detail';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+                const activeTab = document.querySelector('#tabs-for-customers button.active')?.getAttribute('data-tab') || 'customer_contacts';
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
             } else {
                 carTabsBar.style.display = 'none';
                 selectedItem = null;
@@ -4706,7 +4712,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
