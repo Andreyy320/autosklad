@@ -126,7 +126,7 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
-                    COALESCE(c.name, 'Покупатель') AS counterparty,
+                    'Покупатель' AS counterparty,
                     COALESCE(ri.name, z.name) AS part_name,
                     COALESCE(ri.article, z.article) AS part_article,
                     COALESCE(ri.quantity, 1) AS quantity,
