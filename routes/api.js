@@ -4310,6 +4310,8 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 // DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
 router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4472,13 +4474,17 @@ router.post('/move_items', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted)
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
         }
 
-        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const warehouseFromId = moveRecord.warehouse_from_id;
+        const warehouseToId = moveRecord.warehouse_to_id;
+        const isPosted = moveRecord.is_posted;
+        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
 
         if (isPosted) {
             await client.query('ROLLBACK');
@@ -4494,6 +4500,11 @@ router.post('/move_items', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
+
+        // Узнаем название и артикул запчасти для логов
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
         // Считаем расход из: 
@@ -4574,7 +4585,7 @@ router.post('/move_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
-        const userId = req.headers['user-id'] || req.body.user_id || null;
+        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 3. Распределяем строго по партиям FIFO
@@ -4611,6 +4622,7 @@ router.post('/move_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
+            // Сохраняем старый audit_logs, как было
             try {
                 await client.query(
                     `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
@@ -4619,6 +4631,32 @@ router.post('/move_items', async (req, res) => {
                 );
             } catch (logErr) {
                 console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+
+            // Добавляем запись в inventory_logs в ту же транзакцию
+            try {
+                const reasonText = `Добавлена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${takeQty}, цена: ${batch.price})`;
+
+                await writeInventoryLog(client, {
+                    operation_type: 'Перемещение',
+                    action: 'INSERT',
+                    document_id: Number(move_id),
+                    document_number: moveDocNumber,
+                    user_id: userId,
+                    counterparty: null,
+                    part_id: zaphasti_id,
+                    part_name: zaphastiName,
+                    sku: partArticle,
+                    quantity: takeQty,
+                    price: batch.price,
+                    discount: 0,
+                    total_amount: totalRub,
+                    warehouse_to: warehouseToId,
+                    warehouse_from: warehouseFromId,
+                    reason: reasonText
+                });
+            } catch (logErr) {
+                console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
             }
 
             remainingToDistribute -= takeQty;
@@ -4644,7 +4682,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 // PUT /api/move_items/:id - редактирование позиции перемещения с исправленным FIFO и учетом других строк текущего документа
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -4671,13 +4708,17 @@ router.put('/move_items/:id', async (req, res) => {
         const zaphasti_id = currentItem.zaphasti_id;
 
         // 2. Проверяем документ перемещения, его склады и статус проведения (is_posted)
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Документ перемещения не найден.' });
         }
 
-        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const warehouseFromId = moveRecord.warehouse_from_id;
+        const warehouseToId = moveRecord.warehouse_to_id;
+        const isPosted = moveRecord.is_posted;
+        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
 
         if (isPosted) {
             await client.query('ROLLBACK');
@@ -4688,6 +4729,11 @@ router.put('/move_items/:id', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'В документе перемещения не указан склад-источник.' });
         }
+
+        // Узнаем название и артикул запчасти для логов
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // Новое количество и цена (если не переданы, берем старые)
         const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
@@ -4813,17 +4859,44 @@ router.put('/move_items/:id', async (req, res) => {
         const result = await client.query(updateQuery, values);
         const updatedRecord = result.rows[0];
 
+        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
         // Лог аудита
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'UPDATE', 'move_items', updatedRecord.id, JSON.stringify(req.body), clientIp]
+                [userId, 'UPDATE', 'move_items', updatedRecord.id, JSON.stringify({ ...req.body, income_document_id: chosenBatch.receipt_id }), clientIp]
             );
         } catch (logErr) {
             console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        // Добавляем запись в inventory_logs в ту же транзакцию
+        try {
+            const reasonText = `Изменена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${requestedQty}, цена: ${finalPrice})`;
+
+            await writeInventoryLog(client, {
+                operation_type: 'Перемещение',
+                action: 'UPDATE',
+                document_id: Number(move_id),
+                document_number: moveDocNumber,
+                user_id: userId,
+                counterparty: null,
+                part_id: zaphasti_id,
+                part_name: zaphastiName,
+                sku: partArticle,
+                quantity: requestedQty,
+                price: finalPrice,
+                discount: 0,
+                total_amount: totalRub,
+                warehouse_to: warehouseToId,
+                warehouse_from: warehouseFromId,
+                reason: reasonText
+            });
+        } catch (logErr) {
+            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
@@ -4862,21 +4935,32 @@ router.delete('/move_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
+        const zaphasti_id = currentItem.zaphasti_id;
+        const initialQty = Number(currentItem.quantity) || 0;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
-        const moveCheck = await client.query('SELECT warehouse_from_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ перемещения не найден.' });
         }
 
-        const { is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const warehouseFromId = moveRecord.warehouse_from_id;
+        const warehouseToId = moveRecord.warehouse_to_id;
+        const isPosted = moveRecord.is_posted;
+        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
 
         // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
         if (isPosted) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного документа перемещения. Сначала отмените проведение документа.' });
         }
+
+        // Узнаем название и артикул запчасти для логов
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // Примечание по логике FIFO: 
         // Так как документ не проведен, эта позиция «занимала» остаток на складе-источнике (warehouse_from_id) 
@@ -4887,10 +4971,11 @@ router.delete('/move_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
+        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
         // 5. Лог аудита
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -4898,6 +4983,32 @@ router.delete('/move_items/:id', async (req, res) => {
             );
         } catch (logErr) {
             console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        // Добавляем запись в inventory_logs в ту же транзакцию
+        try {
+            const reasonText = `Удалена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${initialQty})`;
+
+            await writeInventoryLog(client, {
+                operation_type: 'Перемещение',
+                action: 'DELETE',
+                document_id: Number(move_id),
+                document_number: moveDocNumber,
+                user_id: userId,
+                counterparty: null,
+                part_id: zaphasti_id,
+                part_name: zaphastiName,
+                sku: partArticle,
+                quantity: initialQty,
+                price: Number(currentItem.price) || 0,
+                discount: 0,
+                total_amount: Number(currentItem.total_rub) || 0,
+                warehouse_to: warehouseToId,
+                warehouse_from: warehouseFromId,
+                reason: reasonText
+            });
+        } catch (logErr) {
+            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');

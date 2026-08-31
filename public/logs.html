@@ -68,6 +68,23 @@
 <script>
     let currentType = 'Приход';
 
+    // Функция для получения читаемого названия склада по его ID (если на бэкенде приходят id складов)
+    let warehousesMap = {};
+
+    async function loadWarehouses() {
+        try {
+            const res = await fetch('/api/warehouses');
+            if (res.ok) {
+                const list = await res.json();
+                list.forEach(w => {
+                    warehousesMap[w.id] = w.name;
+                });
+            }
+        } catch (e) {
+            console.error('Не удалось загрузить справочник складов:', e);
+        }
+    }
+
     async function loadLogs(type) {
         currentType = type;
         const tbody = document.getElementById('logs-table-body');
@@ -114,11 +131,18 @@
                     actionBadge = `<span class="badge badge-default">${action}</span>`;
                 }
 
+                // Обработка складов (если с бэкенда приходят ID или названия)
+                let rawFrom = log.warehouse_from;
+                let rawTo = log.warehouse_to;
+
+                if (rawFrom && warehousesMap[rawFrom]) rawFrom = warehousesMap[rawFrom];
+                if (rawTo && warehousesMap[rawTo]) rawTo = warehousesMap[rawTo];
+
                 // Формируем направление / причину / описание
                 let directionOrReason = log.reason || log.description || '';
-                if (log.warehouse_from || log.warehouse_to) {
-                    const whFrom = log.warehouse_from || 'Склад';
-                    const whTo = log.warehouse_to || 'Склад';
+                if (rawFrom || rawTo) {
+                    const whFrom = rawFrom || 'Склад';
+                    const whTo = rawTo || 'Склад';
                     directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
                 }
 
@@ -151,8 +175,11 @@
         loadLogs(type);
     }
 
-    // Загружаем приходы по умолчанию при открытии страницы
-    loadLogs('Приход');
+    // Инициализация при загрузке страницы: подгружаем склады, затем логи по умолчанию
+    window.addEventListener('DOMContentLoaded', async () => {
+        await loadWarehouses();
+        loadLogs('Приход');
+    });
 </script>
 </body>
 </html>
