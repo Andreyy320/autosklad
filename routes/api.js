@@ -4704,13 +4704,14 @@ router.delete('/move_items/:id', async (req, res) => {
         const move_id = currentItem.move_id;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
-        const moveCheck = await client.query('SELECT warehouse_from_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ перемещения не найден.' });
         }
 
-        const { is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted, doc_number: moveDocNum } = moveRecord;
 
         // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
         if (isPosted) {
@@ -4727,10 +4728,11 @@ router.delete('/move_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
+        const userId = req.headers['user-id'] || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
         // 5. Лог аудита
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -4738,6 +4740,36 @@ router.delete('/move_items/:id', async (req, res) => {
             );
         } catch (logErr) {
             console.error('Ошибка записи audit_logs:', logErr.message);
+        }
+
+        // 6. Запись в журнал движения запчастей (inventory_logs) для отображения в интерфейсе
+        try {
+            const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [currentItem.zaphasti_id]);
+            const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+            const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
+            const moveDocNumber = moveDocNum ? String(moveDocNum) : String(move_id);
+            const reasonText = `Удалена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${currentItem.quantity}, цена: ${currentItem.price})`;
+
+            await writeInventoryLog(client, {
+                operation_type: 'Перемещение',
+                action: 'DELETE',
+                document_id: Number(move_id),
+                document_number: moveDocNumber,
+                user_id: userId,
+                counterparty: null,
+                part_id: currentItem.zaphasti_id,
+                part_name: zaphastiName,
+                sku: partArticle,
+                quantity: Number(currentItem.quantity) || 0,
+                price: Number(currentItem.price) || 0,
+                discount: 0,
+                total_amount: Number(currentItem.total_rub) || 0,
+                warehouse_to: warehouseToId,
+                warehouse_from: warehouseFromId,
+                reason: reasonText
+            });
+        } catch (logErr) {
+            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
@@ -4754,41 +4786,6 @@ router.delete('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
-
-// Универсальная функция записи в журнал логов
-async function writeInventoryLog(client, data) {
-    try {
-        await client.query(`
-            INSERT INTO inventory_logs (
-                operation_type, action, document_id, document_number, 
-                user_id, counterparty, part_id, part_name, sku, 
-                quantity, price, discount, total_amount, 
-                warehouse_from, warehouse_to, reason
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        `, [
-            data.operation_type || 'Приход',
-            data.action || 'INSERT',
-            data.document_id || null,
-            data.document_number ? String(data.document_number) : null,
-            data.user_id || null,
-            data.counterparty || null,
-            data.part_id || null,
-            data.part_name || null,
-            data.sku || null,
-            Number(data.quantity) || 0,
-            Number(data.price) || 0,
-            Number(data.discount) || 0,
-            Number(data.total_amount) || 0,
-            data.warehouse_from || null,
-            data.warehouse_to || null,
-            data.reason || ''
-        ]);
-    } catch (err) {
-        console.error('❌ Ошибка записи в inventory_logs:', err.message);
-        throw err;
-    }
-}
 // DELETE /api/move_items/:id - удаление позиции перемещения с возвратом количества на склад-источник
 router.delete('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
