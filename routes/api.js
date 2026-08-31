@@ -4016,10 +4016,10 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
         }
 
-        // Узнаем название и sku запчасти
-        const partRes = await client.query('SELECT name, sku FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        // Узнаем название и артикул (article) запчасти
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
         const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
-        const partSku = partRes.rows.length > 0 ? partRes.rows[0].sku : null;
+        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // Узнаем имя контрагента через supplier_id
         let counterpartyName = null;
@@ -4079,7 +4079,7 @@ router.post('/receipt_items', async (req, res) => {
                 counterparty: counterpartyName,
                 part_id: zaphasti_id,
                 part_name: zaphastiName,
-                sku: partSku,
+                sku: partArticle, // передаем article в поле sku таблицы логов
                 quantity: numQty,
                 price: numPrice,
                 discount: 0,
