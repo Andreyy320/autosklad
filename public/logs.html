@@ -28,7 +28,7 @@
         .badge-update { background: #ffc107; color: #333; }
         .badge-delete { background: #dc3545; color: white; }
         .badge-default { background: #6c757d; color: white; }
-        .json-details { font-family: monospace; font-size: 11px; color: #444; background: #f8f9fa; padding: 4px; border-radius: 4px; max-height: 80px; overflow-y: auto; }
+        .json-details { font-family: monospace; font-size: 11px; color: #444; background: #f8f9fa; padding: 4px; border-radius: 4px; max-height: 100px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -72,6 +72,47 @@
         } catch (e) {
             console.error('Не удалось загрузить справочник складов:', e);
         }
+    }
+
+    // Функция красивого форматирования деталей аудита
+    function formatAuditDetails(log) {
+        let details;
+        try {
+            details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+        } catch (e) {
+            return log.details || '—';
+        }
+
+        if (!details) return '—';
+
+        // ЕСЛИ ЭТО UPDATE (содержит изменения `changes`)
+        if (log.action === 'UPDATE' && details.changes) {
+            let html = '<div style="font-size: 13px;">';
+            for (const [field, val] of Object.entries(details.changes)) {
+                html += `<div style="margin-bottom: 2px;">
+                    <span style="color: #666; font-weight: 500;">${field}:</span> 
+                    <span style="text-decoration: line-through; color: #d9534f;">${val.from ?? 'пусто'}</span> 
+                    ➔ 
+                    <span style="color: #5cb85c; font-weight: 500;">${val.to ?? 'пусто'}</span>
+                </div>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        // ЕСЛИ ЭТО INSERT или DELETE (просто показываем поля и значения списком)
+        if (typeof details === 'object') {
+            let html = '<div style="font-size: 12px; color: #444; max-height: 100px; overflow-y: auto;">';
+            for (const [key, val] of Object.entries(details)) {
+                if (val !== null && val !== '' && val !== undefined) {
+                    html += `<span><b>${key}:</b> ${val}</span>; `;
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        return JSON.stringify(details);
     }
 
     // Динамическое формирование шапки таблицы
@@ -128,7 +169,7 @@
                     <th>Таблица / Сущность</th>
                     <th>ID записи</th>
                     <th>IP-адрес</th>
-                    <th>Детали (JSON)</th>
+                    <th>Детали изменений</th>
                 </tr>
             `;
         } else {
@@ -260,7 +301,6 @@
                         <td>${log.description || '—'}</td>
                     `;
                 } else if (currentType === 'Аудит') {
-                    const detailsFormatted = log.details ? `<div class="json-details">${JSON.stringify(log.details, null, 2)}</div>` : '—';
                     tr.innerHTML = `
                         <td>
                             ${formattedDate}<br>
@@ -270,7 +310,7 @@
                         <td>${log.table_name || log.entity || '—'}</td>
                         <td>${log.record_id || '—'}</td>
                         <td>${log.ip_address || '—'}</td>
-                        <td>${detailsFormatted}</td>
+                        <td>${formatAuditDetails(log)}</td>
                     `;
                 } else {
                     let rawFrom = log.warehouse_from_id || log.warehouse_from;

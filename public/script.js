@@ -6873,3 +6873,5 @@ async function checkRemindersOnStart() {
         console.error('Ошибка показа напоминаний:', e);
     }
 }
+
+
