@@ -31,38 +31,39 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение журнала операций из готовой таблицы inventory_logs
+
+
+
+    // Получение журнала операций из inventory_logs
 router.get('/get-logs', async (req, res) => {
     try {
-        const { type } = req.query;
+        const { type } = req.query; // Ожидает 'Приход', 'Продажа', 'Перемещение', 'Ремонт'
         
-        // Базовый запрос под твою структуру таблицы
         let query = `
             SELECT 
-                operation_type,
-                document_id AS doc_id,
-                COALESCE(document_number, '—') AS doc_number,
+                l.operation_type,
+                l.document_id AS doc_id,
+                COALESCE(l.document_number, '—') AS doc_number,
                 l.created_at,
                 COALESCE(u.name, u.login, 'Система') AS user_name,
-                warehouse_to,
-                warehouse_from,
-                COALESCE(counterparty, '—') AS counterparty,
-                COALESCE(part_name, '—') AS part_name,
-                COALESCE(sku, '—') AS part_article,
-                COALESCE(quantity, 0) AS quantity,
-                COALESCE(price, 0) AS price,
-                COALESCE(discount::text, '—') AS discount,
-                COALESCE(total_amount, 0) AS total_amount,
-                action,
-                COALESCE(reason, '') AS reason
+                l.warehouse_to,
+                l.warehouse_from,
+                COALESCE(l.counterparty, '—') AS counterparty,
+                COALESCE(l.part_name, '—') AS part_name,
+                COALESCE(l.sku, '—') AS part_article,
+                COALESCE(l.quantity, 0) AS quantity,
+                COALESCE(l.price, 0) AS price,
+                COALESCE(l.discount, 0) AS discount,
+                COALESCE(l.total_amount, 0) AS total_amount,
+                l.action,
+                COALESCE(l.reason, '') AS reason
             FROM inventory_logs l
             LEFT JOIN users u ON l.user_id = u.id
         `;
 
-        // Если передан тип (receipt, realization и т.д.), фильтруем по нему
         const queryParams = [];
         if (type) {
-            query += ` WHERE operation_type = $1`;
+            query += ` WHERE l.operation_type = $1`;
             queryParams.push(type);
         }
 
@@ -3975,7 +3976,6 @@ router.get('/expense_items', async (req, res) => {
 
 
 
-
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
     const userId = req.headers['x-user-id'] || null;
@@ -4065,32 +4065,28 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Запись в inventory_logs с использованием универсальной функции и транзакционного клиента
-        try {
-            const docNumStr = parentReceipt.doc_number ? String(parentReceipt.doc_number) : String(receipt_id);
-            const reasonText = `Добавлена новая позиция прихода №${docNumStr}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
+        // 5. Запись в inventory_logs внутри той же транзакции (без отдельного try/catch, чтобы логировалось надежно)
+        const docNumStr = parentReceipt.doc_number ? String(parentReceipt.doc_number) : String(receipt_id);
+        const reasonText = `Добавлена новая позиция прихода №${docNumStr}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
 
-            await writeInventoryLog(client, {
-                operation_type: 'Приход',
-                action: 'INSERT',
-                document_id: receipt_id,
-                document_number: docNumStr,
-                user_id: userId,
-                counterparty: counterpartyName,
-                part_id: zaphasti_id,
-                part_name: zaphastiName,
-                sku: partArticle, // передаем article в поле sku таблицы логов
-                quantity: numQty,
-                price: numPrice,
-                discount: 0,
-                total_amount: totalRub,
-                warehouse_to: null,
-                warehouse_from: null,
-                reason: reasonText
-            });
-        } catch (logErr) {
-            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
-        }
+        await writeInventoryLog(client, {
+            operation_type: 'Приход',
+            action: 'INSERT',
+            document_id: receipt_id,
+            document_number: docNumStr,
+            user_id: userId,
+            counterparty: counterpartyName,
+            part_id: zaphasti_id,
+            part_name: zaphastiName,
+            sku: partArticle,
+            quantity: numQty,
+            price: numPrice,
+            discount: 0,
+            total_amount: totalRub,
+            warehouse_to: null,
+            warehouse_from: null,
+            reason: reasonText
+        });
 
         await client.query('COMMIT');
 
