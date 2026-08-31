@@ -90,10 +90,9 @@ router.get('/get-logs', async (req, res) => {
 });
 
 
+// Универсальная функция записи в журнал логов
 async function writeInventoryLog(client, data) {
     try {
-        const d = data || {};
-
         await client.query(`
             INSERT INTO inventory_logs (
                 operation_type, action, document_id, document_number, 
@@ -103,28 +102,31 @@ async function writeInventoryLog(client, data) {
             ) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         `, [
-            d.operation_type || 'Приход',
-            d.action || 'INSERT',
-            d.document_id || null,
-            d.document_number ? String(d.document_number) : null,
-            d.user_id !== undefined && d.user_id !== null ? Number(d.user_id) : null,
-            d.counterparty || null,
-            d.part_id !== undefined && d.part_id !== null ? Number(d.part_id) : null,
-            d.part_name || null,
-            d.sku || null,
-            Number(d.quantity) || 0,
-            Number(d.price) || 0,
-            Number(d.discount) || 0,
-            Number(d.total_amount) || 0,
-            d.warehouse_from !== null && d.warehouse_from !== undefined ? String(d.warehouse_from) : null,
-            d.warehouse_to !== null && d.warehouse_to !== undefined ? String(d.warehouse_to) : null,
-            d.reason || ''
+            data.operation_type || 'Приход',
+            data.action || 'INSERT',
+            data.document_id || null,
+            data.document_number ? String(data.document_number) : null,
+            data.user_id || null,
+            data.counterparty || null,
+            data.part_id || null,
+            data.part_name || null,
+            data.sku || null,
+            Number(data.quantity) || 0,
+            Number(data.price) || 0,
+            Number(data.discount) || 0,
+            Number(data.total_amount) || 0,
+            data.warehouse_from || null,
+            data.warehouse_to || null,
+            data.reason || ''
         ]);
     } catch (err) {
-        console.error('❌ ОШИБКА записи в inventory_logs:', err.message);
+        console.error('❌ Ошибка записи в inventory_logs:', err.message);
         throw err;
     }
 }
+
+
+
 
 // Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
@@ -4932,20 +4934,15 @@ router.delete('/move_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
-        const zaphasti_id = currentItem.zaphasti_id;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ перемещения не найден.' });
         }
 
-        const moveRecord = moveCheck.rows[0];
-        const warehouseFromId = moveRecord.warehouse_from_id;
-        const warehouseToId = moveRecord.warehouse_to_id;
-        const isPosted = moveRecord.is_posted;
-        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
+        const { is_posted: isPosted } = moveCheck.rows[0];
 
         // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
         if (isPosted) {
@@ -4959,39 +4956,20 @@ router.delete('/move_items/:id', async (req, res) => {
         // При простом удалении строки из базы её «бронь» автоматически снимается, 
         // и товар в исходных партиях (с их родными ценами по 50 и 60 рублей) снова становится полностью доступным на складе-отправителе.
 
-        // Получаем название и артикул запчасти для логов склада
-        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
-        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
-        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
-
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
-        // 5. Запись в inventory_logs (без audit_logs)
+        // 5. Лог аудита
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const reasonText = `Удалена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${currentItem.quantity}, цена: ${currentItem.price})`;
-
-            await writeInventoryLog(client, {
-                operation_type: 'Перемещение',
-                action: 'DELETE',
-                document_id: Number(move_id),
-                document_number: moveDocNumber,
-                user_id: userId,
-                counterparty: null,
-                part_id: zaphasti_id,
-                part_name: zaphastiName,
-                sku: partArticle,
-                quantity: Number(currentItem.quantity) || 0,
-                price: Number(currentItem.price) || 0,
-                discount: 0,
-                total_amount: Number(currentItem.total_rub) || 0,
-                warehouse_to: warehouseToId,
-                warehouse_from: warehouseFromId,
-                reason: reasonText
-            });
+            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body?.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [userId, 'DELETE', 'move_items', itemId, JSON.stringify(currentItem), clientIp]
+            );
         } catch (logErr) {
-            console.error('Ошибка записи в inventory_logs:', logErr.message);
+            console.error('Ошибка записи audit_logs:', logErr.message);
         }
 
         await client.query('COMMIT');
