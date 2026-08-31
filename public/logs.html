@@ -29,11 +29,11 @@
     <a href="/" class="back-btn">← На главную в склад</a>
     <h1>📦 Журнал движения запчастей и операций</h1>
     
-    <!-- Вкладки по типам операций -->
+    <!-- Вкладки по реальным типам операций бэкенда -->
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('arrival', this)">📥 Приходы</button>
-        <button class="tab-btn" onclick="switchTab('sale', this)">🛒 Продажи / Расходы</button>
-        <button class="tab-btn" onclick="switchTab('movement', this)">🔄 Перемещения</button>
+        <button class="tab-btn active" onclick="switchTab('receipt', this)">📥 Приходы</button>
+        <button class="tab-btn" onclick="switchTab('realization', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('move', this)">🔄 Перемещения</button>
         <button class="tab-btn" onclick="switchTab('repair', this)">🔧 Ремонт</button>
     </div>
 
@@ -59,7 +59,7 @@
 </div>
 
 <script>
-    let currentType = 'arrival';
+    let currentType = 'receipt';
 
     async function loadLogs(type) {
         currentType = type;
@@ -67,7 +67,8 @@
         tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
 
         try {
-            const response = await fetch(`/api/inventory-logs?type=${type}`);
+            // Обращаемся к нашему бэкенд роутеру /get-logs
+            const response = await fetch(`/get-logs?type=${type}`);
             const logs = await response.json();
             
             tbody.innerHTML = '';
@@ -80,11 +81,11 @@
             logs.forEach(log => {
                 const tr = document.createElement('tr');
                 
-                // Форматируем дату красиво
+                // Форматируем дату
                 const dateObj = new Date(log.created_at);
                 const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
 
-                // Формируем направление (откуда -> куда) или причину
+                // Формируем направление (откуда -> куда)
                 let directionOrReason = log.reason || '';
                 if (log.warehouse_from || log.warehouse_to) {
                     directionOrReason = `${log.warehouse_from || 'Склад'} ➔ ${log.warehouse_to || 'Склад'} ${log.reason ? '(' + log.reason + ')' : ''}`;
@@ -93,13 +94,13 @@
                 tr.innerHTML = `
                     <td>${formattedDate}</td>
                     <td><strong>${log.user_name || 'Система'}</strong></td>
-                    <td>${log.document_number || '—'}</td>
+                    <td>${log.doc_number || '—'}</td>
                     <td>${log.counterparty || '—'}</td>
-                    <td>${log.part_name || '—'} <br><small style="color: #666;">Арт: ${log.sku || '—'}</small></td>
+                    <td>${log.part_name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || '—'}</small></td>
                     <td class="text-center"><strong>${log.quantity}</strong></td>
-                    <td class="text-right">${Number(log.price).toLocaleString()} руб.</td>
-                    <td class="text-right">${log.discount}%</td>
-                    <td class="text-right"><strong>${Number(log.total_amount).toLocaleString()} руб.</strong></td>
+                    <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                    <td class="text-right">—</td>
+                    <td class="text-right"><strong>${Number(log.total_amount || 0).toLocaleString()} руб.</strong></td>
                     <td>${directionOrReason}</td>
                 `;
                 tbody.appendChild(tr);
@@ -117,7 +118,7 @@
     }
 
     // Загружаем приходы при открытии страницы по умолчанию
-    loadLogs('arrival');
+    loadLogs('receipt');
 </script>
 
 </body>

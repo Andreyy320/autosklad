@@ -31,49 +31,129 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-
-// 1. Получение списка товарных логов с фильтрацией по вкладкам (GET)
+// 1. Получение детального журнала товарных операций (GET)
 router.get('/get-logs', async (req, res) => {
     try {
-        const { type } = req.query; // Получаем тип из параметров запроса (например: ?type=arrival)
+        const { type } = req.query; // Получаем тип: receipt, move, repair, realization
         
         let query = `
-            SELECT 
-                inventory_logs.id, 
-                users.login AS user_name, 
-                inventory_logs.operation_type,
-                inventory_logs.document_id,
-                inventory_logs.document_number,
-                inventory_logs.counterparty,
-                inventory_logs.part_id,
-                inventory_logs.part_name,
-                inventory_logs.sku,
-                inventory_logs.quantity,
-                inventory_logs.price,
-                inventory_logs.discount,
-                inventory_logs.total_amount,
-                inventory_logs.warehouse_from,
-                inventory_logs.warehouse_to,
-                inventory_logs.reason,
-                inventory_logs.created_at 
-            FROM inventory_logs 
-            LEFT JOIN users ON inventory_logs.user_id = users.id
+            SELECT * FROM (
+                -- 1. ПРИХОДЫ (receipt_items)
+                SELECT 
+                    'receipt' AS operation_type,
+                    r.id AS doc_id,
+                    r.doc_number,
+                    COALESCE(r.fact_date, r.created_at, NOW()) AS created_at,
+                    COALESCE(u.name, u.login, 'Система') AS user_name,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    p.name AS counterparty,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    ri.quantity,
+                    ri.price,
+                    (ri.quantity * ri.price) AS total_amount,
+                    CONCAT('Приход от поставщика: ', COALESCE(p.name, '—')) AS reason
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+                LEFT JOIN skladi s ON r.warehouse_id = s.id
+                LEFT JOIN postavhik p ON r.supplier_id = p.id
+                LEFT JOIN mol m ON r.mol_id = m.id
+                LEFT JOIN users u ON m.user_id = u.id
+
+                UNION ALL
+
+                -- 2. ПЕРЕМЕЩЕНИЯ (move_items)
+                SELECT 
+                    'move' AS operation_type,
+                    m.id AS doc_id,
+                    m.doc_number,
+                    COALESCE(m.fact_date, m.created_at, NOW()) AS created_at,
+                    COALESCE(uf.name, uf.login, 'Система') AS user_name,
+                    wt.name AS warehouse_to,
+                    wf.name AS warehouse_from,
+                    NULL AS counterparty,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    mi.quantity,
+                    COALESCE(ri_orig.price, mi.price, 0) AS price,
+                    (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
+                    CONCAT('Перемещение со склада "', wf.name, '" на склад "', wt.name, '"') AS reason
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
+                LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
+                LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
+                LEFT JOIN mol mf ON m.mol_from_id = mf.id
+                LEFT JOIN users uf ON mf.user_id = uf.id
+                LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
+
+                UNION ALL
+
+                -- 3. РЕМОНТЫ (repair_items)
+                SELECT 
+                    'repair' AS operation_type,
+                    rep.id AS doc_id,
+                    rep.doc_number,
+                    COALESCE(rep.fact_date, rep.created_at, NOW()) AS created_at,
+                    COALESCE(u.name, u.login, 'Система') AS user_name,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    ri.quantity,
+                    ri.price,
+                    (ri.quantity * ri.price) AS total_amount,
+                    CONCAT('Списание на ремонт машины (', COALESCE(c.gos_number, '—'), ')') AS reason
+                FROM repair_items ri
+                JOIN repairs rep ON ri.repair_id = rep.id
+                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+                LEFT JOIN skladi s ON rep.warehouse_id = s.id
+                LEFT JOIN cars c ON rep.car_id = c.id
+                LEFT JOIN mol m ON rep.mol_id = m.id
+                LEFT JOIN users u ON m.user_id = u.id
+
+                UNION ALL
+
+                -- 4. РЕАЛИЗАЦИИ (realization_items)
+                SELECT 
+                    'realization' AS operation_type,
+                    rz.id AS doc_id,
+                    rz.doc_number,
+                    COALESCE(rz.fact_date, rz.created_at, NOW()) AS created_at,
+                    COALESCE(u.name, u.login, 'Система') AS user_name,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    rz.client_name AS counterparty,
+                    COALESCE(ri.name, z.name) AS part_name,
+                    COALESCE(ri.article, z.article) AS part_article,
+                    COALESCE(ri.quantity, 1) AS quantity,
+                    COALESCE(ri.price, 0) AS price,
+                    COALESCE(ri.total_rub, 0) AS total_amount,
+                    CONCAT('Продажа клиенту: ', COALESCE(rz.client_name, '—')) AS reason
+                FROM realization_items ri
+                JOIN realization rz ON ri.realization_id = rz.id
+                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+                LEFT JOIN skladi s ON rz.warehouse_id = s.id
+                LEFT JOIN users u ON rz.user_id = u.id
+            ) AS combined_logs
         `;
 
         const params = [];
-        
-        // Если передан конкретный тип вкладки — фильтруем по нему
+        // Фильтрация по вкладкам (?type=receipt или realization и т.д.)
         if (type) {
-            query += ` WHERE inventory_logs.operation_type = $1`;
+            query += ` WHERE operation_type = $1`;
             params.push(type);
         }
-        
-        query += ` ORDER BY inventory_logs.created_at DESC LIMIT 150`;
+
+        query += ` ORDER BY created_at DESC LIMIT 200`;
 
         const result = await pool.query(query, params);
         return res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения товарных логов:', err.message);
+        console.error('Ошибка получения детального журнала логов:', err.message);
         return res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -83,18 +163,16 @@ router.get('/logs', (req, res) => {
     res.sendFile(path.join(__dirname, '../logs.html'));
 });
 
-    // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
-    router.get('/users', async (req, res) => {
-       
-        try {
-            const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
-            return res.json(result.rows);
-        } catch (err) {
-            console.error('>>> [API ОШИБКА] в /users:', err.message);
-            return res.status(500).send(err.message);
-        }
-    });
-
+// 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
+router.get('/users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('>>> [API ОШИБКА] в /users:', err.message);
+        return res.status(500).send(err.message);
+    }
+});
 
     // ПОЛУЧЕНИЕ СПИСКА МОЛ (mol_users)
     router.get('/mol_users', async (req, res) => {
