@@ -43,7 +43,7 @@ router.get('/get-logs', async (req, res) => {
                     'receipt' AS operation_type,
                     r.id AS doc_id,
                     r.doc_number,
-                    COALESCE(r.fact_date, r.doc_date, NOW()) AS created_at,
+                    COALESCE(r.fact_date, r.date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -69,7 +69,7 @@ router.get('/get-logs', async (req, res) => {
                     'move' AS operation_type,
                     m.id AS doc_id,
                     m.doc_number,
-                    COALESCE(m.fact_date, m.doc_date, NOW()) AS created_at,
+                    COALESCE(m.fact_date, m.date, NOW()) AS created_at,
                     COALESCE(uf.name, uf.login, 'Система') AS user_name,
                     wt.name AS warehouse_to,
                     wf.name AS warehouse_from,
@@ -122,7 +122,7 @@ router.get('/get-logs', async (req, res) => {
                     'realization' AS operation_type,
                     rz.id AS doc_id,
                     rz.doc_number,
-                    COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
+                    COALESCE(rz.fact_date, rz.date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -142,7 +142,6 @@ router.get('/get-logs', async (req, res) => {
         `;
 
         const params = [];
-        // Фильтрация по вкладкам (?type=receipt или realization и т.д.)
         if (type) {
             query += ` WHERE operation_type = $1`;
             params.push(type);
