@@ -36,12 +36,12 @@
     <a href="/" class="back-btn">← На главную в склад</a>
     <h1>📦 Журнал движения запчастей и операций</h1>
     
-    <!-- Вкладки синхронизированы с русскими значениями operation_type в БД -->
+    <!-- Вкладки со своими эндпоинтами -->
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('Приход', this)">📥 Приходы</button>
-        <button class="tab-btn" onclick="switchTab('Продажа', this)">🛒 Продажи / Расходы</button>
-        <button class="tab-btn" onclick="switchTab('Перемещение', this)">🔄 Перемещения</button>
-        <button class="tab-btn" onclick="switchTab('Ремонт', this)">🔧 Ремонт</button>
+        <button class="tab-btn active" onclick="switchTab('Приход', '/api/get-receipt-logs', this)">📥 Приходы</button>
+        <button class="tab-btn" onclick="switchTab('Продажа', '/api/get-sale-logs', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)">🔄 Перемещения</button>
+        <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)">🔧 Ремонт</button>
     </div>
 
     <table>
@@ -85,15 +85,15 @@
         }
     }
 
-    async function loadLogs(type) {
+    async function loadLogs(type, endpoint) {
         currentType = type;
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
 
-        console.log(`🌐 Фронтенд: отправляем запрос на /api/get-logs?type=${type}`);
+        console.log(`🌐 Фронтенд: отправляем запрос на ${endpoint}`);
 
         try {
-            const response = await fetch(`/api/get-logs?type=${type}`);
+            const response = await fetch(endpoint);
             
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
@@ -169,16 +169,16 @@
         }
     }
 
-    function switchTab(type, buttonElement) {
+    function switchTab(type, endpoint, buttonElement) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         buttonElement.classList.add('active');
-        loadLogs(type);
+        loadLogs(type, endpoint);
     }
 
-    // Инициализация при загрузке страницы: подгружаем склады, затем логи по умолчанию
+    // Инициализация при загрузке страницы: подгружаем склады, затем логи приходов по умолчанию
     window.addEventListener('DOMContentLoaded', async () => {
         await loadWarehouses();
-        loadLogs('Приход');
+        loadLogs('Приход', '/api/get-receipt-logs');
     });
 </script>
 </body>
