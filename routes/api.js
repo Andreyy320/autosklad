@@ -1064,10 +1064,10 @@ router.get('/reminders', async (req, res) => {
             )
             SELECT * FROM calculated_reminders
             WHERE 
-                (pto_current IS NOT NULL AND pto_current <= CURRENT_DATE) OR
-                (pto_next IS NOT NULL AND pto_next <= CURRENT_DATE) OR
-                (insurance_current IS NOT NULL AND insurance_current <= CURRENT_DATE) OR
-                (insurance_next IS NOT NULL AND insurance_next <= CURRENT_DATE)
+                (pto_current IS NOT NULL AND pto_current < CURRENT_DATE) OR
+                (pto_next IS NOT NULL AND pto_next < CURRENT_DATE) OR
+                (insurance_current IS NOT NULL AND insurance_current < CURRENT_DATE) OR
+                (insurance_next IS NOT NULL AND insurance_next < CURRENT_DATE)
             ORDER BY id ASC
         `;
         const result = await pool.query(query);
