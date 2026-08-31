@@ -31,12 +31,12 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение журнала приходов из новой таблицы операций
+// 1. Получение журнала приходов напрямую из таблиц receipts и receipt_items
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        // Фильтруем по типу операции (для приходов)
+        // Если запрашивают другой тип операций, возвращаем пустой массив
         if (type && type !== 'receipt') {
             return res.json([]);
         }
@@ -44,27 +44,26 @@ router.get('/get-logs', async (req, res) => {
         const query = `
             SELECT 
                 'receipt' AS operation_type,
-                l.id AS doc_id,
-                COALESCE(l.doc_number, '—') AS doc_number,
-                l.created_at AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
+                r.id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                COALESCE(r.fact_date, r.date, NOW()) AS created_at,
+                'Система' AS user_name,
                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
-                COALESCE(z.name, l.part_name, 'Документ прихода') AS part_name,
-                COALESCE(z.article, l.part_article, '—') AS part_article,
-                COALESCE(l.quantity, 0) AS quantity,
-                COALESCE(l.price, 0) AS price,
-                (COALESCE(l.quantity, 0) * COALESCE(l.price, 0)) AS total_amount,
-                COALESCE(l.action, 'INSERT') AS action,
-                COALESCE(l.reason, CONCAT('Приход №', COALESCE(l.doc_number, '—'))) AS reason
-            FROM inventory_logs l
-            LEFT JOIN zaphasti z ON l.part_id = z.id
-            LEFT JOIN skladi s ON l.warehouse_id = s.id
-            LEFT JOIN postavhik p ON l.supplier_id = p.id
-            LEFT JOIN users u ON l.user_id = u.id
-            WHERE l.operation_type = 'receipt'
-            ORDER BY l.created_at DESC
+                COALESCE(z.name, 'Документ прихода') AS part_name,
+                COALESCE(z.article, '—') AS part_article,
+                COALESCE(ri.quantity, 0) AS quantity,
+                COALESCE(ri.price_rub, ri.price, 0) AS price,
+                COALESCE(ri.total_rub, (COALESCE(ri.quantity, 0) * COALESCE(ri.price_rub, ri.price, 0)), 0) AS total_amount,
+                'INSERT' AS action,
+                CONCAT('Приход №', COALESCE(r.doc_number, '—'), CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END) AS reason
+            FROM receipt_items ri
+            JOIN receipts r ON ri.receipt_id = r.id
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            LEFT JOIN skladi s ON r.warehouse_id = s.id
+            LEFT JOIN postavhik p ON r.supplier_id = p.id
+            ORDER BY COALESCE(r.fact_date, r.date) DESC
             LIMIT 200
         `;
 
