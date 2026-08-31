@@ -36,7 +36,7 @@ router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        // Базовый запрос под твою структуру таблицы (с добавлением псевдонима для created_at)
+        // Базовый запрос под твою структуру таблицы
         let query = `
             SELECT 
                 operation_type,
@@ -51,7 +51,7 @@ router.get('/get-logs', async (req, res) => {
                 COALESCE(sku, '—') AS part_article,
                 COALESCE(quantity, 0) AS quantity,
                 COALESCE(price, 0) AS price,
-                COALESCE(discount, '—') AS discount,
+                COALESCE(discount::text, '—') AS discount,
                 COALESCE(total_amount, 0) AS total_amount,
                 action,
                 COALESCE(reason, '') AS reason
