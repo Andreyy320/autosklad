@@ -3979,7 +3979,6 @@ router.get('/get-receipt-logs', async (req, res) => {
     }
 });
 
-// GET /api/get-move-logs - получение логов перемещений с учетом твоей структуры таблиц
 router.get('/get-move-logs', async (req, res) => {
     try {
         const query = `
@@ -3987,7 +3986,7 @@ router.get('/get-move-logs', async (req, res) => {
                 ml.*,
                 z.name AS part_name,
                 z.article AS part_article,
-                u.username AS user_name,
+                u.name AS user_name,
                 wh_from.name AS warehouse_from_name,
                 wh_to.name AS warehouse_to_name
             FROM move_logs ml
