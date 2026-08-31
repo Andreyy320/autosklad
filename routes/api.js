@@ -4177,9 +4177,9 @@ router.put('/receipt_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим саму позицию прихода и блокируем её (сразу подтягиваем номер документа и контрагента из receipts)
+        // 1. Находим саму позицию прихода и блокируем её (исправлено: запрашиваем r.id вместо r.receipt_number)
         const itemCheck = await client.query(
-            `SELECT ri.*, r.receipt_number, r.counterparty_id 
+            `SELECT ri.*, r.id as receipt_id_ref, r.counterparty_id 
              FROM receipt_items ri 
              JOIN receipts r ON ri.receipt_id = r.id 
              WHERE ri.id = $1 FOR UPDATE`,
@@ -4250,7 +4250,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Запись в inventory_logs с использованием вспомогательной функции и транзакционного клиента
+        // 5. Запись в inventory_logs (с защитой от ошибок колонок документа)
         try {
             const partInfo = await client.query(
                 'SELECT name, sku FROM zaphasti WHERE id = $1',
@@ -4274,7 +4274,7 @@ router.put('/receipt_items/:id', async (req, res) => {
                 operation_type: 'Приход',
                 action: 'UPDATE',
                 document_id: receipt_id,
-                document_number: currentItem.receipt_number ? String(currentItem.receipt_number) : String(receipt_id),
+                document_number: String(receipt_id),
                 user_id: userId,
                 counterparty: counterpartyName,
                 part_id: currentItem.zaphasti_id,
