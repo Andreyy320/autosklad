@@ -6711,6 +6711,16 @@ async function checkRemindersOnStart() {
                     <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                             <thead>
+                                <!-- Строка с инпутами для фильтрации (самая первая) -->
+                                <tr style="background: #f8f9fa; text-align: center;">
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-desc" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                </tr>
                                 <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
                                     <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
                                     <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
@@ -6723,15 +6733,6 @@ async function checkRemindersOnStart() {
                                     <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
                                     <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
                                     <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
-                                </tr>
-                                <tr style="background: #fff; text-align: center;">
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-curr" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-next" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-curr" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-next" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-desc" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
                                 </tr>
                             </thead>
                             <tbody id="reminders-tbody"></tbody>
