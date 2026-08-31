@@ -4865,8 +4865,6 @@ router.put('/move_items/:id', async (req, res) => {
     }
 });
 
-
-}
 // DELETE /api/move_items/:id - удаление позиции перемещения с возвратом количества на склад-источник
 router.delete('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
