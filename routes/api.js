@@ -4153,8 +4153,9 @@ router.put('/receipt_items/:id', async (req, res) => {
         description
     } = req.body;
 
-    console.log(`\n--- [DEBUG] Запрос на обновление позиции ID: ${itemId} ---`);
-    console.log('📦 Полученные данные в req.body:', req.body);
+    console.log(`\n========================================`);
+    console.log(`📥 [DEBUG] Входящий PUT запрос на /api/receipt_items/${itemId}`);
+    console.log(`📦 [DEBUG] Тело запроса (req.body):`, req.body);
 
     const client = await pool.connect();
     try {
@@ -4167,14 +4168,14 @@ router.put('/receipt_items/:id', async (req, res) => {
         );
 
         if (itemCheck.rows.length === 0) {
-            console.log(`❌ Ошибка: Позиция с ID ${itemId} не найдена в receipt_items.`);
+            console.log(`❌ [DEBUG] Ошибка: Позиция с ID ${itemId} не найдена в receipt_items.`);
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
         }
 
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
-        console.log('🔍 Текущие данные строки из БД до изменения:', currentItem);
+        console.log(`🔍 [DEBUG] Найдена текущая позиция в БД:`, currentItem);
 
         // 2. Проверяем, проведен ли родительский документ (receipts)
         const receiptCheck = await client.query(
@@ -4183,16 +4184,16 @@ router.put('/receipt_items/:id', async (req, res) => {
         );
 
         if (receiptCheck.rows.length === 0) {
-            console.log(`❌ Ошибка: Родительский документ ID ${receipt_id} не найден.`);
+            console.log(`❌ [DEBUG] Ошибка: Родительский документ ID ${receipt_id} не найден.`);
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ прихода не найден.' });
         }
 
         const isPostedVal = receiptCheck.rows[0].is_posted;
-        console.log(`🔒 Статус проведения документа (is_posted):`, isPostedVal);
+        console.log(`🔒 [DEBUG] Статус проведения документа (is_posted):`, isPostedVal);
 
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === '2' || isPostedVal === 1 || isPostedVal === '1') {
-            console.log('⛔ Попытка изменить проведенный документ заблокирована.');
+            console.log(`⛔ [DEBUG] Отказ: попытка изменить запчасти в проведенном документе.`);
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
         }
@@ -4205,10 +4206,10 @@ router.put('/receipt_items/:id', async (req, res) => {
         const curr = currency !== undefined ? currency : currentItem.currency;
         const desc = description !== undefined ? description : currentItem.description;
 
-        console.log(`🧮 Расчёт новых значений -> Цена: ${numPrice}, Кол-во: ${numQty}, Итого: ${totalRub}`);
+        console.log(`🧮 [DEBUG] Рассчитанные значения -> Цена: ${numPrice}, Кол-во: ${numQty}, Итого: ${totalRub}`);
 
         if (numQty <= 0) {
-            console.log('⚠️ Ошибка: Количество меньше или равно нулю.');
+            console.log(`⚠️ [DEBUG] Ошибка: количество меньше или равно нулю (${numQty}).`);
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
@@ -4238,7 +4239,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
-        console.log('✅ Успешно обновлено в receipt_items:', updatedItem);
+        console.log(`✅ [DEBUG] Успешно обновлено в receipt_items:`, updatedItem);
 
         // 5. Автоматическая запись лога (каждое изменение добавляет новую строку в лог через INSERT)
         try {
@@ -4260,7 +4261,7 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            console.🔍 changes = '🔍 Зафиксированные изменения для лога:', changes;
+            console.log(`🔍 [DEBUG] Выявленные изменения для лога:`, changes);
 
             // Записываем в audit_logs только при наличии реальных изменений
             if (Object.keys(changes).length > 0) {
@@ -4269,7 +4270,7 @@ router.put('/receipt_items/:id', async (req, res) => {
                     changes: changes
                 };
 
-                const logInsertRes = await client.query(
+                const logResult = await client.query(
                     `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
                     [
@@ -4281,16 +4282,16 @@ router.put('/receipt_items/:id', async (req, res) => {
                         clientIp
                     ]
                 );
-                console.log('📝 Новая запись успешно добавлена в audit_logs:', logInsertRes.rows[0]);
+                console.log(`📝 [DEBUG] Новая строка успешно добавлена в audit_logs:`, logResult.rows[0]);
             } else {
-                console.log('ℹ️ Реальных изменений полей не обнаружено, запись в audit_logs пропущена.');
+                console.log(`ℹ️ [DEBUG] Изменений полей не обнаружено, запись в audit_logs пропущена.`);
             }
         } catch (logErr) {
-            console.error('❌ Ошибка записи лога (не критично):', logErr.message);
+            console.error('❌ [DEBUG] Ошибка записи лога (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
-        console.log('🎉 Транзакция успешно закоммичена (COMMIT).\n');
+        console.log(`🎉 [DEBUG] Транзакция успешно закоммичена (COMMIT).\n========================================`);
 
         return res.status(200).json({
             message: 'Позиция прихода успешно обновлена',
@@ -4299,7 +4300,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('💥 ПОЛНАЯ ОШИБКА БД при обновлении позиции прихода:', {
+        console.error('💥 [DEBUG] ПОЛНАЯ ОШИБКА БД при обновлении позиции прихода:', {
             message: error.message,
             detail: error.detail,
             hint: error.hint,
