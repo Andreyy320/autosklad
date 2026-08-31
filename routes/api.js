@@ -3979,50 +3979,31 @@ router.get('/get-receipt-logs', async (req, res) => {
     }
 });
 
-// 1. Получение журнала операций для перемещений из таблицы move_logs (GET)
+// GET /api/get-move-logs - получение логов перемещений
 router.get('/get-move-logs', async (req, res) => {
     try {
-        let query = `
+        const query = `
             SELECT 
-                'move' AS operation_type,
-                ml.move_id AS doc_id,
-                COALESCE(m.doc_number, '—') AS doc_number,
-                ml.created_at AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
-                s_to.name AS warehouse_to,
-                s_from.name AS warehouse_from,
-                NULL AS counterparty,
-                COALESCE(z.name, 'Документ перемещения') AS part_name,
-                COALESCE(z.article, '—') AS part_article,
-                ml.quantity AS quantity,
-                ml.price AS price,
-                ml.total_rub AS total_amount,
-                ml.action AS action,
-                CONCAT(
-                    'Перемещение №', COALESCE(m.doc_number, '—'),
-                    CASE WHEN s_from.name IS NOT NULL AND s_to.name IS NOT NULL THEN CONCAT(' с ', s_from.name, ' на ', s_to.name) ELSE '' END,
-                    CASE 
-                        WHEN ml.action = 'INSERT' THEN ' [Добавлена позиция / Документ создан]'
-                        WHEN ml.action = 'UPDATE' THEN ' [Изменена позиция / Документ]'
-                        WHEN ml.action = 'DELETE' THEN ' [Удалена позиция из перемещения]'
-                        ELSE CONCAT(' [', ml.action, ']')
-                    END
-                ) AS reason
+                ml.*,
+                m.doc_number,
+                z.name AS part_name,
+                z.article AS part_article,
+                u.username AS user_name,
+                wh_from.name AS warehouse_from_name,
+                wh_to.name AS warehouse_to_name
             FROM move_logs ml
             LEFT JOIN moves m ON ml.move_id = m.id
             LEFT JOIN zaphasti z ON ml.zaphasti_id = z.id
-            LEFT JOIN skladi s_from ON ml.warehouse_from_id = s_from.id
-            LEFT JOIN skladi s_to ON ml.warehouse_to_id = s_to.id
             LEFT JOIN users u ON ml.user_id = u.id
+            LEFT JOIN warehouses wh_from ON ml.warehouse_from_id = wh_from.id
+            LEFT JOIN warehouses wh_to ON ml.warehouse_to_id = wh_to.id
             ORDER BY ml.created_at DESC
-            LIMIT 200
         `;
-
         const result = await pool.query(query);
-        return res.json(result.rows);
+        res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения журнала перемещений:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера при получении логов перемещений: ' + err.message });
+        console.error('Ошибка получения логов перемещений:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при получении логов перемещений' });
     }
 });
 
