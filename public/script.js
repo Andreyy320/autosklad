@@ -1948,105 +1948,8 @@ expenses_by_receipts: {
 
 
 
-// Функция для проверки и показа окна напоминаний при старте
-async function checkRemindersOnStart() {
-    try {
-        // Укажи правильный путь, если у роутера есть префикс (например, /api/reminders)
-        const response = await fetch('api/reminders'); 
-        const cars = await response.json();
 
-        if (!cars || cars.length === 0) return;
 
-        let modal = document.getElementById('reminders-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'reminders-modal';
-            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;';
-            modal.innerHTML = `
-                <div style="background: #fff; width: 900px; max-height: 85vh; border-radius: 6px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
-                    <div style="background: #f0f0f0; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
-                        <h3 style="margin: 0; font-size: 16px; color: #333;">Напоминания</h3>
-                        <button id="close-reminders" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
-                    </div>
-                    <div style="padding: 8px 15px; background: #fafafa; border-bottom: 1px solid #ddd;">
-                        <button onclick="checkRemindersOnStart()" style="padding: 4px 10px; cursor: pointer; font-size: 13px;">🔄 Обновить</button>
-                    </div>
-                    <div style="padding: 10px; overflow-y: auto; flex-grow: 1;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                            <thead>
-                                <tr style="background: #e5e5e5; text-align: center;">
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Модель</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Описание</th>
-                                </tr>
-                                <tr style="background: #eee; text-align: center;">
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
-                                </tr>
-                            </thead>
-                            <tbody id="reminders-tbody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-
-            document.getElementById('close-reminders').addEventListener('click', () => {
-                modal.style.display = 'none';
-            });
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.style.display = 'none';
-            });
-        }
-
-        const tbody = document.getElementById('reminders-tbody');
-        tbody.innerHTML = '';
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        cars.forEach(car => {
-            const tr = document.createElement('tr');
-
-            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
-            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
-            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
-            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
-
-            const isPtoCurrRed = ptoCurr && ptoCurr < today;
-            const isPtoNextRed = ptoNext && ptoNext < today;
-            const isInsCurrRed = insCurr && insCurr < today;
-            const isInsNextRed = insNext && insNext < today;
-
-            const formatDate = (d) => d ? new Date(d).toISOString().split('T')[0].split('-').reverse().join('.') : '';
-
-            tr.innerHTML = `
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${car.gos_number || ''}</td>
-                <td style="padding: 6px; border: 1px solid #ddd;">${car.model_name || ''}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoCurrRed ? '#e60000' : 'transparent'}; color: ${isPtoCurrRed ? '#fff' : '#000'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoNextRed ? '#e60000' : 'transparent'}; color: ${isPtoNextRed ? '#fff' : '#000'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsCurrRed ? '#e60000' : 'transparent'}; color: ${isInsCurrRed ? '#fff' : '#000'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsNextRed ? '#e60000' : 'transparent'}; color: ${isInsNextRed ? '#fff' : '#000'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd;">${car.description || ''}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        modal.style.display = 'flex';
-
-    } catch (e) {
-        console.error('Ошибка показа напоминаний:', e);
-    }
-}
-
-// Запуск при входе в программу
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(checkRemindersOnStart, 800);
-});
 
 
 function getConfig(entity) {
@@ -4159,8 +4062,10 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
             loadData('users', 'Пользователи');
 
-            // 👉 ВЫЗЫВАЕМ ОКНО НАПОМИНАНИЙ СРАЗУ ПОСЛЕ УСПЕШНОГО ВХОДА
-            checkRemindersOnStart();
+            // 👉 Автоматический вызов окна напоминаний поверх программы сразу после входа
+            if (typeof checkRemindersOnStart === 'function') {
+                checkRemindersOnStart();
+            }
 
         } else {
             errorDiv.style.display = 'block';
@@ -4171,7 +4076,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
-
 function logout() {
     localStorage.clear(); 
     location.reload();
@@ -6437,8 +6341,7 @@ const navMap = {
     'Расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
     'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
     'Накладные поставщика': 'expenses_by_receipts',
-    'Спецификация расходов': 'expense_items',
-    'Напоминание':'reminders'         // Поменяли "Детали расходов" для единообразия
+    'Спецификация расходов': 'expense_items'         // Поменяли "Детали расходов" для единообразия
 };
 
 function updateFilterPanels(entity) {
@@ -6895,3 +6798,102 @@ function openDefaultDetail(entity, item) {
     // 5. Первичный запуск
     setTimeout(applyTableResizers, 300);
 })();
+
+
+
+// Функция для проверки и показа окна напоминаний
+async function checkRemindersOnStart() {
+    try {
+        // Убедись, что путь совпадает с твоим API (например, /api/reminders или просто /reminders)
+        const response = await fetch('/api/reminders');
+        if (!response.ok) return;
+        
+        const cars = await response.json();
+        if (!cars || cars.length === 0) return;
+
+        // Создаем модальное окно, если его еще нет на странице
+        let modal = document.getElementById('reminders-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'reminders-modal';
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;';
+            modal.innerHTML = `
+                <div style="background: #fff; width: 900px; max-height: 85vh; border-radius: 6px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
+                    <div style="background: #f0f0f0; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
+                        <h3 style="margin: 0; font-size: 16px; color: #333;">Напоминания (ТО и Страховка)</h3>
+                        <button id="close-reminders" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
+                    </div>
+                    <div style="padding: 8px 15px; background: #fafafa; border-bottom: 1px solid #ddd;">
+                        <button onclick="checkRemindersOnStart()" style="padding: 4px 10px; cursor: pointer; font-size: 13px;">🔄 Обновить</button>
+                    </div>
+                    <div style="padding: 10px; overflow-y: auto; flex-grow: 1;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: #e5e5e5; text-align: center;">
+                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
+                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Модель</th>
+                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
+                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
+                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Описание</th>
+                                </tr>
+                                <tr style="background: #eee; text-align: center;">
+                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
+                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reminders-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('close-reminders').addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.style.display = 'none';
+            });
+        }
+
+        const tbody = document.getElementById('reminders-tbody');
+        tbody.innerHTML = '';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        cars.forEach(car => {
+            const tr = document.createElement('tr');
+
+            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
+            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
+            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
+            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
+
+            const isPtoCurrRed = ptoCurr && ptoCurr < today;
+            const isPtoNextRed = ptoNext && ptoNext < today;
+            const isInsCurrRed = insCurr && insCurr < today;
+            const isInsNextRed = insNext && insNext < today;
+
+            const formatDate = (d) => d ? new Date(d).toISOString().split('T')[0].split('-').reverse().join('.') : '';
+
+            tr.innerHTML = `
+                <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${car.gos_number || ''}</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">${car.model_name || ''}</td>
+                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoCurrRed ? '#e60000' : 'transparent'}; color: ${isPtoCurrRed ? '#fff' : '#000'};">${formatDate(car.pto_current)}</td>
+                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoNextRed ? '#e60000' : 'transparent'}; color: ${isPtoNextRed ? '#fff' : '#000'};">${formatDate(car.pto_next)}</td>
+                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsCurrRed ? '#e60000' : 'transparent'}; color: ${isInsCurrRed ? '#fff' : '#000'};">${formatDate(car.insurance_current)}</td>
+                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsNextRed ? '#e60000' : 'transparent'}; color: ${isInsNextRed ? '#fff' : '#000'};">${formatDate(car.insurance_next)}</td>
+                <td style="padding: 6px; border: 1px solid #ddd;">${car.description || ''}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        modal.style.display = 'flex';
+
+    } catch (e) {
+        console.error('Ошибка показа напоминаний:', e);
+    }
+}
