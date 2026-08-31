@@ -45,19 +45,8 @@
     </div>
 
     <table>
-        <thead>
-            <tr>
-                <th>Дата / Время / Действие</th>
-                <th>Пользователь</th>
-                <th>Документ</th>
-                <th>Контрагент</th>
-                <th>Запчасть (Артикул)</th>
-                <th class="text-center">Количество</th>
-                <th class="text-right">Цена</th>
-                <th class="text-right">Скидка</th>
-                <th class="text-right">Итого</th>
-                <th>Направление / Причина / Детали</th>
-            </tr>
+        <thead id="table-head">
+            <!-- Шапка генерируется динамически -->
         </thead>
         <tbody id="logs-table-body">
             <tr><td colspan="10" style="text-align: center;">Загрузка данных...</td></tr>
@@ -67,8 +56,6 @@
 
 <script>
     let currentType = 'Приход';
-
-    // Функция для получения читаемого названия склада по его ID (если на бэкенде приходят id складов)
     let warehousesMap = {};
 
     async function loadWarehouses() {
@@ -85,10 +72,48 @@
         }
     }
 
+    // Динамическое формирование шапки таблицы
+    function renderTableHead(type) {
+        const thead = document.getElementById('table-head');
+        if (type === 'Перемещение') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Направление (Откуда ➔ Куда)</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
+        } else {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Контрагент</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Скидка</th>
+                    <th class="text-right">Итого</th>
+                    <th>Направление / Причина / Детали</th>
+                </tr>
+            `;
+        }
+    }
+
     async function loadLogs(type, endpoint) {
         currentType = type;
+        renderTableHead(type);
+
+        const colspanCount = type === 'Перемещение' ? 9 : 10;
         const tbody = document.getElementById('logs-table-body');
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
 
         console.log(`🌐 Фронтенд: отправляем запрос на ${endpoint}`);
 
@@ -106,7 +131,7 @@
             tbody.innerHTML = '';
 
             if (!Array.isArray(logs) || logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">В этом разделе пока нет записей</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">В этом разделе пока нет записей</td></tr>`;
                 return;
             }
 
@@ -117,7 +142,7 @@
                 const dateObj = new Date(log.created_at);
                 const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
 
-                // Определяем тип действия (INSERT, UPDATE, DELETE или аналогичные)
+                // Определяем тип действия
                 const action = (log.action || log.action_type || 'INSERT').toUpperCase();
                 let actionBadge = '';
 
@@ -131,47 +156,65 @@
                     actionBadge = `<span class="badge badge-default">${action}</span>`;
                 }
 
-                // Обработка складов (если с бэкенда приходят ID или названия)
-                let rawFrom = log.warehouse_from_id || log.warehouse_from;
-                let rawTo = log.warehouse_to_id || log.warehouse_to;
+                const partName = log.part_name || log.name || log.zaphasti_name || '—';
+                const partArticle = log.part_article || log.article || log.zaphasti_article || '—';
 
-                if (rawFrom && warehousesMap[rawFrom]) rawFrom = warehousesMap[rawFrom];
-                if (rawTo && warehousesMap[rawTo]) rawTo = warehousesMap[rawTo];
-
-                // Логика для вкладки перемещений: если есть ID складов в мапе или объекте
                 if (currentType === 'Перемещение') {
-                    if (!rawFrom && log.warehouse_from_id) rawFrom = warehousesMap[log.warehouse_from_id] || log.warehouse_from_id;
-                    if (!rawTo && log.warehouse_to_id) rawTo = warehousesMap[log.warehouse_to_id] || log.warehouse_to_id;
-                }
+                    // Рендер строки для вкладки Перемещений
+                    const whFrom = log.warehouse_from_name || warehousesMap[log.warehouse_from_id] || log.warehouse_from_id || 'Склад';
+                    const whTo = log.warehouse_to_name || warehousesMap[log.warehouse_to_id] || log.warehouse_to_id || 'Склад';
+                    const directionStr = `<strong>${whFrom}</strong> ➔ <strong>${whTo}</strong>`;
 
-                // Формируем направление / причину / описание
-                let directionOrReason = log.reason || log.description || '';
-                if (rawFrom || rawTo) {
-                    const whFrom = rawFrom || 'Склад';
-                    const whTo = rawTo || 'Склад';
-                    directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
-                }
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_number || log.doc_number || '—'}</td>
+                        <td>${directionStr}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price_rub || log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total_rub || log.total_amount || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || log.reason || '—'}</td>
+                    `;
+                } else {
+                    // Рендер строки для остальных вкладок
+                    let rawFrom = log.warehouse_from_id || log.warehouse_from;
+                    let rawTo = log.warehouse_to_id || log.warehouse_to;
 
-                tr.innerHTML = `
-                    <td>
-                        ${formattedDate}<br>
-                        ${actionBadge}
-                    </td>
-                    <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
-                    <td>${log.doc_number || '—'}</td>
-                    <td>${log.counterparty || log.customer_name || '—'}</td>
-                    <td>${log.part_name || log.name || log.zaphasti_name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || log.article || log.zaphasti_article || '—'}</small></td>
-                    <td class="text-center"><strong>${log.quantity || 0}</strong></td>
-                    <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
-                    <td class="text-right">${log.discount || '—'}</td>
-                    <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
-                    <td>${directionOrReason}</td>
-                `;
+                    if (rawFrom && warehousesMap[rawFrom]) rawFrom = warehousesMap[rawFrom];
+                    if (rawTo && warehousesMap[rawTo]) rawTo = warehousesMap[rawTo];
+
+                    let directionOrReason = log.reason || log.description || '';
+                    if (rawFrom || rawTo) {
+                        const whFrom = rawFrom || 'Склад';
+                        const whTo = rawTo || 'Склад';
+                        directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
+                    }
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
+                        <td>${log.doc_number || '—'}</td>
+                        <td>${log.counterparty || log.customer_name || '—'}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right">${log.discount || '—'}</td>
+                        <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                        <td>${directionOrReason}</td>
+                    `;
+                }
                 tbody.appendChild(tr);
             });
         } catch (err) {
             console.error('❌ Ошибка загрузки логов на клиенте:', err);
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
         }
     }
 
@@ -181,7 +224,6 @@
         loadLogs(type, endpoint);
     }
 
-    // Инициализация при загрузке страницы: подгружаем склады, затем логи приходов по умолчанию
     window.addEventListener('DOMContentLoaded', async () => {
         await loadWarehouses();
         loadLogs('Приход', '/api/get-receipt-logs');
