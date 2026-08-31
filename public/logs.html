@@ -39,10 +39,9 @@
     <!-- Вкладки со своими эндпоинтами -->
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('Приход', '/api/get-receipt-logs', this)">📥 Приходы</button>
-        <button class="tab-btn" onclick="switchTab('Продажа', '/api/get-sale-logs', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)">📄 Реализация</button>
         <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)">🔄 Перемещения</button>
         <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)">🔧 Ремонт</button>
-        <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)">📄 Реализация</button>
     </div>
 
     <table>
@@ -172,11 +171,9 @@
             logs.forEach(log => {
                 const tr = document.createElement('tr');
                 
-                // Форматируем дату
                 const dateObj = new Date(log.created_at);
                 const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
 
-                // Определяем тип действия
                 const action = (log.action || log.action_type || 'INSERT').toUpperCase();
                 let actionBadge = '';
 
@@ -194,7 +191,6 @@
                 const partArticle = log.part_article || log.article || log.zaphasti_article || '—';
 
                 if (currentType === 'Перемещение') {
-                    // Рендер строки для вкладки Перемещений
                     const whFrom = log.warehouse_from_name || warehousesMap[log.warehouse_from_id] || log.warehouse_from_id || 'Склад';
                     const whTo = log.warehouse_to_name || warehousesMap[log.warehouse_to_id] || log.warehouse_to_id || 'Склад';
                     const directionStr = `<strong>${whFrom}</strong> ➔ <strong>${whTo}</strong>`;
@@ -214,7 +210,6 @@
                         <td>${log.description || log.reason || '—'}</td>
                     `;
                 } else if (currentType === 'Ремонт') {
-                    // Рендер строки для вкладки Ремонт (поля структуры repair_logs)
                     const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
                     const carInfo = log.car_number ? `${log.car_number} (${log.car_model || '—'})` : (log.car_id ? `Авто ID: ${log.car_id}` : '—');
 
@@ -233,7 +228,6 @@
                         <td>${log.description || '—'}</td>
                     `;
                 } else if (currentType === 'Реализация') {
-                    // Рендер строки для вкладки Реализация (поля структуры realization_logs)
                     const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
                     const customerOrCar = [log.customer_name, log.car_number ? `${log.car_number} (${log.car_model})` : null].filter(Boolean).join(' / ') || '—';
 
@@ -253,7 +247,6 @@
                         <td>${log.description || '—'}</td>
                     `;
                 } else {
-                    // Рендер строки для остальных вкладок
                     let rawFrom = log.warehouse_from_id || log.warehouse_from;
                     let rawTo = log.warehouse_to_id || log.warehouse_to;
 
