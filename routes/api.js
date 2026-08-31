@@ -3979,7 +3979,52 @@ router.get('/get-receipt-logs', async (req, res) => {
     }
 });
 
+// 1. Получение журнала операций для перемещений из таблицы move_logs (GET)
+router.get('/get-move-logs', async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                'move' AS operation_type,
+                ml.move_id AS doc_id,
+                COALESCE(m.doc_number, '—') AS doc_number,
+                ml.created_at AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                s_to.name AS warehouse_to,
+                s_from.name AS warehouse_from,
+                NULL AS counterparty,
+                COALESCE(z.name, 'Документ перемещения') AS part_name,
+                COALESCE(z.article, '—') AS part_article,
+                ml.quantity AS quantity,
+                ml.price AS price,
+                ml.total_rub AS total_amount,
+                ml.action AS action,
+                CONCAT(
+                    'Перемещение №', COALESCE(m.doc_number, '—'),
+                    CASE WHEN s_from.name IS NOT NULL AND s_to.name IS NOT NULL THEN CONCAT(' с ', s_from.name, ' на ', s_to.name) ELSE '' END,
+                    CASE 
+                        WHEN ml.action = 'INSERT' THEN ' [Добавлена позиция / Документ создан]'
+                        WHEN ml.action = 'UPDATE' THEN ' [Изменена позиция / Документ]'
+                        WHEN ml.action = 'DELETE' THEN ' [Удалена позиция из перемещения]'
+                        ELSE CONCAT(' [', ml.action, ']')
+                    END
+                ) AS reason
+            FROM move_logs ml
+            LEFT JOIN moves m ON ml.move_id = m.id
+            LEFT JOIN zaphasti z ON ml.zaphasti_id = z.id
+            LEFT JOIN skladi s_from ON ml.warehouse_from_id = s_from.id
+            LEFT JOIN skladi s_to ON ml.warehouse_to_id = s_to.id
+            LEFT JOIN users u ON ml.user_id = u.id
+            ORDER BY ml.created_at DESC
+            LIMIT 200
+        `;
 
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения журнала перемещений:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов перемещений: ' + err.message });
+    }
+});
 
 // Функция записи лога приходов
 async function writeReceiptLog(client, req, data = {}) {
@@ -4019,6 +4064,45 @@ async function writeReceiptLog(client, req, data = {}) {
         throw err;
     }
 }
+
+// Функция для записи логов перемещений (аналог writeReceiptLog, создайте её в своем файле или утилите)
+async function writeMoveLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO move_logs (
+                action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
+                zaphasti_id, quantity, price, currency, price_rub, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            [
+                data.action,
+                data.move_id,
+                data.document_number,
+                data.warehouse_from_id,
+                data.warehouse_to_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.currency,
+                data.price_rub,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога перемещения (не критично):', logErr.message);
+    }
+}
+
+
+
 
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
@@ -4408,14 +4492,18 @@ router.post('/move_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted)
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted) с получением doc_number
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
         }
 
-        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+        const moveData = moveCheck.rows[0];
+        const warehouseFromId = moveData.warehouse_from_id;
+        const warehouseToId = moveData.warehouse_to_id;
+        const isPosted = moveData.is_posted;
+        const moveDocNumber = moveData.doc_number || '';
 
         if (isPosted) {
             await client.query('ROLLBACK');
@@ -4433,10 +4521,6 @@ router.post('/move_items', async (req, res) => {
         }
 
         // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
-        // Считаем расход из: 
-        // - других проведенных перемещений (где склад-источник совпадает)
-        // - текущего документа перемещения (кроме самого себя, если бы мы правили строку, но у нас INSERT, так что берем все строки текущего move_id)
-        // - проведенных реализаций и ремонтов
         const batchesQuery = `
             SELECT 
                 r.id AS receipt_id,
@@ -4511,7 +4595,7 @@ router.post('/move_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
-        const userId = req.headers['user-id'] || req.body.user_id || null;
+        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 3. Распределяем строго по партиям FIFO
@@ -4547,6 +4631,23 @@ router.post('/move_items', async (req, res) => {
             const result = await client.query(insertQuery, values);
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
+
+            // 4. Запись лога перемещения через writeMoveLog
+            await writeMoveLog(client, req, {
+                action: 'INSERT',
+                move_id: move_id,
+                document_number: moveDocNumber,
+                warehouse_from_id: warehouseFromId,
+                warehouse_to_id: warehouseToId,
+                zaphasti_id: zaphasti_id,
+                quantity: takeQty,
+                price: batch.price,
+                currency: curr,
+                price_rub: batch.price,
+                total_rub: totalRub,
+                income_document_id: batch.receipt_id,
+                description: description || 'Добавлена позиция в перемещение'
+            });
 
             try {
                 await client.query(

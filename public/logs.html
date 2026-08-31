@@ -132,11 +132,17 @@
                 }
 
                 // Обработка складов (если с бэкенда приходят ID или названия)
-                let rawFrom = log.warehouse_from;
-                let rawTo = log.warehouse_to;
+                let rawFrom = log.warehouse_from_id || log.warehouse_from;
+                let rawTo = log.warehouse_to_id || log.warehouse_to;
 
                 if (rawFrom && warehousesMap[rawFrom]) rawFrom = warehousesMap[rawFrom];
                 if (rawTo && warehousesMap[rawTo]) rawTo = warehousesMap[rawTo];
+
+                // Логика для вкладки перемещений: если есть ID складов в мапе или объекте
+                if (currentType === 'Перемещение') {
+                    if (!rawFrom && log.warehouse_from_id) rawFrom = warehousesMap[log.warehouse_from_id] || log.warehouse_from_id;
+                    if (!rawTo && log.warehouse_to_id) rawTo = warehousesMap[log.warehouse_to_id] || log.warehouse_to_id;
+                }
 
                 // Формируем направление / причину / описание
                 let directionOrReason = log.reason || log.description || '';
@@ -154,7 +160,7 @@
                     <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
                     <td>${log.doc_number || '—'}</td>
                     <td>${log.counterparty || log.customer_name || '—'}</td>
-                    <td>${log.part_name || log.name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || log.article || '—'}</small></td>
+                    <td>${log.part_name || log.name || log.zaphasti_name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || log.article || log.zaphasti_article || '—'}</small></td>
                     <td class="text-center"><strong>${log.quantity || 0}</strong></td>
                     <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
                     <td class="text-right">${log.discount || '—'}</td>
