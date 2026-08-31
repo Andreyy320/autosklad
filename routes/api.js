@@ -31,46 +31,47 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение журнала приходов напрямую из таблиц receipts и receipt_items
+// 1. Получение журнала операций из готовой таблицы inventory_logs
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        // Если запрашивают другой тип операций, возвращаем пустой массив
-        if (type && type !== 'receipt') {
-            return res.json([]);
-        }
-
-        const query = `
+        // Базовый запрос под твою структуру таблицы
+        let query = `
             SELECT 
-                'receipt' AS operation_type,
-                r.id AS doc_id,
-                COALESCE(r.doc_number, '—') AS doc_number,
-                COALESCE(r.fact_date, r.date, NOW()) AS created_at,
-                'Система' AS user_name,
-                s.name AS warehouse_to,
-                NULL AS warehouse_from,
-                p.name AS counterparty,
-                COALESCE(z.name, 'Документ прихода') AS part_name,
-                COALESCE(z.article, '—') AS part_article,
-                COALESCE(ri.quantity, 0) AS quantity,
-                COALESCE(ri.price_rub, ri.price, 0) AS price,
-                COALESCE(ri.total_rub, (COALESCE(ri.quantity, 0) * COALESCE(ri.price_rub, ri.price, 0)), 0) AS total_amount,
-                'INSERT' AS action,
-                CONCAT('Приход №', COALESCE(r.doc_number, '—'), CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END) AS reason
-            FROM receipt_items ri
-            JOIN receipts r ON ri.receipt_id = r.id
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-            LEFT JOIN skladi s ON r.warehouse_id = s.id
-            LEFT JOIN postavhik p ON r.supplier_id = p.id
-            ORDER BY COALESCE(r.fact_date, r.date) DESC
-            LIMIT 200
+                operation_type,
+                document_id AS doc_id,
+                COALESCE(document_number, '—') AS doc_number,
+                created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                warehouse_to,
+                warehouse_from,
+                COALESCE(counterparty, '—') AS counterparty,
+                COALESCE(part_name, '—') AS part_name,
+                COALESCE(sku, '—') AS part_article,
+                COALESCE(quantity, 0) AS quantity,
+                COALESCE(price, 0) AS price,
+                COALESCE(discount, '—') AS discount,
+                COALESCE(total_amount, 0) AS total_amount,
+                action,
+                COALESCE(reason, '') AS reason
+            FROM inventory_logs l
+            LEFT JOIN users u ON l.user_id = u.id
         `;
 
-        const result = await pool.query(query);
+        // Если передан тип (receipt, realization и т.д.), фильтруем по нему
+        const queryParams = [];
+        if (type) {
+            query += ` WHERE operation_type = $1`;
+            queryParams.push(type);
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT 200`;
+
+        const result = await pool.query(query, queryParams);
         return res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения журнала приходов:', err.message);
+        console.error('Ошибка получения журнала из inventory_logs:', err.message);
         return res.status(500).json({ error: 'Ошибка сервера при получении логов: ' + err.message });
     }
 });
@@ -3977,6 +3978,7 @@ router.get('/expense_items', async (req, res) => {
 
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
+    const userId = req.headers['x-user-id'] || null;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -4020,8 +4022,11 @@ router.post('/receipt_items', async (req, res) => {
         const partSku = partRes.rows.length > 0 ? partRes.rows[0].sku : null;
 
         // Узнаем имя контрагента
-        const cpRes = await client.query('SELECT name FROM counterparties WHERE id = $1', [parentReceipt.counterparty_id]);
-        const counterpartyName = cpRes.rows.length > 0 ? cpRes.rows[0].name : null;
+        let counterpartyName = null;
+        if (parentReceipt.counterparty_id) {
+            const cpRes = await client.query('SELECT name FROM counterparties WHERE id = $1', [parentReceipt.counterparty_id]);
+            counterpartyName = cpRes.rows.length > 0 ? cpRes.rows[0].name : null;
+        }
 
         // 3. Подготовка и расчёт числовых полей
         const numPrice = Number(price) || 0;
@@ -4060,45 +4065,28 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Запись в inventory_logs вместо audit_logs
+        // 5. Запись в inventory_logs с использованием универсальной функции и транзакционного клиента
         try {
             const reasonText = `Добавлена новая позиция прихода №${parentReceipt.receipt_number || receipt_id}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
 
-            await client.query(
-                `INSERT INTO inventory_logs (
-                    operation_type, 
-                    document_id, 
-                    document_number, 
-                    counterparty, 
-                    part_id, 
-                    part_name, 
-                    sku, 
-                    quantity, 
-                    price, 
-                    discount, 
-                    total_amount, 
-                    warehouse_from, 
-                    warehouse_to, 
-                    reason, 
-                    created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())`,
-                [
-                    'Приход',
-                    receipt_id,
-                    parentReceipt.receipt_number ? String(parentReceipt.receipt_number) : String(receipt_id),
-                    counterpartyName,
-                    zaphasti_id,
-                    zaphastiName,
-                    partSku,
-                    numQty,
-                    numPrice,
-                    0,
-                    totalRub,
-                    null,
-                    null,
-                    reasonText
-                ]
-            );
+            await writeInventoryLog(client, {
+                operation_type: 'Приход',
+                action: 'INSERT',
+                document_id: receipt_id,
+                document_number: parentReceipt.receipt_number ? String(parentReceipt.receipt_number) : String(receipt_id),
+                user_id: userId,
+                counterparty: counterpartyName,
+                part_id: zaphasti_id,
+                part_name: zaphastiName,
+                sku: partSku,
+                quantity: numQty,
+                price: numPrice,
+                discount: 0,
+                total_amount: totalRub,
+                warehouse_to: null,
+                warehouse_from: null,
+                reason: reasonText
+            });
         } catch (logErr) {
             console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
@@ -4131,6 +4119,7 @@ router.post('/receipt_items', async (req, res) => {
 // PUT /api/receipt_items/:id - редактирование позиции в приходе
 router.put('/receipt_items/:id', async (req, res) => {
     const itemId = req.params.id;
+    const userId = req.headers['x-user-id'] || null;
     const {
         price,
         currency,
@@ -4215,9 +4204,8 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Прямая запись в inventory_logs «в лоб» без всяких audit_logs
+        // 5. Запись в inventory_logs с использованием вспомогательной функции и транзакционного клиента
         try {
-            // Узнаем название и sku запчасти
             const partInfo = await client.query(
                 'SELECT name, sku FROM zaphasti WHERE id = $1',
                 [currentItem.zaphasti_id]
@@ -4225,50 +4213,35 @@ router.put('/receipt_items/:id', async (req, res) => {
             const partName = partInfo.rows.length > 0 ? partInfo.rows[0].name : null;
             const partSku = partInfo.rows.length > 0 ? partInfo.rows[0].sku : null;
 
-            // Узнаем имя контрагента
-            const cpInfo = await client.query(
-                'SELECT name FROM counterparties WHERE id = $1',
-                [currentItem.counterparty_id]
-            );
-            const counterpartyName = cpInfo.rows.length > 0 ? cpInfo.rows[0].name : null;
+            let counterpartyName = null;
+            if (currentItem.counterparty_id) {
+                const cpInfo = await client.query(
+                    'SELECT name FROM counterparties WHERE id = $1',
+                    [currentItem.counterparty_id]
+                );
+                counterpartyName = cpInfo.rows.length > 0 ? cpInfo.rows[0].name : null;
+            }
 
             const reasonText = `Изменение позиции прихода (ID: ${itemId}): кол-во -> ${numQty}, цена -> ${numPrice}`;
 
-            await client.query(
-                `INSERT INTO inventory_logs (
-                    operation_type, 
-                    document_id, 
-                    document_number, 
-                    counterparty, 
-                    part_id, 
-                    part_name, 
-                    sku, 
-                    quantity, 
-                    price, 
-                    discount, 
-                    total_amount, 
-                    warehouse_from, 
-                    warehouse_to, 
-                    reason, 
-                    created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())`,
-                [
-                    'Приход',
-                    receipt_id,
-                    currentItem.receipt_number ? String(currentItem.receipt_number) : String(receipt_id),
-                    counterpartyName,
-                    currentItem.zaphasti_id,
-                    partName,
-                    partSku,
-                    numQty,
-                    numPrice,
-                    0,
-                    totalRub,
-                    null,
-                    null,
-                    reasonText
-                ]
-            );
+            await writeInventoryLog(client, {
+                operation_type: 'Приход',
+                action: 'UPDATE',
+                document_id: receipt_id,
+                document_number: currentItem.receipt_number ? String(currentItem.receipt_number) : String(receipt_id),
+                user_id: userId,
+                counterparty: counterpartyName,
+                part_id: currentItem.zaphasti_id,
+                part_name: partName,
+                sku: partSku,
+                quantity: numQty,
+                price: numPrice,
+                discount: 0,
+                total_amount: totalRub,
+                warehouse_to: null,
+                warehouse_from: null,
+                reason: reasonText
+            });
         } catch (logErr) {
             console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
@@ -4304,13 +4277,21 @@ router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`[ID]:`, req.params.id);
 
     const itemId = req.params.id;
+    const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Находим удаляемую позицию прихода и блокируем её
-        const itemCheck = await client.query('SELECT ri.*, z.name AS zaphasti_name FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id WHERE ri.id = $1 FOR UPDATE', [itemId]);
+        // 1. Находим удаляемую позицию прихода и блокируем её, сразу подтягивая номер документа и ID контрагента
+        const itemCheck = await client.query(`
+            SELECT ri.*, r.receipt_number, r.counterparty_id, z.name AS zaphasti_name, z.sku AS zaphasti_sku 
+            FROM receipt_items ri 
+            JOIN receipts r ON ri.receipt_id = r.id 
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id 
+            WHERE ri.id = $1 FOR UPDATE
+        `, [itemId]);
+
         if (itemCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
@@ -4332,7 +4313,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
 
         // 3. Если документ проведен, проверяем, не были ли списаны товары из этой конкретной строки прихода
         if (isPosted) {
-            // Считаем, сколько из этой позиции уже ушло в перемещения, реализации и ремонты
             const spentCheckQuery = `
                 SELECT 
                     (
@@ -4369,7 +4349,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
             const spentRes = await client.query(spentCheckQuery, [receipt_id, zaphasti_id, warehouseId]);
             const totalSpent = Number(spentRes.rows[0]?.total_spent) || 0;
 
-            // Если по этой партии уже что-то списано, удалять нельзя
             if (totalSpent > 0) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ 
@@ -4378,41 +4357,40 @@ router.delete('/receipt_items/:id', async (req, res) => {
             }
         }
 
+        // Узнаем имя контрагента для лога
+        let counterpartyName = null;
+        if (currentItem.counterparty_id) {
+            const cpInfo = await client.query('SELECT name FROM counterparties WHERE id = $1', [currentItem.counterparty_id]);
+            counterpartyName = cpInfo.rows.length > 0 ? cpInfo.rows[0].name : null;
+        }
+
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
 
-        // 5. Лог аудита
+        // 5. Запись в inventory_logs через универсальную функцию с использованием транзакционного клиента
         try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-            const userId = currentUserId || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+            const reasonText = `Удалена позиция прихода №${currentItem.receipt_number || receipt_id}: ${currentItem.zaphasti_name || 'запчасть'} (кол-во: ${initialQty})`;
 
-            const detailsObj = {
-                deleted_item: {
-                    id: currentItem.id,
-                    receipt_id: currentItem.receipt_id,
-                    zaphasti_id: currentItem.zaphasti_id,
-                    zaphasti_name: currentItem.zaphasti_name || 'запчасть',
-                    quantity: currentItem.quantity,
-                    price: currentItem.price,
-                    total_rub: currentItem.total_rub
-                }
-            };
-
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    userId,
-                    'DELETE',
-                    'receipt_items',
-                    itemId,
-                    JSON.stringify(detailsObj),
-                    clientIp
-                ]
-            );
+            await writeInventoryLog(client, {
+                operation_type: 'Приход',
+                action: 'DELETE',
+                document_id: receipt_id,
+                document_number: currentItem.receipt_number ? String(currentItem.receipt_number) : String(receipt_id),
+                user_id: userId,
+                counterparty: counterpartyName,
+                part_id: zaphasti_id,
+                part_name: currentItem.zaphasti_name || null,
+                sku: currentItem.zaphasti_sku || null,
+                quantity: initialQty,
+                price: Number(currentItem.price) || 0,
+                discount: 0,
+                total_amount: Number(currentItem.total_rub) || 0,
+                warehouse_to: null,
+                warehouse_from: null,
+                reason: reasonText
+            });
         } catch (logErr) {
-            console.error('Ошибка записи лога (не критично):', logErr.message);
+            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
@@ -4429,6 +4407,7 @@ router.delete('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 
 
 // POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа

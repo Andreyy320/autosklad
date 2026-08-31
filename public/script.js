@@ -6873,3 +6873,36 @@ async function checkRemindersOnStart() {
         console.error('Ошибка показа напоминаний:', e);
     }
 }
+
+
+
+
+
+
+async function writeInventoryLog(pool, data) {
+    try {
+        await pool.query(`
+            INSERT INTO inventory_logs 
+            (operation_type, action, document_id, document_number, user_id, counterparty, part_id, part_name, sku, quantity, price, discount, total_amount, warehouse_to, reason)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `, [
+            data.operation_type || 'receipt',
+            data.action, // 'INSERT', 'UPDATE', 'DELETE'
+            data.document_id,
+            data.document_number,
+            data.user_id || null,
+            data.counterparty || null,
+            data.part_id || null,
+            data.part_name || null,
+            data.sku || null,
+            data.quantity || 0,
+            data.price || 0,
+            data.discount || 0,
+            data.total_amount || 0,
+            data.warehouse_to || null,
+            data.reason || ''
+        ]);
+    } catch (err) {
+        console.error('Ошибка записи в inventory_logs:', err.message);
+    }
+}
