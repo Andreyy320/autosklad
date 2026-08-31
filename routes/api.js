@@ -31,65 +31,93 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение журнала операций ТОЛЬКО для приходов (GET)
+// 1. Получение неизменяемого журнала операций для приходов (GET)
 router.get('/get-logs', async (req, res) => {
     try {
-        const { type } = req.query; // Ожидаем type = 'receipt'
+        const { type } = req.query;
         
         let query = `
-            SELECT * FROM (
-                -- ПРИХОДЫ И ИХ ПОЗИЦИИ (Логирование всех действий)
-                SELECT 
-                    'receipt' AS operation_type,
-                    COALESCE(r.id, ri.receipt_id) AS doc_id,
-                    COALESCE(r.doc_number, '—') AS doc_number,
-                    al.created_at AS created_at,
-                    COALESCE(u_log.name, u_log.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    p.name AS counterparty,
-                    COALESCE(z.name, 'Документ прихода') AS part_name,
-                    COALESCE(z.article, '—') AS part_article,
-                    COALESCE(ri.quantity, 0) AS quantity,
-                    COALESCE(ri.price, 0) AS price,
-                    (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
-                    al.action AS action,
-                    CONCAT(
-                        'Приход №', COALESCE(r.doc_number, '—'), 
-                        CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
-                        CASE 
-                            WHEN al.action = 'INSERT' AND al.table_name = 'receipts' THEN ' [Документ создан]'
-                            WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция: ', COALESCE(z.name, 'запчасть'), ' - ', COALESCE(ri.quantity, 0), ' шт. по ', COALESCE(ri.price, 0), ' руб.]')
-                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":true%' THEN ' [Документ проведен]'
-                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":false%' THEN ' [Документ распроведен]'
-                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция "', COALESCE(z.name, 'запчасть'), '"]')
-                            WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
-                            ELSE CONCAT(' [', al.action, ']')
-                        END
-                    ) AS reason
-                FROM audit_logs al
-                LEFT JOIN receipt_items ri ON (al.table_name = 'receipt_items' AND al.record_id = ri.id) OR (al.table_name = 'receipts' AND al.record_id = ri.receipt_id)
-                LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR (ri.receipt_id = r.id)
-                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-                LEFT JOIN skladi s ON r.warehouse_id = s.id
-                LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN users u_log ON al.user_id = u_log.id
-                WHERE al.table_name IN ('receipts', 'receipt_items')
-            ) AS combined_logs
+            SELECT 
+                'receipt' AS operation_type,
+                al.record_id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                al.created_at AS created_at,
+                COALESCE(u_log.name, u_log.login, 'Система') AS user_name,
+                s.name AS warehouse_to,
+                NULL AS warehouse_from,
+                p.name AS counterparty,
+                -- Достаем название запчасти из лога или из текущей таблицы как запасной вариант
+                COALESCE(
+                    NULLIF(al.details->'deleted_item'->>'zaphasti_name', ''),
+                    NULLIF(al.details->'updated_fields'->>'zaphasti_name', ''),
+                    NULLIF(al.details->'zaphasti_name', ''),
+                    z.name, 
+                    'Документ прихода'
+                ) AS part_name,
+                COALESCE(
+                    z.article, 
+                    '—'
+                ) AS part_article,
+                -- Жестко фиксируем количество из JSON-лога, чтобы оно не менялось при редактировании
+                COALESCE(
+                    NULLIF(al.details->'updated_fields'->>'quantity', '')::numeric,
+                    NULLIF(al.details->'deleted_item'->>'quantity', '')::numeric,
+                    NULLIF(al.details->>'quantity', '')::numeric,
+                    ri.quantity, 
+                    0
+                ) AS quantity,
+                -- Жестко фиксируем цену из JSON-лога
+                COALESCE(
+                    NULLIF(al.details->'updated_fields'->>'price', '')::numeric,
+                    NULLIF(al.details->'deleted_item'->>'price', '')::numeric,
+                    NULLIF(al.details->>'price', '')::numeric,
+                    ri.price, 
+                    0
+                ) AS price,
+                -- Итоговая сумма по конкретному историческому моменту
+                (
+                    COALESCE(
+                        NULLIF(al.details->'updated_fields'->>'quantity', '')::numeric,
+                        NULLIF(al.details->'deleted_item'->>'quantity', '')::numeric,
+                        NULLIF(al.details->>'quantity', '')::numeric,
+                        ri.quantity, 
+                        0
+                    ) * 
+                    COALESCE(
+                        NULLIF(al.details->'updated_fields'->>'price', '')::numeric,
+                        NULLIF(al.details->'deleted_item'->>'price', '')::numeric,
+                        NULLIF(al.details->>'price', '')::numeric,
+                        ri.price, 
+                        0
+                    )
+                ) AS total_amount,
+                al.action AS action,
+                CONCAT(
+                    'Приход №', COALESCE(r.doc_number, '—'), 
+                    CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
+                    CASE 
+                        WHEN al.action = 'INSERT' AND al.table_name = 'receipts' THEN ' [Документ создан]'
+                        WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция]')
+                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details::text LIKE '%is_posted%' AND al.details::text LIKE '%"to":true%' THEN ' [Документ проведен]'
+                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details::text LIKE '%is_posted%' AND al.details::text LIKE '%"to":false%' THEN ' [Документ распроведен]'
+                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция количество/цена]')
+                        WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
+                        ELSE CONCAT(' [', al.action, ']')
+                    END
+                ) AS reason
+            FROM audit_logs al
+            LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+            LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR ri.receipt_id = r.id
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            LEFT JOIN skladi s ON r.warehouse_id = s.id
+            LEFT JOIN postavhik p ON r.supplier_id = p.id
+            LEFT JOIN users u_log ON al.user_id = u_log.id
+            WHERE al.table_name IN ('receipts', 'receipt_items')
+            ORDER BY al.created_at DESC
+            LIMIT 200
         `;
 
-        const params = [];
-        // Если запрашивают конкретный тип или по умолчанию грузим приходы
-        if (type) {
-            query += ` WHERE operation_type = $1`;
-            params.push(type);
-        } else {
-            query += ` WHERE operation_type = 'receipt'`;
-        }
-
-        query += ` ORDER BY created_at DESC LIMIT 200`;
-
-        const result = await pool.query(query, params);
+        const result = await pool.query(query);
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения журнала приходов:', err.message);
