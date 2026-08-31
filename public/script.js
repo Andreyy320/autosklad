@@ -1944,6 +1944,8 @@ expenses_by_receipts: {
 
 
 function getConfig(entity) {
+    console.log(`⚙️ [getConfig] Запрос конфигурации для сущности: "${entity}"`, tableConfig[entity] ? '✅ Найдена' : '❌ НЕ НАЙДЕНА (используется дефолт)');
+    
     if (tableConfig[entity]) {
         return tableConfig[entity];
     }
@@ -5477,131 +5479,6 @@ async function postReceipt(receiptId) {
     );
 }
 
-/**
- * Открывает нижнюю таблицу (детали) для сущности по умолчанию, 
- * основываясь на текущих активных вкладках или предопределенной логике.
- */
-function openDefaultDetail(entity, item) {
-    if (!item) return;
-
-    const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-    const tabsForCars = document.getElementById('tabs-for-cars');
-    const tabsForAccidents = document.getElementById('tabs-for-accidents');
-    const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
-    const tabsForRealizations = document.getElementById('tabs-for-realizations');
-    const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
-    const detailContainer = document.getElementById('detail-container');
-
-    // Сначала управляем видимостью панелей вкладок внизу
-    if (carTabsPanel) {
-        carTabsPanel.style.display = 'flex';
-    }
-
-    if (tabsForCars) tabsForCars.style.display = (entity === 'car_cards' || entity === 'car_card') ? 'flex' : 'none';
-    if (tabsForAccidents) tabsForAccidents.style.display = (entity === 'accidents') ? 'flex' : 'none';
-    if (tabsForRepairs) tabsForRepairs.style.display = (entity === 'repairs') ? 'flex' : 'none';
-    if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
-    if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (entity === 'money_receipts') ? 'flex' : 'none';
-
-    if (detailContainer) {
-        detailContainer.style.display = 'flex';
-    }
-
-    // Маршрутизация по сущностям для загрузки нужных данных в нижнюю таблицу
-    switch (entity) {
-        case 'cars':
-            if (carTabsPanel) carTabsPanel.style.display = 'none';
-            loadDetailData('car_details', item.id);
-            break;
-
-        case 'car_card':
-        case 'car_cards': {
-            const activeTab = document.querySelector('.car-tab-btn.active') || document.querySelector('.car-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            loadDetailData(match ? match[1] : 'car_general', item.id);
-            break;
-        }
-
-        case 'accidents': {
-            const activeTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            const subTab = match ? match[1] : 'accident_invoices';
-            if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
-            loadDetailData(subTab, item.id);
-            break;
-        }
-
-        case 'repairs': {
-            const activeTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            const subTab = match ? match[1] : 'repair_items';
-            if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
-            loadDetailData(subTab, item.id);
-            break;
-        }
-
-        case 'money_receipts_by_sklad':
-            loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной'}`, { sklad_id: item.sklad_id });
-            break;
-
-        case 'money_receipts': {
-            const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || 
-                              document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
-            let subTabName = activeTab ? (activeTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
-            
-            if (subTabName === 'realization_items') subTabName = 'money_receipts_detail';
-            if (subTabName === 'realization_works') subTabName = 'money_receipts_works_detail';
-
-            if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
-
-            loadDetailData(subTabName, {
-                customer_id: item.customer_id,
-                sklad_id: item.sklad_id,
-                realization_id: item.realization_id || item.id,
-            });
-            break;
-        }
-
-        case 'realizations': {
-            const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || 
-                              document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
-            const subTabName = activeTab ? (activeTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
-            if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-            loadDetailData(subTabName, item.id);
-            break;
-        }
-
-        case 'receipts':
-            loadDetailData('receipt_items', item.id);
-            break;
-
-        case 'moves':
-            loadDetailData('move_items', item.id);
-            break;
-
-        case 'postavhik':
-            loadDetailData('postavhik_contacts', item.id);
-            break;
-
-        case 'counterparties':
-            loadDetailData('counterparty_contacts', item.id);
-            break;
-
-        case 'customers':
-            loadDetailData('customer_contacts', item.id);
-            break;
-
-        default:
-            if (carTabsPanel) {
-                carTabsPanel.style.display = ['receipts', 'moves', 'customers'].includes(entity) ? 'flex' : 'none';
-            }
-            if (detailContainer) {
-                detailContainer.style.display = 'none';
-            }
-            break;
-    }
-}
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -5637,6 +5514,13 @@ if (tableBody) {
 
         console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
+        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
+        const tabsForCars = document.getElementById('tabs-for-cars');
+        const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const detailContainer = document.getElementById('detail-container');
+
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
             if (
@@ -5660,11 +5544,131 @@ if (tableBody) {
         }
 
         if (selectedItem) {
-            if (currentEntity === 'money_receipts_by_sklad' && !e.isTrusted) return;
-            openDefaultDetail(currentEntity, selectedItem);
+            if (currentEntity === 'cars') {
+                if (carTabsPanel) carTabsPanel.style.display = 'none';
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (detailContainer) detailContainer.style.display = 'flex';
+                loadDetailData('car_details', selectedItem.id);
+            } else if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
+                if (carTabsPanel) carTabsPanel.style.display = 'flex';
+                if (tabsForCars) tabsForCars.style.display = 'flex';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (detailContainer) detailContainer.style.display = 'flex';
+                
+                const activeCarTab = document.querySelector('.car-tab-btn.active') || document.querySelector('.car-tab-btn');
+                if (activeCarTab) {
+                    const onclickAttr = activeCarTab.getAttribute('onclick');
+                    const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
+                    if (match && match[1]) {
+                        loadDetailData(match[1], selectedItem.id);
+                    } else {
+                        loadDetailData('car_general', selectedItem.id);
+                    }
+                } else {
+                    loadDetailData('car_general', selectedItem.id);
+                }
+            } else if (currentEntity === 'accidents') {
+                if (carTabsPanel) carTabsPanel.style.display = 'flex';
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (detailContainer) detailContainer.style.display = 'flex';
+
+                const activeAccidentTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
+                const match = activeAccidentTab && activeAccidentTab.getAttribute('onclick')?.match(/'([^']+)'/);
+                const subTab = match ? match[1] : 'accident_invoices';
+                if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
+                loadDetailData(subTab, selectedItem.id);
+            } else if (currentEntity === 'repairs') {
+                if (carTabsPanel) carTabsPanel.style.display = 'flex';
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (detailContainer) detailContainer.style.display = 'flex';
+
+                const activeRepairTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
+                const match = activeRepairTab && activeRepairTab.getAttribute('onclick')?.match(/'([^']+)'/);
+                const subTab = match ? match[1] : 'repair_items';
+                if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
+                loadDetailData(subTab, selectedItem.id);
+            } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
+                if (carTabsPanel) carTabsPanel.style.display = 'flex';
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                if (detailContainer) detailContainer.style.display = 'flex';
+
+                const realizationsTabs = document.getElementById('tabs-for-realizations');
+                const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
+                
+                if (realizationsTabs) realizationsTabs.style.display = (currentEntity === 'realizations') ? 'flex' : 'none';
+                if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts') ? 'flex' : 'none';
+
+                if (currentEntity === 'money_receipts_by_sklad') {
+                    if (!e.isTrusted) return;
+                    loadData('money_receipts', `Покупатели склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
+                } else if (currentEntity === 'money_receipts') {
+                    const activeMoneyTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
+                    let subTabName = activeMoneyTab ? (activeMoneyTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
+                    
+                    if (subTabName === 'realization_items') subTabName = 'money_receipts_detail';
+                    if (subTabName === 'realization_works') subTabName = 'money_receipts_works_detail';
+
+                    if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
+
+                    loadDetailData(subTabName, {
+                        customer_id: selectedItem.customer_id,
+                        sklad_id: selectedItem.sklad_id,
+                        realization_id: selectedItem.realization_id || selectedItem.id,
+                    });
+                } else {
+                    const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
+                    const subTabName = activeRealizationTab ? (activeRealizationTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
+                    if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
+                    loadDetailData(subTabName, selectedItem.id);
+                }
+            } else {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                
+                const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
+                if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
+
+                if (carTabsPanel) {
+                    carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
+                }
+
+                if (currentEntity === 'receipts') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadDetailData('receipt_items', selectedItem.id);
+                } else if (currentEntity === 'moves') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadDetailData('move_items', selectedItem.id);
+                } else if (currentEntity === 'postavhik') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadDetailData('postavhik_contacts', selectedItem.id);
+                } else if (currentEntity === 'counterparties') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadDetailData('counterparty_contacts', selectedItem.id);
+                } else if (currentEntity === 'customers') {
+                    if (detailContainer) detailContainer.style.display = 'flex';
+                    loadDetailData('customer_contacts', selectedItem.id);
+                }
+            }
         }
     });
 }
+
 
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
