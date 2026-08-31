@@ -4016,9 +4016,9 @@ router.get('/get-repair-logs', async (req, res) => {
                 z.article AS part_article,
                 c.car_number,
                 c.model AS car_model,
-                u.username AS user_name
+                u.name AS user_name
             FROM repair_logs rl
-            LEFT JOIN warehouses w ON rl.warehouse_id::text = w.id::text
+            LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
             LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
             LEFT JOIN cars c ON rl.car_id::text = c.id::text
             LEFT JOIN users u ON rl.user_id::text = u.id::text
