@@ -4664,26 +4664,22 @@ async function loadData(entity, title, customParams = {}) {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 selectedItem = null;
-                const activeTab = document.querySelector('#tabs-for-cars button.active')?.getAttribute('data-tab') || 'car_details';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'accidents') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                 selectedItem = null;
-                const activeTab = document.querySelector('#tabs-for-accidents button.active')?.getAttribute('data-tab') || 'accident_items';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'repairs') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 selectedItem = null;
-                const activeTab = document.querySelector('#tabs-for-repairs button.active')?.getAttribute('data-tab') || 'repair_items';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'realizations') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                 selectedItem = null;
-                const activeTab = document.querySelector('#tabs-for-realizations button.active')?.getAttribute('data-tab') || 'realization_items';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
@@ -4691,14 +4687,12 @@ async function loadData(entity, title, customParams = {}) {
                 if (customParams.sklad_id) {
                     window.currentSkladId = customParams.sklad_id;
                 }
-                const activeTab = document.querySelector('#tabs-for-money-receipts button.active')?.getAttribute('data-tab') || 'money_receipts_detail';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
                 selectedItem = null;
-                const activeTab = document.querySelector('#tabs-for-customers button.active')?.getAttribute('data-tab') || 'customer_contacts';
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(activeTab);
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else {
                 carTabsBar.style.display = 'none';
                 selectedItem = null;
@@ -4712,6 +4706,7 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
+
 
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
@@ -5916,7 +5911,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -5951,7 +5945,7 @@ async function loadDetailData(entity, parentId) {
     const skipObjectCleaning = ['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
     
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
-        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || '';
+        cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || parentId.accident_id || parentId.id_accident || '';
     }
     console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
 
@@ -6220,8 +6214,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
-
 
 function filterDetailTable() {
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
