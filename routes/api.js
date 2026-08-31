@@ -6047,7 +6047,6 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
-
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -6187,17 +6186,25 @@ router.put('/:entity/:id', async (req, res) => {
                 changes: changes
             };
 
-            // Проверяем структуру таблицы audit_logs (наличие колонки table_name / ip_address для совместимости)
+            let detailsJson = '{}';
+            try {
+                detailsJson = JSON.stringify(detailsObj);
+            } catch (e) {
+                detailsJson = '{}';
+            }
+
+            // Проверяем структуру таблицы audit_logs и записываем лог через тот же client с явным приведением к jsonb
             await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
                     userId,
                     'UPDATE',
                     entity,
                     id,
-                    JSON.stringify(detailsObj),
-                    clientIp
+                    detailsJson,
+                    clientIp,
+                    entity
                 ]
             );
         } catch (logErr) {
@@ -6216,7 +6223,6 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
-
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -6299,15 +6305,30 @@ router.delete('/:entity/:id', async (req, res) => {
 
         // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (DELETE) ====================
         try {
-            const userId = req.headers['x-user-id'] || req.body.user_id || null;
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const deletedData = result.rows[0];
-            const detailsStr = Object.entries(deletedData)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(', ');
+            const userId = currentUserId || deletedData.user_id || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            let detailsJson = '{}';
+            try {
+                detailsJson = JSON.stringify(deletedData);
+            } catch (e) {
+                detailsJson = '{}';
+            }
 
             await client.query(
-                `INSERT INTO audit_logs (user_id, entity, action, record_id, details) VALUES ($1, $2, $3, $4, $5)`,
-                [userId, entity, 'DELETE', id, `Удалена запись. Данные: ${detailsStr}`]
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                [
+                    userId,
+                    'DELETE',
+                    entity,
+                    id,
+                    detailsJson,
+                    clientIp,
+                    entity
+                ]
             );
         } catch (logErr) {
             console.error('Ошибка записи лога удаления (не критично):', logErr.message);
@@ -6325,6 +6346,5 @@ router.delete('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
-
 return router;
 };
