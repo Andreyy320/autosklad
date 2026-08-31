@@ -4015,7 +4015,7 @@ router.get('/get-repair-logs', async (req, res) => {
                 z.name AS part_name,
                 COALESCE(z.article, z.code, '—') AS part_article,
                 c.gos_number AS car_number,
-                c.model AS car_model,
+                COALESCE(c.model, '—') AS car_model,
                 u.name AS user_name
             FROM repair_logs rl
             LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
