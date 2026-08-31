@@ -4044,7 +4044,6 @@ function editSelectedEntity() {
     }
     openEntityForm(currentEntity, selectedItem);
 }
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -4059,12 +4058,21 @@ document.getElementById('login-form').addEventListener('submit', async function(
         });
         const result = await response.json();
 
+        // 🔍 ЛОГ: Посмотрим, что вообще пришло от сервера при логине
+        console.log("🟢 [ОТВЕТ СЕРВЕРА ПРИ ЛОГИНЕ]:", result);
+
         if (response.ok && result.success) {
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
             
-            if (result.user && result.user.id) {
-                localStorage.setItem('currentUserId', result.user.id);
+            // Универсальный поиск ID (проверяем все возможные варианты ответа бэкенда)
+            const userId = result.user?.id || result.id || result.userId || null;
+
+            if (userId) {
+                localStorage.setItem('currentUserId', userId);
+                console.log("✅ [УСПЕХ] ID пользователя успешно сохранен в localStorage:", userId);
+            } else {
+                console.warn("⚠️ [ВНИМАНИЕ] Сервер пустил пользователя, но НЕ передал его ID! Проверьте, что возвращает /api/login");
             }
 
             document.getElementById('login-screen').style.display = 'none';
@@ -4076,7 +4084,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
             loadData('users', 'Пользователи');
 
-            // 👉 Автоматический вызов окна напоминаний поверх программы сразу после входа
             if (typeof checkRemindersOnStart === 'function') {
                 checkRemindersOnStart();
             }
@@ -4086,6 +4093,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
             errorDiv.innerText = result.message || 'Ошибка входа';
         }
     } catch (err) {
+        console.error("❌ Ошибка при отправке формы входа:", err);
         errorDiv.style.display = 'block';
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
@@ -5492,20 +5500,18 @@ async function postMove(moveId) {
             }
         }
     );
-}async function postReceipt(receiptId) {
+}
+
+async function postReceipt(receiptId) {
     showPostConfirmModal(
         'Проведение документа',
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
-                // Достаем ID текущего пользователя из localStorage
-                const currentUserId = localStorage.getItem('currentUserId') || '';
-
                 const response = await fetch(`/api/receipts/${receiptId}`, {
                     method: 'PUT',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'x-user-id': currentUserId // <--- ВОТ ЭТО СТУЧИТ К СЕРВЕРУ И ПЕРЕДАЕТ ПОЛЬЗОВАТЕЛЯ
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ is_posted: true })
                 });
