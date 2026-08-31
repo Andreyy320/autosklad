@@ -4934,7 +4934,6 @@ router.delete('/move_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
-        const zaphasti_id = currentItem.zaphasti_id;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
         const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
@@ -4944,21 +4943,13 @@ router.delete('/move_items/:id', async (req, res) => {
         }
 
         const moveRecord = moveCheck.rows[0];
-        const warehouseFromId = moveRecord.warehouse_from_id;
-        const warehouseToId = moveRecord.warehouse_to_id;
-        const isPosted = moveRecord.is_posted;
-        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
+        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted, doc_number: moveDocNum } = moveRecord;
 
         // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
         if (isPosted) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного документа перемещения. Сначала отмените проведение документа.' });
         }
-
-        // Получаем название и артикул запчасти для логов склада
-        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
-        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
-        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // Примечание по логике FIFO: 
         // Так как документ не проведен, эта позиция «занимала» остаток на складе-источнике (warehouse_from_id) 
@@ -4983,8 +4974,12 @@ router.delete('/move_items/:id', async (req, res) => {
             console.error('Ошибка записи audit_logs:', logErr.message);
         }
 
-        // Запись в таблицу складских логов (inventory_logs)
+        // 6. Аккуратная запись в складские логи (inventory_logs), не ломающая старую логику
         try {
+            const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [currentItem.zaphasti_id]);
+            const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+            const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
+            const moveDocNumber = moveDocNum ? String(moveDocNum) : String(move_id);
             const reasonText = `Удалена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${currentItem.quantity}, цена: ${currentItem.price})`;
 
             await writeInventoryLog(client, {
@@ -4994,7 +4989,7 @@ router.delete('/move_items/:id', async (req, res) => {
                 document_number: moveDocNumber,
                 user_id: userId,
                 counterparty: null,
-                part_id: zaphasti_id,
+                part_id: currentItem.zaphasti_id,
                 part_name: zaphastiName,
                 sku: partArticle,
                 quantity: Number(currentItem.quantity) || 0,
