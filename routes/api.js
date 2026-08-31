@@ -31,7 +31,7 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций (GET) с историей изменений (audit_logs)
+// 1. Получение детального журнала товарных операций (GET)
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Получаем тип: receipt, move, repair, realization
@@ -54,7 +54,6 @@ router.get('/get-logs', async (req, res) => {
                     ri.price,
                     (ri.quantity * ri.price) AS total_amount,
                     CONCAT('Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—')) AS reason,
-                    'receipts' AS table_name,
                     (
                         SELECT json_agg(json_build_object(
                             'action', al.action,
@@ -90,7 +89,6 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(ri_orig.price, mi.price, 0) AS price,
                     (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
                     CONCAT('Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"') AS reason,
-                    'moves' AS table_name,
                     (
                         SELECT json_agg(json_build_object(
                             'action', al.action,
@@ -127,7 +125,6 @@ router.get('/get-logs', async (req, res) => {
                     ri.price,
                     (ri.quantity * ri.price) AS total_amount,
                     CONCAT('Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')') AS reason,
-                    'repairs' AS table_name,
                     (
                         SELECT json_agg(json_build_object(
                             'action', al.action,
@@ -156,14 +153,13 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
-                    COALESCE(c.name, 'Покупатель') AS counterparty,
+                    COALESCE(c.full_name, 'Покупатель') AS counterparty,
                     COALESCE(ri.name, z.name) AS part_name,
                     COALESCE(ri.article, z.article) AS part_article,
                     COALESCE(ri.quantity, 1) AS quantity,
                     COALESCE(ri.price, 0) AS price,
                     COALESCE(ri.total_rub, 0) AS total_amount,
                     CONCAT('Реализация №', rz.doc_number) AS reason,
-                    'realizations' AS table_name,
                     (
                         SELECT json_agg(json_build_object(
                             'action', al.action,
