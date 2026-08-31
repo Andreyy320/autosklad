@@ -4472,7 +4472,6 @@ router.post('/move_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
         // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted)
         const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
@@ -4632,7 +4631,7 @@ router.post('/move_items', async (req, res) => {
                 console.error('Ошибка записи audit_logs:', logErr.message);
             }
 
-            // Добавляем запись в inventory_logs, ничего больше не меняя в логике FIFO
+            // Запись в таблицу складских логов (inventory_logs)
             try {
                 const reasonText = `Добавлена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${takeQty}, цена: ${batch.price})`;
 
