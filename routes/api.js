@@ -31,76 +31,40 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение неизменяемого журнала операций для приходов (GET)
+// 1. Получение журнала приходов из новой таблицы
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        let query = `
+        // Если запрашивают не приходы, можно сделать заглушку или обрабатывать другие типы
+        if (type && type !== 'receipt') {
+            return res.json([]);
+        }
+
+        const query = `
             SELECT 
                 'receipt' AS operation_type,
-                al.record_id AS doc_id,
-                COALESCE(r.doc_number, '—') AS doc_number,
-                al.created_at AS created_at,
-                COALESCE(u_log.name, u_log.login, 'Система') AS user_name,
+                l.id AS doc_id,
+                COALESCE(l.doc_number, '—') AS doc_number,
+                l.created_at AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
-                -- Приводим details к jsonb, чтобы оператор ->> работал без ошибок типов
-                COALESCE(
-                    (al.details::jsonb)->>'zaphasti_name',
-                    (al.details::jsonb)->'deleted_item'->>'zaphasti_name',
-                    z.name, 
-                    'Документ прихода'
-                ) AS part_name,
-                COALESCE(
-                    z.article, 
-                    '—'
-                ) AS part_article,
-                COALESCE(
-                    NULLIF((al.details::jsonb)->>'quantity', '')::numeric,
-                    ri.quantity, 
-                    0
-                ) AS quantity,
-                COALESCE(
-                    NULLIF((al.details::jsonb)->>'price', '')::numeric,
-                    ri.price, 
-                    0
-                ) AS price,
-                (
-                    COALESCE(
-                        NULLIF((al.details::jsonb)->>'quantity', '')::numeric,
-                        ri.quantity, 
-                        0
-                    ) * 
-                    COALESCE(
-                        NULLIF((al.details::jsonb)->>'price', '')::numeric,
-                        ri.price, 
-                        0
-                    )
-                ) AS total_amount,
-                al.action AS action,
-                CONCAT(
-                    'Приход №', COALESCE(r.doc_number, '—'), 
-                    CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
-                    CASE 
-                        WHEN al.action = 'INSERT' AND al.table_name = 'receipts' THEN ' [Документ создан]'
-                        WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция]')
-                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' THEN ' [Изменен документ прихода]'
-                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция количество/цена]')
-                        WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
-                        ELSE CONCAT(' [', al.action, ']')
-                    END
-                ) AS reason
-            FROM audit_logs al
-            LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
-            LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR ri.receipt_id = r.id
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-            LEFT JOIN skladi s ON r.warehouse_id = s.id
-            LEFT JOIN postavhik p ON r.supplier_id = p.id
-            LEFT JOIN users u_log ON al.user_id = u_log.id
-            WHERE al.table_name IN ('receipts', 'receipt_items')
-            ORDER BY al.created_at DESC
+                COALESCE(z.name, 'Документ прихода') AS part_name,
+                COALESCE(z.article, '—') AS part_article,
+                COALESCE(l.quantity, 0) AS quantity,
+                COALESCE(l.price, 0) AS price,
+                (COALESCE(l.quantity, 0) * COALESCE(l.price, 0)) AS total_amount,
+                COALESCE(l.action, 'INSERT') AS action,
+                COALESCE(l.reason, CONCAT('Приход №', COALESCE(l.doc_number, '—'))) AS reason
+            FROM inventory_logs l
+            LEFT JOIN zaphasti z ON l.zaphasti_id = z.id
+            LEFT JOIN skladi s ON l.warehouse_id = s.id
+            LEFT JOIN postavhik p ON l.supplier_id = p.id
+            LEFT JOIN users u ON l.user_id = u.id
+            WHERE l.operation_type = 'receipt'
+            ORDER BY l.created_at DESC
             LIMIT 200
         `;
 
