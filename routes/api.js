@@ -90,8 +90,11 @@ router.get('/get-logs', async (req, res) => {
 });
 
 
-async function writeInventoryLog(client, data) {
+async function writeInventoryLog(client, data = {}) {
     try {
+        // Защита, если вдруг передали null или undefined вместо объекта
+        const safeData = data || {};
+
         await client.query(`
             INSERT INTO inventory_logs (
                 operation_type, action, document_id, document_number, 
@@ -101,30 +104,28 @@ async function writeInventoryLog(client, data) {
             ) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         `, [
-            data.operation_type || 'Приход',
-            data.action || 'INSERT',
-            data.document_id || null,
-            data.document_number ? String(data.document_number) : null,
-            data.user_id ? Number(data.user_id) : null,
-            data.counterparty || null,
-            data.part_id ? Number(data.part_id) : null,
-            data.part_name || null,
-            data.sku || null,
-            Number(data.quantity) || 0,
-            Number(data.price) || 0,
-            Number(data.discount) || 0,
-            Number(data.total_amount) || 0,
-            data.warehouse_from !== null && data.warehouse_from !== undefined ? String(data.warehouse_from) : null,
-            data.warehouse_to !== null && data.warehouse_to !== undefined ? String(data.warehouse_to) : null,
-            data.reason || ''
+            safeData.operation_type || 'Приход',
+            safeData.action || 'INSERT',
+            safeData.document_id || null,
+            safeData.document_number ? String(safeData.document_number) : null,
+            safeData.user_id ? Number(safeData.user_id) : null,
+            safeData.counterparty || null,
+            safeData.part_id ? Number(safeData.part_id) : null,
+            safeData.part_name || null,
+            safeData.sku || null,
+            Number(safeData.quantity) || 0,
+            Number(safeData.price) || 0,
+            Number(safeData.discount) || 0,
+            Number(safeData.total_amount) || 0,
+            safeData.warehouse_from !== null && safeData.warehouse_from !== undefined ? String(safeData.warehouse_from) : null,
+            safeData.warehouse_to !== null && safeData.warehouse_to !== undefined ? String(safeData.warehouse_to) : null,
+            safeData.reason || ''
         ]);
     } catch (err) {
         console.error('❌ ОШИБКА записи в inventory_logs:', err.message);
-        throw err; // Обязательно прокидываем наверх, чтобы видеть в консоли реальную причину, если что-то пойдет не так
+        throw err;
     }
 }
-
-
 
 // Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
