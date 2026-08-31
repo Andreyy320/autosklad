@@ -90,6 +90,44 @@ router.get('/get-logs', async (req, res) => {
 });
 
 
+// Универсальная функция записи в журнал логов
+async function writeInventoryLog(client, data) {
+    try {
+        await client.query(`
+            INSERT INTO inventory_logs (
+                operation_type, action, document_id, document_number, 
+                user_id, counterparty, part_id, part_name, sku, 
+                quantity, price, discount, total_amount, 
+                warehouse_from, warehouse_to, reason
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        `, [
+            data.operation_type || 'Приход',
+            data.action || 'INSERT',
+            data.document_id || null,
+            data.document_number ? String(data.document_number) : null,
+            data.user_id || null,
+            data.counterparty || null,
+            data.part_id || null,
+            data.part_name || null,
+            data.sku || null,
+            Number(data.quantity) || 0,
+            Number(data.price) || 0,
+            Number(data.discount) || 0,
+            Number(data.total_amount) || 0,
+            data.warehouse_from || null,
+            data.warehouse_to || null,
+            data.reason || ''
+        ]);
+    } catch (err) {
+        console.error('❌ Ошибка записи в inventory_logs:', err.message);
+        throw err;
+    }
+}
+
+
+
+
 // Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
     res.sendFile(path.join(__dirname, '../logs.html'));
