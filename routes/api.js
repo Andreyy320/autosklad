@@ -4177,9 +4177,9 @@ router.put('/receipt_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим саму позицию прихода и блокируем её (исправлено: запрашиваем r.id вместо r.receipt_number)
+        // 1. Находим саму позицию прихода и подтягиваем данные документа (как в POST)
         const itemCheck = await client.query(
-            `SELECT ri.*, r.id as receipt_id_ref, r.counterparty_id 
+            `SELECT ri.*, r.id as receipt_id_ref, r.doc_number, r.supplier_id 
              FROM receipt_items ri 
              JOIN receipts r ON ri.receipt_id = r.id 
              WHERE ri.id = $1 FOR UPDATE`,
@@ -4250,47 +4250,41 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Запись в inventory_logs (с защитой от ошибок колонок документа)
-        try {
-            const partInfo = await client.query(
-                'SELECT name, sku FROM zaphasti WHERE id = $1',
-                [currentItem.zaphasti_id]
-            );
-            const partName = partInfo.rows.length > 0 ? partInfo.rows[0].name : null;
-            const partSku = partInfo.rows.length > 0 ? partInfo.rows[0].sku : null;
+        // 5. Запись в inventory_logs (точно так же, как в POST)
+        const partInfo = await client.query(
+            'SELECT name, article FROM zaphasti WHERE id = $1',
+            [currentItem.zaphasti_id]
+        );
+        const zaphastiName = partInfo.rows.length > 0 ? partInfo.rows[0].name : 'Неизвестная запчасть';
+        const partArticle = partInfo.rows.length > 0 ? partInfo.rows[0].article : null;
 
-            let counterpartyName = null;
-            if (currentItem.counterparty_id) {
-                const cpInfo = await client.query(
-                    'SELECT name FROM counterparties WHERE id = $1',
-                    [currentItem.counterparty_id]
-                );
-                counterpartyName = cpInfo.rows.length > 0 ? cpInfo.rows[0].name : null;
-            }
-
-            const reasonText = `Изменение позиции прихода (ID: ${itemId}): кол-во -> ${numQty}, цена -> ${numPrice}`;
-
-            await writeInventoryLog(client, {
-                operation_type: 'Приход',
-                action: 'UPDATE',
-                document_id: receipt_id,
-                document_number: String(receipt_id),
-                user_id: userId,
-                counterparty: counterpartyName,
-                part_id: currentItem.zaphasti_id,
-                part_name: partName,
-                sku: partSku,
-                quantity: numQty,
-                price: numPrice,
-                discount: 0,
-                total_amount: totalRub,
-                warehouse_to: null,
-                warehouse_from: null,
-                reason: reasonText
-            });
-        } catch (logErr) {
-            console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
+        let counterpartyName = null;
+        if (currentItem.supplier_id) {
+            const cpRes = await client.query('SELECT name FROM counterparties WHERE id = $1', [currentItem.supplier_id]);
+            counterpartyName = cpRes.rows.length > 0 ? cpRes.rows[0].name : null;
         }
+
+        const docNumStr = currentItem.doc_number ? String(currentItem.doc_number) : String(receipt_id);
+        const reasonText = `Изменение позиции прихода №${docNumStr}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
+
+        await writeInventoryLog(client, {
+            operation_type: 'Приход',
+            action: 'UPDATE',
+            document_id: receipt_id,
+            document_number: docNumStr,
+            user_id: userId,
+            counterparty: counterpartyName,
+            part_id: currentItem.zaphasti_id,
+            part_name: zaphastiName,
+            sku: partArticle,
+            quantity: numQty,
+            price: numPrice,
+            discount: 0,
+            total_amount: totalRub,
+            warehouse_to: null,
+            warehouse_from: null,
+            reason: reasonText
+        });
 
         await client.query('COMMIT');
 
