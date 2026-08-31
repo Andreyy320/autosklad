@@ -4472,14 +4472,19 @@ router.post('/move_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
         // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted)
-        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ перемещения не найден.' });
         }
 
-        const { warehouse_from_id: warehouseFromId, warehouse_to_id: warehouseToId, is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const warehouseFromId = moveRecord.warehouse_from_id;
+        const warehouseToId = moveRecord.warehouse_to_id;
+        const isPosted = moveRecord.is_posted;
+        const moveDocNumber = moveRecord.doc_number ? String(moveRecord.doc_number) : String(move_id);
 
         if (isPosted) {
             await client.query('ROLLBACK');
@@ -4495,6 +4500,11 @@ router.post('/move_items', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
+
+        // Получаем название и артикул запчасти для логов склада
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
+        const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
         // Считаем расход из: 
@@ -4620,6 +4630,32 @@ router.post('/move_items', async (req, res) => {
                 );
             } catch (logErr) {
                 console.error('Ошибка записи audit_logs:', logErr.message);
+            }
+
+            // Добавляем запись в inventory_logs, ничего больше не меняя в логике FIFO
+            try {
+                const reasonText = `Добавлена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${takeQty}, цена: ${batch.price})`;
+
+                await writeInventoryLog(client, {
+                    operation_type: 'Перемещение',
+                    action: 'INSERT',
+                    document_id: Number(move_id),
+                    document_number: moveDocNumber,
+                    user_id: userId,
+                    counterparty: null,
+                    part_id: zaphasti_id,
+                    part_name: zaphastiName,
+                    sku: partArticle,
+                    quantity: takeQty,
+                    price: batch.price,
+                    discount: 0,
+                    total_amount: totalRub,
+                    warehouse_to: warehouseToId,
+                    warehouse_from: warehouseFromId,
+                    reason: reasonText
+                });
+            } catch (logErr) {
+                console.error('Ошибка записи в inventory_logs (не критично):', logErr.message);
             }
 
             remainingToDistribute -= takeQty;
