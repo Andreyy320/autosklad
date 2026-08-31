@@ -4004,6 +4004,33 @@ router.get('/get-move-logs', async (req, res) => {
     }
 });
 
+// GET /api/get-repair-logs - получение логов ремонта с расшифровкой связанных справочников
+router.get('/get-repair-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                rl.*,
+                z.name AS part_name,
+                z.article AS part_article,
+                u.name AS user_name,
+                wh.name AS warehouse_name,
+                c.car_number AS car_number,
+                c.model AS car_model
+            FROM repair_logs rl
+            LEFT JOIN zaphasti z ON rl.zaphast_id = z.id
+            LEFT JOIN users u ON rl.user_id = u.id
+            LEFT JOIN skladi wh ON rl.warehouse_id = wh.id
+            LEFT JOIN cars c ON rl.car_id = c.id
+            ORDER BY rl.created_at DESC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения логов ремонта:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при получении логов ремонта' });
+    }
+});
+
 // Функция записи лога приходов
 async function writeReceiptLog(client, req, data = {}) {
     try {
@@ -4079,7 +4106,39 @@ async function writeMoveLog(client, req, data) {
     }
 }
 
+// Функция для записи логов ремонта в таблицу repair_logs
+async function writeRepairLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
+        await client.query(
+            `INSERT INTO repair_logs (
+                action, repair_id, document_number, warehouse_id, car_id, 
+                zaphast_id, quantity, price, total, receipt_id, 
+                description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                data.action,
+                data.repair_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.zaphast_id,
+                data.quantity,
+                data.price,
+                data.total,
+                data.receipt_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
+    }
+}
 
 
 // POST /api/receipt_items - добавление позиции в приход
@@ -5040,13 +5099,17 @@ router.post('/repair_items', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Проверяем документ ремонта, его склад и статус проведения
-        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        const repairCheck = await client.query('SELECT doc_number, warehouse_id, car_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
         if (repairCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный документ ремонта не найден.' });
         }
 
-        const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
+        const repairRecord = repairCheck.rows[0];
+        const warehouseId = repairRecord.warehouse_id;
+        const carId = repairRecord.car_id;
+        const isPosted = repairRecord.is_posted;
+        const documentNumber = repairRecord.doc_number || `РЕМОНТ-${repair_id}`;
 
         const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === 1 || isPosted === '1' || isPosted === 2 || isPosted === '2';
         if (isDocumentPosted) {
@@ -5134,8 +5197,6 @@ router.post('/repair_items', async (req, res) => {
 
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
-        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 3. Распределяем строго по партиям FIFO
         for (const batch of batches) {
@@ -5169,15 +5230,20 @@ router.post('/repair_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
-            try {
-                await client.query(
-                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [userId, 'INSERT', 'repair_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, receipt_id: batch.receipt_id }), clientIp]
-                );
-            } catch (logErr) {
-                console.error('Ошибка записи audit_logs:', logErr.message);
-            }
+            // Запись в repair_logs вместо audit_logs
+            await writeRepairLog(client, req, {
+                action: 'INSERT',
+                repair_id: repair_id,
+                document_number: documentNumber,
+                warehouse_id: warehouseId,
+                car_id: carId,
+                zaphast_id: zaphast_id,
+                quantity: takeQty,
+                price: batch.price,
+                total: totalSum,
+                receipt_id: batch.receipt_id,
+                description: description || null
+            });
 
             remainingToDistribute -= takeQty;
         }
@@ -5201,6 +5267,40 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
+
+// Функция для записи логов ремонта в таблицу repair_logs
+async function writeRepairLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO repair_logs (
+                action, repair_id, document_number, warehouse_id, car_id, 
+                zaphast_id, quantity, price, total, receipt_id, 
+                description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                data.action,
+                data.repair_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.zaphast_id,
+                data.quantity,
+                data.price,
+                data.total,
+                data.receipt_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
+    }
+}
 
 // PUT /api/repair_items/:id - редактирование запчасти в ремонте с полноценным FIFO и проверкой склада
 router.put('/repair_items/:id', async (req, res) => {

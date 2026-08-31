@@ -89,6 +89,20 @@
                     <th>Описание / Детали</th>
                 </tr>
             `;
+        } else if (type === 'Ремонт') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Склад</th>
+                    <th>Автомобиль</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
         } else {
             thead.innerHTML = `
                 <tr>
@@ -111,7 +125,10 @@
         currentType = type;
         renderTableHead(type);
 
-        const colspanCount = type === 'Перемещение' ? 9 : 10;
+        let colspanCount = 10;
+        if (type === 'Перемещение') colspanCount = 9;
+        if (type === 'Ремонт') colspanCount = 9;
+
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
 
@@ -156,7 +173,7 @@
                     actionBadge = `<span class="badge badge-default">${action}</span>`;
                 }
 
-                const partName = log.part_name || log.name || log.zaphasti_name || '—';
+                const partName = log.part_name || log.name || log.zaphasti_name || log.zaphast_name || '—';
                 const partArticle = log.part_article || log.article || log.zaphasti_article || '—';
 
                 if (currentType === 'Перемещение') {
@@ -178,6 +195,25 @@
                         <td class="text-right">${Number(log.price_rub || log.price || 0).toLocaleString()} руб.</td>
                         <td class="text-right"><strong>${Number(log.total_rub || log.total_amount || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.description || log.reason || '—'}</td>
+                    `;
+                } else if (currentType === 'Ремонт') {
+                    // Рендер строки для вкладки Ремонт (поля структуры repair_logs)
+                    const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
+                    const carInfo = log.car_number ? `${log.car_number} (${log.car_model || '—'})` : (log.car_id ? `Авто ID: ${log.car_id}` : '—');
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${whName}</td>
+                        <td>${carInfo}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || '—'}</td>
                     `;
                 } else {
                     // Рендер строки для остальных вкладок
