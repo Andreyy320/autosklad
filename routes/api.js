@@ -5451,15 +5451,16 @@ router.put('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs'];
+        // Получаем старую запись для сравнения изменений (что на что поменялось)
+        const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
+        if (currentDocRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+        const oldDoc = currentDocRes.rows[0];
+
+        const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs', 'realizations'];
         if (docWithStatusTables.includes(entity)) {
-            // Добавлен FOR UPDATE для блокировки шапки документа от гонок
-            const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
-            if (currentDocRes.rows.length === 0) {
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Запись не найдена' });
-            }
-            const oldDoc = currentDocRes.rows[0];
             const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
             if (oldIsPosted) {
@@ -5475,14 +5476,7 @@ router.put('/:entity/:id', async (req, res) => {
         }
 
         if (entity === 'repair_works') {
-            // Добавлен FOR UPDATE
-            const oldItemRes = await client.query('SELECT * FROM "repair_works" WHERE id = $1 FOR UPDATE', [id]);
-            if (oldItemRes.rows.length === 0) {
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Запись не найдена' });
-            }
-            const oldItem = oldItemRes.rows[0];
-            const targetRepairId = req.body.repair_id || oldItem.repair_id;
+            const targetRepairId = req.body.repair_id || oldDoc.repair_id;
 
             if (targetRepairId) {
                 const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [targetRepairId]);
@@ -5515,16 +5509,44 @@ router.put('/:entity/:id', async (req, res) => {
             return res.status(404).json({ error: 'Запись не найдена' });
         }
 
-        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE) ====================
-        try {
-            const userId = req.headers['x-user-id'] || req.body.user_id || null;
-            const detailsStr = Object.entries(req.body)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(', ');
+        const updatedDoc = result.rows[0];
 
+        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE с детализацией изменений) ====================
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || oldDoc.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            // Сравниваем старые и новые значения по измененным полям
+            const changes = {};
+            for (const key of keys) {
+                const oldValue = oldDoc[key];
+                const newValue = updatedDoc[key];
+                if (String(oldValue) !== String(newValue)) {
+                    changes[key] = {
+                        from: oldValue,
+                        to: newValue
+                    };
+                }
+            }
+
+            const detailsObj = {
+                updated_fields: req.body,
+                changes: changes
+            };
+
+            // Проверяем структуру таблицы audit_logs (наличие колонки table_name / ip_address для совместимости)
             await client.query(
-                `INSERT INTO audit_logs (user_id, entity, action, record_id, details) VALUES ($1, $2, $3, $4, $5)`,
-                [userId, entity, 'UPDATE', id, detailsStr || 'Обновление записи']
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    userId,
+                    'UPDATE',
+                    entity,
+                    id,
+                    JSON.stringify(detailsObj),
+                    clientIp
+                ]
             );
         } catch (logErr) {
             console.error('Ошибка записи лога (не критично):', logErr.message);
@@ -5532,7 +5554,7 @@ router.put('/:entity/:id', async (req, res) => {
         // ============================================================================
 
         await client.query('COMMIT');
-        res.json(result.rows[0]);
+        res.json(updatedDoc);
 
     } catch (err) {
         await client.query('ROLLBACK');
