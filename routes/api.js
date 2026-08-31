@@ -38,131 +38,155 @@ router.get('/get-logs', async (req, res) => {
         
         let query = `
             SELECT * FROM (
-                -- 1. ПРИХОДЫ (receipt_items + audit_logs)
+                -- 1. ПРИХОДЫ (receipt_items)
                 SELECT 
                     'receipt' AS operation_type,
                     r.id AS doc_id,
                     r.doc_number,
-                    COALESCE(al.created_at, r.fact_date, r.date, NOW()) AS created_at,
-                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
-                    al.action AS action_type,
+                    COALESCE(r.fact_date, r.date, NOW()) AS created_at,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     p.name AS counterparty,
-                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
-                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
-                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
-                    COALESCE(ri.price, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'price', '') AS NUMERIC), 0) AS price,
-                    (COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) * COALESCE(ri.price, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'price', '') AS NUMERIC), 0)) AS total_amount,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    ri.quantity,
+                    ri.price,
+                    (ri.quantity * ri.price) AS total_amount,
                     CONCAT(
                         'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
-                        ' [', al.action, ']',
-                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                        COALESCE((
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' AND al.details LIKE '%changes%' THEN CONCAT(' [Изменено: ', al.details, ']')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'receipts' OR al.table_name = 'receipt_items') 
+                              AND (al.record_id = r.id OR al.record_id = ri.id)
+                        ), '')
                     ) AS reason
-                FROM audit_logs al
-                JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+                FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN users u_audit ON al.user_id = u_audit.id
                 LEFT JOIN users u_doc ON r.user_id = u_doc.id
 
                 UNION ALL
 
-                -- 2. ПЕРЕМЕЩЕНИЯ (move_items + audit_logs)
+                -- 2. ПЕРЕМЕЩЕНИЯ (move_items)
                 SELECT 
                     'move' AS operation_type,
                     m.id AS doc_id,
                     m.doc_number,
-                    COALESCE(al.created_at, m.fact_date, m.date, NOW()) AS created_at,
-                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
-                    al.action AS action_type,
+                    COALESCE(m.fact_date, m.date, NOW()) AS created_at,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     wt.name AS warehouse_to,
                     wf.name AS warehouse_from,
                     NULL AS counterparty,
-                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
-                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
-                    COALESCE(mi.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    mi.quantity,
                     COALESCE(ri_orig.price, mi.price, 0) AS price,
-                    (COALESCE(mi.quantity, 0) * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
+                    (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
                     CONCAT(
                         'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
-                        ' [', al.action, ']',
-                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                        COALESCE((
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'moves' OR al.table_name = 'move_items') 
+                              AND (al.record_id = m.id OR al.record_id = mi.id)
+                        ), '')
                     ) AS reason
-                FROM audit_logs al
-                JOIN move_items mi ON al.table_name = 'move_items' AND al.record_id = mi.id
+                FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
                 LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
                 LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
-                LEFT JOIN users u_audit ON al.user_id = u_audit.id
                 LEFT JOIN users u_doc ON m.user_id = u_doc.id
                 LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
 
                 UNION ALL
 
-                -- 3. РЕМОНТЫ (repair_items + audit_logs)
+                -- 3. РЕМОНТЫ (repair_items)
                 SELECT 
                     'repair' AS operation_type,
                     rep.id AS doc_id,
                     rep.doc_number,
-                    COALESCE(al.created_at, rep.fact_date, rep.doc_date, NOW()) AS created_at,
-                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
-                    al.action AS action_type,
+                    COALESCE(rep.fact_date, rep.doc_date, NOW()) AS created_at,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
-                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
-                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
-                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
-                    COALESCE(ri.price, 0) AS price,
-                    (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
+                    z.name AS part_name,
+                    z.article AS part_article,
+                    ri.quantity,
+                    ri.price,
+                    (ri.quantity * ri.price) AS total_amount,
                     CONCAT(
                         'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
-                        ' [', al.action, ']',
-                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                        COALESCE((
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'repairs' OR al.table_name = 'repair_items') 
+                              AND (al.record_id = rep.id OR al.record_id = ri.id)
+                        ), '')
                     ) AS reason
-                FROM audit_logs al
-                JOIN repair_items ri ON al.table_name = 'repair_items' AND al.record_id = ri.id
+                FROM repair_items ri
                 JOIN repairs rep ON ri.repair_id = rep.id
                 LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
                 LEFT JOIN skladi s ON rep.warehouse_id = s.id
                 LEFT JOIN cars c ON rep.car_id = c.id
-                LEFT JOIN users u_audit ON al.user_id = u_audit.id
                 LEFT JOIN users u_doc ON rep.user_id = u_doc.id
 
                 UNION ALL
 
-                -- 4. РЕАЛИЗАЦИИ (realization_items + audit_logs)
+                -- 4. РЕАЛИЗАЦИИ (realization_items)
                 SELECT 
                     'realization' AS operation_type,
                     rz.id AS doc_id,
                     rz.doc_number,
-                    COALESCE(al.created_at, rz.fact_date, rz.doc_date, NOW()) AS created_at,
-                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
-                    al.action AS action_type,
+                    COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
-                    COALESCE(cust.name, cust.name_full, 'Покупатель') AS counterparty,
-                    COALESCE(ri.name, z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
-                    COALESCE(ri.article, z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
-                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 1) AS quantity,
+                    COALESCE(cust.name_full, 'Покупатель') AS counterparty,
+                    COALESCE(ri.name, z.name) AS part_name,
+                    COALESCE(ri.article, z.article) AS part_article,
+                    COALESCE(ri.quantity, 1) AS quantity,
                     COALESCE(ri.price, 0) AS price,
                     COALESCE(ri.total_rub, 0) AS total_amount,
                     CONCAT(
                         'Реализация №', rz.doc_number,
-                        ' [', al.action, ']',
-                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                        COALESCE((
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'realizations' OR al.table_name = 'realization_items') 
+                              AND (al.record_id = rz.id OR al.record_id = ri.id)
+                        ), '')
                     ) AS reason
-                FROM audit_logs al
-                JOIN realization_items ri ON al.table_name = 'realization_items' AND al.record_id = ri.id
+                FROM realization_items ri
                 JOIN realizations rz ON ri.realization_id = rz.id
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON rz.sklad_id = s.id
                 LEFT JOIN customers cust ON rz.customer_id = cust.id
-                LEFT JOIN users u_audit ON al.user_id = u_audit.id
                 LEFT JOIN users u_doc ON rz.user_id = u_doc.id
             ) AS combined_logs
         `;
@@ -173,13 +197,13 @@ router.get('/get-logs', async (req, res) => {
             params.push(type);
         }
 
-        query += ` ORDER BY created_at DESC LIMIT 300`;
+        query += ` ORDER BY created_at DESC LIMIT 200`;
 
         const result = await pool.query(query, params);
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения детального журнала логов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        return res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 // Открытие самой страницы logs.html по адресу /logs (GET)
