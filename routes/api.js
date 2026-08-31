@@ -46,11 +46,9 @@ router.get('/get-logs', async (req, res) => {
                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
-                -- Достаем название запчасти из лога или из текущей таблицы как запасной вариант
+                -- Берем название запчасти из текста JSON или текущей базы
                 COALESCE(
-                    NULLIF(al.details->'deleted_item'->>'zaphasti_name', ''),
-                    NULLIF(al.details->'updated_fields'->>'zaphasti_name', ''),
-                    NULLIF(al.details->'zaphasti_name', ''),
+                    al.details->>'zaphasti_name',
                     z.name, 
                     'Документ прихода'
                 ) AS part_name,
@@ -58,35 +56,27 @@ router.get('/get-logs', async (req, res) => {
                     z.article, 
                     '—'
                 ) AS part_article,
-                -- Жестко фиксируем количество из JSON-лога, чтобы оно не менялось при редактировании
+                -- Берем количество из JSON или текущей базы
                 COALESCE(
-                    NULLIF(al.details->'updated_fields'->>'quantity', '')::numeric,
-                    NULLIF(al.details->'deleted_item'->>'quantity', '')::numeric,
-                    NULLIF(al.details->>'quantity', '')::numeric,
+                    (al.details->>'quantity')::numeric,
                     ri.quantity, 
                     0
                 ) AS quantity,
-                -- Жестко фиксируем цену из JSON-лога
+                -- Берем цену из JSON или текущей базы
                 COALESCE(
-                    NULLIF(al.details->'updated_fields'->>'price', '')::numeric,
-                    NULLIF(al.details->'deleted_item'->>'price', '')::numeric,
-                    NULLIF(al.details->>'price', '')::numeric,
+                    (al.details->>'price')::numeric,
                     ri.price, 
                     0
                 ) AS price,
-                -- Итоговая сумма по конкретному историческому моменту
+                -- Считаем итоговую сумму
                 (
                     COALESCE(
-                        NULLIF(al.details->'updated_fields'->>'quantity', '')::numeric,
-                        NULLIF(al.details->'deleted_item'->>'quantity', '')::numeric,
-                        NULLIF(al.details->>'quantity', '')::numeric,
+                        (al.details->>'quantity')::numeric,
                         ri.quantity, 
                         0
                     ) * 
                     COALESCE(
-                        NULLIF(al.details->'updated_fields'->>'price', '')::numeric,
-                        NULLIF(al.details->'deleted_item'->>'price', '')::numeric,
-                        NULLIF(al.details->>'price', '')::numeric,
+                        (al.details->>'price')::numeric,
                         ri.price, 
                         0
                     )
@@ -98,8 +88,7 @@ router.get('/get-logs', async (req, res) => {
                     CASE 
                         WHEN al.action = 'INSERT' AND al.table_name = 'receipts' THEN ' [Документ создан]'
                         WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция]')
-                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details::text LIKE '%is_posted%' AND al.details::text LIKE '%"to":true%' THEN ' [Документ проведен]'
-                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details::text LIKE '%is_posted%' AND al.details::text LIKE '%"to":false%' THEN ' [Документ распроведен]'
+                        WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' THEN ' [Изменен документ прихода]'
                         WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция количество/цена]')
                         WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
                         ELSE CONCAT(' [', al.action, ']')
@@ -121,7 +110,7 @@ router.get('/get-logs', async (req, res) => {
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения журнала приходов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера при получении логов' });
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов: ' + err.message });
     }
 });
 // Открытие самой страницы logs.html по адресу /logs (GET)
