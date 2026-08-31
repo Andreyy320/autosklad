@@ -68,7 +68,7 @@
 
         try {
             // Обращаемся к нашему бэкенд роутеру /get-logs
-            const response = await fetch(`/get-logs?type=${type}`);
+const response = await fetch(`/api/get-logs?type=${type}`);
             const logs = await response.json();
             
             tbody.innerHTML = '';
