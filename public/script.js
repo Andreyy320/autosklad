@@ -6702,7 +6702,7 @@ async function checkRemindersOnStart() {
             modal.innerHTML = `
                 <div style="background: #fff; width: 1050px; max-height: 85vh; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
                     <div style="background: #f5f5f5; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
-                        <h3 style="margin: 0; font-size: 18px; color: #333;">Напоминания (ТО и Страховка)</h3>
+                        <h3 style="margin: 0; font-size: 18px; color: #333;">Напоминания</h3>
                         <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
                     </div>
                     <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">

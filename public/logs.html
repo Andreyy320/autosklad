@@ -2,91 +2,122 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Журнал логов и действий</title>
+    <title>Складской журнал операций</title>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
-        tr:hover { background-color: #f1f1f1; }
         .back-btn { display: inline-block; margin-bottom: 15px; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; }
         .back-btn:hover { background: #5a6268; }
-        .badge { background: #e2e8f0; color: #1e293b; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .action-insert { color: #16a34a; font-weight: bold; }
-        .action-update { color: #2563eb; font-weight: bold; }
-        .action-delete { color: #dc2626; font-weight: bold; }
-        .action-login { color: #9333ea; font-weight: bold; }
+        
+        /* Стили для вкладок */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; }
+        .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: #495057; }
+        .tab-btn.active { background: #007bff; color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #343a40; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <a href="/" class="back-btn">← На главную в склад</a>
-    <h1>📜 Журнал действий пользователей</h1>
+    <h1>📦 Журнал движения запчастей и операций</h1>
     
+    <!-- Вкладки по типам операций -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('arrival', this)">📥 Приходы</button>
+        <button class="tab-btn" onclick="switchTab('sale', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('movement', this)">🔄 Перемещения</button>
+        <button class="tab-btn" onclick="switchTab('repair', this)">🔧 Ремонт</button>
+    </div>
+
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>Дата / Время</th>
                 <th>Пользователь</th>
-                <th>Раздел / Документ</th>
-                <th>Действие</th>
-                <th>ID записи</th>
-                <th>Детали (что изменили, сколько штук)</th>
-                <th>Время</th>
+                <th>Документ</th>
+                <th>Контрагент</th>
+                <th>Запчасть (Артикул)</th>
+                <th class="text-center">Количество</th>
+                <th class="text-right">Цена</th>
+                <th class="text-right">Скидка</th>
+                <th class="text-right">Итого</th>
+                <th>Направление / Причина</th>
             </tr>
         </thead>
         <tbody id="logs-table-body">
-            <tr><td colspan="7" style="text-align: center;">Загрузка логов...</td></tr>
+            <tr><td colspan="10" style="text-align: center;">Загрузка данных...</td></tr>
         </tbody>
     </table>
 </div>
 
 <script>
-    async function loadLogs() {
+    let currentType = 'arrival';
+
+    async function loadLogs(type) {
+        currentType = type;
+        const tbody = document.getElementById('logs-table-body');
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
+
         try {
-            const response = await fetch('/api/get-logs');
+            const response = await fetch(`/api/inventory-logs?type=${type}`);
             const logs = await response.json();
             
-            const tbody = document.getElementById('logs-table-body');
             tbody.innerHTML = '';
 
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Логов пока нет</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">В этом разделе пока нет записей</td></tr>';
                 return;
             }
 
             logs.forEach(log => {
                 const tr = document.createElement('tr');
                 
-                // Красивое оформление цвета для разных действий
-                let actionClass = '';
-                const act = (log.action || '').toUpperCase();
-                if (act.includes('INSERT')) actionClass = 'action-insert';
-                else if (act.includes('UPDATE')) actionClass = 'action-update';
-                else if (act.includes('DELETE')) actionClass = 'action-delete';
-                else if (act.includes('LOGIN')) actionClass = 'action-login';
+                // Форматируем дату красиво
+                const dateObj = new Date(log.created_at);
+                const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
+
+                // Формируем направление (откуда -> куда) или причину
+                let directionOrReason = log.reason || '';
+                if (log.warehouse_from || log.warehouse_to) {
+                    directionOrReason = `${log.warehouse_from || 'Склад'} ➔ ${log.warehouse_to || 'Склад'} ${log.reason ? '(' + log.reason + ')' : ''}`;
+                }
 
                 tr.innerHTML = `
-                    <td>${log.id}</td>
-                    <td><strong>${log.user_name || 'Неизвестный'}</strong></td>
-                    <td><span class="badge">${log.entity || '-'}</span></td>
-                    <td><span class="${actionClass}">${log.action}</span></td>
-                    <td>${log.record_id || '-'}</td>
-                    <td>${log.details || ''}</td>
-                    <td>${new Date(log.created_at).toLocaleString()}</td>
+                    <td>${formattedDate}</td>
+                    <td><strong>${log.user_name || 'Система'}</strong></td>
+                    <td>${log.document_number || '—'}</td>
+                    <td>${log.counterparty || '—'}</td>
+                    <td>${log.part_name || '—'} <br><small style="color: #666;">Арт: ${log.sku || '—'}</small></td>
+                    <td class="text-center"><strong>${log.quantity}</strong></td>
+                    <td class="text-right">${Number(log.price).toLocaleString()} руб.</td>
+                    <td class="text-right">${log.discount}%</td>
+                    <td class="text-right"><strong>${Number(log.total_amount).toLocaleString()} руб.</strong></td>
+                    <td>${directionOrReason}</td>
                 `;
                 tbody.appendChild(tr);
             });
         } catch (err) {
             console.error('Ошибка загрузки логов:', err);
-            document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Ошибка загрузки данных</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки данных с сервера</td></tr>';
         }
     }
 
-    loadLogs();
+    function switchTab(type, buttonElement) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        buttonElement.classList.add('active');
+        loadLogs(type);
+    }
+
+    // Загружаем приходы при открытии страницы по умолчанию
+    loadLogs('arrival');
 </script>
 
 </body>

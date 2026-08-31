@@ -32,32 +32,56 @@ module.exports = (pool) => {
         }
     });
 
-// 1. Получение списка логов для таблицы (GET)
+// 1. Получение списка товарных логов с фильтрацией по вкладкам (GET)
 router.get('/get-logs', async (req, res) => {
     try {
-        const result = await pool.query(`
+        const { type } = req.query; // Получаем тип из параметров запроса (например: ?type=arrival)
+        
+        let query = `
             SELECT 
-                audit_logs.id, 
+                inventory_logs.id, 
                 users.login AS user_name, 
-                audit_logs.entity,
-                audit_logs.action, 
-                audit_logs.record_id,
-                audit_logs.details, 
-                audit_logs.created_at 
-            FROM audit_logs 
-            LEFT JOIN users ON audit_logs.user_id = users.id 
-            ORDER BY audit_logs.created_at DESC
-        `);
+                inventory_logs.operation_type,
+                inventory_logs.document_id,
+                inventory_logs.document_number,
+                inventory_logs.counterparty,
+                inventory_logs.part_id,
+                inventory_logs.part_name,
+                inventory_logs.sku,
+                inventory_logs.quantity,
+                inventory_logs.price,
+                inventory_logs.discount,
+                inventory_logs.total_amount,
+                inventory_logs.warehouse_from,
+                inventory_logs.warehouse_to,
+                inventory_logs.reason,
+                inventory_logs.created_at 
+            FROM inventory_logs 
+            LEFT JOIN users ON inventory_logs.user_id = users.id
+        `;
+
+        const params = [];
+        
+        // Если передан конкретный тип вкладки — фильтруем по нему
+        if (type) {
+            query += ` WHERE inventory_logs.operation_type = $1`;
+            params.push(type);
+        }
+        
+        query += ` ORDER BY inventory_logs.created_at DESC LIMIT 150`;
+
+        const result = await pool.query(query, params);
         return res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения логов:', err.message);
+        console.error('Ошибка получения товарных логов:', err.message);
         return res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-    // Открытие самой страницы logs.html по адресу /logs (GET)
-    router.get('/logs', (req, res) => {
-        res.sendFile(path.join(__dirname, '../logs.html'));
-    });
+
+// Открытие самой страницы logs.html по адресу /logs (GET)
+router.get('/logs', (req, res) => {
+    res.sendFile(path.join(__dirname, '../logs.html'));
+});
 
     // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ (С полными логами)
     router.get('/users', async (req, res) => {
