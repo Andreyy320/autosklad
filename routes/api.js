@@ -2873,9 +2873,6 @@ router.post('/realization_items', async (req, res) => {
         const zap = zaphastiRes.rows[0];
 
         // 3. Собираем партии с учетом исходных приходов И перемещений на этот склад (`warehouse_to_id`)
-        // ВНИМАНИЕ: возвращаем условие "(rel.is_posted = true OR rel.id = $3)", чтобы при расчете 
-        // доступного остатка для текущего документа учитывались уже добавленные в него строки, 
-        // но при этом старые списания из других документов не блокировали остаток повторно.
         const batchesQuery = `
             WITH all_incoming_batches AS (
                 -- Прямые приходы на склад
@@ -2985,7 +2982,10 @@ router.post('/realization_items', async (req, res) => {
 
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
-        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+        
+        // Надежно подхватываем пользователя из заголовков или тела
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 5. Распределение по партиям (FIFO) с теми ценами, с которыми они пришли через перемещение
@@ -3061,8 +3061,6 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-
-
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
     const { id } = req.params;
