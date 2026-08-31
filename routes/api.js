@@ -90,12 +90,12 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. РЕМОНТЫ (repair_items + repairs)
+                -- 3. РЕМОНТЫ (repair_items + repairs) - берем безопасно созданные поля
                 SELECT 
                     'repair' AS operation_type,
                     rep.id AS doc_id,
                     rep.doc_number,
-                    COALESCE(rep.fact_date, rep.date, NOW()) AS created_at,
+                    COALESCE(rep.created_at, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -121,7 +121,7 @@ router.get('/get-logs', async (req, res) => {
                     'realization' AS operation_type,
                     rz.id AS doc_id,
                     rz.doc_number,
-                    COALESCE(rz.fact_date, rz.date, NOW()) AS created_at,
+                    COALESCE(rz.created_at, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
