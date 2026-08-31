@@ -4729,7 +4729,7 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе перемещения не указан склад-источник.' });
         }
 
-        // Узнаем название и артикул запчасти для логов
+        // Получаем название и артикул запчасти для логов склада
         const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
         const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
         const partArticle = partRes.rows.length > 0 ? partRes.rows[0].article : null;
@@ -4858,23 +4858,23 @@ router.put('/move_items/:id', async (req, res) => {
         const result = await client.query(updateQuery, values);
         const updatedRecord = result.rows[0];
 
-        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+        // Лог аудита
+        const userId = req.headers['user-id'] || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-        // Лог аудита
         try {
             await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'UPDATE', 'move_items', updatedRecord.id, JSON.stringify({ ...req.body, income_document_id: chosenBatch.receipt_id }), clientIp]
+                [userId, 'UPDATE', 'move_items', updatedRecord.id, JSON.stringify(req.body), clientIp]
             );
         } catch (logErr) {
             console.error('Ошибка записи audit_logs:', logErr.message);
         }
 
-        // Добавляем запись в inventory_logs в ту же транзакцию
+        // Запись в таблицу складских логов (inventory_logs)
         try {
-            const reasonText = `Изменена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${requestedQty}, цена: ${finalPrice})`;
+            const reasonText = `Обновлена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${requestedQty}, цена: ${finalPrice})`;
 
             await writeInventoryLog(client, {
                 operation_type: 'Перемещение',
