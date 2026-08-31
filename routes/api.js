@@ -4121,6 +4121,7 @@ router.post('/receipt_items', async (req, res) => {
 
         // 1. Проверяем обязательные поля
         if (!receipt_id || !zaphasti_id) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
         }
 
@@ -4131,11 +4132,13 @@ router.post('/receipt_items', async (req, res) => {
         );
 
         if (receiptCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Указанный приход не найден.' });
         }
 
         const isPostedVal = receiptCheck.rows[0].is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
         }
 
@@ -4176,6 +4179,28 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
+        // 5. Автоматическая запись лога (INSERT)
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    userId,
+                    'INSERT',
+                    'receipt_items',
+                    createdItem.id,
+                    JSON.stringify({ message: 'Добавлена новая позиция в приход', data: createdItem }),
+                    clientIp
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога (не критично):', logErr.message);
+        }
+
         await client.query('COMMIT');
 
         return res.status(201).json({
@@ -4200,7 +4225,6 @@ router.post('/receipt_items', async (req, res) => {
         client.release();
     }
 });
-
 
 // PUT /api/receipt_items/:id - редактирование позиции в приходе
 router.put('/receipt_items/:id', async (req, res) => {
@@ -4285,6 +4309,47 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
+
+        // 5. Автоматическая запись лога (UPDATE с детализацией изменений)
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            const changes = {};
+            const fieldsToCheck = ['price', 'currency', 'quantity', 'description', 'price_rub', 'total_rub'];
+
+            for (const key of fieldsToCheck) {
+                const oldValue = currentItem[key];
+                const newValue = updatedItem[key];
+                if (String(oldValue ?? '') !== String(newValue ?? '')) {
+                    changes[key] = {
+                        from: oldValue,
+                        to: newValue
+                    };
+                }
+            }
+
+            const detailsObj = {
+                updated_fields: req.body,
+                changes: changes
+            };
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    userId,
+                    'UPDATE',
+                    'receipt_items',
+                    itemId,
+                    JSON.stringify(detailsObj),
+                    clientIp
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога (не критично):', logErr.message);
+        }
 
         await client.query('COMMIT');
 
