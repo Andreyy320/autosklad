@@ -2216,7 +2216,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки машин покупателя при открытии:', e);
                     }
-                } else if (item && item.car_id) {
+                } else {
                     try {
                         const carRes = await fetch(`/api/customer_cars`);
                         if (carRes.ok) {
@@ -2226,6 +2226,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки списка машин:', e);
                     }
+                }
+            } else if (referenceName === 'cars') {
+                try {
+                    const carRes = await fetch(`/api/cars`);
+                    if (carRes.ok) {
+                        refItems = await carRes.json();
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки списка автомобилей (cars):', e);
                 }
             } else {
                 refItems = await fetchReferenceData(referenceName);
@@ -2309,9 +2318,16 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     }
 
-    // Исправление: убрали добавление carCol в самый низ, если это автострахование или техосмотр
     if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
         if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
+            html += await renderField(carCol);
+        }
+    }
+
+    // Принудительный вывод car_id для autostrahovanie и tehosmotr, если оно есть в конфиге, но не отрисовалось выше
+    if (carCol && (entity === 'autostrahovanie' || entity === 'tehosmotr')) {
+        const alreadyRendered = config.columns.some(c => c.field === 'autoservice');
+        if (!alreadyRendered) {
             html += await renderField(carCol);
         }
     }
