@@ -5807,17 +5807,33 @@ async function writeAuditLog(client, req, data) {
         const userId = currentUserId || req.body?.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
+        // Безопасная подготовка details для типа JSON/JSONB
+        let detailsParam = null;
+        if (data.details !== undefined && data.details !== null) {
+            if (typeof data.details === 'string') {
+                try {
+                    // Проверяем, может строка уже является валидным JSON, или её нужно распарсить/обернуть
+                    JSON.parse(data.details);
+                    detailsParam = data.details; // уже валидный JSON в виде строки
+                } catch (e) {
+                    detailsParam = JSON.stringify(data.details); // обычная строка — заворачиваем в JSON
+                }
+            } else {
+                detailsParam = JSON.stringify(data.details); // объект/массив — сериализуем
+            }
+        }
+
         await client.query(
             `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
             [
                 userId,
-                data.action,                                    // 'INSERT', 'UPDATE', 'DELETE'
-                data.table_name || null,                        // имя таблицы (например, 'move_items')
-                data.record_id || null,                         // ID записи
-                data.details ? JSON.stringify(data.details) : null, // детальные данные
+                data.action,                            // 'INSERT', 'UPDATE', 'DELETE'
+                data.table_name || null,                // имя таблицы (например, 'move_items')
+                data.record_id || null,                 // ID записи
+                detailsParam,                           // безопасный JSON
                 clientIp,
-                data.entity || null                             // сущность
+                data.entity || null                     // сущность
             ]
         );
     } catch (logErr) {
@@ -5989,16 +6005,24 @@ router.post('/:entity', async (req, res) => {
             const userId = currentUserId || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             
+            let detailsJson = '{}';
+            try {
+                detailsJson = req.body ? JSON.stringify(req.body) : '{}';
+            } catch (e) {
+                detailsJson = '{}';
+            }
+
             await pool.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
                     userId,
                     'INSERT',
                     entity,
                     newRecord.id || null,
-                    JSON.stringify(req.body),
-                    clientIp
+                    detailsJson,
+                    clientIp,
+                    entity
                 ]
             );
         } catch (logErr) {
