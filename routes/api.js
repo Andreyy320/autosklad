@@ -111,6 +111,9 @@ router.get('/get-logs', async (req, res) => {
         return res.status(500).json({ error: 'Ошибка сервера при получении логов: ' + err.message });
     }
 });
+
+
+
 // Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
     res.sendFile(path.join(__dirname, '../logs.html'));
@@ -4047,6 +4050,10 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
         }
 
+        // Узнаем название запчасти для лога
+        const partRes = await client.query('SELECT name FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows[0]?.name || 'Неизвестная запчасть';
+
         // 3. Подготовка и расчёт числовых полей
         const numPrice = Number(price) || 0;
         const numQty = Number(quantity) || 0;
@@ -4084,7 +4091,7 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Автоматическая запись лога (INSERT)
+        // 5. Автоматическая запись лога (INSERT) с фиксированными параметрами
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || null;
@@ -4098,7 +4105,12 @@ router.post('/receipt_items', async (req, res) => {
                     'INSERT',
                     'receipt_items',
                     createdItem.id,
-                    JSON.stringify({ message: 'Добавлена новая позиция в приход', data: createdItem }),
+                    JSON.stringify({
+                        zaphasti_name: zaphastiName,
+                        quantity: numQty,
+                        price: numPrice,
+                        message: 'Добавлена новая позиция в приход'
+                    }),
                     clientIp
                 ]
             );
@@ -4147,7 +4159,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         // 1. Находим саму позицию прихода и блокируем её
         const itemCheck = await client.query(
-            'SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE',
+            'SELECT ri.*, z.name AS zaphasti_name FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id WHERE ri.id = $1 FOR UPDATE',
             [itemId]
         );
 
@@ -4158,6 +4170,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
+        const zaphastiName = currentItem.zaphasti_name || 'Неизвестная запчасть';
 
         // 2. Проверяем, проведен ли родительский документ (receipts)
         const receiptCheck = await client.query(
@@ -4173,10 +4186,10 @@ router.put('/receipt_items/:id', async (req, res) => {
         const isPostedVal = receiptCheck.rows[0].is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === '2' || isPostedVal === 1 || isPostedVal === '1') {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенный документ!' });
         }
 
-        // 3. Подготовка и расчёт новых числовых полей (если поле не передано, оставляем старое)
+        // 3. Подготовка и расчёт новых числовых полей
         const numPrice = price !== undefined ? Number(price) || 0 : Number(currentItem.price);
         const numQty = quantity !== undefined ? Number(quantity) || 0 : Number(currentItem.quantity);
         const priceRub = numPrice; 
@@ -4215,7 +4228,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Автоматическая запись лога (UPDATE с детализацией изменений — только если есть реальные изменения)
+        // 5. Автоматическая запись лога (INSERT новой строки в history-логу без перезаписи)
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || null;
@@ -4235,11 +4248,14 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            // Записываем в audit_logs только при наличии реальных изменений
+            // Записываем в audit_logs чистую новую строку-историю только при наличии реальных изменений
             if (Object.keys(changes).length > 0) {
                 const detailsObj = {
-                    updated_fields: req.body,
-                    changes: changes
+                    zaphasti_name: zaphastiName,
+                    quantity: numQty,
+                    price: numPrice,
+                    changes: changes,
+                    message: 'Изменена позиция в приходе'
                 };
 
                 await client.query(
@@ -4283,7 +4299,6 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
 router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
