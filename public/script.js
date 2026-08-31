@@ -2038,6 +2038,7 @@ function closeDrawer() {
     }
 
 }
+
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2617,6 +2618,10 @@ async function openReceiptForm(entity, item = null) {
     const config = getConfig('receipts');
     const drawer = getOrCreateDrawer();
     
+    // Безопасно определяем ID редактируемой записи, поддерживая разные варианты ключей
+    const itemId = item && (item.id || item.item_id || item.receipt_id);
+    const isEdit = Boolean(itemId);
+
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -2625,7 +2630,7 @@ async function openReceiptForm(entity, item = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    if (!item || !item.id) {
+    if (!isEdit) {
         let nextId = 1;
         const prefix = 'Р-';
 
@@ -2655,15 +2660,15 @@ async function openReceiptForm(entity, item = null) {
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать приход' : 'Добавить приход'}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${isEdit ? 'Редактировать приход' : 'Добавить приход'}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="receipts" data-item-id="${item && item.id ? item.id : ''}">
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="receipts" data-item-id="${itemId || ''}">
     `;
 
     for (const col of config.columns) {
         if (col.field === 'id' || col.insert === false) continue;
-        if ((col.update === false || col.edit === false) && item && item.id) continue;
+        if ((col.update === false || col.edit === false) && isEdit) continue;
 
         let val = '';
         if (item) {
@@ -2745,7 +2750,7 @@ async function openReceiptForm(entity, item = null) {
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    ${isEdit ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                     <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
             </form>
@@ -2834,7 +2839,7 @@ async function openReceiptForm(entity, item = null) {
                 async () => {
                     const currentUserId = localStorage.getItem('currentUserId') || '';
                     try {
-                        const response = await fetch(`/api/receipts/${item.id}`, {
+                        const response = await fetch(`/api/receipts/${itemId}`, {
                             method: 'DELETE',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -2877,8 +2882,7 @@ async function openReceiptForm(entity, item = null) {
         }
 
         try {
-            const isEdit = item && item.id;
-            const url = isEdit ? `/api/receipts/${item.id}` : `/api/receipts`;
+            const url = isEdit ? `/api/receipts/${itemId}` : `/api/receipts`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
@@ -3662,6 +3666,8 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
+
+
 
 
 // Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
