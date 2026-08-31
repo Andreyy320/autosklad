@@ -4013,7 +4013,7 @@ router.get('/get-repair-logs', async (req, res) => {
                 rl.*,
                 w.name AS warehouse_name,
                 z.name AS part_name,
-                z.article AS part_article,
+                COALESCE(z.article, z.code, '—') AS part_article,
                 c.gos_number AS car_number,
                 c.model AS car_model,
                 u.name AS user_name
