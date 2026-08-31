@@ -2662,6 +2662,8 @@ router.get('/realizations', async (req, res) => {
     }
 });
 
+
+
 // ==================== ПОЛУЧИТЬ СПИСОК ЗАПЧАСТЕЙ РЕАЛИЗАЦИИ ====================
 router.get('/realization_items', async (req, res) => {
     const { realization_id } = req.query;
@@ -2695,6 +2697,76 @@ router.get('/realization_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении запчастей реализации' });
     }
 });
+
+
+
+// GET /api/get-realization-logs - получение логов реализации
+router.get('/get-realization-logs', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT 
+                rl.*,
+                w.name AS warehouse_name,
+                z.name AS part_name,
+                COALESCE(z.article, z.code, '—') AS part_article,
+                c.gos_number AS car_number,
+                COALESCE(c.model, '—') AS car_model,
+                cust.name AS customer_name,
+                u.name AS user_name
+            FROM realization_logs rl
+            LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
+            LEFT JOIN zaphasti z ON rl.zaphasti_id::text = z.id::text
+            LEFT JOIN cars c ON rl.car_id::text = c.id::text
+            LEFT JOIN customers cust ON rl.customer_id::text = cust.id::text
+            LEFT JOIN users u ON rl.user_id::text = u.id::text
+            ORDER BY rl.created_at DESC
+            LIMIT 500;
+        `;
+        const result = await client.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения логов реализации:', err.message);
+        return res.status(500).json({ error: 'Ошибка получения логов реализации: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Функция для записи логов реализации в таблицу realization_logs
+async function writeRealizationLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO realization_logs (
+                action, realization_id, document_number, warehouse_id, car_id, 
+                customer_id, zaphasti_id, quantity, price, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [
+                data.action,
+                data.realization_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.customer_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога реализации (не критично):', logErr.message);
+    }
+}
 
 
 // ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ ВСЕГО И FIFO) ====================
