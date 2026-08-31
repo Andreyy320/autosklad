@@ -3998,9 +3998,9 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
         }
 
-        // 2. Проверяем, проведен ли уже родительский документ (receipts) и достаем его номер и контрагента
+        // 2. Проверяем, проведен ли уже родительский документ (receipts) и достаем doc_number и supplier_id
         const receiptCheck = await client.query(
-            'SELECT r.is_posted, r.receipt_number, r.counterparty_id FROM receipts r WHERE r.id = $1',
+            'SELECT r.is_posted, r.doc_number, r.supplier_id FROM receipts r WHERE r.id = $1',
             [receipt_id]
         );
 
@@ -4021,10 +4021,10 @@ router.post('/receipt_items', async (req, res) => {
         const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'Неизвестная запчасть';
         const partSku = partRes.rows.length > 0 ? partRes.rows[0].sku : null;
 
-        // Узнаем имя контрагента
+        // Узнаем имя контрагента через supplier_id
         let counterpartyName = null;
-        if (parentReceipt.counterparty_id) {
-            const cpRes = await client.query('SELECT name FROM counterparties WHERE id = $1', [parentReceipt.counterparty_id]);
+        if (parentReceipt.supplier_id) {
+            const cpRes = await client.query('SELECT name FROM counterparties WHERE id = $1', [parentReceipt.supplier_id]);
             counterpartyName = cpRes.rows.length > 0 ? cpRes.rows[0].name : null;
         }
 
@@ -4067,13 +4067,14 @@ router.post('/receipt_items', async (req, res) => {
 
         // 5. Запись в inventory_logs с использованием универсальной функции и транзакционного клиента
         try {
-            const reasonText = `Добавлена новая позиция прихода №${parentReceipt.receipt_number || receipt_id}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
+            const docNumStr = parentReceipt.doc_number ? String(parentReceipt.doc_number) : String(receipt_id);
+            const reasonText = `Добавлена новая позиция прихода №${docNumStr}: ${zaphastiName} (кол-во: ${numQty}, цена: ${numPrice})`;
 
             await writeInventoryLog(client, {
                 operation_type: 'Приход',
                 action: 'INSERT',
                 document_id: receipt_id,
-                document_number: parentReceipt.receipt_number ? String(parentReceipt.receipt_number) : String(receipt_id),
+                document_number: docNumStr,
                 user_id: userId,
                 counterparty: counterpartyName,
                 part_id: zaphasti_id,
