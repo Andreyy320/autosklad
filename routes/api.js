@@ -2700,7 +2700,6 @@ router.get('/realization_items', async (req, res) => {
 
 
 
-// GET /api/get-realization-logs - получение логов реализации
 router.get('/get-realization-logs', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -2712,7 +2711,7 @@ router.get('/get-realization-logs', async (req, res) => {
                 COALESCE(z.article, z.code, '—') AS part_article,
                 c.gos_number AS car_number,
                 COALESCE(c.model, '—') AS car_model,
-                cust.name AS customer_name,
+                COALESCE(cust.name_full, cust.name_short) AS customer_name,
                 u.name AS user_name
             FROM realization_logs rl
             LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
