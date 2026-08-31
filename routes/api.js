@@ -4969,7 +4969,7 @@ router.delete('/move_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
-        // 5. Запись в inventory_logs вместо audit_logs
+        // 5. Запись в inventory_logs (без audit_logs)
         try {
             const userId = req.headers['user-id'] || req.body.user_id || null;
             const reasonText = `Удалена позиция перемещения №${moveDocNumber}: ${zaphastiName} (кол-во: ${currentItem.quantity}, цена: ${currentItem.price})`;
