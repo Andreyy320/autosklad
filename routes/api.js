@@ -31,12 +31,12 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение журнала приходов из новой таблицы
+// 1. Получение журнала приходов из новой таблицы операций
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        // Если запрашивают не приходы, можно сделать заглушку или обрабатывать другие типы
+        // Фильтруем по типу операции (для приходов)
         if (type && type !== 'receipt') {
             return res.json([]);
         }
@@ -51,15 +51,15 @@ router.get('/get-logs', async (req, res) => {
                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
-                COALESCE(z.name, 'Документ прихода') AS part_name,
-                COALESCE(z.article, '—') AS part_article,
+                COALESCE(z.name, l.part_name, 'Документ прихода') AS part_name,
+                COALESCE(z.article, l.part_article, '—') AS part_article,
                 COALESCE(l.quantity, 0) AS quantity,
                 COALESCE(l.price, 0) AS price,
                 (COALESCE(l.quantity, 0) * COALESCE(l.price, 0)) AS total_amount,
                 COALESCE(l.action, 'INSERT') AS action,
                 COALESCE(l.reason, CONCAT('Приход №', COALESCE(l.doc_number, '—'))) AS reason
             FROM inventory_logs l
-            LEFT JOIN zaphasti z ON l.zaphasti_id = z.id
+            LEFT JOIN zaphasti z ON l.part_id = z.id
             LEFT JOIN skladi s ON l.warehouse_id = s.id
             LEFT JOIN postavhik p ON l.supplier_id = p.id
             LEFT JOIN users u ON l.user_id = u.id
