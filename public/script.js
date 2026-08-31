@@ -2038,7 +2038,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2299,18 +2298,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
     for (const col of config.columns) {
         if (col.field === 'car_id') continue; 
 
-        if (col.field === 'autoservice' && carCol) {
+        if ((col.field === 'autoservice' || col.field === 'end_date') && carCol) {
             html += await renderField(carCol);
         }
 
         html += await renderField(col);
 
-        if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr') {
+        if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie') {
             html += await renderField(carCol);
         }
     }
 
-    if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
+    if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'end_date') && !config.columns.some(c => c.field === 'customer_id')) {
         html += await renderField(carCol);
     }
 
