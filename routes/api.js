@@ -3318,6 +3318,11 @@ async function writeRealizationLog(client, req, data) {
 
 // ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[DELETE REQUEST] Удаление запчасти из реализации (realization_items)`);
+    console.log(`[PARAMS]:`, req.params);
+    console.log(`[QUERY]:`, req.query);
+
     const { id } = req.query;
     const itemId = req.params.id || id;
 
@@ -3333,10 +3338,20 @@ router.delete('/realization_items/:id', async (req, res) => {
         }
         const currentItem = existingItemRes.rows[0];
 
-        // 2. Проверяем, не проведена ли реализация, которой принадлежит эта позиция
-        const realizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        // 2. Проверяем, не проведена ли реализация, которой принадлежит эта позиция, а также получаем склад, клиента и номер документа
+        const realizationCheck = await client.query(`SELECT sklad_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        
+        let sklad_id = null;
+        let customer_id = null;
+        let doc_number = null;
+
         if (realizationCheck.rows.length > 0) {
-            const { is_posted } = realizationCheck.rows[0];
+            const realizationData = realizationCheck.rows[0];
+            sklad_id = realizationData.sklad_id;
+            customer_id = realizationData.customer_id;
+            doc_number = realizationData.doc_number;
+
+            const { is_posted } = realizationData;
             const isPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
             if (isPosted) {
                 await client.query('ROLLBACK');
@@ -3348,41 +3363,69 @@ router.delete('/realization_items/:id', async (req, res) => {
         const deleteQuery = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
         const result = await client.query(deleteQuery, [itemId]);
 
-        // 4. Записываем лог удаления в audit_logs
-        try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || req.body?.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    currentUserId,
-                    'DELETE',
-                    'realization_items',
-                    itemId,
-                    JSON.stringify({
-                        message: `Удалена запчасть ID ${currentItem.zaphasti_id}, количество: ${currentItem.quantity}`,
-                        deleted_item: currentItem
-                    }),
-                    clientIp
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs при удалении:', logErr.message);
-        }
+        // 4. Записываем лог в realization_logs вместо audit_logs
+        await writeRealizationLog(client, req, {
+            action: 'DELETE',
+            realization_id: currentItem.realization_id,
+            document_number: doc_number || null,
+            warehouse_id: sklad_id,
+            car_id: null,
+            customer_id: customer_id || null,
+            zaphasti_id: currentItem.zaphasti_id,
+            quantity: currentItem.quantity,
+            price: currentItem.price,
+            total_rub: currentItem.total_rub,
+            income_document_id: currentItem.income_document_id || null,
+            description: `Удалена запчасть ID ${currentItem.zaphasti_id}, количество: ${currentItem.quantity}`
+        });
 
         await client.query('COMMIT');
-        res.json({ success: true, deleted: result.rows[0] });
+        console.log(`[SUCCESS] Успешно удалена строка из реализации ID: ${itemId}`);
+        return res.json({ success: true, deleted: result.rows[0] });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Ошибка при удалении запчасти реализации:', err);
-        res.status(500).json({ error: 'Ошибка сервера при удалении запчасти: ' + err.message });
+        console.error("❌ [CRITICAL ERROR]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении запчасти: ' + err.message });
     } finally {
         client.release();
     }
 });
+// Функция для записи логов реализации в таблицу realization_logs
+async function writeRealizationLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO realization_logs (
+                action, realization_id, document_number, warehouse_id, car_id, 
+                customer_id, zaphasti_id, quantity, price, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [
+                data.action,
+                data.realization_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.customer_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога реализации (не критично):', logErr.message);
+    }
+}
 
 
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
