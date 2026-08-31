@@ -5026,7 +5026,7 @@ router.put('/move_items/:id', async (req, res) => {
         const result = await client.query(updateQuery, values);
         const updatedRecord = result.rows[0];
 
-        // Запись в move_logs вместо audit_logs
+        // Запись в move_logs вместо 
         await writeMoveLog(client, req, {
             action: 'UPDATE',
             move_id: move_id,
@@ -5144,7 +5144,7 @@ router.delete('/move_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
-        // 5. Запись в move_logs вместо audit_logs
+        // 5. Запись в move_logs вместо 
         await writeMoveLog(client, req, {
             action: 'DELETE',
             move_id: move_id,
@@ -5364,7 +5364,7 @@ router.post('/repair_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
-            // Запись в repair_logs вместо audit_logs
+            // Запись в repair_logs вместо 
             await writeRepairLog(client, req, {
                 action: 'INSERT',
                 repair_id: repair_id,
@@ -5599,7 +5599,7 @@ router.put('/repair_items/:id', async (req, res) => {
         const result = await client.query(updateQuery, values);
         const updatedRecord = result.rows[0];
 
-        // Запись в repair_logs вместо audit_logs
+        // Запись в repair_logs вместо 
         await writeRepairLog(client, req, {
             action: 'UPDATE',
             repair_id: repair_id,
@@ -5714,7 +5714,7 @@ router.delete('/repair_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM repair_items WHERE id = $1', [itemId]);
 
-        // 5. Запись в repair_logs вместо audit_logs
+        // 5. Запись в repair_logs вместо 
         await writeRepairLog(client, req, {
             action: 'DELETE',
             repair_id: repair_id,
@@ -5776,6 +5776,55 @@ async function writeRepairLog(client, req, data) {
         console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
     }
 }
+
+
+
+// GET /api/get-audit-logs - получение универсальных логов аудита
+router.get('/get-audit-logs', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT 
+                al.*,
+                u.name AS user_name
+            FROM audit_logs al
+            LEFT JOIN users u ON al.user_id::text = u.id::text
+            ORDER BY al.created_at DESC
+            LIMIT 500;
+        `;
+        const result = await client.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения логов аудита:', err.message);
+        return res.status(500).json({ error: 'Ошибка получения логов аудита: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+async function writeAuditLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body?.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                userId,
+                data.action,                                    // 'INSERT', 'UPDATE', 'DELETE'
+                data.table_name || null,                        // имя таблицы (например, 'move_items')
+                data.record_id || null,                         // ID записи
+                data.details ? JSON.stringify(data.details) : null, // детальные данные
+                clientIp,
+                data.entity || null                             // сущность
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи audit_logs (не критично):', logErr.message);
+    }
+}
+
 
 
 
