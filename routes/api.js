@@ -4285,7 +4285,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Автоматическая запись лога (UPDATE с детализацией изменений)
+        // 5. Автоматическая запись лога (UPDATE с детализацией изменений — только если есть реальные изменения)
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || null;
@@ -4305,23 +4305,26 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            const detailsObj = {
-                updated_fields: req.body,
-                changes: changes
-            };
+            // Записываем в audit_logs только при наличии реальных изменений
+            if (Object.keys(changes).length > 0) {
+                const detailsObj = {
+                    updated_fields: req.body,
+                    changes: changes
+                };
 
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    userId,
-                    'UPDATE',
-                    'receipt_items',
-                    itemId,
-                    JSON.stringify(detailsObj),
-                    clientIp
-                ]
-            );
+                await client.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                        userId,
+                        'UPDATE',
+                        'receipt_items',
+                        itemId,
+                        JSON.stringify(detailsObj),
+                        clientIp
+                    ]
+                );
+            }
         } catch (logErr) {
             console.error('Ошибка записи лога (не критично):', logErr.message);
         }
