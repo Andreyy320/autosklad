@@ -5200,7 +5200,6 @@ router.delete('/repair_items/:id', async (req, res) => {
 
 
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
@@ -5336,9 +5335,9 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и любых других сущностей
+        // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и realizations
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-        if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs')) {
+        if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs' || entity === 'realizations')) {
             req.body.user_id = currentUserId;
         }
 
@@ -5397,7 +5396,6 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
-
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
