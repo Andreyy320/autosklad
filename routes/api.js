@@ -31,14 +31,14 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций (GET)
+// 1. Получение журнала операций ТОЛЬКО для приходов (GET)
 router.get('/get-logs', async (req, res) => {
     try {
-        const { type } = req.query; // Получаем тип: receipt, move, repair, realization
+        const { type } = req.query; // Ожидаем type = 'receipt'
         
         let query = `
             SELECT * FROM (
-                -- 1. ПРИХОДЫ И ИХ ПОЗИЦИИ
+                -- ПРИХОДЫ И ИХ ПОЗИЦИИ (Логирование всех действий)
                 SELECT 
                     'receipt' AS operation_type,
                     COALESCE(r.id, ri.receipt_id) AS doc_id,
@@ -48,11 +48,12 @@ router.get('/get-logs', async (req, res) => {
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     p.name AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
+                    COALESCE(z.name, 'Документ прихода') AS part_name,
+                    COALESCE(z.article, '—') AS part_article,
                     COALESCE(ri.quantity, 0) AS quantity,
                     COALESCE(ri.price, 0) AS price,
                     (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
+                    al.action AS action,
                     CONCAT(
                         'Приход №', COALESCE(r.doc_number, '—'), 
                         CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
@@ -61,7 +62,7 @@ router.get('/get-logs', async (req, res) => {
                             WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция: ', COALESCE(z.name, 'запчасть'), ' - ', COALESCE(ri.quantity, 0), ' шт. по ', COALESCE(ri.price, 0), ' руб.]')
                             WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":true%' THEN ' [Документ проведен]'
                             WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":false%' THEN ' [Документ распроведен]'
-                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция "', COALESCE(z.name, 'запчасть'), '"]: ', al.details)
+                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция "', COALESCE(z.name, 'запчасть'), '"]')
                             WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
                             ELSE CONCAT(' [', al.action, ']')
                         END
@@ -74,102 +75,16 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN users u_log ON al.user_id = u_log.id
                 WHERE al.table_name IN ('receipts', 'receipt_items')
-                  AND (r.is_posted = true OR (al.table_name = 'receipts' AND al.action = 'INSERT'))
-
-                UNION ALL
-
-                -- 2. ПЕРЕМЕЩЕНИЯ
-                SELECT 
-                    'move' AS operation_type,
-                    m.id AS doc_id,
-                    m.doc_number,
-                    COALESCE(m.fact_date, m.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    wt.name AS warehouse_to,
-                    wf.name AS warehouse_from,
-                    NULL AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
-                    mi.quantity,
-                    COALESCE(ri_orig.price, mi.price, 0) AS price,
-                    (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
-                    CONCAT(
-                        'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
-                        ' [Проведено]'
-                    ) AS reason
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
-                LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
-                LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
-                LEFT JOIN users u_doc ON m.user_id = u_doc.id
-                LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
-                WHERE m.is_posted = true
-
-                UNION ALL
-
-                -- 3. РЕМОНТЫ
-                SELECT 
-                    'repair' AS operation_type,
-                    rep.id AS doc_id,
-                    rep.doc_number,
-                    COALESCE(rep.fact_date, rep.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
-                    ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
-                    CONCAT(
-                        'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
-                        ' [Списано в ремонт]'
-                    ) AS reason
-                FROM repair_items ri
-                JOIN repairs rep ON ri.repair_id = rep.id
-                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-                LEFT JOIN skladi s ON rep.warehouse_id = s.id
-                LEFT JOIN cars c ON rep.car_id = c.id
-                LEFT JOIN users u_doc ON rep.user_id = u_doc.id
-                WHERE rep.is_posted = true
-
-                UNION ALL
-
-                -- 4. РЕАЛИЗАЦИИ
-                SELECT 
-                    'realization' AS operation_type,
-                    rz.id AS doc_id,
-                    rz.doc_number,
-                    COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    COALESCE(cust.name_full, 'Покупатель') AS counterparty,
-                    COALESCE(ri.name, z.name) AS part_name,
-                    COALESCE(ri.article, z.article) AS part_article,
-                    COALESCE(ri.quantity, 1) AS quantity,
-                    COALESCE(ri.price, 0) AS price,
-                    COALESCE(ri.total_rub, 0) AS total_amount,
-                    CONCAT(
-                        'Реализация №', rz.doc_number,
-                        ' [Продано]'
-                    ) AS reason
-                FROM realization_items ri
-                JOIN realizations rz ON ri.realization_id = rz.id
-                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-                LEFT JOIN skladi s ON rz.sklad_id = s.id
-                LEFT JOIN customers cust ON rz.customer_id = cust.id
-                LEFT JOIN users u_doc ON rz.user_id = u_doc.id
-                WHERE rz.is_posted = true
             ) AS combined_logs
         `;
 
         const params = [];
+        // Если запрашивают конкретный тип или по умолчанию грузим приходы
         if (type) {
             query += ` WHERE operation_type = $1`;
             params.push(type);
+        } else {
+            query += ` WHERE operation_type = 'receipt'`;
         }
 
         query += ` ORDER BY created_at DESC LIMIT 200`;
@@ -177,8 +92,8 @@ router.get('/get-logs', async (req, res) => {
         const result = await pool.query(query, params);
         return res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения детального журнала логов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера'  });
+        console.error('Ошибка получения журнала приходов:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов' });
     }
 });
 // Открытие самой страницы logs.html по адресу /logs (GET)
