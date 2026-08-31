@@ -122,22 +122,24 @@ router.get('/get-logs', async (req, res) => {
                     'realization' AS operation_type,
                     rz.id AS doc_id,
                     rz.doc_number,
-                    COALESCE(rz.fact_date, rz.date, NOW()) AS created_at,
+                    COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
-                    rz.client_name AS counterparty,
+                    COALESCE(c.name, 'Покупатель') AS counterparty,
                     COALESCE(ri.name, z.name) AS part_name,
                     COALESCE(ri.article, z.article) AS part_article,
                     COALESCE(ri.quantity, 1) AS quantity,
                     COALESCE(ri.price, 0) AS price,
                     COALESCE(ri.total_rub, 0) AS total_amount,
-                    CONCAT('Продажа клиенту: ', COALESCE(rz.client_name, '—')) AS reason
+                    CONCAT('Реализация товаров') AS reason
                 FROM realization_items ri
-                JOIN realization rz ON ri.realization_id = rz.id
+                JOIN realizations rz ON ri.realization_id = rz.id
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-                LEFT JOIN skladi s ON rz.warehouse_id = s.id
-                LEFT JOIN users u ON rz.user_id = u.id
+                LEFT JOIN skladi s ON rz.sklad_id = s.id
+                LEFT JOIN customers c ON rz.customer_id = c.id
+                LEFT JOIN mol m ON rz.mol_id = m.id
+                LEFT JOIN users u ON m.user_id = u.id
             ) AS combined_logs
         `;
 
