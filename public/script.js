@@ -4664,22 +4664,22 @@ async function loadData(entity, title, customParams = {}) {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'accidents') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'repairs') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'realizations') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
@@ -4687,16 +4687,16 @@ async function loadData(entity, title, customParams = {}) {
                 if (customParams.sklad_id) {
                     window.currentSkladId = customParams.sklad_id;
                 }
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else {
                 carTabsBar.style.display = 'none';
                 selectedItem = null;
-                if (typeof emptyDetailBody === 'function') emptyDetailBody();
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             }
         }
 
