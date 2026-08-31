@@ -4014,7 +4014,7 @@ router.get('/get-repair-logs', async (req, res) => {
                 w.name AS warehouse_name,
                 z.name AS part_name,
                 z.article AS part_article,
-                c.car_number,
+                c.gos_number AS car_number,
                 c.model AS car_model,
                 u.name AS user_name
             FROM repair_logs rl
