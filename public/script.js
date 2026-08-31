@@ -6706,11 +6706,20 @@ async function checkRemindersOnStart() {
                         <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
                     </div>
                     <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">
-                        <button onclick="checkRemindersOnStart()" style="padding: 6px 14px; cursor: pointer; font-size: 14px; background: #007bff; color: #fff; border: none; border-radius: 4px;">🔄 Обновить</button>
+                        <button onclick="checkRemindersOnStart()" style="padding: 5px 12px; cursor: pointer; font-size: 13px; background: #f8f9fa; color: #333; border: 1px solid #ccc; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px;"><span style="color: #007bff; font-size: 15px;">🔄</span> Обновить</button>
                     </div>
                     <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                             <thead>
+                                <tr style="background: #f8f9fa; text-align: center;">
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-desc" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
+                                </tr>
                                 <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
                                     <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
                                     <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
@@ -6740,9 +6749,6 @@ async function checkRemindersOnStart() {
             });
         }
 
-        const tbody = document.getElementById('reminders-tbody');
-        tbody.innerHTML = '';
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -6757,7 +6763,6 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
-            // Машина считается просроченной (для вывода в список), если хотя бы одно из полей меньше сегодня (< today)
             const ptoExpired = (ptoCurr && ptoCurr < today) || (ptoNext && ptoNext < today);
             const insExpired = (insCurr && insCurr < today) || (insNext && insNext < today);
 
@@ -6769,43 +6774,86 @@ async function checkRemindersOnStart() {
             return;
         }
 
-        filteredCars.forEach(car => {
-            const tr = document.createElement('tr');
+        const formatDate = (d) => {
+            if (!d) return '—';
+            const dateObj = new Date(d);
+            if (isNaN(dateObj.getTime())) return '—';
+            return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
+        };
 
-            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
-            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
-            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
-            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
+        const renderTable = (dataToRender) => {
+            const tbody = document.getElementById('reminders-tbody');
+            tbody.innerHTML = '';
 
-            if (ptoCurr) ptoCurr.setHours(0,0,0,0);
-            if (ptoNext) ptoNext.setHours(0,0,0,0);
-            if (insCurr) insCurr.setHours(0,0,0,0);
-            if (insNext) insNext.setHours(0,0,0,0);
+            dataToRender.forEach(car => {
+                const tr = document.createElement('tr');
 
-            // Подсвечиваем только то, что реально просрочено (< today)
-            let isPtoCurrRed = ptoCurr && ptoCurr < today;
-            let isPtoNextRed = ptoNext && ptoNext < today;
+                const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
+                const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
+                const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
+                const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
 
-            let isInsCurrRed = insCurr && insCurr < today;
-            let isInsNextRed = insNext && insNext < today;
+                if (ptoCurr) ptoCurr.setHours(0,0,0,0);
+                if (ptoNext) ptoNext.setHours(0,0,0,0);
+                if (insCurr) insCurr.setHours(0,0,0,0);
+                if (insNext) insNext.setHours(0,0,0,0);
 
-            const formatDate = (d) => {
-                if (!d) return '—';
-                const dateObj = new Date(d);
-                if (isNaN(dateObj.getTime())) return '—';
-                return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
-            };
+                let isPtoCurrRed = ptoCurr && ptoCurr < today;
+                let isPtoNextRed = ptoNext && ptoNext < today;
 
-            tr.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
-            `;
-            tbody.appendChild(tr);
+                let isInsCurrRed = insCurr && insCurr < today;
+                let isInsNextRed = insNext && insNext < today;
+
+                tr.innerHTML = `
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        renderTable(filteredCars);
+
+        const applyFilters = () => {
+            const fGos = document.getElementById('filter-gos').value.toLowerCase();
+            const fModel = document.getElementById('filter-model').value.toLowerCase();
+            const fPtoCurr = document.getElementById('filter-pto-curr').value.toLowerCase();
+            const fPtoNext = document.getElementById('filter-pto-next').value.toLowerCase();
+            const fInsCurr = document.getElementById('filter-ins-curr').value.toLowerCase();
+            const fInsNext = document.getElementById('filter-ins-next').value.toLowerCase();
+            const fDesc = document.getElementById('filter-desc').value.toLowerCase();
+
+            const result = filteredCars.filter(car => {
+                const gos = (car.gos_number || '').toLowerCase();
+                const model = (car.model_name || '').toLowerCase();
+                const ptoCurrStr = formatDate(car.pto_current).toLowerCase();
+                const ptoNextStr = formatDate(car.pto_next).toLowerCase();
+                const insCurrStr = formatDate(car.insurance_current).toLowerCase();
+                const insNextStr = formatDate(car.insurance_next).toLowerCase();
+                const desc = (car.description || '').toLowerCase();
+
+                return gos.includes(fGos) &&
+                       model.includes(fModel) &&
+                       ptoCurrStr.includes(fPtoCurr) &&
+                       ptoNextStr.includes(fPtoNext) &&
+                       insCurrStr.includes(fInsCurr) &&
+                       insNextStr.includes(fInsNext) &&
+                       desc.includes(fDesc);
+            });
+
+            renderTable(result);
+        };
+
+        ['filter-gos', 'filter-model', 'filter-pto-curr', 'filter-pto-next', 'filter-ins-curr', 'filter-ins-next', 'filter-desc'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', applyFilters);
+            }
         });
 
         modal.style.display = 'flex';
