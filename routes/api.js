@@ -3979,24 +3979,22 @@ router.get('/get-receipt-logs', async (req, res) => {
     }
 });
 
-// GET /api/get-move-logs - получение логов перемещений
+// GET /api/get-move-logs - получение логов перемещений с учетом твоей структуры таблиц
 router.get('/get-move-logs', async (req, res) => {
     try {
         const query = `
             SELECT 
                 ml.*,
-                m.doc_number,
                 z.name AS part_name,
                 z.article AS part_article,
                 u.username AS user_name,
                 wh_from.name AS warehouse_from_name,
                 wh_to.name AS warehouse_to_name
             FROM move_logs ml
-            LEFT JOIN moves m ON ml.move_id = m.id
             LEFT JOIN zaphasti z ON ml.zaphasti_id = z.id
             LEFT JOIN users u ON ml.user_id = u.id
-            LEFT JOIN warehouses wh_from ON ml.warehouse_from_id = wh_from.id
-            LEFT JOIN warehouses wh_to ON ml.warehouse_to_id = wh_to.id
+            LEFT JOIN skladi wh_from ON ml.warehouse_from_id = wh_from.id
+            LEFT JOIN skladi wh_to ON ml.warehouse_to_id = wh_to.id
             ORDER BY ml.created_at DESC
         `;
         const result = await pool.query(query);
