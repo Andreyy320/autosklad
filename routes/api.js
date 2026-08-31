@@ -38,41 +38,38 @@ router.get('/get-logs', async (req, res) => {
         
         let query = `
             SELECT * FROM (
-                -- 1. ПРИХОДЫ (receipt_items)
+                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (на основе audit_logs, чтобы каждая запись была отдельной строкой)
                 SELECT 
                     'receipt' AS operation_type,
-                    r.id AS doc_id,
-                    r.doc_number,
-                    COALESCE(r.fact_date, r.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
+                    COALESCE(r.id, ri.receipt_id) AS doc_id,
+                    COALESCE(r.doc_number, '—') AS doc_number,
+                    al.created_at AS created_at,
+                    COALESCE(u_log.name, u_log.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     p.name AS counterparty,
                     z.name AS part_name,
                     z.article AS part_article,
-                    ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
+                    COALESCE(ri.quantity, 0) AS quantity,
+                    COALESCE(ri.price, 0) AS price,
+                    (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
                     CONCAT(
-                        'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' AND al.details LIKE '%changes%' THEN CONCAT(' [Изменено: ', al.details, ']')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'receipts' OR al.table_name = 'receipt_items') 
-                              AND (al.record_id = r.id OR al.record_id = ri.id)
-                        ), '')
+                        'Приход №', COALESCE(r.doc_number, '—'), ' от поставщика: ', COALESCE(p.name, '—'),
+                        CASE 
+                            WHEN al.action = 'INSERT' THEN ' [Создано]'
+                            WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено: ', al.details, ']')
+                            WHEN al.action = 'DELETE' THEN ' [Удалено]'
+                            ELSE CONCAT(' [', al.action, ']')
+                        END
                     ) AS reason
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
+                FROM audit_logs al
+                LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+                LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR (ri.receipt_id = r.id)
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN users u_doc ON r.user_id = u_doc.id
+                LEFT JOIN users u_log ON al.user_id = u_log.id
+                WHERE al.table_name IN ('receipts', 'receipt_items')
 
                 UNION ALL
 
