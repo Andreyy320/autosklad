@@ -2789,8 +2789,8 @@ router.post('/realization_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Узнаем склад и статус проведения реализации
-        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`;
+        // 1. Узнаем склад, клиента, номер документа и статус проведения реализации
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1 FOR UPDATE`;
         const realizationRes = await client.query(realizationQuery, [realization_id]);
         
         if (realizationRes.rows.length === 0) {
@@ -2798,7 +2798,7 @@ router.post('/realization_items', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, customer_id, is_posted } = realizationRes.rows[0];
+        const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
 
         const isDocumentPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
         if (isDocumentPosted) {
@@ -2917,10 +2917,6 @@ router.post('/realization_items', async (req, res) => {
 
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
-        
-        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-        const userId = currentUserId || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 5. Распределение по партиям (FIFO)
         for (const batch of batches) {
@@ -2967,15 +2963,21 @@ router.post('/realization_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
-            try {
-                await client.query(
-                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [userId, 'INSERT', 'realization_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, income_document_id: batch.receipt_id }), clientIp]
-                );
-            } catch (logErr) {
-                console.error('Ошибка записи audit_logs:', logErr.message);
-            }
+            // Пишем в realization_logs вместо audit_logs
+            await writeRealizationLog(client, req, {
+                action: 'INSERT',
+                realization_id: realization_id,
+                document_number: doc_number || null,
+                warehouse_id: sklad_id,
+                car_id: null,
+                customer_id: customer_id || null,
+                zaphasti_id: zaphasti_id,
+                quantity: takeQty,
+                price: finalPrice,
+                total_rub: total_rub,
+                income_document_id: batch.receipt_id,
+                description: description || `Добавление запчасти (партия: ${batch.doc_number})`
+            });
 
             remainingToDistribute -= takeQty;
         }
@@ -2998,7 +3000,6 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
     const { id } = req.params;
