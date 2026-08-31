@@ -2963,7 +2963,7 @@ router.post('/realization_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
-            // Пишем в realization_logs вместо audit_logs
+            // Пишем в realization_logs
             await writeRealizationLog(client, req, {
                 action: 'INSERT',
                 realization_id: realization_id,
@@ -3252,7 +3252,7 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const result = await client.query(updateQuery, values);
 
-        // 8. Записываем лог в realization_logs вместо audit_logs
+        // 8. Записываем лог в realization_logs вместо 
         await writeRealizationLog(client, req, {
             action: 'UPDATE',
             realization_id: targetRealizationId,
@@ -3363,7 +3363,7 @@ router.delete('/realization_items/:id', async (req, res) => {
         const deleteQuery = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
         const result = await client.query(deleteQuery, [itemId]);
 
-        // 4. Записываем лог в realization_logs вместо audit_logs
+        // 4. Записываем лог в realization_logs вместо 
         await writeRealizationLog(client, req, {
             action: 'DELETE',
             realization_id: currentItem.realization_id,
@@ -4778,8 +4778,6 @@ router.post('/move_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
-        const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
         // 3. Распределяем строго по партиям FIFO
         for (const batch of batches) {
@@ -4831,16 +4829,6 @@ router.post('/move_items', async (req, res) => {
                 income_document_id: batch.receipt_id,
                 description: description || 'Добавлена позиция в перемещение'
             });
-
-            try {
-                await client.query(
-                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [userId, 'INSERT', 'move_items', newRecord.id, JSON.stringify({ ...req.body, split_quantity: takeQty, income_document_id: batch.receipt_id }), clientIp]
-                );
-            } catch (logErr) {
-                console.error('Ошибка записи audit_logs:', logErr.message);
-            }
 
             remainingToDistribute -= takeQty;
         }
