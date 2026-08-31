@@ -31,7 +31,7 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций с историей из audit_logs (GET)
+// 1. Получение детального журнала товарных операций (GET)
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Получаем тип: receipt, move, repair, realization
@@ -56,7 +56,12 @@ router.get('/get-logs', async (req, res) => {
                     CONCAT(
                         'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
                         COALESCE((
-                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' AND al.details LIKE '%changes%' THEN CONCAT(' [Изменено: ', al.details, ']')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
                             FROM audit_logs al 
                             WHERE (al.table_name = 'receipts' OR al.table_name = 'receipt_items') 
                               AND (al.record_id = r.id OR al.record_id = ri.id)
@@ -89,7 +94,12 @@ router.get('/get-logs', async (req, res) => {
                     CONCAT(
                         'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
                         COALESCE((
-                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
                             FROM audit_logs al 
                             WHERE (al.table_name = 'moves' OR al.table_name = 'move_items') 
                               AND (al.record_id = m.id OR al.record_id = mi.id)
@@ -123,7 +133,12 @@ router.get('/get-logs', async (req, res) => {
                     CONCAT(
                         'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
                         COALESCE((
-                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
                             FROM audit_logs al 
                             WHERE (al.table_name = 'repairs' OR al.table_name = 'repair_items') 
                               AND (al.record_id = rep.id OR al.record_id = ri.id)
@@ -156,7 +171,12 @@ router.get('/get-logs', async (req, res) => {
                     CONCAT(
                         'Реализация №', rz.doc_number,
                         COALESCE((
-                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            SELECT STRING_AGG(
+                                CASE 
+                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
+                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
+                                    ELSE CONCAT(' [', al.action, ']')
+                                END, ' ')
                             FROM audit_logs al 
                             WHERE (al.table_name = 'realizations' OR al.table_name = 'realization_items') 
                               AND (al.record_id = rz.id OR al.record_id = ri.id)
