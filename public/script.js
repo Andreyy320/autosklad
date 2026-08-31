@@ -6878,7 +6878,6 @@ async function checkRemindersOnStart() {
 
 
 
-
 async function writeInventoryLog(client, data) {
     try {
         await client.query(`
