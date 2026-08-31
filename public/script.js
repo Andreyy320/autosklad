@@ -6801,46 +6801,43 @@ function openDefaultDetail(entity, item) {
 
 
 
-// Функция для проверки и показа окна напоминаний
 async function checkRemindersOnStart() {
     try {
-        // Убедись, что путь совпадает с твоим API (например, /api/reminders или просто /reminders)
         const response = await fetch('/api/reminders');
         if (!response.ok) return;
         
         const cars = await response.json();
         if (!cars || cars.length === 0) return;
 
-        // Создаем модальное окно, если его еще нет на странице
         let modal = document.getElementById('reminders-modal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'reminders-modal';
             modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;';
             modal.innerHTML = `
-                <div style="background: #fff; width: 900px; max-height: 85vh; border-radius: 6px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
-                    <div style="background: #f0f0f0; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
-                        <h3 style="margin: 0; font-size: 16px; color: #333;">Напоминания (ТО и Страховка)</h3>
-                        <button id="close-reminders" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
+                <div style="background: #fff; width: 1050px; max-height: 85vh; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
+                    <div style="background: #f5f5f5; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
+                        <h3 style="margin: 0; font-size: 18px; color: #333;">Напоминания (ТО и Страховка)</h3>
+                        <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
                     </div>
-                    <div style="padding: 8px 15px; background: #fafafa; border-bottom: 1px solid #ddd;">
-                        <button onclick="checkRemindersOnStart()" style="padding: 4px 10px; cursor: pointer; font-size: 13px;">🔄 Обновить</button>
+                    <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">
+                        <button onclick="checkRemindersOnStart()" style="padding: 6px 14px; cursor: pointer; font-size: 14px; background: #007bff; color: #fff; border: none; border-radius: 4px;">🔄 Обновить</button>
                     </div>
-                    <div style="padding: 10px; overflow-y: auto; flex-grow: 1;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                             <thead>
-                                <tr style="background: #e5e5e5; text-align: center;">
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Модель</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
-                                    <th style="padding: 6px; border: 1px solid #ccc;" rowspan="2">Описание</th>
+                                <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Описание</th>
                                 </tr>
-                                <tr style="background: #eee; text-align: center;">
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 4px; border: 1px solid #ccc;">Следующий</th>
+                                <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
                                 </tr>
                             </thead>
                             <tbody id="reminders-tbody"></tbody>
@@ -6877,16 +6874,21 @@ async function checkRemindersOnStart() {
             const isInsCurrRed = insCurr && insCurr < today;
             const isInsNextRed = insNext && insNext < today;
 
-            const formatDate = (d) => d ? new Date(d).toISOString().split('T')[0].split('-').reverse().join('.') : '';
+            const formatDate = (d) => {
+                if (!d) return '—';
+                const dateObj = new Date(d);
+                if (isNaN(dateObj.getTime())) return '—';
+                return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
+            };
 
             tr.innerHTML = `
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${car.gos_number || ''}</td>
-                <td style="padding: 6px; border: 1px solid #ddd;">${car.model_name || ''}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoCurrRed ? '#e60000' : 'transparent'}; color: ${isPtoCurrRed ? '#fff' : '#000'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isPtoNextRed ? '#e60000' : 'transparent'}; color: ${isPtoNextRed ? '#fff' : '#000'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsCurrRed ? '#e60000' : 'transparent'}; color: ${isInsCurrRed ? '#fff' : '#000'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd; text-align: center; background: ${isInsNextRed ? '#e60000' : 'transparent'}; color: ${isInsNextRed ? '#fff' : '#000'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 6px; border: 1px solid #ddd;">${car.description || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
             `;
             tbody.appendChild(tr);
         });

@@ -1035,17 +1035,33 @@ router.get('/autostrahovanie', async (req, res) => {
 });
 
 
-
-
 // ==================== ПОЛУЧИТЬ НАПОМИНАНИЯ ПО ДАТАМ ====================
 router.get('/reminders', async (req, res) => {
     try {
         const query = `
             SELECT 
-                c.*, 
-                COALESCE(c.model, m.name, '—') AS model_name
+                c.id,
+                c.gos_number,
+                COALESCE(c.model, m.name, '—') AS model_name,
+                c.description,
+                -- Техосмотр: берем из cars, если пусто — из последней записи tehosmotr
+                COALESCE(c.pto_current, latest_pto.to_date) AS pto_current,
+                COALESCE(c.pto_next, latest_pto.next_to_date) AS pto_next,
+                -- Страховка: берем из cars, если пусто — из последней записи autostrahovanie
+                COALESCE(c.insurance_current, latest_ins.insurance_current) AS insurance_current,
+                COALESCE(c.insurance_next, latest_ins.insurance_next) AS insurance_next
             FROM cars c
             LEFT JOIN car_models m ON c.model_id = m.id
+            LEFT JOIN (
+                SELECT DISTINCT ON (car_id) car_id, to_date, next_to_date
+                FROM tehosmotr
+                ORDER BY car_id, id DESC
+            ) latest_pto ON c.id = latest_pto.car_id
+            LEFT JOIN (
+                SELECT DISTINCT ON (car_id) car_id, insurance_current, insurance_next
+                FROM autostrahovanie
+                ORDER BY car_id, id DESC
+            ) latest_ins ON c.id = latest_ins.car_id
             ORDER BY c.id ASC
         `;
         const result = await pool.query(query);
@@ -1055,8 +1071,6 @@ router.get('/reminders', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при получении напоминаний' });
     }
 });
-
-
 
 
 // ==================== ОБНОВЛЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
