@@ -5553,15 +5553,21 @@ router.delete('/repair_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const repair_id = currentItem.repair_id;
+        const zaphast_id = currentItem.zaphast_id;
 
-        // 2. Проверяем родительский документ ремонта (repairs), его статус проведения и склад
-        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        // 2. Проверяем родительский документ ремонта (repairs), его статус проведения, склад и машину
+        const repairCheck = await client.query('SELECT doc_number, warehouse_id, car_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
         if (repairCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ ремонта не найден.' });
         }
 
-        const { is_posted: isPosted } = repairCheck.rows[0];
+        const repairRecord = repairCheck.rows[0];
+        const warehouseId = repairRecord.warehouse_id;
+        const carId = repairRecord.car_id;
+        const isPosted = repairRecord.is_posted;
+        const documentNumber = repairRecord.doc_number || `РЕМОНТ-${repair_id}`;
+
         const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === '1' || isPosted === 1 || isPosted === '2' || isPosted === 2;
 
         // 3. Если документ ремонта проведен, удалять из него позиции нельзя (нужна отмена проведения)
@@ -5573,23 +5579,25 @@ router.delete('/repair_items/:id', async (req, res) => {
         // Примечание по логике FIFO:
         // Поскольку документ ремонта не проведен, эта позиция учитывалась в расчетах остатков как зарезервированная.
         // При удалении строки из таблицы `repair_items` эта «бронь» снимается, 
-        // и количество запчасти автоматически возвращается на склад (в ту самую партию по её исходной цене, например по 50 или 60 рублей).
+        // и количество запчасти автоматически возвращается на склад (в ту самую партию по её исходной цене).
 
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM repair_items WHERE id = $1', [itemId]);
 
-        // 5. Лог аудита
-        try {
-            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'DELETE', 'repair_items', itemId, JSON.stringify(currentItem), clientIp]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs:', logErr.message);
-        }
+        // 5. Запись в repair_logs вместо audit_logs
+        await writeRepairLog(client, req, {
+            action: 'DELETE',
+            repair_id: repair_id,
+            document_number: documentNumber,
+            warehouse_id: warehouseId,
+            car_id: carId,
+            zaphast_id: zaphast_id,
+            quantity: currentItem.quantity,
+            price: currentItem.price,
+            total: currentItem.total,
+            receipt_id: currentItem.receipt_id,
+            description: currentItem.description || null
+        });
 
         await client.query('COMMIT');
 
@@ -5605,8 +5613,39 @@ router.delete('/repair_items/:id', async (req, res) => {
         client.release();
     }
 });
+// Функция для записи логов ремонта в таблицу repair_logs
+async function writeRepairLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-
+        await client.query(
+            `INSERT INTO repair_logs (
+                action, repair_id, document_number, warehouse_id, car_id, 
+                zaphast_id, quantity, price, total, receipt_id, 
+                description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                data.action,
+                data.repair_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.zaphast_id,
+                data.quantity,
+                data.price,
+                data.total,
+                data.receipt_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
+    }
+}
 
 
 
