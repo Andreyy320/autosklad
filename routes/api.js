@@ -4288,6 +4288,8 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 // DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
 router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
