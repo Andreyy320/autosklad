@@ -1952,7 +1952,7 @@ expenses_by_receipts: {
 async function checkRemindersOnStart() {
     try {
         // Укажи правильный путь, если у роутера есть префикс (например, /api/reminders)
-        const response = await fetch('/reminders'); 
+        const response = await fetch('api/reminders'); 
         const cars = await response.json();
 
         if (!cars || cars.length === 0) return;
