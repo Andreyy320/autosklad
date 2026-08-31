@@ -4277,8 +4277,8 @@ router.delete('/receipt_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим удаляемую позицию прихода и блокируем её
-        const itemCheck = await client.query('SELECT ri.*, z.name AS zaphasti_name FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id WHERE ri.id = $1 FOR UPDATE', [itemId]);
+        // 1. Находим удаляемую позицию прихода и блокируем её (без LEFT JOIN с FOR UPDATE, чтобы PostgreSQL не ругался на nullable сторону)
+        const itemCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1 FOR UPDATE', [itemId]);
         if (itemCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
@@ -4288,6 +4288,10 @@ router.delete('/receipt_items/:id', async (req, res) => {
         const receipt_id = currentItem.receipt_id;
         const zaphasti_id = currentItem.zaphasti_id;
         const initialQty = Number(currentItem.quantity) || 0;
+
+        // Дополнительно подтянем название запчасти для лога (без FOR UPDATE)
+        const zaphastiRes = await client.query('SELECT name FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = zaphastiRes.rows[0]?.name || 'запчасть';
 
         // 2. Проверяем родительский документ (receipts), забираем warehouse_id, is_posted и doc_number
         const receiptCheck = await client.query('SELECT warehouse_id, is_posted, doc_number, supplier_id FROM receipts WHERE id = $1 FOR UPDATE', [receipt_id]);
@@ -4351,7 +4355,7 @@ router.delete('/receipt_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
 
-        // 5. Запись лога в новую изолированную таблицу receipt_logs через writeReceiptLog
+        // 5. Запись лога через writeReceiptLog (как в эндпоинте обновления)
         await writeReceiptLog(client, req, {
             action: 'DELETE',
             receipt_id: receipt_id,
