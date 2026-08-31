@@ -2970,6 +2970,15 @@ router.post('/realization_items', async (req, res) => {
                 JOIN moves m ON mi.move_id = m.id
                 WHERE mi.zaphasti_id = $1 AND m.warehouse_from_id = $2 AND m.is_posted = true
                 GROUP BY mi.income_document_id
+
+                UNION ALL
+
+                -- Что ушло с этого склада через списания (например, списания в ремонт или списания со склада)
+                SELECT wo_i.income_document_id AS batch_id, SUM(wo_i.quantity) as spent_qty
+                FROM write_off_items wo_i
+                JOIN write_offs wo ON wo_i.write_off_id = wo.id
+                WHERE wo_i.zaphasti_id = $1 AND wo.sklad_id = $2 AND wo.is_posted = true
+                GROUP BY wo_i.income_document_id
             )
             SELECT 
                 b.batch_id,
