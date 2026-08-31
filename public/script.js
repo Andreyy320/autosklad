@@ -6701,44 +6701,32 @@ async function checkRemindersOnStart() {
             modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;';
             modal.innerHTML = `
                 <div style="background: #fff; width: 1050px; max-height: 85vh; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
-                    <div style="background: #f5f5f5; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; flex-shrink: 0;">
+                    <div style="background: #f5f5f5; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
                         <h3 style="margin: 0; font-size: 18px; color: #333;">Напоминания (ТО и Страховка)</h3>
                         <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
                     </div>
-                    <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">
                         <button onclick="checkRemindersOnStart()" style="padding: 6px 14px; cursor: pointer; font-size: 14px; background: #007bff; color: #fff; border: none; border-radius: 4px;">🔄 Обновить</button>
-                        <button id="reset-columns" style="padding: 6px 10px; cursor: pointer; font-size: 12px; background: #6c757d; color: #fff; border: none; border-radius: 4px;" title="Сбросить ширину колонок">Сбросить ширину</button>
                     </div>
-                    <div style="padding: 15px; display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
-                        <div style="overflow: auto; flex-grow: 1; position: relative;">
-                            <table id="reminders-table" style="border-collapse: collapse; font-size: 14px; table-layout: fixed;">
-                                <colgroup>
-                                    <col style="width: 13%;">
-                                    <col style="width: 13%;">
-                                    <col style="width: 14%;">
-                                    <col style="width: 14%;">
-                                    <col style="width: 14%;">
-                                    <col style="width: 14%;">
-                                    <col style="width: 18%;">
-                                </colgroup>
-                                <thead>
-                                    <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
-                                        <th style="padding: 10px; border: 1px solid #ccc; position: relative;" rowspan="2">Гос. номер<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                        <th style="padding: 10px; border: 1px solid #ccc; position: relative;" rowspan="2">Модель<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                        <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
-                                        <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
-                                        <th style="padding: 10px; border: 1px solid #ccc; position: relative;" rowspan="2">Описание<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                    </tr>
-                                    <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
-                                        <th style="padding: 8px; border: 1px solid #ccc; position: relative;">Текущий<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                        <th style="padding: 8px; border: 1px solid #ccc; position: relative;">Следующий<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                        <th style="padding: 8px; border: 1px solid #ccc; position: relative;">Текущий<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                        <th style="padding: 8px; border: 1px solid #ccc; position: relative;">Следующий<div class="resizer" style="position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none;"></div></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="reminders-tbody"></tbody>
-                            </table>
-                        </div>
+                    <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                            <thead>
+                                <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
+                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Описание</th>
+                                </tr>
+                                <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
+                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reminders-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
             `;
@@ -6749,62 +6737,6 @@ async function checkRemindersOnStart() {
             });
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.style.display = 'none';
-            });
-
-            // Логика изменения размера колонок мышкой
-            const table = document.getElementById('reminders-table');
-            const cols = table.querySelectorAll('colgroup col');
-            
-            // Восстановление сохраненной ширины из localStorage
-            const savedWidths = localStorage.getItem('reminders_col_widths');
-            if (savedWidths) {
-                try {
-                    const widths = JSON.parse(savedWidths);
-                    widths.forEach((w, i) => {
-                        if (cols[i]) cols[i].style.width = w;
-                    });
-                } catch(err) {}
-            }
-
-            // Кнопка сброса ширины
-            document.getElementById('reset-columns').addEventListener('click', () => {
-                localStorage.removeItem('reminders_col_widths');
-                const defaultWidths = ['13%', '13%', '14%', '14%', '14%', '14%', '18%'];
-                cols.forEach((col, i) => {
-                    col.style.width = defaultWidths[i];
-                });
-            });
-
-            table.querySelectorAll('.resizer').forEach((resizer, index) => {
-                let x = 0;
-                let w = 0;
-                const col = cols[index];
-
-                const mouseMoveHandler = function (e) {
-                    const dx = e.clientX - x;
-                    if (col) {
-                        col.style.width = `${w + dx}px`;
-                    }
-                };
-
-                const mouseUpHandler = function () {
-                    document.removeEventListener('mousemove', mouseMoveHandler);
-                    document.removeEventListener('mouseup', mouseUpHandler);
-
-                    // Сохраняем в localStorage при отпускании мыши
-                    const currentWidths = Array.from(cols).map(c => c.style.width);
-                    localStorage.setItem('reminders_col_widths', JSON.stringify(currentWidths));
-                };
-
-                resizer.addEventListener('mousedown', function (e) {
-                    x = e.clientX;
-                    if (col) {
-                        w = col.getBoundingClientRect().width;
-                    }
-                    document.addEventListener('mousemove', mouseMoveHandler);
-                    document.addEventListener('mouseup', mouseUpHandler);
-                    e.preventDefault(); // Предотвращаем выделение текста
-                });
             });
         }
 
@@ -6825,6 +6757,7 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
+            // Машина считается просроченной (для вывода в список), если хотя бы одно из полей меньше сегодня (< today)
             const ptoExpired = (ptoCurr && ptoCurr < today) || (ptoNext && ptoNext < today);
             const insExpired = (insCurr && insCurr < today) || (insNext && insNext < today);
 
@@ -6849,8 +6782,10 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
+            // Подсвечиваем только то, что реально просрочено (< today)
             let isPtoCurrRed = ptoCurr && ptoCurr < today;
             let isPtoNextRed = ptoNext && ptoNext < today;
+
             let isInsCurrRed = insCurr && insCurr < today;
             let isInsNextRed = insNext && insNext < today;
 
@@ -6862,13 +6797,13 @@ async function checkRemindersOnStart() {
             };
 
             tr.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word;">${car.gos_number || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word;">${car.model_name || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; word-break: break-word;">${car.description || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
             `;
             tbody.appendChild(tr);
         });
