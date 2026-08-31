@@ -6874,6 +6874,35 @@ async function checkRemindersOnStart() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // Функция определения какая именно ячейка должна гореть красным для ТО или Страховки
+        // Возвращает объект: { target: 'curr' или 'next' или null, isRed: boolean }
+        const getHighlightStatus = (currDate, nextDate) => {
+            const curr = currDate ? new Date(currDate) : null;
+            const next = nextDate ? new Date(nextDate) : null;
+            if (curr) curr.setHours(0,0,0,0);
+            if (next) next.setHours(0,0,0,0);
+
+            // Если текущая дата есть и она меньше либо равна сегодня — она просрочена
+            if (curr && curr <= today) {
+                // Но если следующий тоже просрочен или существует, по аналогии с эталоном:
+                // Если текущий прошел, смотрим: если next тоже в прошлом или подошел, горит next, иначе горит curr.
+                // Глядя на эталон: если Текущий просрочен (меньше текущей даты), подсвечивается Следующий красным.
+                return { currRed: false, nextRed: true };
+            } 
+            
+            // Если текущая дата в будущем, но следующий просрочен (вдруг такое)
+            if (next && next <= today) {
+                return { currRed: false, nextRed: true };
+            }
+
+            // Если текущий еще не наступил и больше сегодня
+            if (curr && curr > today) {
+                return { currRed: false, nextRed: false };
+            }
+
+            return { currRed: false, nextRed: false };
+        };
+
         const filteredCars = cars.filter(car => {
             const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
             const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
@@ -6885,10 +6914,10 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
-            const isPtoExpired = (ptoCurr && ptoCurr <= today) || (ptoNext && ptoNext <= today);
-            const isInsExpired = (insCurr && insCurr <= today) || (insNext && insNext <= today);
+            const ptoExpired = (ptoCurr && ptoCurr <= today) || (ptoNext && ptoNext <= today);
+            const insExpired = (insCurr && insCurr <= today) || (insNext && insNext <= today);
 
-            return isPtoExpired || isInsExpired;
+            return ptoExpired || insExpired;
         });
 
         if (filteredCars.length === 0) {
@@ -6899,6 +6928,8 @@ async function checkRemindersOnStart() {
         filteredCars.forEach(car => {
             const tr = document.createElement('tr');
 
+            // Логика подсветки по аналогии с эталоном: 
+            // Если текущая дата просрочена (<= today), подсвечиваем "Следующий" красным.
             const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
             const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
             const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
@@ -6909,10 +6940,23 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
-            const isPtoCurrRed = ptoCurr && ptoCurr <= today;
-            const isPtoNextRed = ptoNext && ptoNext <= today;
-            const isInsCurrRed = insCurr && insCurr <= today;
-            const isInsNextRed = insNext && insNext <= today;
+            // Проверяем ТО
+            let isPtoCurrRed = false;
+            let isPtoNextRed = false;
+            if (ptoCurr && ptoCurr <= today) {
+                isPtoNextRed = true; // Как на эталоне: прошел текущий -> горит следующий
+            } else if (ptoNext && ptoNext <= today) {
+                isPtoNextRed = true;
+            }
+
+            // Проверяем Страховку
+            let isInsCurrRed = false;
+            let isInsNextRed = false;
+            if (insCurr && insCurr <= today) {
+                isInsNextRed = true; 
+            } else if (insNext && insNext <= today) {
+                isInsNextRed = true;
+            }
 
             const formatDate = (d) => {
                 if (!d) return '—';
