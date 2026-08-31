@@ -31,19 +31,18 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций (GET)
 router.get('/get-logs', async (req, res) => {
     try {
-        const { type } = req.query; // Получаем тип: receipt, move, repair, realization
+        const { type } = req.query; // receipt, move, repair, realization
         
         let query = `
             SELECT * FROM (
-                -- 1. ПРИХОДЫ (receipt_items)
+                -- 1. ПРИХОДЫ (receipt_items + receipts)
                 SELECT 
                     'receipt' AS operation_type,
                     r.id AS doc_id,
                     r.doc_number,
-                    COALESCE(r.fact_date, r.created_at, NOW()) AS created_at,
+                    COALESCE(r.fact_date, r.date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -51,8 +50,8 @@ router.get('/get-logs', async (req, res) => {
                     z.name AS part_name,
                     z.article AS part_article,
                     ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
+                    COALESCE(ri.price_rub, ri.price, 0) AS price,
+                    COALESCE(ri.total_rub, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)), 0) AS total_amount,
                     CONCAT('Приход от поставщика: ', COALESCE(p.name, '—')) AS reason
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
@@ -64,12 +63,12 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. ПЕРЕМЕЩЕНИЯ (move_items)
+                -- 2. ПЕРЕМЕЩЕНИЯ (move_items + moves)
                 SELECT 
                     'move' AS operation_type,
                     m.id AS doc_id,
                     m.doc_number,
-                    COALESCE(m.fact_date, m.created_at, NOW()) AS created_at,
+                    COALESCE(m.fact_date, m.date, NOW()) AS created_at,
                     COALESCE(uf.name, uf.login, 'Система') AS user_name,
                     wt.name AS warehouse_to,
                     wf.name AS warehouse_from,
@@ -77,9 +76,9 @@ router.get('/get-logs', async (req, res) => {
                     z.name AS part_name,
                     z.article AS part_article,
                     mi.quantity,
-                    COALESCE(ri_orig.price, mi.price, 0) AS price,
-                    (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
-                    CONCAT('Перемещение со склада "', wf.name, '" на склад "', wt.name, '"') AS reason
+                    COALESCE(mi.price_rub, mi.price, ri_orig.price_rub, 0) AS price,
+                    COALESCE(mi.total_rub, (mi.quantity * COALESCE(mi.price_rub, mi.price, 0)), 0) AS total_amount,
+                    CONCAT('Перемещение со склада "', COALESCE(wf.name, '—'), '" на склад "', COALESCE(wt.name, '—'), '"') AS reason
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
@@ -91,12 +90,12 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. РЕМОНТЫ (repair_items)
+                -- 3. РЕМОНТЫ (repair_items + repairs)
                 SELECT 
                     'repair' AS operation_type,
                     rep.id AS doc_id,
                     rep.doc_number,
-                    COALESCE(rep.fact_date, rep.created_at, NOW()) AS created_at,
+                    COALESCE(rep.fact_date, rep.date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -104,8 +103,8 @@ router.get('/get-logs', async (req, res) => {
                     z.name AS part_name,
                     z.article AS part_article,
                     ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
+                    COALESCE(ri.price, 0) AS price,
+                    (ri.quantity * COALESCE(ri.price, 0)) AS total_amount,
                     CONCAT('Списание на ремонт машины (', COALESCE(c.gos_number, '—'), ')') AS reason
                 FROM repair_items ri
                 JOIN repairs rep ON ri.repair_id = rep.id
@@ -117,12 +116,12 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. РЕАЛИЗАЦИИ (realization_items)
+                -- 4. РЕАЛИЗАЦИИ (realization_items + realization)
                 SELECT 
                     'realization' AS operation_type,
                     rz.id AS doc_id,
                     rz.doc_number,
-                    COALESCE(rz.fact_date, rz.created_at, NOW()) AS created_at,
+                    COALESCE(rz.fact_date, rz.date, NOW()) AS created_at,
                     COALESCE(u.name, u.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
@@ -142,7 +141,6 @@ router.get('/get-logs', async (req, res) => {
         `;
 
         const params = [];
-        // Фильтрация по вкладкам (?type=receipt или realization и т.д.)
         if (type) {
             query += ` WHERE operation_type = $1`;
             params.push(type);
@@ -154,7 +152,7 @@ router.get('/get-logs', async (req, res) => {
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения детального журнала логов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера' });
+        return res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
 
