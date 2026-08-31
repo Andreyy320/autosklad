@@ -5841,7 +5841,45 @@ async function writeAuditLog(client, req, data) {
     }
 }
 
+function formatAuditDetails(log) {
+    let details;
+    try {
+        details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+    } catch (e) {
+        return log.details; // Если вдруг не JSON, выводим как есть
+    }
 
+    if (!details) return '—';
+
+    // ЕСЛИ ЭТО UPDATE (содержит изменения `changes`)
+    if (log.action === 'UPDATE' && details.changes) {
+        let html = '<div style="font-size: 13px;">';
+        for (const [field, val] of Object.entries(details.changes)) {
+            html += `<div style="margin-bottom: 2px;">
+                <span style="color: #666; font-weight: 500;">${field}:</span> 
+                <span style="text-decoration: line-through; color: #d9534f;">${val.from ?? 'пусто'}</span> 
+                ➔ 
+                <span style="color: #5cb85c; font-weight: 500;">${val.to ?? 'пусто'}</span>
+            </div>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
+    // ЕСЛИ ЭТО INSERT или DELETE (просто показываем поля и значения списком)
+    if (typeof details === 'object') {
+        let html = '<div style="font-size: 12px; color: #444; max-height: 100px; overflow-y: auto;">';
+        for (const [key, val] of Object.entries(details)) {
+            if (val !== null && val !== '' && val !== undefined) {
+                html += `<span><b>${key}:</b> ${val}</span>; `;
+            }
+        }
+        html += '</div>';
+        return html;
+    }
+
+    return JSON.stringify(details);
+}
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
