@@ -36,13 +36,13 @@ router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query;
         
-        // Базовый запрос под твою структуру таблицы
+        // Базовый запрос под твою структуру таблицы (с добавлением псевдонима для created_at)
         let query = `
             SELECT 
                 operation_type,
                 document_id AS doc_id,
                 COALESCE(document_number, '—') AS doc_number,
-                created_at,
+                l.created_at,
                 COALESCE(u.name, u.login, 'Система') AS user_name,
                 warehouse_to,
                 warehouse_from,
@@ -66,7 +66,7 @@ router.get('/get-logs', async (req, res) => {
             queryParams.push(type);
         }
 
-        query += ` ORDER BY created_at DESC LIMIT 200`;
+        query += ` ORDER BY l.created_at DESC LIMIT 200`;
 
         const result = await pool.query(query, queryParams);
         return res.json(result.rows);
