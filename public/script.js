@@ -6814,7 +6814,6 @@ function openDefaultDetail(entity, item) {
 })();
 
 
-
 async function checkRemindersOnStart() {
     try {
         const response = await fetch('/api/reminders');
@@ -6875,7 +6874,29 @@ async function checkRemindersOnStart() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        cars.forEach(car => {
+        const filteredCars = cars.filter(car => {
+            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
+            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
+            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
+            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
+
+            if (ptoCurr) ptoCurr.setHours(0,0,0,0);
+            if (ptoNext) ptoNext.setHours(0,0,0,0);
+            if (insCurr) insCurr.setHours(0,0,0,0);
+            if (insNext) insNext.setHours(0,0,0,0);
+
+            const isPtoExpired = (ptoCurr && ptoCurr <= today) || (ptoNext && ptoNext <= today);
+            const isInsExpired = (insCurr && insCurr <= today) || (insNext && insNext <= today);
+
+            return isPtoExpired || isInsExpired;
+        });
+
+        if (filteredCars.length === 0) {
+            modal.style.display = 'none';
+            return;
+        }
+
+        filteredCars.forEach(car => {
             const tr = document.createElement('tr');
 
             const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
@@ -6883,10 +6904,15 @@ async function checkRemindersOnStart() {
             const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
             const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
 
-            const isPtoCurrRed = ptoCurr && ptoCurr < today;
-            const isPtoNextRed = ptoNext && ptoNext < today;
-            const isInsCurrRed = insCurr && insCurr < today;
-            const isInsNextRed = insNext && insNext < today;
+            if (ptoCurr) ptoCurr.setHours(0,0,0,0);
+            if (ptoNext) ptoNext.setHours(0,0,0,0);
+            if (insCurr) insCurr.setHours(0,0,0,0);
+            if (insNext) insNext.setHours(0,0,0,0);
+
+            const isPtoCurrRed = ptoCurr && ptoCurr <= today;
+            const isPtoNextRed = ptoNext && ptoNext <= today;
+            const isInsCurrRed = insCurr && insCurr <= today;
+            const isInsNextRed = insNext && insNext <= today;
 
             const formatDate = (d) => {
                 if (!d) return '—';
