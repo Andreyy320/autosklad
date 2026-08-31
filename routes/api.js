@@ -33,11 +33,11 @@ module.exports = (pool) => {
     });
 
 
-
-    // Получение журнала операций из inventory_logs
+// Получение журнала операций из inventory_logs с отладкой
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Ожидает 'Приход', 'Продажа', 'Перемещение', 'Ремонт'
+        console.log('🔍 Запрос логов. Получен параметр type:', type);
         
         let query = `
             SELECT 
@@ -69,14 +69,25 @@ router.get('/get-logs', async (req, res) => {
 
         query += ` ORDER BY l.created_at DESC LIMIT 200`;
 
+        console.log('🛠️ Итоговый SQL запрос:', query);
+        console.log('📦 Параметры запроса (queryParams):', queryParams);
+
         const result = await pool.query(query, queryParams);
+        
+        console.log(`✅ Найдено строк в БД: ${result.rows.length}`);
+        if (result.rows.length > 0) {
+            console.log('📄 Пример первой строки из БД:', result.rows[0]);
+        } else {
+            console.log('⚠️ Внимание: таблица inventory_logs пуста для данного типа или критерия поиска!');
+        }
+
         return res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения журнала из inventory_logs:', err.message);
+        console.error('❌ Ошибка получения журнала из inventory_logs:', err.message);
+        console.error(err.stack);
         return res.status(500).json({ error: 'Ошибка сервера при получении логов: ' + err.message });
     }
 });
-
 
 
 // Открытие самой страницы logs.html по адресу /logs (GET)

@@ -36,12 +36,12 @@
     <a href="/" class="back-btn">← На главную в склад</a>
     <h1>📦 Журнал движения запчастей и операций</h1>
     
-    <!-- Вкладки по реальным типам операций бэкенда -->
+    <!-- Вкладки синхронизированы с русскими значениями operation_type в БД -->
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('receipt', this)">📥 Приходы</button>
-        <button class="tab-btn" onclick="switchTab('realization', this)">🛒 Продажи / Расходы</button>
-        <button class="tab-btn" onclick="switchTab('move', this)">🔄 Перемещения</button>
-        <button class="tab-btn" onclick="switchTab('repair', this)">🔧 Ремонт</button>
+        <button class="tab-btn active" onclick="switchTab('Приход', this)">📥 Приходы</button>
+        <button class="tab-btn" onclick="switchTab('Продажа', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('Перемещение', this)">🔄 Перемещения</button>
+        <button class="tab-btn" onclick="switchTab('Ремонт', this)">🔧 Ремонт</button>
     </div>
 
     <table>
@@ -66,12 +66,14 @@
 </div>
 
 <script>
-    let currentType = 'receipt';
+    let currentType = 'Приход';
 
     async function loadLogs(type) {
         currentType = type;
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
+
+        console.log(`🌐 Фронтенд: отправляем запрос на /api/get-logs?type=${type}`);
 
         try {
             const response = await fetch(`/api/get-logs?type=${type}`);
@@ -82,10 +84,11 @@
             }
 
             const logs = await response.json();
+            console.log(`📥 Фронтенд: получено записей от сервера:`, logs);
             
             tbody.innerHTML = '';
 
-            if (logs.length === 0) {
+            if (!Array.isArray(logs) || logs.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">В этом разделе пока нет записей</td></tr>';
                 return;
             }
@@ -137,7 +140,7 @@
                 tbody.appendChild(tr);
             });
         } catch (err) {
-            console.error('Ошибка загрузки логов:', err);
+            console.error('❌ Ошибка загрузки логов на клиенте:', err);
             tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
         }
     }
@@ -148,8 +151,8 @@
         loadLogs(type);
     }
 
-    // Загружаем приходы при открытии страницы по умолчанию
-    loadLogs('receipt');
+    // Загружаем приходы по умолчанию при открытии страницы
+    loadLogs('Приход');
 </script>
 </body>
 </html>
