@@ -67,8 +67,15 @@
         tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
 
         try {
-            // Обращаемся к нашему бэкенд роутеру /get-logs
-const response = await fetch(`/api/get-logs?type=${type}`);
+            // Запрос идет на правильный префикс /api/get-logs
+            const response = await fetch(`/api/get-logs?type=${type}`);
+            
+            // Проверяем, что сервер вернул именно JSON, а не HTML-ошибку
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Сервер вернул не JSON (возможно, ошибка 404 или 500)");
+            }
+
             const logs = await response.json();
             
             tbody.innerHTML = '';
@@ -107,7 +114,7 @@ const response = await fetch(`/api/get-logs?type=${type}`);
             });
         } catch (err) {
             console.error('Ошибка загрузки логов:', err);
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки данных с сервера</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
         }
     }
 
