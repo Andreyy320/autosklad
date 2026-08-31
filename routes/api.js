@@ -4153,6 +4153,9 @@ router.put('/receipt_items/:id', async (req, res) => {
         description
     } = req.body;
 
+    console.log(`\n--- [DEBUG] Запрос на обновление позиции ID: ${itemId} ---`);
+    console.log('📦 Полученные данные в req.body:', req.body);
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -4164,12 +4167,14 @@ router.put('/receipt_items/:id', async (req, res) => {
         );
 
         if (itemCheck.rows.length === 0) {
+            console.log(`❌ Ошибка: Позиция с ID ${itemId} не найдена в receipt_items.`);
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
         }
 
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
+        console.log('🔍 Текущие данные строки из БД до изменения:', currentItem);
 
         // 2. Проверяем, проведен ли родительский документ (receipts)
         const receiptCheck = await client.query(
@@ -4178,12 +4183,16 @@ router.put('/receipt_items/:id', async (req, res) => {
         );
 
         if (receiptCheck.rows.length === 0) {
+            console.log(`❌ Ошибка: Родительский документ ID ${receipt_id} не найден.`);
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ прихода не найден.' });
         }
 
         const isPostedVal = receiptCheck.rows[0].is_posted;
+        console.log(`🔒 Статус проведения документа (is_posted):`, isPostedVal);
+
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === '2' || isPostedVal === 1 || isPostedVal === '1') {
+            console.log('⛔ Попытка изменить проведенный документ заблокирована.');
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
         }
@@ -4196,12 +4205,15 @@ router.put('/receipt_items/:id', async (req, res) => {
         const curr = currency !== undefined ? currency : currentItem.currency;
         const desc = description !== undefined ? description : currentItem.description;
 
+        console.log(`🧮 Расчёт новых значений -> Цена: ${numPrice}, Кол-во: ${numQty}, Итого: ${totalRub}`);
+
         if (numQty <= 0) {
+            console.log('⚠️ Ошибка: Количество меньше или равно нулю.');
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
 
-        // 4. Обновление текущей позиции в таблице receipt_items
+        // 4. Обновление позиции в таблице receipt_items
         const updateQuery = `
             UPDATE receipt_items 
             SET price = $1, 
@@ -4226,9 +4238,14 @@ router.put('/receipt_items/:id', async (req, res) => {
 
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
+        console.log('✅ Успешно обновлено в receipt_items:', updatedItem);
 
-        // 5. Автоматическая запись движения в inventory_logs (каждое изменение создает НОВУЮ отдельную строку)
+        // 5. Автоматическая запись лога (каждое изменение добавляет новую строку в лог через INSERT)
         try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
             const changes = {};
             const fieldsToCheck = ['price', 'currency', 'quantity', 'description', 'price_rub', 'total_rub'];
 
@@ -4243,28 +4260,37 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            // Записываем в inventory_logs только при наличии реальных изменений
-            if (Object.keys(changes).length > 0) {
-                const actionDesc = `Изменена позиция: количество стало ${numQty}, цена ${numPrice}`;
+            console.🔍 changes = '🔍 Зафиксированные изменения для лога:', changes;
 
-                await client.query(
-                    `INSERT INTO inventory_logs (receipt_id, zaphasti_id, quantity, price, action_type, description, created_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+            // Записываем в audit_logs только при наличии реальных изменений
+            if (Object.keys(changes).length > 0) {
+                const detailsObj = {
+                    updated_fields: req.body,
+                    changes: changes
+                };
+
+                const logInsertRes = await client.query(
+                    `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
                     [
-                        receipt_id,
-                        currentItem.zaphasti_id,
-                        numQty,
-                        numPrice,
+                        userId,
                         'UPDATE',
-                        actionDesc
+                        'receipt_items',
+                        itemId,
+                        JSON.stringify(detailsObj),
+                        clientIp
                     ]
                 );
+                console.log('📝 Новая запись успешно добавлена в audit_logs:', logInsertRes.rows[0]);
+            } else {
+                console.log('ℹ️ Реальных изменений полей не обнаружено, запись в audit_logs пропущена.');
             }
         } catch (logErr) {
-            console.error('Ошибка записи лога движения (не критично):', logErr.message);
+            console.error('❌ Ошибка записи лога (не критично):', logErr.message);
         }
 
         await client.query('COMMIT');
+        console.log('🎉 Транзакция успешно закоммичена (COMMIT).\n');
 
         return res.status(200).json({
             message: 'Позиция прихода успешно обновлена',
@@ -4273,7 +4299,7 @@ router.put('/receipt_items/:id', async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('ПОЛНАЯ ОШИБКА БД при обновлении позиции прихода:', {
+        console.error('💥 ПОЛНАЯ ОШИБКА БД при обновлении позиции прихода:', {
             message: error.message,
             detail: error.detail,
             hint: error.hint,
@@ -4288,8 +4314,6 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
-
-
 // DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
 router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
