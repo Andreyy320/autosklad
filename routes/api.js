@@ -44,7 +44,7 @@ router.get('/get-logs', async (req, res) => {
                     r.id AS doc_id,
                     r.doc_number,
                     COALESCE(r.fact_date, r.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, u_mol.name, u_mol.login, 'Система') AS user_name,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     p.name AS counterparty,
@@ -59,8 +59,6 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN mol m ON r.mol_id = m.id
-                LEFT JOIN users u_mol ON m.user_id = u_mol.id
                 LEFT JOIN users u_doc ON r.user_id = u_doc.id
 
                 UNION ALL
@@ -71,7 +69,7 @@ router.get('/get-logs', async (req, res) => {
                     m.id AS doc_id,
                     m.doc_number,
                     COALESCE(m.fact_date, m.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, uf.name, uf.login, 'Система') AS user_name,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     wt.name AS warehouse_to,
                     wf.name AS warehouse_from,
                     NULL AS counterparty,
@@ -86,8 +84,6 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
                 LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
                 LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
-                LEFT JOIN mol mf ON m.mol_from_id = mf.id
-                LEFT JOIN users uf ON mf.user_id = uf.id
                 LEFT JOIN users u_doc ON m.user_id = u_doc.id
                 LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
 
@@ -99,7 +95,7 @@ router.get('/get-logs', async (req, res) => {
                     rep.id AS doc_id,
                     rep.doc_number,
                     COALESCE(rep.fact_date, rep.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, u_mol.name, u_mol.login, 'Система') AS user_name,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
@@ -114,8 +110,6 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
                 LEFT JOIN skladi s ON rep.warehouse_id = s.id
                 LEFT JOIN cars c ON rep.car_id = c.id
-                LEFT JOIN mol m ON rep.mol_id = m.id
-                LEFT JOIN users u_mol ON m.user_id = u_mol.id
                 LEFT JOIN users u_doc ON rep.user_id = u_doc.id
 
                 UNION ALL
@@ -126,7 +120,7 @@ router.get('/get-logs', async (req, res) => {
                     rz.id AS doc_id,
                     rz.doc_number,
                     COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, u_mol.name, u_mol.login, 'Система') AS user_name,
+                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
                     'Покупатель' AS counterparty,
@@ -141,8 +135,6 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON rz.sklad_id = s.id
                 LEFT JOIN customers c ON rz.customer_id = c.id
-                LEFT JOIN mol m ON rz.mol_id = m.id
-                LEFT JOIN users u_mol ON m.user_id = u_mol.id
                 LEFT JOIN users u_doc ON rz.user_id = u_doc.id
             ) AS combined_logs
         `;
@@ -5212,7 +5204,6 @@ router.delete('/repair_items/:id', async (req, res) => {
 
 
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     console.log(`\n----------------------------------------`);
@@ -5339,6 +5330,14 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
+        // Автоматически подставляем user_id для прихода (receipts), если он не передан
+        if (entity === 'receipts' && !req.body.user_id) {
+            const currentUserId = req.headers['user-id'] || null;
+            if (currentUserId) {
+                req.body.user_id = currentUserId;
+            }
+        }
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -5386,8 +5385,6 @@ router.post('/:entity', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
     }
 });
-
-
 
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
