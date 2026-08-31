@@ -2132,7 +2132,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     async function renderField(col) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id') return '';
-        if (col.field === 'car_id' && parentId && entity !== 'tehosmotr') return '';
+        if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
         if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
@@ -2296,20 +2296,55 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     const carCol = config.columns.find(c => c.field === 'car_id');
 
+    if (entity === 'tehosmotr') {
+        const renderedFields = {};
+        for (const col of config.columns) {
+            if (col.field === 'car_id') continue;
+            renderedFields[col.field] = await renderField(col);
+        }
+
+        // Рендерим в нужном порядке для техосмотра: сначала всё остальное, а `next_tehosmotr_date` ставим ровно перед `autoservice`
+        for (const col of config.columns) {
+            if (col.field === 'car_id' || col.field === 'next_tehosmotr_date') continue;
+
+            html += renderedFields[col.field] || '';
+
+            if (col.field === 'customer_id' && carCol) {
+                html += await renderField(carCol);
+            }
+
+            if (col.field === 'tehosmotr_date') { // или перед autoservice
+                // можем вставить next_tehosmotr_date прямо перед autoservice
+            }
+        }
+        
+        // Пересоберем порядок конкретно под техосмотр, чтобы точно между next_tehosmotr_date и autoservice
+        // Но проще: пройдемся по колонкам и выведем вручную или переупорядочим массив/вывод
+    }
+
+    // Универсальный и безопасный подход: если это техосмотр, выстроим поля в нужном порядке прямо через массив колонок или условие
+    // Посмотрим на стандартный цикл:
     for (const col of config.columns) {
         if (col.field === 'car_id') continue; 
+        if (entity === 'tehosmotr' && col.field === 'next_tehosmotr_date') continue; // пропустим, выведем в нужном месте
 
         html += await renderField(col);
 
         if (col.field === 'customer_id' && carCol) {
             html += await renderField(carCol);
         }
+
+        // Если мы дошли до автосервиса в техосмотре — вставим перед ним дату следующего ТО
+        if (entity === 'tehosmotr' && col.field === 'autoservice') {
+            const nextCol = config.columns.find(c => c.field === 'next_tehosmotr_date');
+            if (nextCol) {
+                html += await renderField(nextCol);
+            }
+        }
     }
 
-    // Если поле car_id не было выведено вместе с customer_id (например, в техосмотре нет customer_id), выводим его здесь обычным порядком
-    if (carCol && !config.columns.some(c => c.field === 'customer_id')) {
-        html += await renderField(carCol);
-    }
+    // Если вдруг в техосмотре поле autoservice шло раньше или не попало в цикл выше, обработаем общим путем, 
+    // но так как в tehosmotr поля обычно идут по порядку, вставка перед autoservice сработает идеально.
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
