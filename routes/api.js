@@ -90,10 +90,9 @@ router.get('/get-logs', async (req, res) => {
 });
 
 
-async function writeInventoryLog(client, data = {}) {
+async function writeInventoryLog(client, data) {
     try {
-        // Защита, если вдруг передали null или undefined вместо объекта
-        const safeData = data || {};
+        const d = data || {};
 
         await client.query(`
             INSERT INTO inventory_logs (
@@ -104,22 +103,22 @@ async function writeInventoryLog(client, data = {}) {
             ) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         `, [
-            safeData.operation_type || 'Приход',
-            safeData.action || 'INSERT',
-            safeData.document_id || null,
-            safeData.document_number ? String(safeData.document_number) : null,
-            safeData.user_id ? Number(safeData.user_id) : null,
-            safeData.counterparty || null,
-            safeData.part_id ? Number(safeData.part_id) : null,
-            safeData.part_name || null,
-            safeData.sku || null,
-            Number(safeData.quantity) || 0,
-            Number(safeData.price) || 0,
-            Number(safeData.discount) || 0,
-            Number(safeData.total_amount) || 0,
-            safeData.warehouse_from !== null && safeData.warehouse_from !== undefined ? String(safeData.warehouse_from) : null,
-            safeData.warehouse_to !== null && safeData.warehouse_to !== undefined ? String(safeData.warehouse_to) : null,
-            safeData.reason || ''
+            d.operation_type || 'Приход',
+            d.action || 'INSERT',
+            d.document_id || null,
+            d.document_number ? String(d.document_number) : null,
+            d.user_id !== undefined && d.user_id !== null ? Number(d.user_id) : null,
+            d.counterparty || null,
+            d.part_id !== undefined && d.part_id !== null ? Number(d.part_id) : null,
+            d.part_name || null,
+            d.sku || null,
+            Number(d.quantity) || 0,
+            Number(d.price) || 0,
+            Number(d.discount) || 0,
+            Number(d.total_amount) || 0,
+            d.warehouse_from !== null && d.warehouse_from !== undefined ? String(d.warehouse_from) : null,
+            d.warehouse_to !== null && d.warehouse_to !== undefined ? String(d.warehouse_to) : null,
+            d.reason || ''
         ]);
     } catch (err) {
         console.error('❌ ОШИБКА записи в inventory_logs:', err.message);
