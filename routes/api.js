@@ -90,7 +90,6 @@ router.get('/get-logs', async (req, res) => {
 });
 
 
-// Универсальная функция записи в журнал логов
 async function writeInventoryLog(client, data) {
     try {
         await client.query(`
@@ -106,25 +105,24 @@ async function writeInventoryLog(client, data) {
             data.action || 'INSERT',
             data.document_id || null,
             data.document_number ? String(data.document_number) : null,
-            data.user_id || null,
+            data.user_id ? Number(data.user_id) : null,
             data.counterparty || null,
-            data.part_id || null,
+            data.part_id ? Number(data.part_id) : null,
             data.part_name || null,
             data.sku || null,
             Number(data.quantity) || 0,
             Number(data.price) || 0,
             Number(data.discount) || 0,
             Number(data.total_amount) || 0,
-            data.warehouse_from || null,
-            data.warehouse_to || null,
+            data.warehouse_from !== null && data.warehouse_from !== undefined ? String(data.warehouse_from) : null,
+            data.warehouse_to !== null && data.warehouse_to !== undefined ? String(data.warehouse_to) : null,
             data.reason || ''
         ]);
     } catch (err) {
-        console.error('❌ Ошибка записи в inventory_logs:', err.message);
-        throw err;
+        console.error('❌ ОШИБКА записи в inventory_logs:', err.message);
+        throw err; // Обязательно прокидываем наверх, чтобы видеть в консоли реальную причину, если что-то пойдет не так
     }
 }
-
 
 
 
