@@ -31,7 +31,7 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций (GET)
+// 1. Получение детального журнала товарных операций с историей из audit_logs (GET)
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Получаем тип: receipt, move, repair, realization
@@ -53,7 +53,15 @@ router.get('/get-logs', async (req, res) => {
                     ri.quantity,
                     ri.price,
                     (ri.quantity * ri.price) AS total_amount,
-                    CONCAT('Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—')) AS reason
+                    CONCAT(
+                        'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
+                        COALESCE((
+                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'receipts' OR al.table_name = 'receipt_items') 
+                              AND (al.record_id = r.id OR al.record_id = ri.id)
+                        ), '')
+                    ) AS reason
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
@@ -78,7 +86,15 @@ router.get('/get-logs', async (req, res) => {
                     mi.quantity,
                     COALESCE(ri_orig.price, mi.price, 0) AS price,
                     (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
-                    CONCAT('Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"') AS reason
+                    CONCAT(
+                        'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
+                        COALESCE((
+                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'moves' OR al.table_name = 'move_items') 
+                              AND (al.record_id = m.id OR al.record_id = mi.id)
+                        ), '')
+                    ) AS reason
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
@@ -104,7 +120,15 @@ router.get('/get-logs', async (req, res) => {
                     ri.quantity,
                     ri.price,
                     (ri.quantity * ri.price) AS total_amount,
-                    CONCAT('Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')') AS reason
+                    CONCAT(
+                        'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
+                        COALESCE((
+                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'repairs' OR al.table_name = 'repair_items') 
+                              AND (al.record_id = rep.id OR al.record_id = ri.id)
+                        ), '')
+                    ) AS reason
                 FROM repair_items ri
                 JOIN repairs rep ON ri.repair_id = rep.id
                 LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
@@ -123,18 +147,26 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
                     s.name AS warehouse_to,
                     NULL AS warehouse_from,
-                    COALESCE(c.name_full, 'Покупатель') AS counterparty,
+                    COALESCE(cust.name_full, 'Покупатель') AS counterparty,
                     COALESCE(ri.name, z.name) AS part_name,
                     COALESCE(ri.article, z.article) AS part_article,
                     COALESCE(ri.quantity, 1) AS quantity,
                     COALESCE(ri.price, 0) AS price,
                     COALESCE(ri.total_rub, 0) AS total_amount,
-                    CONCAT('Реализация №', rz.doc_number) AS reason
+                    CONCAT(
+                        'Реализация №', rz.doc_number,
+                        COALESCE((
+                            SELECT STRING_AGG(CONCAT(' [', al.action, ': ', al.details, ']'), ' ')
+                            FROM audit_logs al 
+                            WHERE (al.table_name = 'realizations' OR al.table_name = 'realization_items') 
+                              AND (al.record_id = rz.id OR al.record_id = ri.id)
+                        ), '')
+                    ) AS reason
                 FROM realization_items ri
                 JOIN realizations rz ON ri.realization_id = rz.id
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON rz.sklad_id = s.id
-                LEFT JOIN customers c ON rz.customer_id = c.id
+                LEFT JOIN customers cust ON rz.customer_id = cust.id
                 LEFT JOIN users u_doc ON rz.user_id = u_doc.id
             ) AS combined_logs
         `;
