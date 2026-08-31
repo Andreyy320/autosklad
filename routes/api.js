@@ -31,130 +31,149 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций через audit_logs (GET)
+// 1. Получение детального журнала товарных операций (GET)
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Получаем тип: receipt, move, repair, realization
         
         let query = `
-            SELECT 
-                al.id AS audit_id,
-                CASE 
-                    WHEN al.table_name IN ('receipts', 'receipt_items') THEN 'receipt'
-                    WHEN al.table_name IN ('moves', 'move_items') THEN 'move'
-                    WHEN al.table_name IN ('repairs', 'repair_items') THEN 'repair'
-                    WHEN al.table_name IN ('realizations', 'realization_items') THEN 'realization'
-                    ELSE 'other'
-                END AS operation_type,
-                
-                COALESCE(r.id, m.id, rep.id, rz.id, 0) AS doc_id,
-                COALESCE(r.doc_number, m.doc_number, rep.doc_number, rz.doc_number, '—') AS doc_number,
-                al.created_at AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
-                al.action AS action, -- INSERT, UPDATE, DELETE
+            SELECT * FROM (
+                -- 1. ПРИХОДЫ (receipt_items + audit_logs)
+                SELECT 
+                    'receipt' AS operation_type,
+                    r.id AS doc_id,
+                    r.doc_number,
+                    COALESCE(al.created_at, r.fact_date, r.date, NOW()) AS created_at,
+                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
+                    al.action AS action_type,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    p.name AS counterparty,
+                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
+                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
+                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
+                    COALESCE(ri.price, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'price', '') AS NUMERIC), 0) AS price,
+                    (COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) * COALESCE(ri.price, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'price', '') AS NUMERIC), 0)) AS total_amount,
+                    CONCAT(
+                        'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
+                        ' [', al.action, ']',
+                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                    ) AS reason
+                FROM audit_logs al
+                JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+                JOIN receipts r ON ri.receipt_id = r.id
+                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+                LEFT JOIN skladi s ON r.warehouse_id = s.id
+                LEFT JOIN postavhik p ON r.supplier_id = p.id
+                LEFT JOIN users u_audit ON al.user_id = u_audit.id
+                LEFT JOIN users u_doc ON r.user_id = u_doc.id
 
-                -- Склады
-                COALESCE(s_rec.name, s_rep.name, s_rz.name, wt.name, '—') AS warehouse_to,
-                wf.name AS warehouse_from,
+                UNION ALL
 
-                -- Контрагенты
-                COALESCE(p.name, cust.name_full, CONCAT('Авто: ', COALESCE(car.gos_number, 'Без номера')), '—') AS counterparty,
+                -- 2. ПЕРЕМЕЩЕНИЯ (move_items + audit_logs)
+                SELECT 
+                    'move' AS operation_type,
+                    m.id AS doc_id,
+                    m.doc_number,
+                    COALESCE(al.created_at, m.fact_date, m.date, NOW()) AS created_at,
+                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
+                    al.action AS action_type,
+                    wt.name AS warehouse_to,
+                    wf.name AS warehouse_from,
+                    NULL AS counterparty,
+                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
+                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
+                    COALESCE(mi.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
+                    COALESCE(ri_orig.price, mi.price, 0) AS price,
+                    (COALESCE(mi.quantity, 0) * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
+                    CONCAT(
+                        'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
+                        ' [', al.action, ']',
+                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                    ) AS reason
+                FROM audit_logs al
+                JOIN move_items mi ON al.table_name = 'move_items' AND al.record_id = mi.id
+                JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
+                LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
+                LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
+                LEFT JOIN users u_audit ON al.user_id = u_audit.id
+                LEFT JOIN users u_doc ON m.user_id = u_doc.id
+                LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
 
-                -- Запчасти (с поддержкой данных из удаленных элементов через JSON details)
-                COALESCE(
-                    z_rec.name, z_move.name, z_rep.name, z_rz.name,
-                    (al.details->'deleted_item'->>'name'),
-                    (al.details->'changes'->>'name'),
-                    'Запчасть'
-                ) AS part_name,
-                
-                COALESCE(
-                    z_rec.article, z_move.article, z_rep.article, z_rz.article,
-                    (al.details->'deleted_item'->>'article'),
-                    '—'
-                ) AS part_article,
+                UNION ALL
 
-                -- Количество
-                COALESCE(
-                    NULLIF(ri.quantity, 0), 
-                    NULLIF(mi.quantity, 0), 
-                    NULLIF(rep_i.quantity, 0), 
-                    NULLIF(rz_i.quantity, 0), 
-                    CAST(NULLIF(al.details->'deleted_item'->>'quantity', '') AS NUMERIC),
-                    0
-                ) AS quantity,
+                -- 3. РЕМОНТЫ (repair_items + audit_logs)
+                SELECT 
+                    'repair' AS operation_type,
+                    rep.id AS doc_id,
+                    rep.doc_number,
+                    COALESCE(al.created_at, rep.fact_date, rep.doc_date, NOW()) AS created_at,
+                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
+                    al.action AS action_type,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
+                    COALESCE(z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
+                    COALESCE(z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
+                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 0) AS quantity,
+                    COALESCE(ri.price, 0) AS price,
+                    (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
+                    CONCAT(
+                        'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
+                        ' [', al.action, ']',
+                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                    ) AS reason
+                FROM audit_logs al
+                JOIN repair_items ri ON al.table_name = 'repair_items' AND al.record_id = ri.id
+                JOIN repairs rep ON ri.repair_id = rep.id
+                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+                LEFT JOIN skladi s ON rep.warehouse_id = s.id
+                LEFT JOIN cars c ON rep.car_id = c.id
+                LEFT JOIN users u_audit ON al.user_id = u_audit.id
+                LEFT JOIN users u_doc ON rep.user_id = u_doc.id
 
-                -- Цена
-                COALESCE(
-                    ri.price, mi.price, rep_i.price, rz_i.price, 
-                    CAST(NULLIF(al.details->'deleted_item'->>'price', '') AS NUMERIC),
-                    0
-                ) AS price,
+                UNION ALL
 
-                -- Скидка
-                COALESCE(rz_i.discount, '—') AS discount,
-
-                -- Итого сумма
-                COALESCE(
-                    (COALESCE(ri.quantity, mi.quantity, rep_i.quantity, rz_i.quantity, 0) * COALESCE(ri.price, mi.price, rep_i.price, rz_i.price, 0)),
-                    rz_i.total_rub,
-                    0
-                ) AS total_amount,
-
-                -- Описание / Причина / Детали изменений
-                COALESCE(
-                    al.details->>'message',
-                    CONCAT('Действие ', al.action, ' над ', al.table_name)
-                ) AS reason
-
-            FROM audit_logs al
-            LEFT JOIN users u ON al.user_id = u.id
-
-            -- ПРИХОДЫ
-            LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR (al.table_name = 'receipt_items' AND al.record_id IN (SELECT id FROM receipt_items WHERE receipt_id = r.id))
-            LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
-            LEFT JOIN zaphasti z_rec ON ri.zaphasti_id = z_rec.id
-            LEFT JOIN skladi s_rec ON r.warehouse_id = s_rec.id
-            LEFT JOIN postavhik p ON r.supplier_id = p.id
-
-            -- ПЕРЕМЕЩЕНИЯ
-            LEFT JOIN moves m ON (al.table_name = 'moves' AND al.record_id = m.id) OR (al.table_name = 'move_items' AND al.record_id IN (SELECT id FROM move_items WHERE move_id = m.id))
-            LEFT JOIN move_items mi ON al.table_name = 'move_items' AND al.record_id = mi.id
-            LEFT JOIN zaphasti z_move ON mi.zaphasti_id = z_move.id
-            LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
-            LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
-
-            LEFT JOIN repairs rep ON (al.table_name = 'repairs' AND al.record_id = rep.id) OR (al.table_name = 'repair_items' AND al.record_id IN (SELECT id FROM repair_items WHERE repair_id = rep.id))
-            LEFT JOIN repair_items rep_i ON al.table_name = 'repair_items' AND al.record_id = rep_i.id
-            LEFT JOIN zaphasti z_rep ON rep_i.zaphast_id = z_rep.id
-            LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
-            LEFT JOIN cars car ON rep.car_id = car.id
-
-            -- РЕАЛИЗАЦИИ
-            LEFT JOIN realizations rz ON (al.table_name = 'realizations' AND al.record_id = rz.id) OR (al.table_name = 'realization_items' AND al.record_id IN (SELECT id FROM realization_items WHERE realization_id = rz.id))
-            LEFT JOIN realization_items rz_i ON al.table_name = 'realization_items' AND al.record_id = rz_i.id
-            LEFT JOIN zaphasti z_rz ON rz_i.zaphasti_id = z_rz.id
-            LEFT JOIN skladi s_rz ON rz.sklad_id = s_rz.id
-            LEFT JOIN customers cust ON rz.customer_id = cust.id
-
-            WHERE al.table_name IN ('receipts', 'receipt_items', 'moves', 'move_items', 'repairs', 'repair_items', 'realizations', 'realization_items')
+                -- 4. РЕАЛИЗАЦИИ (realization_items + audit_logs)
+                SELECT 
+                    'realization' AS operation_type,
+                    rz.id AS doc_id,
+                    rz.doc_number,
+                    COALESCE(al.created_at, rz.fact_date, rz.doc_date, NOW()) AS created_at,
+                    COALESCE(u_audit.name, u_audit.login, u_doc.name, u_doc.login, 'Система') AS user_name,
+                    al.action AS action_type,
+                    s.name AS warehouse_to,
+                    NULL AS warehouse_from,
+                    COALESCE(cust.name, cust.name_full, 'Покупатель') AS counterparty,
+                    COALESCE(ri.name, z.name, (al.details::jsonb->'deleted_item'->>'name'), 'Запчасть') AS part_name,
+                    COALESCE(ri.article, z.article, (al.details::jsonb->'deleted_item'->>'article'), '—') AS part_article,
+                    COALESCE(ri.quantity, CAST(NULLIF(al.details::jsonb->'deleted_item'->>'quantity', '') AS NUMERIC), 1) AS quantity,
+                    COALESCE(ri.price, 0) AS price,
+                    COALESCE(ri.total_rub, 0) AS total_amount,
+                    CONCAT(
+                        'Реализация №', rz.doc_number,
+                        ' [', al.action, ']',
+                        CASE WHEN al.details IS NOT NULL AND al.details != '' THEN CONCAT(' Детали: ', al.details) ELSE '' END
+                    ) AS reason
+                FROM audit_logs al
+                JOIN realization_items ri ON al.table_name = 'realization_items' AND al.record_id = ri.id
+                JOIN realizations rz ON ri.realization_id = rz.id
+                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+                LEFT JOIN skladi s ON rz.sklad_id = s.id
+                LEFT JOIN customers cust ON rz.customer_id = cust.id
+                LEFT JOIN users u_audit ON al.user_id = u_audit.id
+                LEFT JOIN users u_doc ON rz.user_id = u_doc.id
+            ) AS combined_logs
         `;
 
         const params = [];
         if (type) {
-            query += ` AND (
-                CASE 
-                    WHEN al.table_name IN ('receipts', 'receipt_items') THEN 'receipt'
-                    WHEN al.table_name IN ('moves', 'move_items') THEN 'move'
-                    WHEN al.table_name IN ('repairs', 'repair_items') THEN 'repair'
-                    WHEN al.table_name IN ('realizations', 'realization_items') THEN 'realization'
-                    ELSE 'other'
-                END
-            ) = $1`;
+            query += ` WHERE operation_type = $1`;
             params.push(type);
         }
 
-        query += ` ORDER BY al.created_at DESC LIMIT 300`;
+        query += ` ORDER BY created_at DESC LIMIT 300`;
 
         const result = await pool.query(query, params);
         return res.json(result.rows);
