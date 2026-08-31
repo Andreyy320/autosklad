@@ -5206,9 +5206,15 @@ router.delete('/repair_items/:id', async (req, res) => {
 
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
-    console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Сущность: ${req.params.entity}`);
-    console.log(`[BODY]:`, req.body);
+    const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
+    const browserLog = (msg) => {
+        console.log(msg);
+        logsBuffer.push(msg);
+    };
+
+    browserLog(`\n----------------------------------------`);
+    browserLog(`[POST REQUEST] Сущность: ${req.params.entity}`);
+    browserLog(`[BODY]: ${JSON.stringify(req.body)}`);
 
     try {
         let { entity } = req.params;
@@ -5241,8 +5247,11 @@ router.post('/:entity', async (req, res) => {
         ];
 
         if (!allowedTables.includes(entity)) {
-            console.log(`[ERROR] Недопустимая таблица: ${entity}`);
-            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+            browserLog(`[ERROR] Недопустимая таблица: ${entity}`);
+            return res.status(400).json({ 
+                error: `Недопустимая таблица: ${entity}`,
+                serverLogs: logsBuffer 
+            });
         }
 
         if (entity === 'repairs') {
@@ -5265,9 +5274,6 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
-        // Блок с логикой для repair_items полностью убран отсюда, 
-        // так как теперь для него используется отдельный выделенный роут выше.
-
         if (entity === 'repair_works') {
             const { repair_id } = req.body;
             
@@ -5276,8 +5282,11 @@ router.post('/:entity', async (req, res) => {
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        console.log(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
-                        return res.status(400).json({ error: 'Нельзя добавлять работы в уже проведенный ремонт!' });
+                        browserLog(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
+                        return res.status(400).json({ 
+                            error: 'Нельзя добавлять работы в уже проведенный ремонт!',
+                            serverLogs: logsBuffer 
+                        });
                     }
                 }
             }
@@ -5298,10 +5307,10 @@ router.post('/:entity', async (req, res) => {
             }
             
             if (!req.body.car_id) {
-                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!', serverLogs: logsBuffer });
             }
             if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                return res.status(400).json({ error: 'Необходимо указать сумму!' });
+                return res.status(400).json({ error: 'Необходимо указать сумму!', serverLogs: logsBuffer });
             }
         }
 
@@ -5323,27 +5332,25 @@ router.post('/:entity', async (req, res) => {
             }
             
             if (!req.body.car_id) {
-                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!' });
+                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!', serverLogs: logsBuffer });
             }
             if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                return res.status(400).json({ error: 'Необходимо указать сумму!' });
+                return res.status(400).json({ error: 'Необходимо указать сумму!', serverLogs: logsBuffer });
             }
         }
 
-        // Автоматически подставляем user_id для прихода (receipts), если он не передан
-        if (entity === 'receipts' && !req.body.user_id) {
-            const currentUserId = req.headers['user-id'] || null;
-            if (currentUserId) {
-                req.body.user_id = currentUserId;
-            }
+        // Автоматически подставляем user_id из заголовков (поддерживаем x-user-id и user-id)
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        if (entity === 'receipts' && !req.body.user_id && currentUserId) {
+            req.body.user_id = currentUserId;
         }
 
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
         if (keys.length === 0) {
-            console.log(`[ERROR] Пустое тело запроса`);
-            return res.status(400).json({ error: 'Нет данных для сохранения' });
+            browserLog(`[ERROR] Пустое тело запроса`);
+            return res.status(400).json({ error: 'Нет данных для сохранения', serverLogs: logsBuffer });
         }
 
         const processedValues = values.map(val => val === '' ? null : val);
@@ -5356,7 +5363,7 @@ router.post('/:entity', async (req, res) => {
 
         // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
         try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
+            const userId = currentUserId || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
             
             await pool.query(
@@ -5376,13 +5383,21 @@ router.post('/:entity', async (req, res) => {
         }
         // ======================================================================================
 
-        console.log(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
-        res.status(201).json(newRecord);
+        browserLog(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
+        
+        // Возвращаем запись и логи для браузера
+        res.status(201).json({
+            ...newRecord,
+            serverLogs: logsBuffer
+        });
 
     } catch (err) {
         console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
         console.error(err.stack);
-        res.status(500).json({ error: 'Ошибка сервера при добавлении: ' + err.message });
+        res.status(500).json({ 
+            error: 'Ошибка сервера при добавлении: ' + err.message,
+            serverLogs: logsBuffer 
+        });
     }
 });
 
