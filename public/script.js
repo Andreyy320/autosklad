@@ -1944,11 +1944,14 @@ expenses_by_receipts: {
 
 
 function getConfig(entity) {
-    console.log(`⚙️ [getConfig] Запрос конфигурации для сущности: "${entity}"`, tableConfig[entity] ? '✅ Найдена' : '❌ НЕ НАЙДЕНА (используется дефолт)');
-    
+    if (!entity || entity === 'undefined') {
+        console.warn('⚠️ [getConfig] Внимание! Попытка получить конфиг для пустой сущности (undefined). Вызов из:', new Error().stack);
+    }
+
     if (tableConfig[entity]) {
         return tableConfig[entity];
     }
+    
     return {
         title: 'Данные',
         columns: [
