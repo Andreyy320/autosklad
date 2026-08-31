@@ -1037,6 +1037,28 @@ router.get('/autostrahovanie', async (req, res) => {
 
 
 
+// ==================== ПОЛУЧИТЬ НАПОМИНАНИЯ ПО ДАТАМ ====================
+router.get('/reminders', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.*, 
+                COALESCE(c.model, m.name, '—') AS model_name
+            FROM cars c
+            LEFT JOIN car_models m ON c.model_id = m.id
+            ORDER BY c.id ASC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка при получении напоминаний:', err.message);
+        res.status(500).json({ error: 'Ошибка при получении напоминаний' });
+    }
+});
+
+
+
+
 // ==================== ОБНОВЛЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
 router.put('/moves/:id', async (req, res) => {
     try {
