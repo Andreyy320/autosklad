@@ -4171,10 +4171,6 @@ router.put('/receipt_items/:id', async (req, res) => {
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
 
-        // Узнаем название запчасти для истории логов отдельным безопасным запросом
-        const partRes = await client.query('SELECT name FROM zaphasti WHERE id = $1', [currentItem.zaphasti_id]);
-        const zaphastiName = partRes.rows[0]?.name || 'Неизвестная запчасть';
-
         // 2. Проверяем, проведен ли родительский документ (receipts)
         const receiptCheck = await client.query(
             'SELECT is_posted FROM receipts WHERE id = $1 FOR UPDATE',
@@ -4189,7 +4185,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const isPostedVal = receiptCheck.rows[0].is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === '2' || isPostedVal === 1 || isPostedVal === '1') {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенный документ!' });
+            return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенном документе!' });
         }
 
         // 3. Подготовка и расчёт новых числовых полей (если поле не передано, оставляем старое)
@@ -4231,7 +4227,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 5. Автоматическая запись лога (INSERT новой строки в историю без перезаписи старых)
+        // 5. Автоматическая запись лога (каждое изменение добавляет новую строку в лог через INSERT)
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || null;
@@ -4251,16 +4247,15 @@ router.put('/receipt_items/:id', async (req, res) => {
                 }
             }
 
-            // Записываем в audit_logs новую запись-историю только при наличии реальных изменений
+            // Записываем в audit_logs только при наличии реальных изменений
             if (Object.keys(changes).length > 0) {
                 const detailsObj = {
-                    zaphasti_name: zaphastiName,
-                    quantity: numQty,
-                    price: numPrice,
-                    changes: changes,
-                    message: 'Изменена позиция в приходе'
+                    updated_fields: req.body,
+                    changes: changes
                 };
 
+                // Используем абсолютно чистый INSERT без каких-либо апдейтов таблицы логов, 
+                // чтобы каждая запись в истории сохранялась как отдельный независимый исторический факт.
                 await client.query(
                     `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
                      VALUES ($1, $2, $3, $4, $5, $6)`,
