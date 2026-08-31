@@ -3002,6 +3002,11 @@ router.post('/realization_items', async (req, res) => {
 });
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
+    console.log(`\n----------------------------------------`);
+    console.log(`[PUT REQUEST] Изменение запчасти в реализации (realization_items) с FIFO`);
+    console.log(`[PARAMS]:`, req.params);
+    console.log(`[BODY]:`, req.body);
+
     const { id } = req.params;
     const { realization_id, zaphasti_id, quantity, description } = req.body;
 
@@ -3019,7 +3024,7 @@ router.put('/realization_items/:id', async (req, res) => {
         const currentItem = existingItemRes.rows[0];
 
         // Проверяем, не проведена ли исходная реализация, которой принадлежит эта позиция
-        const sourceRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        const sourceRealizationCheck = await client.query(`SELECT is_posted, doc_number FROM realizations WHERE id = $1`, [currentItem.realization_id]);
         if (sourceRealizationCheck.rows.length > 0) {
             const { is_posted } = sourceRealizationCheck.rows[0];
             const isSourcePosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
@@ -3052,8 +3057,8 @@ router.put('/realization_items/:id', async (req, res) => {
             }
         }
 
-        // 2. Узнаем склад и клиента для этой реализации с блокировкой строки FOR UPDATE
-        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted FROM realizations WHERE id = $1 FOR UPDATE`;
+        // 2. Узнаем склад, клиента, номер документа для этой реализации с блокировкой строки FOR UPDATE
+        const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1 FOR UPDATE`;
         const realizationRes = await client.query(realizationQuery, [targetRealizationId]);
         
         if (realizationRes.rows.length === 0) {
@@ -3061,7 +3066,7 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, customer_id, is_posted } = realizationRes.rows[0];
+        const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
 
         const isDocumentPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
         if (isDocumentPosted) {
@@ -3150,6 +3155,7 @@ router.put('/realization_items/:id', async (req, res) => {
 
         console.log(`[FIFO EDIT REALIZATION DEBUG] Запрошено при редактировании: ${requestedQty} шт.`);
         console.log(`[FIFO EDIT REALIZATION DEBUG] Реально доступно на складе с учетом возврата редактируемой строки:`, totalAvailableStock);
+        console.log(`[FIFO EDIT REALIZATION DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
             await client.query('ROLLBACK');
@@ -3179,7 +3185,6 @@ router.put('/realization_items/:id', async (req, res) => {
         }
 
         // 6. Распределяем по FIFO для получения первой подходящей партии (или берем базовые цены из первой покрывающей партии)
-        // Для простоты обновления одной строки в старом интерфейсе таблицы: берем цену из той партии, куда поместилась первая часть или целиком объем
         let remainingToDistribute = requestedQty;
         let chosenPurchasePrice = 0;
         let chosenIncomeDocumentId = null;
@@ -3247,49 +3252,70 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const result = await client.query(updateQuery, values);
 
-        // 8. Записываем лог изменений в audit_logs
-        try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-            let changeDetails = {};
-            if (Number(currentItem.quantity) !== Number(requestedQty)) {
-                changeDetails.quantity = { from: Number(currentItem.quantity), to: Number(requestedQty) };
-            }
-            if (currentItem.zaphasti_id !== targetZaphastiId) {
-                changeDetails.zaphasti_id = { from: currentItem.zaphasti_id, to: targetZaphastiId };
-            }
-
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    currentUserId, 
-                    'UPDATE', 
-                    'realization_items', 
-                    id, 
-                    JSON.stringify({
-                        message: `Количество изменено с ${currentItem.quantity} на ${requestedQty}`,
-                        changes: changeDetails
-                    }), 
-                    clientIp
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs при обновлении:', logErr.message);
-        }
+        // 8. Записываем лог в realization_logs вместо audit_logs
+        await writeRealizationLog(client, req, {
+            action: 'UPDATE',
+            realization_id: targetRealizationId,
+            document_number: doc_number || null,
+            warehouse_id: sklad_id,
+            car_id: null,
+            customer_id: customer_id || null,
+            zaphasti_id: targetZaphastiId,
+            quantity: requestedQty,
+            price: finalPrice,
+            total_rub: total_rub,
+            income_document_id: chosenIncomeDocumentId,
+            description: finalDescription || `Изменение запчасти (позиция ID: ${id})`
+        });
 
         await client.query('COMMIT');
-        res.json(result.rows[0]);
+        console.log(`[SUCCESS] Успешно обновлена строка в реализации ID: ${id}`);
+        return res.json(result.rows[0]);
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Ошибка при обновлении запчасти в реализации:', err);
-        res.status(500).json({ error: 'Ошибка сервера при обновлении запчасти: ' + err.message });
+        console.error("❌ [CRITICAL ERROR]:", err.message);
+        console.error(err.stack);
+        return res.status(500).json({ error: 'Ошибка сервера при обновлении запчасти: ' + err.message });
     } finally {
         client.release();
     }
 });
+// Функция для записи логов реализации в таблицу realization_logs
+async function writeRealizationLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO realization_logs (
+                action, realization_id, document_number, warehouse_id, car_id, 
+                customer_id, zaphasti_id, quantity, price, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [
+                data.action,
+                data.realization_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.customer_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога реализации (не критично):', logErr.message);
+    }
+}
+
 // ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
     const { id } = req.query;
