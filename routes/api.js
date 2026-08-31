@@ -3112,6 +3112,8 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
+
+
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
     const { id } = req.params;
@@ -3330,6 +3332,38 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const result = await client.query(updateQuery, values);
 
+        // 9. Записываем понятный лог изменений в audit_logs
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            let changeDetails = {};
+            if (Number(currentItem.quantity) !== Number(requestedQty)) {
+                changeDetails.quantity = { from: Number(currentItem.quantity), to: Number(requestedQty) };
+            }
+            if (currentItem.zaphasti_id !== targetZaphastiId) {
+                changeDetails.zaphasti_id = { from: currentItem.zaphasti_id, to: targetZaphastiId };
+            }
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    currentUserId, 
+                    'UPDATE', 
+                    'realization_items', 
+                    id, 
+                    JSON.stringify({
+                        message: `Количество изменено с ${currentItem.quantity} на ${requestedQty}`,
+                        changes: changeDetails
+                    }), 
+                    clientIp
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs при обновлении:', logErr.message);
+        }
+
         await client.query('COMMIT');
         res.json(result.rows[0]);
 
@@ -3341,7 +3375,6 @@ router.put('/realization_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 
 // ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_items/:id', async (req, res) => {
