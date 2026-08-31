@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Складской журнал операций</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+        .back-btn { display: inline-block; margin-bottom: 15px; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; }
+        .back-btn:hover { background: #5a6268; }
+        
+        /* Стили для вкладок */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; }
+        .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: #495057; }
+        .tab-btn.active { background: #007bff; color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        th { background-color: #343a40; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Бейджики действий */
+        .badge { display: inline-block; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-top: 4px; }
+        .badge-insert { background: #28a745; color: white; }
+        .badge-update { background: #ffc107; color: #333; }
+        .badge-delete { background: #dc3545; color: white; }
+        .badge-default { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="back-btn">← На главную в склад</a>
+    <h1>📦 Журнал движения запчастей и операций</h1>
+    
+    <!-- Вкладки по реальным типам операций бэкенда -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('receipt', this)">📥 Приходы</button>
+        <button class="tab-btn" onclick="switchTab('realization', this)">🛒 Продажи / Расходы</button>
+        <button class="tab-btn" onclick="switchTab('move', this)">🔄 Перемещения</button>
+        <button class="tab-btn" onclick="switchTab('repair', this)">🔧 Ремонт</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Дата / Время / Действие</th>
+                <th>Пользователь</th>
+                <th>Документ</th>
+                <th>Контрагент</th>
+                <th>Запчасть (Артикул)</th>
+                <th class="text-center">Количество</th>
+                <th class="text-right">Цена</th>
+                <th class="text-right">Скидка</th>
+                <th class="text-right">Итого</th>
+                <th>Направление / Причина / Детали</th>
+            </tr>
+        </thead>
+        <tbody id="logs-table-body">
+            <tr><td colspan="10" style="text-align: center;">Загрузка данных...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let currentType = 'receipt';
+
+    async function loadLogs(type) {
+        currentType = type;
+        const tbody = document.getElementById('logs-table-body');
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
+
+        try {
+            const response = await fetch(`/api/get-logs?type=${type}`);
+            
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Сервер вернул не JSON (возможно, ошибка 404 или 500)");
+            }
+
+            const logs = await response.json();
+            
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">В этом разделе пока нет записей</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                
+                // Форматируем дату
+                const dateObj = new Date(log.created_at);
+                const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
+
+                // Определяем тип действия (INSERT, UPDATE, DELETE или аналогичные)
+                const action = (log.action || log.action_type || 'INSERT').toUpperCase();
+                let actionBadge = '';
+
+                if (action === 'INSERT' || action === 'ДОБАВЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-insert">➕ Добавил</span>';
+                } else if (action === 'UPDATE' || action === 'ИЗМЕНЕНИЕ') {
+                    actionBadge = '<span class="badge badge-update">✏️ Изменил</span>';
+                } else if (action === 'DELETE' || action === 'УДАЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-delete">🗑️ Удалил</span>';
+                } else {
+                    actionBadge = `<span class="badge badge-default">${action}</span>`;
+                }
+
+                // Формируем направление / причину / описание
+                let directionOrReason = log.reason || log.description || '';
+                if (log.warehouse_from || log.warehouse_to) {
+                    const whFrom = log.warehouse_from || 'Склад';
+                    const whTo = log.warehouse_to || 'Склад';
+                    directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
+                }
+
+                tr.innerHTML = `
+                    <td>
+                        ${formattedDate}<br>
+                        ${actionBadge}
+                    </td>
+                    <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
+                    <td>${log.doc_number || '—'}</td>
+                    <td>${log.counterparty || log.customer_name || '—'}</td>
+                    <td>${log.part_name || log.name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || log.article || '—'}</small></td>
+                    <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                    <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                    <td class="text-right">${log.discount || '—'}</td>
+                    <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                    <td>${directionOrReason}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Ошибка загрузки логов:', err);
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
+        }
+    }
+
+    function switchTab(type, buttonElement) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        buttonElement.classList.add('active');
+        loadLogs(type);
+    }
+
+    // Загружаем приходы при открытии страницы по умолчанию
+    loadLogs('receipt');
+</script>
+</body>
+</html>
