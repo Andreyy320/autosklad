@@ -38,7 +38,7 @@ router.get('/get-logs', async (req, res) => {
         
         let query = `
             SELECT * FROM (
-                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (на основе audit_logs, чтобы каждая запись была отдельной строкой)
+                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (выводим только те действия, которые произошли при проведенном документе)
                 SELECT 
                     'receipt' AS operation_type,
                     COALESCE(r.id, ri.receipt_id) AS doc_id,
@@ -70,6 +70,14 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN users u_log ON al.user_id = u_log.id
                 WHERE al.table_name IN ('receipts', 'receipt_items')
+                  AND (
+                      r.is_posted = true 
+                      OR r.is_posted = 'true'::boolean 
+                      OR r.is_posted = 1 
+                      OR r.is_posted = '1'
+                      OR r.is_posted = 2 
+                      OR r.is_posted = '2'::integer
+                  )
 
                 UNION ALL
 
