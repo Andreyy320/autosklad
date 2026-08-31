@@ -46,10 +46,10 @@ router.get('/get-logs', async (req, res) => {
                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
-                -- Безопасное извлечение названия
+                -- Приводим details к jsonb, чтобы оператор ->> работал без ошибок типов
                 COALESCE(
-                    al.details->'zaphasti_name'#>>'{}',
-                    al.details->'deleted_item'->>'zaphasti_name',
+                    (al.details::jsonb)->>'zaphasti_name',
+                    (al.details::jsonb)->'deleted_item'->>'zaphasti_name',
                     z.name, 
                     'Документ прихода'
                 ) AS part_name,
@@ -57,31 +57,24 @@ router.get('/get-logs', async (req, res) => {
                     z.article, 
                     '—'
                 ) AS part_article,
-                -- Безопасное извлечение количества с приведением к numeric
                 COALESCE(
-                    NULLIF(al.details->'quantity'#>>'{}', '')::numeric,
-                    NULLIF(al.details->>'quantity', '')::numeric,
+                    NULLIF((al.details::jsonb)->>'quantity', '')::numeric,
                     ri.quantity, 
                     0
                 ) AS quantity,
-                -- Безопасное извлечение цены с приведением к numeric
                 COALESCE(
-                    NULLIF(al.details->'price'#>>'{}', '')::numeric,
-                    NULLIF(al.details->>'price', '')::numeric,
+                    NULLIF((al.details::jsonb)->>'price', '')::numeric,
                     ri.price, 
                     0
                 ) AS price,
-                -- Считаем итоговую сумму
                 (
                     COALESCE(
-                        NULLIF(al.details->'quantity'#>>'{}', '')::numeric,
-                        NULLIF(al.details->>'quantity', '')::numeric,
+                        NULLIF((al.details::jsonb)->>'quantity', '')::numeric,
                         ri.quantity, 
                         0
                     ) * 
                     COALESCE(
-                        NULLIF(al.details->'price'#>>'{}', '')::numeric,
-                        NULLIF(al.details->>'price', '')::numeric,
+                        NULLIF((al.details::jsonb)->>'price', '')::numeric,
                         ri.price, 
                         0
                     )
