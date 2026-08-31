@@ -38,7 +38,7 @@ router.get('/get-logs', async (req, res) => {
         
         let query = `
             SELECT * FROM (
-                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (выводим только те действия, которые произошли при проведенном документе)
+                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (только для проведенных документов)
                 SELECT 
                     'receipt' AS operation_type,
                     COALESCE(r.id, ri.receipt_id) AS doc_id,
@@ -70,14 +70,7 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN users u_log ON al.user_id = u_log.id
                 WHERE al.table_name IN ('receipts', 'receipt_items')
-                  AND (
-                      r.is_posted = true 
-                      OR r.is_posted = 'true'::boolean 
-                      OR r.is_posted = 1 
-                      OR r.is_posted = '1'
-                      OR r.is_posted = 2 
-                      OR r.is_posted = '2'::integer
-                  )
+                  AND r.is_posted = true
 
                 UNION ALL
 
@@ -117,6 +110,7 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
                 LEFT JOIN users u_doc ON m.user_id = u_doc.id
                 LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
+                WHERE m.is_posted = true
 
                 UNION ALL
 
@@ -155,6 +149,7 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN skladi s ON rep.warehouse_id = s.id
                 LEFT JOIN cars c ON rep.car_id = c.id
                 LEFT JOIN users u_doc ON rep.user_id = u_doc.id
+                WHERE rep.is_posted = true
 
                 UNION ALL
 
@@ -193,6 +188,7 @@ router.get('/get-logs', async (req, res) => {
                 LEFT JOIN skladi s ON rz.sklad_id = s.id
                 LEFT JOIN customers cust ON rz.customer_id = cust.id
                 LEFT JOIN users u_doc ON rz.user_id = u_doc.id
+                WHERE rz.is_posted = true
             ) AS combined_logs
         `;
 
