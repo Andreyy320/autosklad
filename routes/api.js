@@ -2869,10 +2869,10 @@ router.get('/realization_items', async (req, res) => {
 });
 
 
-// ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ ПЕРЕМЕЩЕНИЙ И FIFO) ====================
+// ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ ВСЕГО И FIFO) ====================
 router.post('/realization_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление запчасти в реализацию с учетом перемещений FIFO`);
+    console.log(`[POST REQUEST] Добавление запчасти в реализацию с учетом перемещений, ремонтов и FIFO`);
     console.log(`[BODY]:`, req.body);
 
     const { realization_id, zaphasti_id, quantity, description } = req.body;
@@ -2923,7 +2923,7 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 3. Собираем партии с учетом исходных приходов И перемещений на этот склад (`warehouse_to_id`)
+        // 3. Собираем партии с учетом приходов, перемещений, реализаций и ремонтов
         const batchesQuery = `
             WITH all_incoming_batches AS (
                 -- Прямые приходы на склад
@@ -2955,7 +2955,7 @@ router.post('/realization_items', async (req, res) => {
                 WHERE mi.zaphasti_id = $1 AND m.warehouse_to_id = $2 AND m.is_posted = true
             ),
             spent_quantities AS (
-                -- Что уже ушло с этого склада через проведенные реализации ИЛИ текущую черновик-реализацию ($3)
+                -- Что ушло через проведенные реализации ИЛИ текущую черновик-реализацию ($3)
                 SELECT rel_i.income_document_id AS batch_id, SUM(rel_i.quantity) as spent_qty
                 FROM realization_items rel_i
                 JOIN realizations rel ON rel_i.realization_id = rel.id
@@ -2964,12 +2964,21 @@ router.post('/realization_items', async (req, res) => {
 
                 UNION ALL
 
-                -- Что ушло с этого склада через отправленные перемещения
+                -- Что ушло через отправленные перемещения с этого склада
                 SELECT mi.income_document_id AS batch_id, SUM(mi.quantity) as spent_qty
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 WHERE mi.zaphasti_id = $1 AND m.warehouse_from_id = $2 AND m.is_posted = true
                 GROUP BY mi.income_document_id
+
+                UNION ALL
+
+                -- Что ушло через проведенные ремонты с этого склада
+                SELECT rep_i.receipt_id AS batch_id, SUM(rep_i.quantity) as spent_qty
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2 AND rep.is_posted = true
+                GROUP BY rep_i.receipt_id
             )
             SELECT 
                 b.batch_id,
@@ -3001,7 +3010,7 @@ router.post('/realization_items', async (req, res) => {
 
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
-        console.log(`[FIFO REALIZATION DEBUG] Запрошено: ${requestedQty}, Доступно на складе с учетом перемещений: ${totalAvailableStock}`);
+        console.log(`[FIFO REALIZATION DEBUG] Запрошено: ${requestedQty}, Доступно на складе с учетом всего: ${totalAvailableStock}`);
         console.log(`[FIFO REALIZATION DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
@@ -3034,12 +3043,11 @@ router.post('/realization_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
         
-        // Надежно подхватываем пользователя из заголовков или тела
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-        // 5. Распределение по партиям (FIFO) с теми ценами, с которыми они пришли через перемещение
+        // 5. Распределение по партиям (FIFO)
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -3112,7 +3120,6 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-
 
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
 router.put('/realization_items/:id', async (req, res) => {
