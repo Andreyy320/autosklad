@@ -16,11 +16,18 @@
         .tab-btn.active { background: #007bff; color: white; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
         th { background-color: #343a40; color: white; }
         tr:hover { background-color: #f1f1f1; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
+
+        /* Бейджики действий */
+        .badge { display: inline-block; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-top: 4px; }
+        .badge-insert { background: #28a745; color: white; }
+        .badge-update { background: #ffc107; color: #333; }
+        .badge-delete { background: #dc3545; color: white; }
+        .badge-default { background: #6c757d; color: white; }
     </style>
 </head>
 <body>
@@ -40,7 +47,7 @@
     <table>
         <thead>
             <tr>
-                <th>Дата / Время</th>
+                <th>Дата / Время / Действие</th>
                 <th>Пользователь</th>
                 <th>Документ</th>
                 <th>Контрагент</th>
@@ -49,7 +56,7 @@
                 <th class="text-right">Цена</th>
                 <th class="text-right">Скидка</th>
                 <th class="text-right">Итого</th>
-                <th>Направление / Причина</th>
+                <th>Направление / Причина / Детали</th>
             </tr>
         </thead>
         <tbody id="logs-table-body">
@@ -67,10 +74,8 @@
         tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Загрузка...</td></tr>';
 
         try {
-            // Запрос идет на правильный префикс /api/get-logs
             const response = await fetch(`/api/get-logs?type=${type}`);
             
-            // Проверяем, что сервер вернул именно JSON, а не HTML-ошибку
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
                 throw new Error("Сервер вернул не JSON (возможно, ошибка 404 или 500)");
@@ -92,22 +97,41 @@
                 const dateObj = new Date(log.created_at);
                 const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
 
-                // Формируем направление (откуда -> куда)
-                let directionOrReason = log.reason || '';
+                // Определяем тип действия (INSERT, UPDATE, DELETE или аналогичные)
+                const action = (log.action || log.action_type || 'INSERT').toUpperCase();
+                let actionBadge = '';
+
+                if (action === 'INSERT' || action === 'ДОБАВЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-insert">➕ Добавил</span>';
+                } else if (action === 'UPDATE' || action === 'ИЗМЕНЕНИЕ') {
+                    actionBadge = '<span class="badge badge-update">✏️ Изменил</span>';
+                } else if (action === 'DELETE' || action === 'УДАЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-delete">🗑️ Удалил</span>';
+                } else {
+                    actionBadge = `<span class="badge badge-default">${action}</span>`;
+                }
+
+                // Формируем направление / причину / описание
+                let directionOrReason = log.reason || log.description || '';
                 if (log.warehouse_from || log.warehouse_to) {
-                    directionOrReason = `${log.warehouse_from || 'Склад'} ➔ ${log.warehouse_to || 'Склад'} ${log.reason ? '(' + log.reason + ')' : ''}`;
+                    const whFrom = log.warehouse_from || 'Склад';
+                    const whTo = log.warehouse_to || 'Склад';
+                    directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
                 }
 
                 tr.innerHTML = `
-                    <td>${formattedDate}</td>
-                    <td><strong>${log.user_name || 'Система'}</strong></td>
+                    <td>
+                        ${formattedDate}<br>
+                        ${actionBadge}
+                    </td>
+                    <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
                     <td>${log.doc_number || '—'}</td>
-                    <td>${log.counterparty || '—'}</td>
-                    <td>${log.part_name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || '—'}</small></td>
-                    <td class="text-center"><strong>${log.quantity}</strong></td>
+                    <td>${log.counterparty || log.customer_name || '—'}</td>
+                    <td>${log.part_name || log.name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || log.article || '—'}</small></td>
+                    <td class="text-center"><strong>${log.quantity || 0}</strong></td>
                     <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
-                    <td class="text-right">—</td>
-                    <td class="text-right"><strong>${Number(log.total_amount || 0).toLocaleString()} руб.</strong></td>
+                    <td class="text-right">${log.discount || '—'}</td>
+                    <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
                     <td>${directionOrReason}</td>
                 `;
                 tbody.appendChild(tr);

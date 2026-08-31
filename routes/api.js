@@ -31,179 +31,136 @@ module.exports = (pool) => {
             return res.status(500).send('Ошибка сервера');
         }
     });
-// 1. Получение детального журнала товарных операций (GET)
+// 1. Получение детального журнала товарных операций через audit_logs (GET)
 router.get('/get-logs', async (req, res) => {
     try {
         const { type } = req.query; // Получаем тип: receipt, move, repair, realization
         
         let query = `
-            SELECT * FROM (
-                -- 1. ПРИХОДЫ (receipt_items)
-                SELECT 
-                    'receipt' AS operation_type,
-                    r.id AS doc_id,
-                    r.doc_number,
-                    COALESCE(r.fact_date, r.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    p.name AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
-                    ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
-                    CONCAT(
-                        'Приход №', r.doc_number, ' от поставщика: ', COALESCE(p.name, '—'),
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' AND al.details LIKE '%changes%' THEN CONCAT(' [Изменено: ', al.details, ']')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'receipts' OR al.table_name = 'receipt_items') 
-                              AND (al.record_id = r.id OR al.record_id = ri.id)
-                        ), '')
-                    ) AS reason
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
-                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-                LEFT JOIN skladi s ON r.warehouse_id = s.id
-                LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN users u_doc ON r.user_id = u_doc.id
+            SELECT 
+                al.id AS audit_id,
+                CASE 
+                    WHEN al.table_name IN ('receipts', 'receipt_items') THEN 'receipt'
+                    WHEN al.table_name IN ('moves', 'move_items') THEN 'move'
+                    WHEN al.table_name IN ('repairs', 'repair_items') THEN 'repair'
+                    WHEN al.table_name IN ('realizations', 'realization_items') THEN 'realization'
+                    ELSE 'other'
+                END AS operation_type,
+                
+                COALESCE(r.id, m.id, rep.id, rz.id, 0) AS doc_id,
+                COALESCE(r.doc_number, m.doc_number, rep.doc_number, rz.doc_number, '—') AS doc_number,
+                al.created_at AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                al.action AS action, -- INSERT, UPDATE, DELETE
 
-                UNION ALL
+                -- Склады
+                COALESCE(s_rec.name, s_rep.name, s_rz.name, wt.name, '—') AS warehouse_to,
+                wf.name AS warehouse_from,
 
-                -- 2. ПЕРЕМЕЩЕНИЯ (move_items)
-                SELECT 
-                    'move' AS operation_type,
-                    m.id AS doc_id,
-                    m.doc_number,
-                    COALESCE(m.fact_date, m.date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    wt.name AS warehouse_to,
-                    wf.name AS warehouse_from,
-                    NULL AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
-                    mi.quantity,
-                    COALESCE(ri_orig.price, mi.price, 0) AS price,
-                    (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
-                    CONCAT(
-                        'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'moves' OR al.table_name = 'move_items') 
-                              AND (al.record_id = m.id OR al.record_id = mi.id)
-                        ), '')
-                    ) AS reason
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
-                LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
-                LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
-                LEFT JOIN users u_doc ON m.user_id = u_doc.id
-                LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
+                -- Контрагенты
+                COALESCE(p.name, cust.name_full, CONCAT('Авто: ', COALESCE(car.gos_number, 'Без номера')), '—') AS counterparty,
 
-                UNION ALL
+                -- Запчасти (с поддержкой данных из удаленных элементов через JSON details)
+                COALESCE(
+                    z_rec.name, z_move.name, z_rep.name, z_rz.name,
+                    (al.details->'deleted_item'->>'name'),
+                    (al.details->'changes'->>'name'),
+                    'Запчасть'
+                ) AS part_name,
+                
+                COALESCE(
+                    z_rec.article, z_move.article, z_rep.article, z_rz.article,
+                    (al.details->'deleted_item'->>'article'),
+                    '—'
+                ) AS part_article,
 
-                -- 3. РЕМОНТЫ (repair_items)
-                SELECT 
-                    'repair' AS operation_type,
-                    rep.id AS doc_id,
-                    rep.doc_number,
-                    COALESCE(rep.fact_date, rep.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    CONCAT('Авто: ', COALESCE(c.gos_number, 'Без номера')) AS counterparty,
-                    z.name AS part_name,
-                    z.article AS part_article,
-                    ri.quantity,
-                    ri.price,
-                    (ri.quantity * ri.price) AS total_amount,
-                    CONCAT(
-                        'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'repairs' OR al.table_name = 'repair_items') 
-                              AND (al.record_id = rep.id OR al.record_id = ri.id)
-                        ), '')
-                    ) AS reason
-                FROM repair_items ri
-                JOIN repairs rep ON ri.repair_id = rep.id
-                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-                LEFT JOIN skladi s ON rep.warehouse_id = s.id
-                LEFT JOIN cars c ON rep.car_id = c.id
-                LEFT JOIN users u_doc ON rep.user_id = u_doc.id
+                -- Количество
+                COALESCE(
+                    NULLIF(ri.quantity, 0), 
+                    NULLIF(mi.quantity, 0), 
+                    NULLIF(rep_i.quantity, 0), 
+                    NULLIF(rz_i.quantity, 0), 
+                    CAST(NULLIF(al.details->'deleted_item'->>'quantity', '') AS NUMERIC),
+                    0
+                ) AS quantity,
 
-                UNION ALL
+                -- Цена
+                COALESCE(
+                    ri.price, mi.price, rep_i.price, rz_i.price, 
+                    CAST(NULLIF(al.details->'deleted_item'->>'price', '') AS NUMERIC),
+                    0
+                ) AS price,
 
-                -- 4. РЕАЛИЗАЦИИ (realization_items)
-                SELECT 
-                    'realization' AS operation_type,
-                    rz.id AS doc_id,
-                    rz.doc_number,
-                    COALESCE(rz.fact_date, rz.doc_date, NOW()) AS created_at,
-                    COALESCE(u_doc.name, u_doc.login, 'Система') AS user_name,
-                    s.name AS warehouse_to,
-                    NULL AS warehouse_from,
-                    COALESCE(cust.name_full, 'Покупатель') AS counterparty,
-                    COALESCE(ri.name, z.name) AS part_name,
-                    COALESCE(ri.article, z.article) AS part_article,
-                    COALESCE(ri.quantity, 1) AS quantity,
-                    COALESCE(ri.price, 0) AS price,
-                    COALESCE(ri.total_rub, 0) AS total_amount,
-                    CONCAT(
-                        'Реализация №', rz.doc_number,
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'realizations' OR al.table_name = 'realization_items') 
-                              AND (al.record_id = rz.id OR al.record_id = ri.id)
-                        ), '')
-                    ) AS reason
-                FROM realization_items ri
-                JOIN realizations rz ON ri.realization_id = rz.id
-                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-                LEFT JOIN skladi s ON rz.sklad_id = s.id
-                LEFT JOIN customers cust ON rz.customer_id = cust.id
-                LEFT JOIN users u_doc ON rz.user_id = u_doc.id
-            ) AS combined_logs
+                -- Скидка
+                COALESCE(rz_i.discount, '—') AS discount,
+
+                -- Итого сумма
+                COALESCE(
+                    (COALESCE(ri.quantity, mi.quantity, rep_i.quantity, rz_i.quantity, 0) * COALESCE(ri.price, mi.price, rep_i.price, rz_i.price, 0)),
+                    rz_i.total_rub,
+                    0
+                ) AS total_amount,
+
+                -- Описание / Причина / Детали изменений
+                COALESCE(
+                    al.details->>'message',
+                    CONCAT('Действие ', al.action, ' над ', al.table_name)
+                ) AS reason
+
+            FROM audit_logs al
+            LEFT JOIN users u ON al.user_id = u.id
+
+            -- ПРИХОДЫ
+            LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR (al.table_name = 'receipt_items' AND al.record_id IN (SELECT id FROM receipt_items WHERE receipt_id = r.id))
+            LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+            LEFT JOIN zaphasti z_rec ON ri.zaphasti_id = z_rec.id
+            LEFT JOIN skladi s_rec ON r.warehouse_id = s_rec.id
+            LEFT JOIN postavhik p ON r.supplier_id = p.id
+
+            -- ПЕРЕМЕЩЕНИЯ
+            LEFT JOIN moves m ON (al.table_name = 'moves' AND al.record_id = m.id) OR (al.table_name = 'move_items' AND al.record_id IN (SELECT id FROM move_items WHERE move_id = m.id))
+            LEFT JOIN move_items mi ON al.table_name = 'move_items' AND al.record_id = mi.id
+            LEFT JOIN zaphasti z_move ON mi.zaphasti_id = z_move.id
+            LEFT JOIN skladi wf ON m.warehouse_from_id = wf.id
+            LEFT JOIN skladi wt ON m.warehouse_to_id = wt.id
+
+            LEFT JOIN repairs rep ON (al.table_name = 'repairs' AND al.record_id = rep.id) OR (al.table_name = 'repair_items' AND al.record_id IN (SELECT id FROM repair_items WHERE repair_id = rep.id))
+            LEFT JOIN repair_items rep_i ON al.table_name = 'repair_items' AND al.record_id = rep_i.id
+            LEFT JOIN zaphasti z_rep ON rep_i.zaphast_id = z_rep.id
+            LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
+            LEFT JOIN cars car ON rep.car_id = car.id
+
+            -- РЕАЛИЗАЦИИ
+            LEFT JOIN realizations rz ON (al.table_name = 'realizations' AND al.record_id = rz.id) OR (al.table_name = 'realization_items' AND al.record_id IN (SELECT id FROM realization_items WHERE realization_id = rz.id))
+            LEFT JOIN realization_items rz_i ON al.table_name = 'realization_items' AND al.record_id = rz_i.id
+            LEFT JOIN zaphasti z_rz ON rz_i.zaphasti_id = z_rz.id
+            LEFT JOIN skladi s_rz ON rz.sklad_id = s_rz.id
+            LEFT JOIN customers cust ON rz.customer_id = cust.id
+
+            WHERE al.table_name IN ('receipts', 'receipt_items', 'moves', 'move_items', 'repairs', 'repair_items', 'realizations', 'realization_items')
         `;
 
         const params = [];
         if (type) {
-            query += ` WHERE operation_type = $1`;
+            query += ` AND (
+                CASE 
+                    WHEN al.table_name IN ('receipts', 'receipt_items') THEN 'receipt'
+                    WHEN al.table_name IN ('moves', 'move_items') THEN 'move'
+                    WHEN al.table_name IN ('repairs', 'repair_items') THEN 'repair'
+                    WHEN al.table_name IN ('realizations', 'realization_items') THEN 'realization'
+                    ELSE 'other'
+                END
+            ) = $1`;
             params.push(type);
         }
 
-        query += ` ORDER BY created_at DESC LIMIT 200`;
+        query += ` ORDER BY al.created_at DESC LIMIT 300`;
 
         const result = await pool.query(query, params);
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения детального журнала логов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера' });
+        return res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
 // Открытие самой страницы logs.html по адресу /logs (GET)
@@ -3394,21 +3351,69 @@ router.put('/realization_items/:id', async (req, res) => {
 router.delete('/realization_items/:id', async (req, res) => {
     const { id } = req.query;
     const itemId = req.params.id || id;
+
+    const client = await pool.connect();
     try {
-        const query = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
-        const result = await pool.query(query, [itemId]);
-        
-        if (result.rowCount === 0) {
+        await client.query('BEGIN');
+
+        // 1. Находим удаляемую позицию, чтобы узнать, к какому документу она принадлежит
+        const existingItemRes = await client.query(`SELECT * FROM realization_items WHERE id = $1`, [itemId]);
+        if (existingItemRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Запись не найдена' });
         }
-        
+        const currentItem = existingItemRes.rows[0];
+
+        // 2. Проверяем, не проведена ли реализация, которой принадлежит эта позиция
+        const realizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        if (realizationCheck.rows.length > 0) {
+            const { is_posted } = realizationCheck.rows[0];
+            const isPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
+            if (isPosted) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя удалять запчасти из уже проведенной реализации!' });
+            }
+        }
+
+        // 3. Удаляем позицию
+        const deleteQuery = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
+        const result = await client.query(deleteQuery, [itemId]);
+
+        // 4. Записываем лог удаления в audit_logs
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || req.body?.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                    currentUserId,
+                    'DELETE',
+                    'realization_items',
+                    itemId,
+                    JSON.stringify({
+                        message: `Удалена запчасть ID ${currentItem.zaphasti_id}, количество: ${currentItem.quantity}`,
+                        deleted_item: currentItem
+                    }),
+                    clientIp
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи audit_logs при удалении:', logErr.message);
+        }
+
+        await client.query('COMMIT');
         res.json({ success: true, deleted: result.rows[0] });
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Ошибка при удалении запчасти реализации:', err);
-        res.status(500).json({ error: 'Ошибка сервера при удалении запчасти' });
+        res.status(500).json({ error: 'Ошибка сервера при удалении запчасти: ' + err.message });
+    } finally {
+        client.release();
     }
 });
-
 
 
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
