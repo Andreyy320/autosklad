@@ -4921,15 +4921,20 @@ router.delete('/move_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
+        const zaphasti_id = currentItem.zaphasti_id;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
-        const moveCheck = await client.query('SELECT warehouse_from_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
+        const moveCheck = await client.query('SELECT doc_number, warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Родительский документ перемещения не найден.' });
         }
 
-        const { is_posted: isPosted } = moveCheck.rows[0];
+        const moveRecord = moveCheck.rows[0];
+        const warehouseFromId = moveRecord.warehouse_from_id;
+        const warehouseToId = moveRecord.warehouse_to_id;
+        const isPosted = moveRecord.is_posted;
+        const documentNumber = moveRecord.doc_number || `ПЕР-${move_id}`;
 
         // 3. Если документ перемещения проведен, удалять из него позиции нельзя (нужна отмена проведения)
         if (isPosted) {
@@ -4946,18 +4951,22 @@ router.delete('/move_items/:id', async (req, res) => {
         // 4. Удаляем позицию из базы данных
         await client.query('DELETE FROM move_items WHERE id = $1', [itemId]);
 
-        // 5. Лог аудита
-        try {
-            const userId = req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'DELETE', 'move_items', itemId, JSON.stringify(currentItem), clientIp]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs:', logErr.message);
-        }
+        // 5. Запись в move_logs вместо audit_logs
+        await writeMoveLog(client, req, {
+            action: 'DELETE',
+            move_id: move_id,
+            document_number: documentNumber,
+            warehouse_from_id: warehouseFromId,
+            warehouse_to_id: warehouseToId,
+            zaphasti_id: zaphasti_id,
+            quantity: currentItem.quantity,
+            price: currentItem.price,
+            currency: currentItem.currency,
+            price_rub: currentItem.price_rub,
+            total_rub: currentItem.total_rub,
+            income_document_id: currentItem.income_document_id,
+            description: currentItem.description
+        });
 
         await client.query('COMMIT');
 
@@ -4974,6 +4983,41 @@ router.delete('/move_items/:id', async (req, res) => {
     }
 });
 
+// Функция для записи логов перемещений в таблицу move_logs
+async function writeMoveLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO move_logs (
+                action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
+                zaphasti_id, quantity, price, currency, price_rub, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            [
+                data.action,
+                data.move_id,
+                data.document_number,
+                data.warehouse_from_id,
+                data.warehouse_to_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.currency,
+                data.price_rub,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога перемещения (не критично):', logErr.message);
+    }
+}
 // POST /api/repair_items - добавление запчасти в ремонт с честным FIFO и разделением партий
 router.post('/repair_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
