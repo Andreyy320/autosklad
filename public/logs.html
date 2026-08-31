@@ -11,7 +11,7 @@
         .back-btn:hover { background: #5a6268; }
         
         /* Стили для вкладок */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; flex-wrap: wrap; }
         .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: #495057; }
         .tab-btn.active { background: #007bff; color: white; }
 
@@ -42,6 +42,7 @@
         <button class="tab-btn" onclick="switchTab('Продажа', '/api/get-sale-logs', this)">🛒 Продажи / Расходы</button>
         <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)">🔄 Перемещения</button>
         <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)">🔧 Ремонт</button>
+        <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)">📄 Реализация</button>
     </div>
 
     <table>
@@ -103,6 +104,21 @@
                     <th>Описание / Детали</th>
                 </tr>
             `;
+        } else if (type === 'Реализация') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Склад</th>
+                    <th>Покупатель / Авто</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
         } else {
             thead.innerHTML = `
                 <tr>
@@ -128,6 +144,7 @@
         let colspanCount = 10;
         if (type === 'Перемещение') colspanCount = 9;
         if (type === 'Ремонт') colspanCount = 9;
+        if (type === 'Реализация') colspanCount = 10;
 
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
@@ -213,6 +230,26 @@
                         <td class="text-center"><strong>${log.quantity || 0}</strong></td>
                         <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
                         <td class="text-right"><strong>${Number(log.total || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || '—'}</td>
+                    `;
+                } else if (currentType === 'Реализация') {
+                    // Рендер строки для вкладки Реализация (поля структуры realization_logs)
+                    const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
+                    const customerOrCar = [log.customer_name, log.car_number ? `${log.car_number} (${log.car_model})` : null].filter(Boolean).join(' / ') || '—';
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_number || '—'}</td>
+                        <td>${whName}</td>
+                        <td>${customerOrCar}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total_rub || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.description || '—'}</td>
                     `;
                 } else {
