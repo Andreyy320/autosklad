@@ -4323,12 +4323,11 @@ router.delete('/receipt_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим удаляемую позицию прихода и блокируем её (используем doc_number и supplier_id)
+        // 1. Блокируем ТОЛЬКО строки из receipt_items и receipts (убираем FOR UPDATE из запроса с LEFT JOIN)
         const itemCheck = await client.query(`
-            SELECT ri.*, r.doc_number, r.supplier_id, z.name AS zaphasti_name, z.article AS zaphasti_sku 
+            SELECT ri.*, r.doc_number, r.supplier_id 
             FROM receipt_items ri 
             JOIN receipts r ON ri.receipt_id = r.id 
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id 
             WHERE ri.id = $1 FOR UPDATE
         `, [itemId]);
 
@@ -4341,6 +4340,11 @@ router.delete('/receipt_items/:id', async (req, res) => {
         const receipt_id = currentItem.receipt_id;
         const zaphasti_id = currentItem.zaphasti_id;
         const initialQty = Number(currentItem.quantity) || 0;
+
+        // Достаем данные запчасти отдельным безопасным запросом
+        const partRes = await client.query('SELECT name, article FROM zaphasti WHERE id = $1', [zaphasti_id]);
+        const zaphastiName = partRes.rows.length > 0 ? partRes.rows[0].name : 'запчасть';
+        const zaphastiSku = partRes.rows.length > 0 ? partRes.rows[0].article : null;
 
         // 2. Проверяем родительский документ (receipts)
         const receiptCheck = await client.query('SELECT warehouse_id, is_posted FROM receipts WHERE id = $1 FOR UPDATE', [receipt_id]);
@@ -4409,7 +4413,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
 
         // 5. Запись в inventory_logs через универсальную функцию внутри транзакции
         const docNumStr = currentItem.doc_number ? String(currentItem.doc_number) : String(receipt_id);
-        const zaphastiName = currentItem.zaphasti_name || 'запчасть';
         const reasonText = `Удалена позиция прихода №${docNumStr}: ${zaphastiName} (кол-во: ${initialQty})`;
 
         await writeInventoryLog(client, {
@@ -4420,8 +4423,8 @@ router.delete('/receipt_items/:id', async (req, res) => {
             user_id: userId,
             counterparty: counterpartyName,
             part_id: zaphasti_id,
-            part_name: currentItem.zaphasti_name || null,
-            sku: currentItem.zaphasti_sku || null,
+            part_name: zaphastiName,
+            sku: zaphastiSku,
             quantity: initialQty,
             price: Number(currentItem.price) || 0,
             discount: 0,
