@@ -4004,30 +4004,34 @@ router.get('/get-move-logs', async (req, res) => {
     }
 });
 
-// GET /api/get-repair-logs - получение логов ремонта с расшифровкой связанных справочников
+// GET /api/get-repair-logs - получение логов ремонта
 router.get('/get-repair-logs', async (req, res) => {
+    const client = await pool.connect();
     try {
         const query = `
             SELECT 
                 rl.*,
+                w.name AS warehouse_name,
                 z.name AS part_name,
                 z.article AS part_article,
-                u.name AS user_name,
-                wh.name AS warehouse_name,
-                c.car_number AS car_number,
-                c.model AS car_model
+                c.car_number,
+                c.model AS car_model,
+                u.username AS user_name
             FROM repair_logs rl
-            LEFT JOIN zaphasti z ON rl.zaphast_id = z.id
-            LEFT JOIN users u ON rl.user_id = u.id
-            LEFT JOIN skladi wh ON rl.warehouse_id = wh.id
-            LEFT JOIN cars c ON rl.car_id = c.id
+            LEFT JOIN warehouses w ON rl.warehouse_id::text = w.id::text
+            LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
+            LEFT JOIN cars c ON rl.car_id::text = c.id::text
+            LEFT JOIN users u ON rl.user_id::text = u.id::text
             ORDER BY rl.created_at DESC
+            LIMIT 500;
         `;
-        const result = await pool.query(query);
-        res.json(result.rows);
+        const result = await client.query(query);
+        return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения логов ремонта:', err.message);
-        res.status(500).json({ error: 'Ошибка сервера при получении логов ремонта' });
+        return res.status(500).json({ error: 'Ошибка получения логов ремонта: ' + err.message });
+    } finally {
+        client.release();
     }
 });
 
