@@ -3392,6 +3392,7 @@ router.delete('/realization_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 // Функция для записи логов реализации в таблицу realization_logs
 async function writeRealizationLog(client, req, data) {
     try {
