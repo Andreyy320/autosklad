@@ -3931,6 +3931,94 @@ router.get('/expense_items', async (req, res) => {
 
 
 
+    
+// 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
+router.get('/get-receipt-logs', async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                'receipt' AS operation_type,
+                rl.receipt_id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                rl.created_at AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                s.name AS warehouse_to,
+                NULL AS warehouse_from,
+                p.name AS counterparty,
+                COALESCE(z.name, 'Документ прихода') AS part_name,
+                COALESCE(z.article, '—') AS part_article,
+                rl.quantity AS quantity,
+                rl.price AS price,
+                rl.total_rub AS total_amount,
+                rl.action AS action,
+                CONCAT(
+                    'Приход №', COALESCE(r.doc_number, '—'), 
+                    CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
+                    CASE 
+                        WHEN rl.action = 'INSERT' THEN ' [Добавлена позиция / Документ создан]'
+                        WHEN rl.action = 'UPDATE' THEN ' [Изменена позиция / Документ]'
+                        WHEN rl.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
+                        ELSE CONCAT(' [', rl.action, ']')
+                    END
+                ) AS reason
+            FROM receipt_logs rl
+            LEFT JOIN receipts r ON rl.receipt_id = r.id
+            LEFT JOIN zaphasti z ON rl.zaphasti_id = z.id
+            LEFT JOIN skladi s ON rl.warehouse_id = s.id
+            LEFT JOIN postavhik p ON rl.supplier_id = p.id
+            LEFT JOIN users u ON rl.user_id = u.id
+            ORDER BY rl.created_at DESC
+            LIMIT 200
+        `;
+
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения журнала приходов:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов приходов: ' + err.message });
+    }
+});
+
+
+
+// Функция записи лога приходов
+async function writeReceiptLog(client, req, data = {}) {
+    try {
+        const d = data || {};
+        
+        const userId = req?.headers?.['x-user-id'] || 
+                       req?.headers?.['user-id'] || 
+                       req?.body?.user_id || 
+                       d.user_id || 
+                       null;
+
+        await client.query(`
+            INSERT INTO receipt_logs (
+                action, receipt_id, document_number, user_id, 
+                supplier_id, warehouse_id, zaphasti_id, 
+                quantity, price, currency, price_rub, total_rub, description
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [
+            d.action || 'INSERT',
+            d.receipt_id ? Number(d.receipt_id) : null,
+            d.document_number ? String(d.document_number) : null,
+            userId ? Number(userId) : null,
+            d.supplier_id ? Number(d.supplier_id) : null,
+            d.warehouse_id ? Number(d.warehouse_id) : null,
+            d.zaphasti_id ? Number(d.zaphasti_id) : null,
+            Number(d.quantity) || 0,
+            Number(d.price) || 0,
+            d.currency || 'RUB',
+            Number(d.price_rub) || 0,
+            Number(d.total_rub) || 0,
+            d.description || ''
+        ]);
+    } catch (err) {
+        console.error('❌ ОШИБКА записи в receipt_logs:', err.message);
+        throw err;
+    }
+}
 
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
@@ -3953,9 +4041,9 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
         }
 
-        // 2. Проверяем, проведен ли уже родительский документ (receipts)
+        // 2. Проверяем, проведен ли уже родительский документ (receipts), и забираем нужные поля для лога (warehouse_id, supplier_id, doc_number)
         const receiptCheck = await client.query(
-            'SELECT is_posted FROM receipts WHERE id = $1',
+            'SELECT is_posted, warehouse_id, supplier_id, doc_number FROM receipts WHERE id = $1',
             [receipt_id]
         );
 
@@ -3964,15 +4052,12 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(404).json({ error: 'Указанный приход не найден.' });
         }
 
-        const isPostedVal = receiptCheck.rows[0].is_posted;
+        const receiptData = receiptCheck.rows[0];
+        const isPostedVal = receiptData.is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя добавлять запчасти в уже проведенный документ!' });
         }
-
-        // Узнаем название запчасти для лога
-        const partRes = await client.query('SELECT name FROM zaphasti WHERE id = $1', [zaphasti_id]);
-        const zaphastiName = partRes.rows[0]?.name || 'Неизвестная запчасть';
 
         // 3. Подготовка и расчёт числовых полей
         const numPrice = Number(price) || 0;
@@ -4011,32 +4096,21 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Автоматическая запись лога (INSERT) с фиксированными параметрами
-        try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-            const userId = currentUserId || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    userId,
-                    'INSERT',
-                    'receipt_items',
-                    createdItem.id,
-                    JSON.stringify({
-                        zaphasti_name: zaphastiName,
-                        quantity: numQty,
-                        price: numPrice,
-                        message: 'Добавлена новая позиция в приход'
-                    }),
-                    clientIp
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи лога (не критично):', logErr.message);
-        }
+        // 5. Запись лога в новую изолированную таблицу receipt_logs
+        await writeReceiptLog(client, req, {
+            action: 'INSERT',
+            receipt_id: receipt_id,
+            document_number: receiptData.doc_number || '',
+            supplier_id: receiptData.supplier_id || null,
+            warehouse_id: receiptData.warehouse_id || null,
+            zaphasti_id: zaphasti_id,
+            quantity: numQty,
+            price: numPrice,
+            currency: curr,
+            price_rub: priceRub,
+            total_rub: totalRub,
+            description: description || 'Добавлена новая позиция в приход'
+        });
 
         await client.query('COMMIT');
 
@@ -4217,6 +4291,8 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 // DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой FIFO
 router.delete('/receipt_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
