@@ -5332,13 +5332,18 @@ router.put('/repair_items/:id', async (req, res) => {
         const zaphast_id = currentItem.zaphast_id;
 
         // 2. Проверяем документ ремонта, его склад и статус проведения (is_posted)
-        const repairCheck = await client.query('SELECT warehouse_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
+        const repairCheck = await client.query('SELECT doc_number, warehouse_id, car_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
         if (repairCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Документ ремонта не найден.' });
         }
 
-        const { warehouse_id: warehouseId, is_posted: isPosted } = repairCheck.rows[0];
+        const repairRecord = repairCheck.rows[0];
+        const warehouseId = repairRecord.warehouse_id;
+        const carId = repairRecord.car_id;
+        const isPosted = repairRecord.is_posted;
+        const documentNumber = repairRecord.doc_number || `РЕМОНТ-${repair_id}`;
+
         const isDocumentPosted = isPosted === true || isPosted === 'true' || isPosted === 1 || isPosted === '1' || isPosted === 2 || isPosted === '2';
 
         if (isDocumentPosted) {
@@ -5464,18 +5469,20 @@ router.put('/repair_items/:id', async (req, res) => {
         const result = await client.query(updateQuery, values);
         const updatedRecord = result.rows[0];
 
-        // Лог аудита
-        try {
-            const userId = req.headers['x-user-id'] || req.headers['user-id'] || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [userId, 'UPDATE', 'repair_items', updatedRecord.id, JSON.stringify(req.body), clientIp]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи audit_logs:', logErr.message);
-        }
+        // Запись в repair_logs вместо audit_logs
+        await writeRepairLog(client, req, {
+            action: 'UPDATE',
+            repair_id: repair_id,
+            document_number: documentNumber,
+            warehouse_id: warehouseId,
+            car_id: carId,
+            zaphast_id: zaphast_id,
+            quantity: requestedQty,
+            price: finalPrice,
+            total: totalSum,
+            receipt_id: chosenBatch.receipt_id,
+            description: desc || null
+        });
 
         await client.query('COMMIT');
 
@@ -5491,7 +5498,6 @@ router.put('/repair_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // DELETE /api/repair_items/:id - удаление запчасти из ремонта с возвратом количества на склад
 router.delete('/repair_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
