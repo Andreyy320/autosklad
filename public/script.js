@@ -6543,134 +6543,6 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 });
 
 
-/**
- * Открывает нижнюю таблицу (детали) для сущности по умолчанию, 
- * основываясь на текущих активных вкладках или предопределенной логике.
- */
-function openDefaultDetail(entity, item) {
-    if (!item) return;
-
-    const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-    const tabsForCars = document.getElementById('tabs-for-cars');
-    const tabsForAccidents = document.getElementById('tabs-for-accidents');
-    const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
-    const tabsForRealizations = document.getElementById('tabs-for-realizations');
-    const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
-    const detailContainer = document.getElementById('detail-container');
-
-    // Сначала управляем видимостью панелей вкладок внизу
-    if (carTabsPanel) {
-        carTabsPanel.style.display = 'flex';
-    }
-
-    if (tabsForCars) tabsForCars.style.display = (entity === 'car_cards' || entity === 'car_card') ? 'flex' : 'none';
-    if (tabsForAccidents) tabsForAccidents.style.display = (entity === 'accidents') ? 'flex' : 'none';
-    if (tabsForRepairs) tabsForRepairs.style.display = (entity === 'repairs') ? 'flex' : 'none';
-    if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
-    if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (entity === 'money_receipts') ? 'flex' : 'none';
-
-    if (detailContainer) {
-        detailContainer.style.display = 'flex';
-    }
-
-    // Маршрутизация по сущностям для загрузки нужных данных в нижнюю таблицу
-    switch (entity) {
-        case 'cars':
-            if (carTabsPanel) carTabsPanel.style.display = 'none';
-            loadDetailData('car_details', item.id);
-            break;
-
-        case 'car_card':
-        case 'car_cards': {
-            const activeTab = document.querySelector('.car-tab-btn.active') || document.querySelector('.car-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            loadDetailData(match ? match[1] : 'car_general', item.id);
-            break;
-        }
-
-        case 'accidents': {
-            const activeTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            const subTab = match ? match[1] : 'accident_invoices';
-            if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
-            loadDetailData(subTab, item.id);
-            break;
-        }
-
-        case 'repairs': {
-            const activeTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
-            const match = activeTab?.getAttribute('onclick')?.match(/'([^']+)'/);
-            const subTab = match ? match[1] : 'repair_items';
-            if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
-            loadDetailData(subTab, item.id);
-            break;
-        }
-
-        case 'money_receipts_by_sklad':
-            // Для этой сущности клик открывает другой список (родительский)
-            loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной'}`, { sklad_id: item.sklad_id });
-            break;
-
-        case 'money_receipts': {
-            const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || 
-                              document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
-            let subTabName = activeTab ? (activeTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
-            
-            if (subTabName === 'realization_items') subTabName = 'money_receipts_detail';
-            if (subTabName === 'realization_works') subTabName = 'money_receipts_works_detail';
-
-            if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
-
-            loadDetailData(subTabName, {
-                customer_id: item.customer_id,
-                sklad_id: item.sklad_id,
-                realization_id: item.realization_id || item.id,
-            });
-            break;
-        }
-
-        case 'realizations': {
-            const activeTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || 
-                              document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
-            const subTabName = activeTab ? (activeTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
-            if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-            loadDetailData(subTabName, item.id);
-            break;
-        }
-
-        case 'receipts':
-            loadDetailData('receipt_items', item.id);
-            break;
-
-        case 'moves':
-            loadDetailData('move_items', item.id);
-            break;
-
-        case 'postavhik':
-            loadDetailData('postavhik_contacts', item.id);
-            break;
-
-        case 'counterparties':
-            loadDetailData('counterparty_contacts', item.id);
-            break;
-
-        case 'customers':
-            loadDetailData('customer_contacts', item.id);
-            break;
-
-        default:
-            // Если у сущности нет нижней таблицы, скрываем панели детальной информации
-            if (carTabsPanel) {
-                carTabsPanel.style.display = ['receipts', 'moves', 'customers'].includes(entity) ? 'flex' : 'none';
-            }
-            if (detailContainer) {
-                detailContainer.style.display = 'none';
-            }
-            break;
-    }
-}
-
-
 
 
 (function() {
@@ -6852,6 +6724,15 @@ async function checkRemindersOnStart() {
                                     <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
                                     <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
                                 </tr>
+                                <tr style="background: #fff; text-align: center;">
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-curr" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-next" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-curr" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-next" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-desc" placeholder="Фильтр..." style="width: 90%; padding: 4px; box-sizing: border-box; font-size: 12px;"></th>
+                                </tr>
                             </thead>
                             <tbody id="reminders-tbody"></tbody>
                         </table>
@@ -6868,9 +6749,6 @@ async function checkRemindersOnStart() {
             });
         }
 
-        const tbody = document.getElementById('reminders-tbody');
-        tbody.innerHTML = '';
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -6885,7 +6763,6 @@ async function checkRemindersOnStart() {
             if (insCurr) insCurr.setHours(0,0,0,0);
             if (insNext) insNext.setHours(0,0,0,0);
 
-            // Машина считается просроченной (для вывода в список), если хотя бы одно из полей меньше сегодня (< today)
             const ptoExpired = (ptoCurr && ptoCurr < today) || (ptoNext && ptoNext < today);
             const insExpired = (insCurr && insCurr < today) || (insNext && insNext < today);
 
@@ -6897,43 +6774,86 @@ async function checkRemindersOnStart() {
             return;
         }
 
-        filteredCars.forEach(car => {
-            const tr = document.createElement('tr');
+        const formatDate = (d) => {
+            if (!d) return '—';
+            const dateObj = new Date(d);
+            if (isNaN(dateObj.getTime())) return '—';
+            return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
+        };
 
-            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
-            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
-            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
-            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
+        const renderTable = (dataToRender) => {
+            const tbody = document.getElementById('reminders-tbody');
+            tbody.innerHTML = '';
 
-            if (ptoCurr) ptoCurr.setHours(0,0,0,0);
-            if (ptoNext) ptoNext.setHours(0,0,0,0);
-            if (insCurr) insCurr.setHours(0,0,0,0);
-            if (insNext) insNext.setHours(0,0,0,0);
+            dataToRender.forEach(car => {
+                const tr = document.createElement('tr');
 
-            // Подсвечиваем только то, что реально просрочено (< today)
-            let isPtoCurrRed = ptoCurr && ptoCurr < today;
-            let isPtoNextRed = ptoNext && ptoNext < today;
+                const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
+                const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
+                const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
+                const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
 
-            let isInsCurrRed = insCurr && insCurr < today;
-            let isInsNextRed = insNext && insNext < today;
+                if (ptoCurr) ptoCurr.setHours(0,0,0,0);
+                if (ptoNext) ptoNext.setHours(0,0,0,0);
+                if (insCurr) insCurr.setHours(0,0,0,0);
+                if (insNext) insNext.setHours(0,0,0,0);
 
-            const formatDate = (d) => {
-                if (!d) return '—';
-                const dateObj = new Date(d);
-                if (isNaN(dateObj.getTime())) return '—';
-                return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
-            };
+                let isPtoCurrRed = ptoCurr && ptoCurr < today;
+                let isPtoNextRed = ptoNext && ptoNext < today;
 
-            tr.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
-            `;
-            tbody.appendChild(tr);
+                let isInsCurrRed = insCurr && insCurr < today;
+                let isInsNextRed = insNext && insNext < today;
+
+                tr.innerHTML = `
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        renderTable(filteredCars);
+
+        const applyFilters = () => {
+            const fGos = document.getElementById('filter-gos').value.toLowerCase();
+            const fModel = document.getElementById('filter-model').value.toLowerCase();
+            const fPtoCurr = document.getElementById('filter-pto-curr').value.toLowerCase();
+            const fPtoNext = document.getElementById('filter-pto-next').value.toLowerCase();
+            const fInsCurr = document.getElementById('filter-ins-curr').value.toLowerCase();
+            const fInsNext = document.getElementById('filter-ins-next').value.toLowerCase();
+            const fDesc = document.getElementById('filter-desc').value.toLowerCase();
+
+            const result = filteredCars.filter(car => {
+                const gos = (car.gos_number || '').toLowerCase();
+                const model = (car.model_name || '').toLowerCase();
+                const ptoCurrStr = formatDate(car.pto_current).toLowerCase();
+                const ptoNextStr = formatDate(car.pto_next).toLowerCase();
+                const insCurrStr = formatDate(car.insurance_current).toLowerCase();
+                const insNextStr = formatDate(car.insurance_next).toLowerCase();
+                const desc = (car.description || '').toLowerCase();
+
+                return gos.includes(fGos) &&
+                       model.includes(fModel) &&
+                       ptoCurrStr.includes(fPtoCurr) &&
+                       ptoNextStr.includes(fPtoNext) &&
+                       insCurrStr.includes(fInsCurr) &&
+                       insNextStr.includes(fInsNext) &&
+                       desc.includes(fDesc);
+            });
+
+            renderTable(result);
+        };
+
+        ['filter-gos', 'filter-model', 'filter-pto-curr', 'filter-pto-next', 'filter-ins-curr', 'filter-ins-next', 'filter-desc'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', applyFilters);
+            }
         });
 
         modal.style.display = 'flex';
