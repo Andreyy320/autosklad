@@ -6080,7 +6080,7 @@ async function loadDetailData(entity, parentId) {
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
-    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName)) {
+    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
         if (thead && visibleColumns.length > 0) {
             if (!filterRow) {
                 filterRow = document.createElement('tr');
