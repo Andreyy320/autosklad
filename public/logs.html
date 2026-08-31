@@ -28,6 +28,7 @@
         .badge-update { background: #ffc107; color: #333; }
         .badge-delete { background: #dc3545; color: white; }
         .badge-default { background: #6c757d; color: white; }
+        .json-details { font-family: monospace; font-size: 11px; color: #444; background: #f8f9fa; padding: 4px; border-radius: 4px; max-height: 80px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -42,6 +43,7 @@
         <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)">📄 Реализация</button>
         <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)">🔄 Перемещения</button>
         <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)">🔧 Ремонт</button>
+        <button class="tab-btn" onclick="switchTab('Аудит', '/api/get-audit-logs', this)">🛡️ Общий аудит</button>
     </div>
 
     <table>
@@ -118,6 +120,17 @@
                     <th>Описание / Детали</th>
                 </tr>
             `;
+        } else if (type === 'Аудит') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Таблица / Сущность</th>
+                    <th>ID записи</th>
+                    <th>IP-адрес</th>
+                    <th>Детали (JSON)</th>
+                </tr>
+            `;
         } else {
             thead.innerHTML = `
                 <tr>
@@ -141,9 +154,9 @@
         renderTableHead(type);
 
         let colspanCount = 10;
-        if (type === 'Перемещение') colspanCount = 9;
-        if (type === 'Ремонт') colspanCount = 9;
+        if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
         if (type === 'Реализация') colspanCount = 10;
+        if (type === 'Аудит') colspanCount = 6;
 
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
@@ -245,6 +258,19 @@
                         <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
                         <td class="text-right"><strong>${Number(log.total_rub || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.description || '—'}</td>
+                    `;
+                } else if (currentType === 'Аудит') {
+                    const detailsFormatted = log.details ? `<div class="json-details">${JSON.stringify(log.details, null, 2)}</div>` : '—';
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.table_name || log.entity || '—'}</td>
+                        <td>${log.record_id || '—'}</td>
+                        <td>${log.ip_address || '—'}</td>
+                        <td>${detailsFormatted}</td>
                     `;
                 } else {
                     let rawFrom = log.warehouse_from_id || log.warehouse_from;
