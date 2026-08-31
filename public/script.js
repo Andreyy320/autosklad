@@ -5492,18 +5492,20 @@ async function postMove(moveId) {
             }
         }
     );
-}
-
-async function postReceipt(receiptId) {
+}async function postReceipt(receiptId) {
     showPostConfirmModal(
         'Проведение документа',
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
+                // Достаем ID текущего пользователя из localStorage
+                const currentUserId = localStorage.getItem('currentUserId') || '';
+
                 const response = await fetch(`/api/receipts/${receiptId}`, {
                     method: 'PUT',
                     headers: { 
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-user-id': currentUserId // <--- ВОТ ЭТО СТУЧИТ К СЕРВЕРУ И ПЕРЕДАЕТ ПОЛЬЗОВАТЕЛЯ
                     },
                     body: JSON.stringify({ is_posted: true })
                 });
