@@ -38,7 +38,7 @@ router.get('/get-logs', async (req, res) => {
         
         let query = `
             SELECT * FROM (
-                -- 1. ЛОГИ ПРИХОДОВ И ИХ ПОЗИЦИЙ (только для проведенных документов)
+                -- 1. ПРИХОДЫ И ИХ ПОЗИЦИИ
                 SELECT 
                     'receipt' AS operation_type,
                     COALESCE(r.id, ri.receipt_id) AS doc_id,
@@ -54,27 +54,31 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(ri.price, 0) AS price,
                     (COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0)) AS total_amount,
                     CONCAT(
-                        'Приход №', COALESCE(r.doc_number, '—'), ' от поставщика: ', COALESCE(p.name, '—'),
+                        'Приход №', COALESCE(r.doc_number, '—'), 
+                        CASE WHEN p.name IS NOT NULL THEN CONCAT(' от ', p.name) ELSE '' END,
                         CASE 
-                            WHEN al.action = 'INSERT' THEN ' [Создано]'
-                            WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено: ', al.details, ']')
-                            WHEN al.action = 'DELETE' THEN ' [Удалено]'
+                            WHEN al.action = 'INSERT' AND al.table_name = 'receipts' THEN ' [Документ создан]'
+                            WHEN al.action = 'INSERT' AND al.table_name = 'receipt_items' THEN CONCAT(' [Добавлена позиция: ', COALESCE(z.name, 'запчасть'), ' - ', COALESCE(ri.quantity, 0), ' шт. по ', COALESCE(ri.price, 0), ' руб.]')
+                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":true%' THEN ' [Документ проведен]'
+                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipts' AND al.details LIKE '%is_posted%' AND al.details LIKE '%"to":false%' THEN ' [Документ распроведен]'
+                            WHEN al.action = 'UPDATE' AND al.table_name = 'receipt_items' THEN CONCAT(' [Изменена позиция "', COALESCE(z.name, 'запчасть'), '"]: ', al.details)
+                            WHEN al.action = 'DELETE' THEN ' [Удалена позиция из прихода]'
                             ELSE CONCAT(' [', al.action, ']')
                         END
                     ) AS reason
                 FROM audit_logs al
-                LEFT JOIN receipt_items ri ON al.table_name = 'receipt_items' AND al.record_id = ri.id
+                LEFT JOIN receipt_items ri ON (al.table_name = 'receipt_items' AND al.record_id = ri.id) OR (al.table_name = 'receipts' AND al.record_id = ri.receipt_id)
                 LEFT JOIN receipts r ON (al.table_name = 'receipts' AND al.record_id = r.id) OR (ri.receipt_id = r.id)
                 LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN users u_log ON al.user_id = u_log.id
                 WHERE al.table_name IN ('receipts', 'receipt_items')
-                  AND r.is_posted = true
+                  AND (r.is_posted = true OR (al.table_name = 'receipts' AND al.action = 'INSERT'))
 
                 UNION ALL
 
-                -- 2. ПЕРЕМЕЩЕНИЯ (move_items)
+                -- 2. ПЕРЕМЕЩЕНИЯ
                 SELECT 
                     'move' AS operation_type,
                     m.id AS doc_id,
@@ -91,17 +95,7 @@ router.get('/get-logs', async (req, res) => {
                     (mi.quantity * COALESCE(ri_orig.price, mi.price, 0)) AS total_amount,
                     CONCAT(
                         'Перемещение №', m.doc_number, ' со склада "', wf.name, '" на склад "', wt.name, '"',
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'moves' OR al.table_name = 'move_items') 
-                              AND (al.record_id = m.id OR al.record_id = mi.id)
-                        ), '')
+                        ' [Проведено]'
                     ) AS reason
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
@@ -114,7 +108,7 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. РЕМОНТЫ (repair_items)
+                -- 3. РЕМОНТЫ
                 SELECT 
                     'repair' AS operation_type,
                     rep.id AS doc_id,
@@ -131,17 +125,7 @@ router.get('/get-logs', async (req, res) => {
                     (ri.quantity * ri.price) AS total_amount,
                     CONCAT(
                         'Ремонт №', rep.doc_number, ' (списание на авто: ', COALESCE(c.gos_number, '—'), ')',
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'repairs' OR al.table_name = 'repair_items') 
-                              AND (al.record_id = rep.id OR al.record_id = ri.id)
-                        ), '')
+                        ' [Списано в ремонт]'
                     ) AS reason
                 FROM repair_items ri
                 JOIN repairs rep ON ri.repair_id = rep.id
@@ -153,7 +137,7 @@ router.get('/get-logs', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. РЕАЛИЗАЦИИ (realization_items)
+                -- 4. РЕАЛИЗАЦИИ
                 SELECT 
                     'realization' AS operation_type,
                     rz.id AS doc_id,
@@ -170,17 +154,7 @@ router.get('/get-logs', async (req, res) => {
                     COALESCE(ri.total_rub, 0) AS total_amount,
                     CONCAT(
                         'Реализация №', rz.doc_number,
-                        COALESCE((
-                            SELECT STRING_AGG(
-                                CASE 
-                                    WHEN al.action = 'INSERT' THEN ' [Создано]'
-                                    WHEN al.action = 'UPDATE' THEN CONCAT(' [Изменено]')
-                                    ELSE CONCAT(' [', al.action, ']')
-                                END, ' ')
-                            FROM audit_logs al 
-                            WHERE (al.table_name = 'realizations' OR al.table_name = 'realization_items') 
-                              AND (al.record_id = rz.id OR al.record_id = ri.id)
-                        ), '')
+                        ' [Продано]'
                     ) AS reason
                 FROM realization_items ri
                 JOIN realizations rz ON ri.realization_id = rz.id
@@ -204,7 +178,7 @@ router.get('/get-logs', async (req, res) => {
         return res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения детального журнала логов:', err.message);
-        return res.status(500).json({ error: 'Ошибка сервера' });
+        return res.status(500).json({ error: 'Ошибка сервера'  });
     }
 });
 // Открытие самой страницы logs.html по адресу /logs (GET)
