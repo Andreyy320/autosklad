@@ -2216,7 +2216,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки машин покупателя при открытии:', e);
                     }
-                } else {
+                } else if (item && item.car_id) {
                     try {
                         const carRes = await fetch(`/api/customer_cars`);
                         if (carRes.ok) {
@@ -2226,15 +2226,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки списка машин:', e);
                     }
-                }
-            } else if (referenceName === 'cars') {
-                try {
-                    const carRes = await fetch(`/api/cars`);
-                    if (carRes.ok) {
-                        refItems = await carRes.json();
-                    }
-                } catch (e) {
-                    console.error('Ошибка загрузки списка автомобилей (cars):', e);
                 }
             } else {
                 refItems = await fetchReferenceData(referenceName);
@@ -2304,31 +2295,38 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     const carCol = config.columns.find(c => c.field === 'car_id');
 
-    for (const col of config.columns) {
-        if (col.field === 'car_id') continue; 
+    // СПЕЦИАЛЬНЫЙ ПОРЯДОК ДЛЯ АВТОСТРАХОВАНИЯ: Выбор авто сразу после даты окончания/следующей даты страхования
+    if (entity === 'autostrahovanie' && carCol) {
+        for (const col of config.columns) {
+            if (col.field === 'car_id') continue;
+            html += await renderField(col);
+            
+            // Проверяем поле даты окончания или следующей даты (обычно называется end_date, next_date, date_to и т.д.)
+            // Вставьте нужное поле сюда, если оно называется иначе (например, end_date)
+            if (col.field === 'end_date' || col.field === 'next_date' || col.field.includes('end') || col.field.includes('next')) {
+                html += await renderField(carCol);
+            }
+        }
+    } else {
+        // Стандартный рендеринг для остальных сущностей
+        for (const col of config.columns) {
+            if (col.field === 'car_id') continue; 
 
-        if (col.field === 'autoservice' && carCol) {
-            html += await renderField(carCol);
+            if (col.field === 'autoservice' && carCol) {
+                html += await renderField(carCol);
+            }
+
+            html += await renderField(col);
+
+            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie') {
+                html += await renderField(carCol);
+            }
         }
 
-        html += await renderField(col);
-
-        if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie') {
-            html += await renderField(carCol);
-        }
-    }
-
-    if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
-        if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
-            html += await renderField(carCol);
-        }
-    }
-
-    // Принудительный вывод car_id для autostrahovanie и tehosmotr, если оно есть в конфиге, но не отрисовалось выше
-    if (carCol && (entity === 'autostrahovanie' || entity === 'tehosmotr')) {
-        const alreadyRendered = config.columns.some(c => c.field === 'autoservice');
-        if (!alreadyRendered) {
-            html += await renderField(carCol);
+        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
+            if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
+                html += await renderField(carCol);
+            }
         }
     }
 
