@@ -3634,10 +3634,13 @@ async function openRepairForm(item = null, parentId = null) {
 }
 
 
-
-//ически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
+// Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
+        // Предотвращаем стандартное поведение (скачивание, переход по ссылкам и т.д.)
+        e.preventDefault();
+        e.stopPropagation();
+
         const img = e.target;
         if (img.src) {
             // Проверяем, создано ли уже модальное окно, если нет — создаем
@@ -3667,7 +3670,6 @@ document.addEventListener('click', function(e) {
         }
     }
 });
-
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -5911,6 +5913,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
