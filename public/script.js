@@ -3184,7 +3184,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols() {
+            async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
 
@@ -3205,31 +3205,37 @@ async function openMoveForm(entity, item = null, parentId = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    let isCurrentStillValid = false;
+
                     mols.forEach(m => {
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            const userName = usersMap[m.user_id] || m.user_fio || m.description || `МОЛ #${m.id}`;
                             option.textContent = userName;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
+                                isCurrentStillValid = true;
                             }
                             mol.appendChild(option);
                         }
                     });
+
+                    if (isUserChange && !isCurrentStillValid) {
+                        mol.value = '';
+                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
+                filterMols(true);
             });
 
             if (warehouse.value) {
-                filterMols();
+                filterMols(false);
             }
         });
     }
@@ -3246,7 +3252,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
                     try {
                         const response = await fetch(`/api/${entity}/${item.id}`, {
                             method: 'DELETE',
-                        headers: {
+                            headers: {
                                 'Content-Type': 'application/json',
                                 'x-user-id': currentUserId
                             }
@@ -3286,7 +3292,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
 
         const formData = new FormData(e.target);
         
-        // --- ДЕТАЛЬНЫЕ ЛОГИ ВСЕХ ПОЛЕЙ ИЗ ФОРМЫ ---
         const rawEntries = Array.from(formData.entries());
         console.group('[DEBUG FORM SUBMIT] Содержимое FormData по полям:');
         rawEntries.forEach(([key, val]) => {
