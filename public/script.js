@@ -2693,7 +2693,23 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
-            const refItems = await fetchReferenceData(col.ref);
+            let refItems = [];
+            if (col.ref === 'mol') {
+                try {
+                    const molRes = await fetch('/api/mol');
+                    if (molRes.ok) refItems = await molRes.json();
+                    
+                    const currentWarehouseVal = item ? (item.warehouse_id || item.warehouse) : '';
+                    if (currentWarehouseVal) {
+                        refItems = refItems.filter(m => String(m.warehouse_id) === String(currentWarehouseVal));
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки МОЛ для селекта', e);
+                }
+            } else {
+                refItems = await fetchReferenceData(col.ref);
+            }
+
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
