@@ -2045,14 +2045,7 @@ function closeDrawer() {
 
 
 async function openEntityForm(entity, item = null, parentId = null) {
-    if (entity === 'realizations' || entity === 'Реализация') {
-        if (typeof openRealizationForm === 'function') {
-            return openRealizationForm(item);
-        } else {
-            console.error('Функция openRealizationForm не найдена');
-        }
-    }
-
+  
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
