@@ -4157,7 +4157,7 @@ async function openRealizationForm(entity, item = null) {
 
             const updateMolOptions = async (isUserChange = false) => {
                 const selectedWarehouseId = warehouse.value;
-                const currentMolValue = mol.value;
+                const currentMolValue = item && !isUserChange ? (item.mol_id || item.mol?.id || item.mol || mol.value) : mol.value;
                 console.log("🔄 [DEBUG WAREHOUSE] Обновление МОЛ для склада ID:", selectedWarehouseId, "Текущий МОЛ:", currentMolValue);
 
                 try {
@@ -4314,7 +4314,7 @@ async function openRealizationForm(entity, item = null) {
 
             if (response.ok) {
                 closeDrawer();
-               showAppNotification('Реализация успешно сохранена', 'success');
+                showAppNotification('Реализация успешно сохранена', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
