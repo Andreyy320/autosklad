@@ -3905,6 +3905,39 @@ async function openRealizationForm(entity, item = null) {
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
     console.log("🔒 Флаг isPosted:", isPosted);
 
+    // Вспомогательная функция загрузки машин покупателя
+    async function loadCarsForCustomer(customerId, targetCarSelect, preselectedCarId = null) {
+        console.log("🚗 [loadCarsForCustomer] Загрузка для customerId:", customerId, "предопределенная машина:", preselectedCarId);
+        targetCarSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
+        if (!customerId) return;
+
+        try {
+            const fetchUrl = `/api/customer_cars?customer_id=${customerId}`;
+            const response = await fetch(fetchUrl);
+            if (!response.ok) return;
+            const cars = await response.json();
+            console.log("📦 [loadCarsForCustomer] Получен список машин:", cars);
+
+            cars.forEach(car => {
+                const gos = car.gos_number || car.car_number || '';
+                const mdl = car.model || car.car_model || '';
+                const brd = car.brand || car.car_brand || '';
+                let displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
+
+                const option = document.createElement('option');
+                option.value = car.id;
+                option.textContent = displayName;
+
+                if (preselectedCarId && String(car.id) === String(preselectedCarId)) {
+                    option.selected = true;
+                }
+                targetCarSelect.appendChild(option);
+            });
+        } catch (err) {
+            console.error('❌ [loadCarsForCustomer] Ошибка при запросе машин покупателя:', err);
+        }
+    }
+
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать реализацию' : 'Добавить: Реализация'}</h3>
@@ -4005,7 +4038,7 @@ async function openRealizationForm(entity, item = null) {
             let extraAttributes = '';
             if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
             else if (col.field === 'car_id') extraAttributes = 'id="car-select"';
-            else if (col.field === 'warehouse_id' || col.field === 'skald_id') extraAttributes = `name="${col.field}" id="warehouse_id"`;
+            else if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'sklad_id') extraAttributes = `name="${col.field}" id="warehouse_id"`;
             else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = `name="${col.field}" id="mol_id"`;
 
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
@@ -4099,55 +4132,22 @@ async function openRealizationForm(entity, item = null) {
             const selectedCustomerId = customerSelect.value;
             const currentCarValue = carSelect.value;
             console.log("🔄 [DEBUG CHANGE] Пользователь изменил покупателя в селекте. Новый ID:", selectedCustomerId);
-
-            carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
-            if (!selectedCustomerId) {
-                console.log("⚠️ [DEBUG CHANGE] Покупатель сброшен (пусто), машины очищены.");
-                return;
-            }
-
-            try {
-                const fetchUrl = `/api/customer_cars?customer_id=${selectedCustomerId}`;
-                console.log("📡 [DEBUG CHANGE] Запрос машин для нового покупателя:", fetchUrl);
-                const response = await fetch(fetchUrl);
-                console.log("📥 [DEBUG CHANGE] Статус ответа:", response.status);
-                if (!response.ok) return;
-                const cars = await response.json();
-                console.log("📦 [DEBUG CHANGE] Получен список машин:", cars);
-
-                cars.forEach(car => {
-                    const gos = car.gos_number || car.car_number || '';
-                    const mdl = car.model || car.car_model || '';
-                    const brd = car.brand || car.car_brand || '';
-                    let displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
-
-                    const option = document.createElement('option');
-                    option.value = car.id;
-                    option.textContent = displayName;
-
-                    if (String(car.id) === String(currentCarValue)) {
-                        option.selected = true;
-                    }
-                    carSelect.appendChild(option);
-                });
-            } catch (err) {
-                console.error('❌ [DEBUG CHANGE] Ошибка при запросе машин покупателя:', err);
-            }
+            await loadCarsForCustomer(selectedCustomerId, carSelect, currentCarValue);
         });
     }
 
     if (formElement) {
         const warehouseMolPairs = [
             { 
-                warehouse: formElement.querySelector('[name="warehouse_from_id"]') || formElement.querySelector('[name="skald_from_id"]'), 
+                warehouse: formElement.querySelector('[name="warehouse_from_id"]') || formElement.querySelector('[name="skald_from_id"]') || formElement.querySelector('[name="sklad_from_id"]'), 
                 mol: formElement.querySelector('[name="mol_from_id"]') 
             },
             { 
-                warehouse: formElement.querySelector('[name="warehouse_to_id"]') || formElement.querySelector('[name="skald_to_id"]'), 
+                warehouse: formElement.querySelector('[name="warehouse_to_id"]') || formElement.querySelector('[name="skald_to_id"]') || formElement.querySelector('[name="sklad_to_id"]'), 
                 mol: formElement.querySelector('[name="mol_to_id"]') 
             },
             { 
-                warehouse: formElement.querySelector('[name="warehouse_id"]') || formElement.querySelector('[name="skald_id"]'), 
+                warehouse: formElement.querySelector('[name="warehouse_id"]') || formElement.querySelector('[name="skald_id"]') || formElement.querySelector('[name="sklad_id"]'), 
                 mol: formElement.querySelector('[name="mol_id"]') 
             }
         ];
@@ -4181,11 +4181,12 @@ async function openRealizationForm(entity, item = null) {
                     let isCurrentStillValid = false;
 
                     mols.forEach(m => {
-                        const mWarehouseId = m.warehouse_id || m.skald_id;
+                        const mWarehouseId = m.warehouse_id || m.skald_id || m.sklad_id;
                         const matchesWarehouse = !selectedWarehouseId || 
                             (mWarehouseId && String(mWarehouseId) === String(selectedWarehouseId)) ||
                             (Array.isArray(m.warehouses) && m.warehouses.some(wId => String(wId) === String(selectedWarehouseId))) ||
-                            (Array.isArray(m.skalds) && m.skalds.some(sId => String(sId) === String(selectedWarehouseId)));
+                            (Array.isArray(m.skalds) && m.skalds.some(sId => String(sId) === String(selectedWarehouseId))) ||
+                            (Array.isArray(m.sklads) && m.sklads.some(sId => String(sId) === String(selectedWarehouseId)));
 
                         if (matchesWarehouse) {
                             const option = document.createElement('option');
