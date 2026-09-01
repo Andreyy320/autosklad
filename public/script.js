@@ -2045,7 +2045,7 @@ function closeDrawer() {
 
 
 async function openEntityForm(entity, item = null, parentId = null) {
- 
+ console.log("🚀 openEntityForm вызвана для сущности:", entity, "item:", item);
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
