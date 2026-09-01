@@ -4037,21 +4037,25 @@ async function openRealizationForm(entity, item = null) {
         `;
     }
 
-    if (config && config.columns) {
-        for (const col of config.columns) {
-            if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id'].includes(col.field)) {
-                continue;
-            }
-            html += await renderField(col);
+ try {
+        if (config && config.columns) {
+            for (const col of config.columns) {
+                if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id'].includes(col.field)) {
+                    continue;
+                }
+                html += await renderField(col);
 
-            if (col.field === 'customer_id') {
-                if (warehouseCol) html += await renderField(warehouseCol);
-                if (molCol) html += await renderField(molCol);
-                if (carCol) html += await renderField(carCol);
+                if (col.field === 'customer_id') {
+                    if (warehouseCol) html += await renderField(warehouseCol);
+                    if (molCol) html += await renderField(molCol);
+                    if (carCol) html += await renderField(carCol);
+                }
             }
+        } else {
+            console.error("❌ config.columns не найден! Проверьте структуру config для realizations.");
         }
-    } else {
-        console.error("❌ config.columns не найден! Проверьте структуру config для realizations.");
+    } catch (renderErr) {
+        console.error("💥 ОШИБКА ВНУТРИ ЦИКЛА РЕНДЕРИНГА ПОЛЕЙ:", renderErr);
     }
 
     html += `
