@@ -2045,7 +2045,7 @@ function closeDrawer() {
 
 
 async function openEntityForm(entity, item = null, parentId = null) {
- console.log("🚀 openEntityForm вызвана для сущности:", entity, "item:", item);
+    console.log("🚀 openEntityForm вызвана для сущности:", entity, "item:", item);
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -2057,7 +2057,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    if (!item || !item.id) {
+    // ИСПРАВЛЕНИЕ: если объект item пустой, но в него передали id: null или id: undefined, 
+    // либо он вообще не передан — считаем это созданием новой записи. 
+    // Если вы кликаете «Создать», убедитесь, что передаете item = null (а не объект вроде { id: null }).
+    if (!item || item.id === null || item.id === undefined || item.id === '') {
         let nextId = 1;
         let prefix = 'Р-';
 
@@ -2090,7 +2093,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
             console.error('Не удалось получить список для автонумерации', e);
         }
 
+        // Принудительно создаем новый чистый объект без id, чтобы форма знала, что это создание
         item = { 
+            id: null,
             doc_number: `${prefix}${nextId}`,
             is_posted: false 
         };
@@ -2333,7 +2338,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     if (entity === 'realizations' && warehouseCol && molCol) {
         for (const col of config.columns) {
-            // Убираем всё лишнее для realizations: оставляем только doc_number, is_posted, fact_date, customer_id, warehouse_id/skald_id, mol_id, car_id, description
             const allowedRealizationsFields = ['doc_number', 'is_posted', 'fact_date', 'customer_id', 'warehouse_id', 'skald_id', 'mol_id', 'car_id', 'description'];
             if (!allowedRealizationsFields.includes(col.field)) continue;
 
@@ -2711,19 +2715,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                const errorMsg = errData.error || errData.message || `Ошибка сервера: ${response.status} ${response.statusText}`;
-                
-                showAppNotification(errorMsg, 'error');
-                
-                let errorContainer = formElement.querySelector('#form-error-banner');
-                if (!errorContainer) {
-                    errorContainer = document.createElement('div');
-                    errorContainer.id = 'form-error-banner';
-                    errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;';
-                    formElement.prepend(errorContainer);
-                }
-                errorContainer.textContent = errorMsg;
-                
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
             }
@@ -2734,6 +2726,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
+
 async function openReceiptForm(entity, item = null) {
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
     // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
