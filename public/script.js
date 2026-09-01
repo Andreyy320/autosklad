@@ -20,9 +20,11 @@ async function fetchReferenceData(refEntity) {
         
         if (response.ok) {
             const data = await response.json();
-            return data;
+            // На случай, если бэкенд оборачивает массив в объект { data: [...] }
+            return Array.isArray(data) ? data : (data.data || data.items || []);
         } else {
-            console.warn(`Справочник ${refEntity} вернул статус:`, response.status);
+            const errorText = await response.text();
+            console.warn(`Справочник ${refEntity} вернул статус ${response.status}:`, errorText);
         }
     } catch (err) {
         console.error(`Ошибка загрузки справочника ${refEntity}:`, err);
@@ -2693,45 +2695,7 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
-            let refItems = [];
-            
-            if (col.ref === 'mol') {
-                try {
-                    const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol'),
-                        fetch('/api/mol_users')
-                    ]);
-                    const mols = molRes.ok ? await molRes.json() : [];
-                    const users = usersRes.ok ? await usersRes.json() : [];
-
-                    const usersMap = {};
-                    users.forEach(u => {
-                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                    });
-
-                    // Определяем склад из переданного item при открытии формы
-                    const currentWarehouseId = item ? (item.warehouse_id || item.warehouse || item.warehouse_from_id || item.warehouse_to_id) : '';
-
-                    refItems = mols.map(m => ({
-                        id: m.id,
-                        warehouse_id: m.warehouse_id,
-                        name: m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`
-                    }));
-
-                    // Если склад выбран, сразу фильтруем МОЛ при генерации HTML
-                    if (currentWarehouseId) {
-                        refItems = refItems.filter(m => String(m.warehouse_id) === String(currentWarehouseId));
-                    } else {
-                        // Если склад не выбран изначально, не показываем ни одного МОЛа или показываем пустой список
-                        refItems = [];
-                    }
-                } catch (e) {
-                    console.error('Ошибка загрузки МОЛ при генерации формы', e);
-                }
-            } else {
-                refItems = await fetchReferenceData(col.ref);
-            }
-
+            const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
@@ -2812,19 +2776,16 @@ async function openReceiptForm(entity, item = null) {
 
     if (formElement) {
         const pairs = [
-            { warehouse: formElement.querySelector('[name="warehouse_from_id"], [name="warehouse_from"]'), mol: formElement.querySelector('[name="mol_from_id"], [name="mol_from"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_to_id"], [name="warehouse_to"]'), mol: formElement.querySelector('[name="mol_to_id"], [name="mol_to"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"], [name="warehouse"]'), mol: formElement.querySelector('[name="mol_id"], [name="mol"]') }
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
         ];
 
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols(resetValue = false) {
+            async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
-                if (resetValue) {
-                    mol.value = '';
-                }
                 const currentMolValue = mol.value;
 
                 try {
@@ -2844,12 +2805,8 @@ async function openReceiptForm(entity, item = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
-                    if (!selectedWarehouseId) {
-                        return; // Если склад не выбран, оставляем список МОЛ пустым
-                    }
-
                     mols.forEach(m => {
-                        if (String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
                             option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
@@ -2866,8 +2823,13 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
-                filterMols(true); // При смене склада сбрасываем выбранный МОЛ
+                mol.value = '';
+                filterMols();
             });
+
+            if (warehouse.value) {
+                filterMols();
+            }
         });
     }
 
