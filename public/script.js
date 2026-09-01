@@ -3824,7 +3824,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
-
 async function openRealizationForm(entity, item = null) {
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
@@ -3970,8 +3969,8 @@ async function openRealizationForm(entity, item = null) {
             let extraAttributes = '';
             if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
             else if (col.field === 'car_id') extraAttributes = 'id="car-select"';
-            else if (col.field === 'warehouse_id' || col.field === 'skald_id') extraAttributes = 'id="warehouse_id" class="warehouse-select"';
-            else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = 'id="mol_id" class="mol-select"';
+            else if (col.field === 'warehouse_id' || col.field === 'skald_id') extraAttributes = `name="${col.field}" id="warehouse_id"`;
+            else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = `name="${col.field}" id="mol_id"`;
 
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
@@ -4037,8 +4036,6 @@ async function openRealizationForm(entity, item = null) {
 
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
-    const warehouseSelect = formElement.querySelector('.warehouse-select');
-    const molSelect = formElement.querySelector('.mol-select');
 
     if (customerSelect && carSelect) {
         customerSelect.addEventListener('change', async () => {
@@ -4074,58 +4071,71 @@ async function openRealizationForm(entity, item = null) {
         });
     }
 
-    if (warehouseSelect && molSelect) {
-        async function filterMols(isUserChange = false) {
-            const selectedWarehouseId = warehouseSelect.value;
-            const currentMolValue = molSelect.value;
+    // Точная логика фильтрации склада и МОЛ, как вы просили
+    if (formElement) {
+        const pairs = [
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+            { warehouse: formElement.querySelector('[name="skald_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        ];
 
-            try {
-                const [molRes, usersRes] = await Promise.all([
-                    fetch('/api/mol'),
-                    fetch('/api/mol_users')
-                ]);
+        pairs.forEach(({ warehouse, mol }) => {
+            if (!warehouse || !mol) return;
 
-                if (!molRes.ok) return;
-                const mols = await molRes.json();
-                const users = usersRes.ok ? await usersRes.json() : [];
+            async function filterMols(isUserChange = false) {
+                const selectedWarehouseId = warehouse.value;
+                const currentMolValue = mol.value;
 
-                const usersMap = {};
-                users.forEach(u => {
-                    usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                });
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
 
-                molSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
-                let isCurrentStillValid = false;
+                    if (!molRes.ok) return;
+                    const mols = await molRes.json();
+                    const users = usersRes.ok ? await usersRes.json() : [];
 
-                mols.forEach(m => {
-                    if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
-                        const option = document.createElement('option');
-                        option.value = m.id;
-                        option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
 
-                        if (String(m.id) === String(currentMolValue)) {
-                            option.selected = true;
-                            isCurrentStillValid = true;
+                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                    let isCurrentStillValid = false;
+
+                    mols.forEach(m => {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+
+                            if (String(m.id) === String(currentMolValue)) {
+                                option.selected = true;
+                                isCurrentStillValid = true;
+                            }
+                            mol.appendChild(option);
                         }
-                        molSelect.appendChild(option);
+                    });
+
+                    if (isUserChange && !isCurrentStillValid) {
+                        mol.value = '';
                     }
-                });
-
-                if (isUserChange && !isCurrentStillValid) {
-                    molSelect.value = '';
+                } catch (err) {
+                    console.error('Ошибка при фильтрации МОЛ:', err);
                 }
-            } catch (err) {
-                console.error('Ошибка при фильтрации МОЛ:', err);
             }
-        }
 
-        warehouseSelect.addEventListener('change', () => {
-            filterMols(true);
+            warehouse.addEventListener('change', () => {
+                filterMols(true);
+            });
+
+            if (warehouse.value) {
+                filterMols(false);
+            }
         });
-
-        if (warehouseSelect.value) {
-            filterMols(false);
-        }
     }
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
@@ -4224,7 +4234,6 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
-
 
 
 
