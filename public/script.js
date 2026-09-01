@@ -3915,6 +3915,7 @@ async function openRealizationForm(entity, item = null) {
     const carCol = config?.columns?.find(c => c.field === 'car_id');
     const molCol = config?.columns?.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config?.columns?.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
+    const sellerCol = config?.columns?.find(c => c.field === 'seller_id' || c.field === 'seller' || c.field === 'user_id'); // На случай если продавец называется иначе, но проверим стандартные поля
 
     async function renderField(col) {
         console.log("⚙️ Рендерим поле:", col?.field);
@@ -4042,7 +4043,7 @@ async function openRealizationForm(entity, item = null) {
        if (config && config.columns) {
         for (const col of config.columns) {
             try {
-                if (['customer_id', 'car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
+                if (['doc_number', 'fact_date', 'customer_id', 'car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
                     continue; 
                 }
                 
@@ -4052,13 +4053,28 @@ async function openRealizationForm(entity, item = null) {
             }
         }
 
-        // Порядок: Склад -> МОЛ -> Покупатель -> Гос. номер машины
+        // Порядок: 1) № документа, 2) Дата, затем остальные поля конфига, затем кастомный порядок для ключевых:
+        const docNumCol = config.columns.find(c => c.field === 'doc_number');
+        const factDateCol = config.columns.find(c => c.field === 'fact_date');
+
+        // Рендерим первые два строго первыми: № документа и Дата
+        if (docNumCol) html += await renderField(docNumCol);
+        if (factDateCol) html += await renderField(factDateCol);
+
+        // Склад -> МОЛ -> Покупатель -> Продавец -> Гос. номер машины
         if (warehouseCol) html += await renderField(warehouseCol);
         if (molCol) html += await renderField(molCol);
         
         const customerCol = config.columns.find(c => c.field === 'customer_id');
         if (customerCol) html += await renderField(customerCol);
+
+        // Ищем поле продавца в конфиге (если есть seller_id, seller или user_id)
+        const explicitSellerCol = config.columns.find(c => c.field === 'seller_id' || c.field === 'seller');
+        if (explicitSellerCol) {
+            html += await renderField(explicitSellerCol);
+        }
         
+        // Гос. номер машины строго под продавцом
         if (carCol) html += await renderField(carCol);
 
         const isPostedCol = config.columns.find(c => c.field === 'is_posted');
