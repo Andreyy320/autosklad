@@ -3184,7 +3184,7 @@ async function openMoveForm(entity, item = null, parentId = null) {
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols(isUserChange = false) {
+            async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
 
@@ -3205,37 +3205,31 @@ async function openMoveForm(entity, item = null, parentId = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
-                    let isCurrentStillValid = false;
-
                     mols.forEach(m => {
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            const userName = usersMap[m.user_id] || m.user_fio || m.description || `МОЛ #${m.id}`;
+                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
                             option.textContent = userName;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
-                                isCurrentStillValid = true;
                             }
                             mol.appendChild(option);
                         }
                     });
-
-                    if (isUserChange && !isCurrentStillValid) {
-                        mol.value = '';
-                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                filterMols(true);
+                mol.value = '';
+                filterMols();
             });
 
             if (warehouse.value) {
-                filterMols(false);
+                filterMols();
             }
         });
     }
@@ -4098,7 +4092,7 @@ function openActiveEntityForm(action, item = null) {
             break;
             
         case 'Перемещение':
-        case 'move':
+        case 'moves':
             if (typeof openMovementForm === 'function') {
                 openMovementForm(item);
             } else {
