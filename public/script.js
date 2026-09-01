@@ -2614,6 +2614,49 @@ async function openEntityForm(entity, item = null, parentId = null) {
     });
 }
 
+// Вспомогательная функция вынесена наружу глобально
+async function updateMolsForWarehouse(warehouseSelectId, molSelectId, currentMolValue = '') {
+    const warehouse = document.querySelector(warehouseSelectId);
+    const mol = document.querySelector(molSelectId);
+    
+    if (!warehouse || !mol) return;
+
+    const selectedWarehouseId = warehouse.value;
+
+    try {
+        const [molRes, usersRes] = await Promise.all([
+            fetch('/api/mol'),
+            fetch('/api/mol_users')
+        ]);
+
+        if (!molRes.ok) return;
+        const mols = await molRes.json();
+        const users = usersRes.ok ? await usersRes.json() : [];
+
+        const usersMap = {};
+        users.forEach(u => {
+            usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+        });
+
+        mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+        mols.forEach(m => {
+            if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+
+                if (String(m.id) === String(currentMolValue)) {
+                    option.selected = true;
+                }
+                mol.appendChild(option);
+            }
+        });
+    } catch (err) {
+        console.error('Ошибка при загрузке и фильтрации МОЛ:', err);
+    }
+}
+
 async function openReceiptForm(entity, item = null) {
     const config = getConfig('receipts');
     const drawer = getOrCreateDrawer();
@@ -2653,17 +2696,6 @@ async function openReceiptForm(entity, item = null) {
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
-
-    // Предзагружаем актуальный список МОЛ со всеми нужными полями и JOIN
-    let allMols = [];
-    try {
-        const molRes = await fetch('/api/mol');
-        if (molRes.ok) {
-            allMols = await molRes.json();
-        }
-    } catch (e) {
-        console.error('Ошибка предварительной загрузки МОЛ:', e);
-    }
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -2711,28 +2743,19 @@ async function openReceiptForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-        } else if (col.ref || col.field === 'mol_id') {
+        } else if (col.ref && col.field !== 'mol_id') {
+            const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
-            if (col.field === 'mol_id') {
-                const currentWarehouseId = item ? (item.warehouse_id || item.warehouse) : '';
-                allMols.forEach(m => {
-                    if (!currentWarehouseId || String(m.warehouse_id) === String(currentWarehouseId)) {
-                        const displayName = m.user_fio || m.name || m.description || (`МОЛ #${m.id}`);
-                        const selected = (val !== '' && val !== null && String(m.id) === String(val)) ? 'selected' : '';
-                        optionsHtml += `<option value="${m.id}" ${selected}>${displayName} ${m.warehouse_name ? '(' + m.warehouse_name + ')' : ''}</option>`;
-                    }
-                });
-            } else {
-                const refItems = await fetchReferenceData(col.ref);
-                refItems.forEach(refItem => {
-                    const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
-                    const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                    optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
-                });
-            }
+            refItems.forEach(refItem => {
+                const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
+                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+            });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.field === 'mol_id') {
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}"><option value="">-- Сначала выберите склад --</option></select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -2799,33 +2822,14 @@ async function openReceiptForm(entity, item = null) {
         const mol = formElement.querySelector('[name="mol_id"]');
 
         if (warehouse && mol) {
-            function filterMols() {
-                const selectedWarehouseId = warehouse.value;
-                const currentMolValue = mol.value;
-
-                mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
-                allMols.forEach(m => {
-                    if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
-                        const option = document.createElement('option');
-                        option.value = m.id;
-                        option.textContent = m.user_fio || m.name || m.description || `МОЛ #${m.id}`;
-
-                        if (String(m.id) === String(currentMolValue)) {
-                            option.selected = true;
-                        }
-                        mol.appendChild(option);
-                    }
-                });
-            }
-
             warehouse.addEventListener('change', () => {
                 mol.value = '';
-                filterMols();
+                updateMolsForWarehouse('#entity-form [name="warehouse_id"]', '#entity-form [name="mol_id"]', '');
             });
 
             if (warehouse.value) {
-                filterMols();
+                // Если склад уже заполнен (при редактировании), подгружаем нужный МОЛ
+                updateMolsForWarehouse('#entity-form [name="warehouse_id"]', '#entity-form [name="mol_id"]', item ? item.mol_id : '');
             }
         }
     }
