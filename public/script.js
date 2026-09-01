@@ -2712,6 +2712,24 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     errorContainer = document.createElement('div');
                     errorContainer.id = 'form-error-banner';
                     // ... остальная часть кода обработки ошибок осталась неизменной
+                     
+                     
+                     
+                        errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;';
+                        formElement.prepend(errorContainer);
+                    }
+                    errorContainer.textContent = errorMsg;
+
+                    isSubmitting = false; 
+                    if (saveButton) saveButton.disabled = false;
+                }
+            } catch (err) {
+                showAppNotification('Ошибка соединения с сервером', 'error');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+            }
+        });
+    }
 
 async function openReceiptForm(entity, item = null) {
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
