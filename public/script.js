@@ -4084,15 +4084,6 @@ function openActiveEntityForm(action, item = null) {
             }
             break;
 
-        case 'Ремонт':
-        case 'repairs':
-            if (typeof openRepairForm === 'function') {
-                openRepairForm(item);
-            } else {
-                openEntityForm(entity, item);
-            }
-            break;
-
         case 'Реализация':
         case 'realizations':
             if (typeof openRealizationForm === 'function') {
