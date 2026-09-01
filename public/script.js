@@ -4050,13 +4050,17 @@ async function openRealizationForm(entity, item = null) {
             const sellerCol = config.columns.find(c => c.field === 'seller_id' || c.field === 'seller' || c.field === 'user_id');
             if (sellerCol) html += await renderField(sellerCol);
 
-            // 3. Затем Гос. номер машины под продавцом
+            // 3. Затем Покупатель (customer_id)
+            const customerCol = config.columns.find(c => c.field === 'customer_id');
+            if (customerCol) html += await renderField(customerCol);
+
+            // 4. Затем Гос. номер машины (car_id) строго под покупателем
             const carIdCols = config.columns.filter(c => c.field === 'car_id');
             const primaryCarCol = carIdCols[0]; // Первое вхождение (Гос. номер)
             if (primaryCarCol) html += await renderField(primaryCarCol);
 
-            // 4. Отрендерим остальные поля, исключая те, что уже вывели выше
-            const skippedFields = ['doc_number', 'doc_date', 'seller_id', 'seller', 'user_id', 'car_id', 'id'];
+            // 5. Отрендерим остальные поля, исключая те, что уже вывели выше
+            const skippedFields = ['doc_number', 'doc_date', 'seller_id', 'seller', 'user_id', 'customer_id', 'car_id', 'id'];
             for (const col of config.columns) {
                 if (skippedFields.includes(col.field)) continue;
                 try {
