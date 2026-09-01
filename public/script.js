@@ -4130,24 +4130,32 @@ async function openRealizationForm(entity, item = null) {
     }
 
     if (formElement) {
-        const pairs = [
-            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-            { warehouse: formElement.querySelector('[name="skald_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        const warehouseMolPairs = [
+            { 
+                warehouse: formElement.querySelector('[name="warehouse_from_id"]') || formElement.querySelector('[name="skald_from_id"]'), 
+                mol: formElement.querySelector('[name="mol_from_id"]') 
+            },
+            { 
+                warehouse: formElement.querySelector('[name="warehouse_to_id"]') || formElement.querySelector('[name="skald_to_id"]'), 
+                mol: formElement.querySelector('[name="mol_to_id"]') 
+            },
+            { 
+                warehouse: formElement.querySelector('[name="warehouse_id"]') || formElement.querySelector('[name="skald_id"]'), 
+                mol: formElement.querySelector('[name="mol_id"]') 
+            }
         ];
 
-        pairs.forEach(({ warehouse, mol }) => {
+        warehouseMolPairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols(isUserChange = false) {
+            const updateMolOptions = async (isUserChange = false) => {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
                         fetch('/api/mol'),
-                        fetch('/api/mol_users')
+                        fetch('/api/mol_users').catch(() => ({ ok: false }))
                     ]);
 
                     if (!molRes.ok) return;
@@ -4159,16 +4167,12 @@ async function openRealizationForm(entity, item = null) {
                         usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
                     });
 
-                    // Сохраняем текущее выбранное значение до перерисовки опций (если оно не передано через измененный склад)
                     const activeMolVal = isUserChange ? '' : currentMolValue;
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
                     let isCurrentStillValid = false;
 
                     mols.forEach(m => {
-                        // ПРОВЕРКА ПРИВЯЗКИ МОЛ К СКЛАДУ:
-                        // Поддерживаем как поле warehouse_id в самом МОЛ, так и связь через массив/таблицу warehouse_mols, если она есть
                         const mWarehouseId = m.warehouse_id || m.skald_id;
                         const matchesWarehouse = !selectedWarehouseId || 
                             (mWarehouseId && String(mWarehouseId) === String(selectedWarehouseId)) ||
@@ -4194,16 +4198,16 @@ async function openRealizationForm(entity, item = null) {
                         mol.value = activeMolVal;
                     }
                 } catch (err) {
-                    console.error('❌ Ошибка при фильтрации МОЛ:', err);
+                    console.error('❌ Ошибка при обновлении списка МОЛ для склада:', err);
                 }
-            }
+            };
 
             warehouse.addEventListener('change', () => {
-                filterMols(true);
+                updateMolOptions(true);
             });
 
             if (warehouse.value) {
-                filterMols(false);
+                updateMolOptions(false);
             }
         });
     }
