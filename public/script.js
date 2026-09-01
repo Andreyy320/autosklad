@@ -2044,6 +2044,15 @@ function closeDrawer() {
 }
 
 async function openEntityForm(entity, item = null, parentId = null) {
+    
+    // Принудительно меняем порядок полей для реализации
+    if (entity === 'realizations' && config && config.columns) {
+        config.columns.sort((a, b) => {
+            const order = { 'warehouse_id': 1, 'skald_id': 1, 'mol_id': 2 };
+            return (order[a.field] || 99) - (order[b.field] || 99);
+        });
+    }
+    
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
