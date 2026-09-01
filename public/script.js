@@ -4039,11 +4039,13 @@ async function openRealizationForm(entity, item = null) {
     }
 
  try {
-        if (config && config.columns) {
-            for (const col of config.columns) {
-                if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id'].includes(col.field)) {
-                    continue;
+       if (config && config.columns) {
+        for (const col of config.columns) {
+            try {
+                if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
+                    continue; // Пропускаем те поля, которые рендерим отдельно или управляем ими вручную
                 }
+                
                 html += await renderField(col);
 
                 if (col.field === 'customer_id') {
@@ -4051,10 +4053,23 @@ async function openRealizationForm(entity, item = null) {
                     if (molCol) html += await renderField(molCol);
                     if (carCol) html += await renderField(carCol);
                 }
+            } catch (fieldErr) {
+                console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
             }
-        } else {
-            console.error("❌ config.columns не найден! Проверьте структуру config для realizations.");
         }
+
+        // Принудительно рендерим is_posted в самом конце или в нужном месте, если его не было в колонах
+        const isPostedCol = config.columns.find(c => c.field === 'is_posted');
+        if (isPostedCol) {
+            try {
+                html += await renderField(isPostedCol);
+            } catch (e) {
+                console.error("💥 Ошибка рендеринга is_posted:", e);
+            }
+        }
+    } else {
+        console.error("❌ config.columns не найден!");
+    }
     } catch (renderErr) {
         console.error("💥 ОШИБКА ВНУТРИ ЦИКЛА РЕНДЕРИНГА ПОЛЕЙ:", renderErr);
     }
