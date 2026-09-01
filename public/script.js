@@ -3955,21 +3955,25 @@ async function openRealizationForm(entity, item = null) {
         } else if (col.ref) {
             let refItems = [];
             if (col.ref === 'customer_cars' || col.field === 'car_id') {
-                const targetCustomerId = (item && item.customer_id) ? item.customer_id : null;
+                const targetCustomerId = item ? (item.customer_id || item.customer?.id || item.customer) : null;
+                console.log("🚗 [DEBUG CARS] Рендеринг машин. Найден targetCustomerId:", targetCustomerId, "Полный item:", item);
+                
                 if (targetCustomerId) {
                     try {
-                        const carRes = await fetch(`/api/customer_cars?customer_id=${targetCustomerId}`);
-                        if (carRes.ok) refItems = await carRes.json();
+                        const fetchUrl = `/api/customer_cars?customer_id=${targetCustomerId}`;
+                        console.log("📡 [DEBUG CARS] Отправляем запрос:", fetchUrl);
+                        const carRes = await fetch(fetchUrl);
+                        console.log("📥 [DEBUG CARS] Статус ответа:", carRes.status);
+                        if (carRes.ok) {
+                            refItems = await carRes.json();
+                            console.log("📦 [DEBUG CARS] Полученные машины для покупателя:", refItems);
+                        }
                     } catch (e) {
-                        console.error('❌ Ошибка загрузки машин покупателя:', e);
+                        console.error('❌ [DEBUG CARS] Ошибка загрузки машин покупателя:', e);
                     }
                 } else {
-                    try {
-                        const carRes = await fetch(`/api/customer_cars`);
-                        if (carRes.ok) refItems = await carRes.json();
-                    } catch (e) {
-                        console.error('❌ Ошибка загрузки списка машин:', e);
-                    }
+                    console.log("⚠️ [DEBUG CARS] targetCustomerId не найден или пустой. Список машин оставлен пустым.");
+                    refItems = [];
                 }
             } else {
                 refItems = await fetchReferenceData(col.ref);
@@ -4039,27 +4043,22 @@ async function openRealizationForm(entity, item = null) {
 
     try {
         if (config && config.columns) {
-            // 1. Сначала жестко выводим первые два поля из конфига: № документа и Дата
             const docNumCol = config.columns.find(c => c.field === 'doc_number');
             const docDateCol = config.columns.find(c => c.field === 'doc_date');
 
             if (docNumCol) html += await renderField(docNumCol);
             if (docDateCol) html += await renderField(docDateCol);
 
-            // 2. Затем выводим Продавец (если есть в конфиге)
             const sellerCol = config.columns.find(c => c.field === 'seller_id' || c.field === 'seller' || c.field === 'user_id');
             if (sellerCol) html += await renderField(sellerCol);
 
-            // 3. Затем Покупатель (customer_id)
             const customerCol = config.columns.find(c => c.field === 'customer_id');
             if (customerCol) html += await renderField(customerCol);
 
-            // 4. Затем Гос. номер машины (car_id) строго под покупателем
             const carIdCols = config.columns.filter(c => c.field === 'car_id');
-            const primaryCarCol = carIdCols[0]; // Первое вхождение (Гос. номер)
+            const primaryCarCol = carIdCols[0]; 
             if (primaryCarCol) html += await renderField(primaryCarCol);
 
-            // 5. Отрендерим остальные поля, исключая те, что уже вывели выше
             const skippedFields = ['doc_number', 'doc_date', 'seller_id', 'seller', 'user_id', 'customer_id', 'car_id', 'id'];
             for (const col of config.columns) {
                 if (skippedFields.includes(col.field)) continue;
@@ -4099,14 +4098,22 @@ async function openRealizationForm(entity, item = null) {
         customerSelect.addEventListener('change', async () => {
             const selectedCustomerId = customerSelect.value;
             const currentCarValue = carSelect.value;
+            console.log("🔄 [DEBUG CHANGE] Пользователь изменил покупателя в селекте. Новый ID:", selectedCustomerId);
 
             carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
-            if (!selectedCustomerId) return;
+            if (!selectedCustomerId) {
+                console.log("⚠️ [DEBUG CHANGE] Покупатель сброшен (пусто), машины очищены.");
+                return;
+            }
 
             try {
-                const response = await fetch(`/api/customer_cars?customer_id=${selectedCustomerId}`);
+                const fetchUrl = `/api/customer_cars?customer_id=${selectedCustomerId}`;
+                console.log("📡 [DEBUG CHANGE] Запрос машин для нового покупателя:", fetchUrl);
+                const response = await fetch(fetchUrl);
+                console.log("📥 [DEBUG CHANGE] Статус ответа:", response.status);
                 if (!response.ok) return;
                 const cars = await response.json();
+                console.log("📦 [DEBUG CHANGE] Получен список машин:", cars);
 
                 cars.forEach(car => {
                     const gos = car.gos_number || car.car_number || '';
@@ -4124,7 +4131,7 @@ async function openRealizationForm(entity, item = null) {
                     carSelect.appendChild(option);
                 });
             } catch (err) {
-                console.error('❌ Ошибка при запросе машин покупателя:', err);
+                console.error('❌ [DEBUG CHANGE] Ошибка при запросе машин покупателя:', err);
             }
         });
     }
