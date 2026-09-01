@@ -2091,7 +2091,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
-        if (entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') {
+        if (entity === 'realization_items') {
             item.currency = 'Рубль ПМР';
         }
 
@@ -2105,7 +2105,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             item.autoservice = 'Евроавтотест';
         }
     } else {
-        if ((entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') && !item.currency) {
+        if (entity === 'realization_items' && !item.currency) {
             item.currency = 'Рубль ПМР';
         }
     }
@@ -2130,10 +2130,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="move_id" value="${parentId}">`;
     } else if (entity === 'repair_items' && parentId) {
         html += `<input type="hidden" name="repair_id" value="${parentId}">`;
+    } else if (entity === 'receipt_items' && parentId) {
+        html += `<input type="hidden" name="receipt_id" value="${parentId}">`;
     }
 
     async function renderField(col) {
-        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id') return '';
+        if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'receipt_id') return '';
         if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
@@ -2141,6 +2143,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         if (entity === 'realization_items') {
             const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+            if (!allowedFields.includes(col.field)) {
+                return '';
+            }
+        }
+
+        if (entity === 'receipt_items') {
+            const allowedFields = ['receipt_id', 'zaphasti_id', 'quantity', 'price', 'currency', 'description'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -2182,7 +2191,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        if ((entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') && col.field === 'currency' && !val) {
+        if (entity === 'realization_items' && col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
 
@@ -2468,7 +2477,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
+                                'realization_items', 'realization_works', 'move_items', 'repair_items', 'receipt_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2517,6 +2526,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.move_id = parentId;
         } else if (entity === 'repair_items' && parentId) {
             data.repair_id = parentId;
+        } else if (entity === 'receipt_items' && parentId) {
+            data.receipt_id = parentId;
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
             data.dtp_id = parentId;
         } else if (entity === 'counterparty_contacts' && parentId) {
@@ -2563,7 +2574,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
+                    'realization_items', 'realization_works', 'move_items', 'repair_items', 'receipt_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
