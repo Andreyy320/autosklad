@@ -4071,7 +4071,7 @@ async function openRealizationForm(entity, item = null) {
         });
     }
 
-    // Точная логика фильтрации склада и МОЛ, как вы просили
+    // Скорректированная логика фильтрации МОЛ в зависимости от выбранного склада
     if (formElement) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
@@ -4088,29 +4088,21 @@ async function openRealizationForm(entity, item = null) {
                 const currentMolValue = mol.value;
 
                 try {
-                    const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol'),
-                        fetch('/api/mol_users')
-                    ]);
-
+                    const molRes = await fetch('/api/mol');
                     if (!molRes.ok) return;
                     const mols = await molRes.json();
-                    const users = usersRes.ok ? await usersRes.json() : [];
-
-                    const usersMap = {};
-                    users.forEach(u => {
-                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                    });
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                     let isCurrentStillValid = false;
 
                     mols.forEach(m => {
+                        // Сравниваем ID выбранного склада с warehouse_id у МОЛ
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            // Используем user_fio из вашего примера структуры данных МОЛ
+                            option.textContent = m.user_fio || m.description || `МОЛ #${m.id}`;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
@@ -4234,7 +4226,6 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
-
 
 
 // Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
