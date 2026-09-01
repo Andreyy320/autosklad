@@ -2614,7 +2614,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     });
 }
 
-// Вспомогательная функция вынесена наружу глобально
 async function updateMolsForWarehouse(warehouseSelectId, molSelectId, currentMolValue = '') {
     const warehouse = document.querySelector(warehouseSelectId);
     const mol = document.querySelector(molSelectId);
@@ -2633,6 +2632,10 @@ async function updateMolsForWarehouse(warehouseSelectId, molSelectId, currentMol
         const mols = await molRes.json();
         const users = usersRes.ok ? await usersRes.json() : [];
 
+        // ПОСМОТРИТЕ В КОНСОЛИ БРАУЗЕРА, ЧТО ПРИХОДИТ:
+        console.log('Выбранный склад ID:', selectedWarehouseId);
+        console.log('Список МОЛ с сервера:', mols);
+
         const usersMap = {};
         users.forEach(u => {
             usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
@@ -2641,7 +2644,10 @@ async function updateMolsForWarehouse(warehouseSelectId, molSelectId, currentMol
         mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
         mols.forEach(m => {
-            if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+            // Проверьте, как именно называется поле связи (например: warehouse_id, store_id, id_warehouse и т.д.)
+            const molWarehouseId = m.warehouse_id || m.store_id;
+
+            if (!selectedWarehouseId || String(molWarehouseId) === String(selectedWarehouseId)) {
                 const option = document.createElement('option');
                 option.value = m.id;
                 option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
