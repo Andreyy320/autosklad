@@ -2405,8 +2405,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-        { warehouse: formElement.querySelector('[name="skald_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-        { warehouse: formElement.querySelector('.warehouse-select'), mol: formElement.querySelector('.mol-select') }
+        { warehouse: formElement.querySelector('[name="skald_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
     ];
 
     warehouseMolPairs.forEach(({ warehouse, mol }) => {
@@ -2434,7 +2433,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                 mols.forEach(m => {
-                    if (!selectedWarehouseId || !m.warehouse_id || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                    if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                         const option = document.createElement('option');
                         option.value = m.id;
                         const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
@@ -2457,8 +2456,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         });
 
         if (warehouse.value) {
-            filterMols();
-        } else {
             filterMols();
         }
     });
@@ -2724,7 +2721,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 async function openReceiptForm(entity, item = null) {
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
     // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
