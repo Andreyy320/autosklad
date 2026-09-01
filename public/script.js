@@ -2709,8 +2709,8 @@ async function openReceiptForm(entity, item = null) {
                         usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
                     });
 
-                    // Определяем текущий выбранный склад в форме (поддерживаем разные варианты полей склада)
-                    const currentWarehouseId = item ? (item.warehouse_id || item.warehouse_from_id || item.warehouse_to_id || item.warehouse) : '';
+                    // Определяем склад из переданного item при открытии формы
+                    const currentWarehouseId = item ? (item.warehouse_id || item.warehouse || item.warehouse_from_id || item.warehouse_to_id) : '';
 
                     refItems = mols.map(m => ({
                         id: m.id,
@@ -2718,9 +2718,12 @@ async function openReceiptForm(entity, item = null) {
                         name: m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`
                     }));
 
-                    // Если склад уже выбран, сразу фильтруем список на этапе генерации HTML
+                    // Если склад выбран, сразу фильтруем МОЛ при генерации HTML
                     if (currentWarehouseId) {
                         refItems = refItems.filter(m => String(m.warehouse_id) === String(currentWarehouseId));
+                    } else {
+                        // Если склад не выбран изначально, не показываем ни одного МОЛа или показываем пустой список
+                        refItems = [];
                     }
                 } catch (e) {
                     console.error('Ошибка загрузки МОЛ при генерации формы', e);
@@ -2809,16 +2812,19 @@ async function openReceiptForm(entity, item = null) {
 
     if (formElement) {
         const pairs = [
-            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"], [name="warehouse_from"]'), mol: formElement.querySelector('[name="mol_from_id"], [name="mol_from"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"], [name="warehouse_to"]'), mol: formElement.querySelector('[name="mol_to_id"], [name="mol_to"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"], [name="warehouse"]'), mol: formElement.querySelector('[name="mol_id"], [name="mol"]') }
         ];
 
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols() {
+            async function filterMols(resetValue = false) {
                 const selectedWarehouseId = warehouse.value;
+                if (resetValue) {
+                    mol.value = '';
+                }
                 const currentMolValue = mol.value;
 
                 try {
@@ -2838,8 +2844,12 @@ async function openReceiptForm(entity, item = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    if (!selectedWarehouseId) {
+                        return; // Если склад не выбран, оставляем список МОЛ пустым
+                    }
+
                     mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        if (String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
                             option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
@@ -2856,8 +2866,7 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
+                filterMols(true); // При смене склада сбрасываем выбранный МОЛ
             });
         });
     }
