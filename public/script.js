@@ -2042,7 +2042,6 @@ function closeDrawer() {
     }
 
 }
-
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2132,6 +2131,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="customer_id" value="${parentId}">`;
     } else if (entity === 'car_details' && parentId) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
+    } else if (entity === 'moves') {
+        // Оставляем пустым для шапки перемещений, поля выводятся через columns
     } else if (entity === 'move_items' && parentId) {
         html += `<input type="hidden" name="move_id" value="${parentId}">`;
     } else if (entity === 'repair_items' && parentId) {
@@ -2269,6 +2270,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         const art = refItem.article ? `[${refItem.article}] ` : '';
                         const nm = refItem.name || refItem.title || '';
                         displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                    } else if (referenceName === 'mol') {
+                        displayName = refItem.description || refItem.name || `МОЛ #${refItem.id}`;
                     } else {
                         displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                     }
@@ -2278,7 +2281,16 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'car_id') ? 'id="car-select"' : (col.field === 'customer_id' ? 'id="customer-select"' : (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : (col.field === 'vidy_rabot_id' ? 'id="vidy-rabot-select"' : '')));
+            // Динамические ID для связок (включая складские warehouse / mol)
+            let extraAttributes = '';
+            if (col.field === 'car_id') extraAttributes = 'id="car-select"';
+            else if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
+            else if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
+            else if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
+            else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') extraAttributes = `id="${col.field}" class="warehouse-select"`;
+            else if (col.field === 'warehouse_to_id') extraAttributes = 'id="warehouse_to_id" class="warehouse-select"';
+            else if (col.field === 'mol_from_id' || col.field === 'mol_to_id' || col.field === 'mol_id') extraAttributes = `id="${col.field}" class="mol-select"`;
+
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -2366,6 +2378,66 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
+
+    // Логика фильтрации МОЛ по складам (для перемещений и т.п.)
+    const warehouseMolPairs = [
+        { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+        { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+        { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+        { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+    ];
+
+    warehouseMolPairs.forEach(({ warehouse, mol }) => {
+        if (!warehouse || !mol) return;
+
+        async function filterMols() {
+            const selectedWarehouseId = warehouse.value;
+            const currentMolValue = mol.value;
+
+            try {
+                const [molRes, usersRes] = await Promise.all([
+                    fetch('/api/mol'),
+                    fetch('/api/mol_users')
+                ]);
+
+                if (!molRes.ok) return;
+                const mols = await molRes.json();
+                const users = usersRes.ok ? await usersRes.json() : [];
+
+                const usersMap = {};
+                users.forEach(u => {
+                    usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                });
+
+                mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                mols.forEach(m => {
+                    if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        const option = document.createElement('option');
+                        option.value = m.id;
+                        const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                        option.textContent = userName;
+
+                        if (String(m.id) === String(currentMolValue)) {
+                            option.selected = true;
+                        }
+                        mol.appendChild(option);
+                    }
+                });
+            } catch (err) {
+                console.error('Ошибка при фильтрации МОЛ:', err);
+            }
+        }
+
+        warehouse.addEventListener('change', () => {
+            mol.value = '';
+            filterMols();
+        });
+
+        if (warehouse.value) {
+            filterMols();
+        }
+    });
 
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
