@@ -2701,45 +2701,19 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.field === 'mol_id') {
-            // Обрабатываем mol_id отдельно: если склад уже выбран (при редактировании), сразу подгружаем нужные МОЛ
-            let optionsHtml = `<option value="">-- Сначала выберите склад --</option>`;
-            const initialWarehouseId = item ? (item.warehouse_id || '') : '';
-
-            if (initialWarehouseId) {
-                try {
-                    const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol'),
-                        fetch('/api/mol_users')
-                    ]);
-                    if (molRes.ok) {
-                        const mols = await molRes.json();
-                        const users = usersRes.ok ? await usersRes.json() : [];
-                        const usersMap = {};
-                        users.forEach(u => {
-                            usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                        });
-
-                        optionsHtml = `<option value="">-- Не выбрано --</option>`;
-                        mols.forEach(m => {
-                            if (String(m.warehouse_id) === String(initialWarehouseId)) {
-                                const selected = (val !== '' && val !== null && String(m.id) === String(val)) ? 'selected' : '';
-                                const displayName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-                                optionsHtml += `<option value="${m.id}" ${selected}>${displayName}</option>`;
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error('Ошибка предзагрузки МОЛ:', e);
-                }
-            }
-
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}"><option value="">-- Сначала выберите склад --</option></select>`;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
-                const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
+                let displayName;
+                if (col.field === 'warehouse_id') {
+                    displayName = refItem.name || refItem.title || refItem.warehouse_name || (`Склад #${refItem.id}`);
+                } else {
+                    displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
+                }
+
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
@@ -2811,9 +2785,8 @@ async function openReceiptForm(entity, item = null) {
         const mol = formElement.querySelector('[name="mol_id"]');
 
         if (warehouse && mol) {
-            async function filterMols(resetMol = false) {
+            async function filterMols(targetMolValue = '') {
                 const selectedWarehouseId = warehouse.value;
-                const currentMolValue = resetMol ? '' : (val || mol.value);
 
                 if (!selectedWarehouseId) {
                     mol.innerHTML = '<option value="">-- Сначала выберите склад --</option>';
@@ -2833,7 +2806,7 @@ async function openReceiptForm(entity, item = null) {
 
                     const usersMap = {};
                     users.forEach(u => {
-                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                        usersMap[u.id] = u.name || u.user_fio || u.login || u.description || `Пользователь #${u.id}`;
                     });
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
@@ -2843,9 +2816,9 @@ async function openReceiptForm(entity, item = null) {
                         if (String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = usersMap[m.user_id] || m.name || m.description || `МОЛ #${m.id}`;
 
-                            if (String(m.id) === String(currentMolValue)) {
+                            if (String(m.id) === String(targetMolValue)) {
                                 option.selected = true;
                                 foundSelected = true;
                             }
@@ -2862,8 +2835,13 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
-                filterMols(true); // При смене склада сбрасываем выбранного МОЛ
+                filterMols(''); // При смене склада сбрасываем выбранного МОЛ
             });
+
+            // Если склад уже выбран при открытии (редактирование), подгружаем МОЛ и подставляем сохраненное значение
+            if (warehouse.value) {
+                filterMols(item ? item.mol_id : '');
+            }
         }
     }
 
