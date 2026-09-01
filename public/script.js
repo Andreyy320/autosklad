@@ -6454,7 +6454,11 @@ tableBody.addEventListener('dblclick', (e) => {
     const item = currentItems.find(i => i.id == id);
     if (item) {
         selectedItem = item;
-        openEntityForm(currentEntity, item);
+        if (currentEntity === 'realizations') {
+            openRealizationForm(currentEntity, item);
+        } else {
+            openEntityForm(currentEntity, item);
+        }
     }
 });
 let currentCustomerSubTab = 'customer_contacts';
