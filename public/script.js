@@ -2701,8 +2701,39 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.field === 'mol_id') {
-            // Для поля мол_id делаем пустой select по умолчанию, заполним динамически ниже через фильтрацию по складу
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}"><option value="">-- Сначала выберите склад --</option></select>`;
+            // Обрабатываем mol_id отдельно: если склад уже выбран (при редактировании), сразу подгружаем нужные МОЛ
+            let optionsHtml = `<option value="">-- Сначала выберите склад --</option>`;
+            const initialWarehouseId = item ? (item.warehouse_id || '') : '';
+
+            if (initialWarehouseId) {
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+                    if (molRes.ok) {
+                        const mols = await molRes.json();
+                        const users = usersRes.ok ? await usersRes.json() : [];
+                        const usersMap = {};
+                        users.forEach(u => {
+                            usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                        });
+
+                        optionsHtml = `<option value="">-- Не выбрано --</option>`;
+                        mols.forEach(m => {
+                            if (String(m.warehouse_id) === String(initialWarehouseId)) {
+                                const selected = (val !== '' && val !== null && String(m.id) === String(val)) ? 'selected' : '';
+                                const displayName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                                optionsHtml += `<option value="${m.id}" ${selected}>${displayName}</option>`;
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Ошибка предзагрузки МОЛ:', e);
+                }
+            }
+
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -2809,12 +2840,9 @@ async function openReceiptForm(entity, item = null) {
 
                     let foundSelected = false;
                     mols.forEach(m => {
-                        // Фильтруем записи из таблицы mol по выбранному складу
                         if (String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
-                            // В качестве значения option.value отправляем id пользователя (или m.id, в зависимости от того, что требует колонка mol_id в receipts). 
-                            // Судя по твоему старому коду, сюда подставлялся m.id из таблицы mol:
-                            option.value = m.id; 
+                            option.value = m.id;
                             option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
 
                             if (String(m.id) === String(currentMolValue)) {
@@ -2836,13 +2864,6 @@ async function openReceiptForm(entity, item = null) {
             warehouse.addEventListener('change', () => {
                 filterMols(true); // При смене склада сбрасываем выбранного МОЛ
             });
-
-            // Инициализация при открытии формы (если склад уже выбран или редактируется существующий элемент)
-            // Сохраняем значение из текущего item, если оно есть
-            const val = item ? item.mol_id : '';
-            if (warehouse.value) {
-                filterMols(false);
-            }
         }
     }
 
