@@ -2091,7 +2091,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
-        if (entity === 'realization_items') {
+        if (entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') {
             item.currency = 'Рубль ПМР';
         }
 
@@ -2105,7 +2105,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             item.autoservice = 'Евроавтотест';
         }
     } else {
-        if (entity === 'realization_items' && !item.currency) {
+        if ((entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') && !item.currency) {
             item.currency = 'Рубль ПМР';
         }
     }
@@ -2182,7 +2182,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        if (entity === 'realization_items' && col.field === 'currency' && !val) {
+        if ((entity === 'realization_items' || entity === 'receipts' || entity === 'receipt_items') && col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
 
