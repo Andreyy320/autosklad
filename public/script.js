@@ -2335,8 +2335,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             html += await renderField(col);
 
             if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
-                html += await renderField(warehouseCol);
-                html += await renderField(molCol);
+                html += await renderField(warehouseCol); // Сначала склад
+                html += await renderField(molCol);      // Затем МОЛ
             }
         }
     } else if (entity === 'repairs' && carCol && warehouseCol && molCol) {
