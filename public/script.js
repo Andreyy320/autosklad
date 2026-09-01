@@ -2055,9 +2055,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         let nextId = 1;
         let prefix = 'Р-';
 
-        if (entity === 'receipts') {
-            prefix = 'ПР-';
-        } else if (entity === 'tehosmotr') {
+        if (entity === 'tehosmotr') {
             prefix = 'ТО-';
         } else if (entity === 'autostrahovanie') {
             prefix = 'АС-';
@@ -2296,20 +2294,16 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     const carCol = config.columns.find(c => c.field === 'car_id');
 
-    // СПЕЦИАЛЬНЫЙ ПОРЯДОК ДЛЯ АВТОСТРАХОВАНИЯ: Выбор авто сразу после даты окончания/следующей даты страхования
     if (entity === 'autostrahovanie' && carCol) {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue;
             html += await renderField(col);
             
-            // Проверяем поле даты окончания или следующей даты (обычно называется end_date, next_date, date_to и т.д.)
-            // Вставьте нужное поле сюда, если оно называется иначе (например, end_date)
             if (col.field === 'end_date' || col.field === 'next_date' || col.field.includes('end') || col.field.includes('next')) {
                 html += await renderField(carCol);
             }
         }
     } else {
-        // Стандартный рендеринг для остальных сущностей
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
 
@@ -2470,7 +2464,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'receipt_items', 'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
+                                'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2511,9 +2505,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        if (entity === 'receipt_items' && parentId) {
-            data.receipt_id = parentId;
-        } else if (entity === 'realization_items' && parentId) {
+        if (entity === 'realization_items' && parentId) {
             data.realization_id = parentId;
         } else if (entity === 'realization_works' && parentId) {
             data.realization_id = parentId;
@@ -2567,7 +2559,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'receipt_items', 'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
+                    'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2628,7 +2620,7 @@ async function openReceiptForm(entity, item = null) {
 
     if (!item || !item.id) {
         let nextId = 1;
-        const prefix = 'ПР-';
+        const prefix = 'Р-';
 
         try {
             const response = await fetch('/api/receipts');
@@ -2790,13 +2782,9 @@ async function openReceiptForm(entity, item = null) {
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols(isUserChange = false) {
+            async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
-
-                if (isUserChange) {
-                    mol.value = '';
-                }
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -2821,7 +2809,7 @@ async function openReceiptForm(entity, item = null) {
                             option.value = m.id;
                             option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
 
-                            if (!isUserChange && String(m.id) === String(currentMolValue)) {
+                            if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
                             }
                             mol.appendChild(option);
@@ -2833,11 +2821,12 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
-                filterMols(true);
+                mol.value = '';
+                filterMols();
             });
 
             if (warehouse.value) {
-                filterMols(false);
+                filterMols();
             }
         });
     }
