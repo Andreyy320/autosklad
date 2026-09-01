@@ -2615,7 +2615,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
 }
 
 async function openReceiptForm(entity, item = null) {
+    console.log('🟢 [openReceiptForm] Вызвана функция. Сущность:', entity, 'Элемент:', item);
+    
     const config = getConfig('receipts');
+    console.log('📋 [openReceiptForm] Конфигурация receipts:', config);
+
     const drawer = getOrCreateDrawer();
     
     const now = new Date();
@@ -2631,18 +2635,20 @@ async function openReceiptForm(entity, item = null) {
         const prefix = 'Р-';
 
         try {
+            console.log('🔄 [openReceiptForm] Запрос автонумерации: GET /api/receipts');
             const response = await fetch('/api/receipts');
             if (response.ok) {
                 const records = await response.json();
+                console.log('📥 [openReceiptForm] Получены записи для нумерации, всего:', records.length);
                 if (records.length > 0) {
                     const maxId = Math.max(...records.map(r => r.id || 0));
                     nextId = maxId + 1;
                 }
             } else {
-                console.warn(`Сервер вернул не OK при автонумерации приходов: ${response.status}`);
+                console.warn(`⚠️ [openReceiptForm] Сервер вернул не OK при автонумерации приходов: ${response.status}`);
             }
         } catch (e) {
-            console.error('Не удалось получить список приходов для автонумерации', e);
+            console.error('❌ [openReceiptForm] Не удалось получить список приходов для автонумерации', e);
         }
 
         item = { 
@@ -2650,6 +2656,7 @@ async function openReceiptForm(entity, item = null) {
             is_posted: false,
             fact_date: currentDateTime
         };
+        console.log('✨ [openReceiptForm] Сгенерирован новый объект item:', item);
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
@@ -2691,7 +2698,9 @@ async function openReceiptForm(entity, item = null) {
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
         if (col.field === 'is_posted') {
+            console.log('🔄 [openReceiptForm] Загрузка справочника статусов (statuses)...');
             const statusItems = await fetchReferenceData('statuses');
+            console.log('📥 [openReceiptForm] Получены статусы:', statusItems);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             statusItems.forEach(st => {
@@ -2701,7 +2710,9 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
+            console.log(`🔄 [openReceiptForm] Загрузка справочника для поля [${col.field}] по ссылке: ${col.ref}`);
             const refItems = await fetchReferenceData(col.ref);
+            console.log(`📥 [openReceiptForm] Элементы для справочника ${col.ref}:`, refItems);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
@@ -2772,6 +2783,7 @@ async function openReceiptForm(entity, item = null) {
     
     if (isPostedSelect && factDateInput) {
         isPostedSelect.addEventListener('change', () => {
+            console.log('🖱️ [Event:isPostedSelect] Изменен статус проведенности, новое значение:', isPostedSelect.value);
             if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
                 factDateInput.value = currentDateTime;
             } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
@@ -2787,22 +2799,38 @@ async function openReceiptForm(entity, item = null) {
             { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
         ];
 
-        pairs.forEach(({ warehouse, mol }) => {
-            if (!warehouse || !mol) return;
+        pairs.forEach(({ warehouse, mol }, index) => {
+            if (!warehouse || !mol) {
+                console.log(`ℹ️ [filterMols pair #${index}] Пара склад/МОЛ не найдена в форме (пропуск)`);
+                return;
+            }
+
+            console.log(`🔗 [filterMols pair #${index}] Обнаружена пара: склад [${warehouse.name}] -> МОЛ [${mol.name}]`);
 
             async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
+                console.log(`🔍 [filterMols pair #${index}] Запуск фильтрации. Выбранный склад ID: "${selectedWarehouseId}", текущий МОЛ ID: "${currentMolValue}"`);
 
                 try {
+                    console.log(`🔄 [filterMols pair #${index}] Запрос данных: GET /api/mol и GET /api/mol_users`);
                     const [molRes, usersRes] = await Promise.all([
                         fetch('/api/mol'),
                         fetch('/api/mol_users')
                     ]);
 
-                    if (!molRes.ok) return;
+                    console.log(`📥 [filterMols pair #${index}] Ответ /api/mol: status = ${molRes.status}`);
+                    console.log(`📥 [filterMols pair #${index}] Ответ /api/mol_users: status = ${usersRes.status}`);
+
+                    if (!molRes.ok) {
+                        console.error(`❌ [filterMols pair #${index}] Ошибка запроса /api/mol: ${molRes.status}`);
+                        return;
+                    }
                     const mols = await molRes.json();
                     const users = usersRes.ok ? await usersRes.json() : [];
+
+                    console.log(`📦 [filterMols pair #${index}] Загружено МОЛ: ${mols.length} шт.`, mols);
+                    console.log(`📦 [filterMols pair #${index}] Загружено пользователей: ${users.length} шт.`, users);
 
                     const usersMap = {};
                     users.forEach(u => {
@@ -2811,8 +2839,10 @@ async function openReceiptForm(entity, item = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    let addedCount = 0;
                     mols.forEach(m => {
                         const molWarehouseId = m.warehouse_id || m.warehouse_from_id || m.warehouse_to_id || m.skladi_id || (m.warehouse_obj && m.warehouse_obj.id);
+                        console.log(`   🔸 Проверка МОЛ id=${m.id}: склад МОЛ = "${molWarehouseId}", выбранный склад = "${selectedWarehouseId}"`);
 
                         if (!selectedWarehouseId || String(molWarehouseId) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
@@ -2821,21 +2851,26 @@ async function openReceiptForm(entity, item = null) {
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
+                                console.log(`      ✔️ МОЛ id=${m.id} совпал с текущим выбранным значением и помечен как selected`);
                             }
                             mol.appendChild(option);
+                            addedCount++;
                         }
                     });
+                    console.log(`✅ [filterMols pair #${index}] Фильтрация завершена. Добавлено элементов в select МОЛ: ${addedCount}`);
                 } catch (err) {
-                    console.error('Ошибка при фильтрации МОЛ:', err);
+                    console.error(`❌ [filterMols pair #${index}] Ошибка при загрузке или фильтрации МОЛ:`, err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
+                console.log(`🖱️ [Event:warehouse change] Склад [${warehouse.name}] изменен на ID: "${warehouse.value}"`);
                 mol.value = '';
                 filterMols();
             });
 
             if (warehouse.value) {
+                console.log(`⚡ [Init] Склад [${warehouse.name}] уже имеет значение "${warehouse.value}", запускаем первичную фильтрацию МОЛ...`);
                 filterMols();
             }
         });
@@ -2844,12 +2879,14 @@ async function openReceiptForm(entity, item = null) {
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
+            console.log('🖱️ [Event:deleteBtn click] Нажата кнопка удаления прихода id:', item.id);
             showConfirmModal(
                 'Подтверждение удаления',
                 'Вы уверены, что хотите удалить этот приход?',
                 async () => {
                     const currentUserId = localStorage.getItem('currentUserId') || '';
                     try {
+                        console.log(`🔄 [Delete] Отправка DELETE /api/receipts/${item.id}`);
                         const response = await fetch(`/api/receipts/${item.id}`, {
                             method: 'DELETE',
                             headers: {
@@ -2858,15 +2895,18 @@ async function openReceiptForm(entity, item = null) {
                             }
                         });
 
+                        console.log(`📥 [Delete] Ответ сервера: status = ${response.status}`);
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Приход успешно удален', 'success');
                             refreshData();
                         } else {
                             const errData = await response.json().catch(() => ({}));
+                            console.error('❌ [Delete] Ошибка удаления:', errData);
                             showAppNotification(errData.error || 'Ошибка при удалении прихода', 'error');
                         }
                     } catch (err) {
+                        console.error('❌ [Delete] Ошибка соединения с сервером:', err);
                         showAppNotification('Ошибка соединения с сервером', 'error');
                     }
                 }
@@ -2878,8 +2918,12 @@ async function openReceiptForm(entity, item = null) {
 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
+        console.log('🖱️ [Event:form submit] Сработало отправка формы прихода');
         
-        if (isSubmitting) return;
+        if (isSubmitting) {
+            console.warn('⚠️ [Submit] Отправка уже выполняется, пропуск повторного клика');
+            return;
+        }
         isSubmitting = true;
 
         const saveButton = formElement.querySelector('#save-btn');
@@ -2887,6 +2931,7 @@ async function openReceiptForm(entity, item = null) {
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+        console.log('📦 [Submit] Собранные данные формы:', data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -2898,6 +2943,7 @@ async function openReceiptForm(entity, item = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
+            console.log(`🔄 [Submit] Отправка ${method} запроса на ${url}`, data);
             const response = await fetch(url, {
                 method: method,
                 headers: { 
@@ -2907,17 +2953,20 @@ async function openReceiptForm(entity, item = null) {
                 body: JSON.stringify(data)
             });
 
+            console.log(`📥 [Submit] Ответ сервера: status = ${response.status}`);
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
+                console.error('❌ [Submit] Ошибка сохранения на сервере:', errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении прихода', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
+            console.error('❌ [Submit] Ошибка соединения с сервером:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
