@@ -553,7 +553,9 @@ receipts: {
             </td>
         `;
     }
-},receipt_items: {
+},
+
+receipt_items: {
     title: 'Спецификация документа',
     columns: [
         { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', width: '250px', insert: true, table: false },
@@ -563,7 +565,7 @@ receipts: {
         { field: 'quantity', label: 'Кол-во', width: '80px' },
         { field: 'unit', label: 'Ед.изм', width: '70px', insert: false },
         { field: 'price', label: 'Цена', width: '90px' },
-        { field: 'currency', label: 'Валюта', width: '100px' },
+        { field: 'currency', label: 'Валюта', width: '100px', default: 'Рубль ПМР' },
         { field: 'total_rub', label: 'Сумма', width: '90px', insert: false },
         { field: 'description', label: 'Описание' }
     ],
@@ -3965,37 +3967,6 @@ function openAccidentImageForm(entity, item = null, parentId = null) {
 }
 
 
-async function sendLog(entity, action, recordId, detailsData) {
-    try {
-        let detailsStr = '';
-        
-        if (typeof detailsData === 'object' && detailsData !== null) {
-            if (detailsData.info) {
-                detailsStr = detailsData.info;
-            } else {
-                detailsStr = Object.entries(detailsData).map(([k, v]) => `${k}: ${v}`).join(', ');
-            }
-        } else {
-            detailsStr = String(detailsData || '');
-        }
-
-        const userId = localStorage.getItem('currentUserId') || null;
-
-        await fetch('/api/logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: userId,
-                entity: entity,
-                action: action,
-                recordId: recordId,
-                details: detailsStr
-            })
-        });
-    } catch (err) {
-        console.error('Не удалось отправить лог:', err);
-    }
-}
 
 
 function deleteSelectedEntity() {
@@ -4084,14 +4055,6 @@ function openActiveEntityForm(action, item = null) {
             }
             break;
 
-        case 'Реализация':
-        case 'realizations':
-            if (typeof openRealizationForm === 'function') {
-                openRealizationForm(item);
-            } else {
-                openEntityForm(entity, item);
-            }
-            break;
 
         default:
             // Для остальных справочников используем стандартную универсальную форму
