@@ -3827,20 +3827,34 @@ async function openRepairForm(item = null, parentId = null) {
     });
 }
 async function openRealizationForm(entity, item = null) {
-  
-  console.log("🚀 openRealizationForm вызвана для сущности:", entity, "item:", item);
+    console.log("🚀 openRealizationForm вызвана. Аргументы:", {
+        entityType: typeof entity,
+        entityValue: entity,
+        itemType: typeof item,
+        itemValue: item,
+        stack: new Error().stack // Покажет, откуда именно пришел вызов
+    });
+
     // Поддержка вызова, если первым аргументом передали сам объект (item)
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
+        console.log("⚠️ Первый аргумент оказался объектом item, переназначили:", item);
     } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
         if (entity && typeof entity === 'object') {
             item = entity;
+            console.log("⚠️ item был пустым, взяли entity как item:", item);
         }
     }
 
     const config = getConfig('realizations');
+    console.log("📋 Конфиг для 'realizations':", config);
+    if (!config) {
+        console.error("❌ ОШИБКА: getConfig('realizations') вернул undefined или null! Проверьте имя сущности.");
+    }
+
     const drawer = getOrCreateDrawer();
-    
+    console.log("🗄️ Элемент drawer получен:", drawer);
+
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -3850,22 +3864,25 @@ async function openRealizationForm(entity, item = null) {
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
     if (!item || !item.id) {
+        console.log("➕ Режим создания новой записи (нет item или item.id)");
         let nextId = 1;
         const prefix = 'РЛ-';
 
         try {
             const response = await fetch('/api/realizations');
+            console.log("📡 Ответ запроса автонумерации /api/realizations:", response.status);
             if (response.ok) {
                 const records = await response.json();
+                console.log("📦 Полученные записи для автонумерации:", records);
                 if (records.length > 0) {
                     const maxId = Math.max(...records.map(r => r.id || 0));
                     nextId = maxId + 1;
                 }
             } else {
-                console.warn(`Сервер вернул не OK при автонумерации реализаций: ${response.status}`);
+                console.warn(`⚠️ Сервер вернул не OK при автонумерации реализаций: ${response.status}`);
             }
         } catch (e) {
-            console.error('Не удалось получить список реализаций для автонумерации', e);
+            console.error('❌ Не удалось получить список реализаций для автонумерации:', e);
         }
 
         item = { 
@@ -3873,9 +3890,13 @@ async function openRealizationForm(entity, item = null) {
             is_posted: false,
             fact_date: currentDateTime
         };
+        console.log("✨ Сформирован новый item по умолчанию:", item);
+    } else {
+        console.log("✏️ Режим редактирования существующей записи, ID:", item.id);
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
+    console.log("🔒 Флаг isPosted:", isPosted);
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -3885,9 +3906,9 @@ async function openRealizationForm(entity, item = null) {
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="realizations" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    const carCol = config.columns.find(c => c.field === 'car_id');
-    const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
-    const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
+    const carCol = config?.columns?.find(c => c.field === 'car_id');
+    const molCol = config?.columns?.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
+    const warehouseCol = config?.columns?.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
     async function renderField(col) {
         if (!col || col.field === 'id' || col.insert === false) return '';
@@ -3936,14 +3957,14 @@ async function openRealizationForm(entity, item = null) {
                         const carRes = await fetch(`/api/customer_cars?customer_id=${targetCustomerId}`);
                         if (carRes.ok) refItems = await carRes.json();
                     } catch (e) {
-                        console.error('Ошибка загрузки машин покупателя:', e);
+                        console.error('❌ Ошибка загрузки машин покупателя:', e);
                     }
                 } else {
                     try {
                         const carRes = await fetch(`/api/customer_cars`);
                         if (carRes.ok) refItems = await carRes.json();
                     } catch (e) {
-                        console.error('Ошибка загрузки списка машин:', e);
+                        console.error('❌ Ошибка загрузки списка машин:', e);
                     }
                 }
             } else {
@@ -4010,19 +4031,21 @@ async function openRealizationForm(entity, item = null) {
         `;
     }
 
-    // Исключаем их из основного цикла, чтобы выстроить в нужном порядке принудительно
-    for (const col of config.columns) {
-        if (col.field === 'car_id' || col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id' || col.field === 'mol_from_id') {
-            continue;
-        }
-        html += await renderField(col);
+    if (config && config.columns) {
+        for (const col of config.columns) {
+            if (col.field === 'car_id' || col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id' || col.field === 'mol_from_id') {
+                continue;
+            }
+            html += await renderField(col);
 
-        // Строгий порядок: Покупатель -> Склад -> МОЛ -> Гос. номер
-        if (col.field === 'customer_id') {
-            if (warehouseCol) html += await renderField(warehouseCol);
-            if (molCol) html += await renderField(molCol);
-            if (carCol) html += await renderField(carCol);
+            if (col.field === 'customer_id') {
+                if (warehouseCol) html += await renderField(warehouseCol);
+                if (molCol) html += await renderField(molCol);
+                if (carCol) html += await renderField(carCol);
+            }
         }
+    } else {
+        console.error("❌ config.columns не найден! Проверьте структуру config для realizations.");
     }
 
     html += `
@@ -4073,7 +4096,7 @@ async function openRealizationForm(entity, item = null) {
                     carSelect.appendChild(option);
                 });
             } catch (err) {
-                console.error('Ошибка при запросе машин покупателя:', err);
+                console.error('❌ Ошибка при запросе машин покупателя:', err);
             }
         });
     }
@@ -4130,7 +4153,7 @@ async function openRealizationForm(entity, item = null) {
                         mol.value = '';
                     }
                 } catch (err) {
-                    console.error('Ошибка при фильтрации МОЛ:', err);
+                    console.error('❌ Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
@@ -4194,6 +4217,7 @@ async function openRealizationForm(entity, item = null) {
 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
+        console.log("📤 Отправка формы 'realizations' перехвачена");
         
         if (isSubmitting) return;
         isSubmitting = true;
@@ -4203,6 +4227,7 @@ async function openRealizationForm(entity, item = null) {
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+        console.log("📦 Данные формы перед обработкой:", data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -4214,6 +4239,8 @@ async function openRealizationForm(entity, item = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
+            console.log(`🚀 Отправка запроса [${method}] на ${url} с данными:`, data);
+
             const response = await fetch(url, {
                 method: method,
                 headers: { 
@@ -4223,17 +4250,21 @@ async function openRealizationForm(entity, item = null) {
                 body: JSON.stringify(data)
             });
 
+            console.log("📥 Ответ сервера на сохранение:", response.status);
+
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Реализация успешно сохранена', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
+                console.error("❌ Ошибка от сервера при сохранении:", errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении реализации', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
+            console.error("❌ Ошибка соединения при сохранении:", err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
