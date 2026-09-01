@@ -4314,7 +4314,7 @@ async function openRealizationForm(entity, item = null) {
 
             if (response.ok) {
                 closeDrawer();
-                showAppInstanceNotification('Реализация успешно сохранена', 'success');
+               showAppNotification('Реализация успешно сохранена', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
