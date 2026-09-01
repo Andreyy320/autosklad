@@ -2332,15 +2332,24 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
+    // Собираем поля один раз в правильном порядке, исключая дубликаты car_id и авто-вставок
+    let renderedFieldsHtml = '';
     const carCol = config.columns.find(c => c.field === 'car_id');
+    const processedFields = new Set();
 
     if (entity === 'autostrahovanie' && carCol) {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue;
-            html += await renderField(col);
+            if (!processedFields.has(col.field)) {
+                renderedFieldsHtml += await renderField(col);
+                processedFields.add(col.field);
+            }
             
             if (col.field === 'end_date' || col.field === 'next_date' || col.field.includes('end') || col.field.includes('next')) {
-                html += await renderField(carCol);
+                if (!processedFields.has(carCol.field)) {
+                    renderedFieldsHtml += await renderField(carCol);
+                    processedFields.add(carCol.field);
+                }
             }
         }
     } else {
@@ -2348,22 +2357,36 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (col.field === 'car_id') continue; 
 
             if (col.field === 'autoservice' && carCol) {
-                html += await renderField(carCol);
+                if (!processedFields.has(carCol.field)) {
+                    renderedFieldsHtml += await renderField(carCol);
+                    processedFields.add(carCol.field);
+                }
             }
 
-            html += await renderField(col);
+            if (!processedFields.has(col.field)) {
+                renderedFieldsHtml += await renderField(col);
+                processedFields.add(col.field);
+            }
 
             if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie') {
-                html += await renderField(carCol);
+                if (!processedFields.has(carCol.field)) {
+                    renderedFieldsHtml += await renderField(carCol);
+                    processedFields.add(carCol.field);
+                }
             }
         }
 
         if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
             if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
-                html += await renderField(carCol);
+                if (!processedFields.has(carCol.field)) {
+                    renderedFieldsHtml += await renderField(carCol);
+                    processedFields.add(carCol.field);
+                }
             }
         }
     }
+
+    html += renderedFieldsHtml;
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
