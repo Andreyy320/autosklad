@@ -3893,6 +3893,7 @@ async function openRealizationForm(entity, item = null) {
 
         item = { 
             doc_number: `${prefix}${nextId}`,
+            doc_date: currentDateTime,
             is_posted: false,
             fact_date: currentDateTime
         };
@@ -3911,11 +3912,6 @@ async function openRealizationForm(entity, item = null) {
         </div>
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="realizations" data-item-id="${item && item.id ? item.id : ''}">
     `;
-
-    const carCol = config?.columns?.find(c => c.field === 'car_id');
-    const molCol = config?.columns?.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
-    const warehouseCol = config?.columns?.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
-    const sellerCol = config?.columns?.find(c => c.field === 'seller_id' || c.field === 'seller' || c.field === 'user_id'); // На случай если продавец называется иначе, но проверим стандартные поля
 
     async function renderField(col) {
         console.log("⚙️ Рендерим поле:", col?.field);
@@ -3983,7 +3979,9 @@ async function openRealizationForm(entity, item = null) {
             
             refItems.forEach(refItem => {
                 let displayName = '';
-                if (col.ref === 'cars' || col.ref === 'customer_cars' || col.field === 'car_id') {
+                if (col.formatRef && typeof col.formatRef === 'function') {
+                    displayName = col.formatRef(refItem);
+                } else if (col.ref === 'cars' || col.ref === 'customer_cars' || col.field === 'car_id') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     const brd = refItem.brand || refItem.car_brand || '';
@@ -4039,55 +4037,37 @@ async function openRealizationForm(entity, item = null) {
         `;
     }
 
-   try {
-       if (config && config.columns) {
-        for (const col of config.columns) {
-            try {
-                if (['doc_number', 'fact_date', 'customer_id', 'car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
-                    continue; 
+    try {
+        if (config && config.columns) {
+            // 1. Сначала жестко выводим первые два поля из конфига: № документа и Дата
+            const docNumCol = config.columns.find(c => c.field === 'doc_number');
+            const docDateCol = config.columns.find(c => c.field === 'doc_date');
+
+            if (docNumCol) html += await renderField(docNumCol);
+            if (docDateCol) html += await renderField(docDateCol);
+
+            // 2. Затем выводим Продавец (если есть в конфиге)
+            const sellerCol = config.columns.find(c => c.field === 'seller_id' || c.field === 'seller' || c.field === 'user_id');
+            if (sellerCol) html += await renderField(sellerCol);
+
+            // 3. Затем Гос. номер машины под продавцом
+            const carIdCols = config.columns.filter(c => c.field === 'car_id');
+            const primaryCarCol = carIdCols[0]; // Первое вхождение (Гос. номер)
+            if (primaryCarCol) html += await renderField(primaryCarCol);
+
+            // 4. Отрендерим остальные поля, исключая те, что уже вывели выше
+            const skippedFields = ['doc_number', 'doc_date', 'seller_id', 'seller', 'user_id', 'car_id', 'id'];
+            for (const col of config.columns) {
+                if (skippedFields.includes(col.field)) continue;
+                try {
+                    html += await renderField(col);
+                } catch (fieldErr) {
+                    console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
                 }
-                
-                html += await renderField(col);
-            } catch (fieldErr) {
-                console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
             }
+        } else {
+            console.error("❌ config.columns не найден!");
         }
-
-        // Порядок: 1) № документа, 2) Дата, затем остальные поля конфига, затем кастомный порядок для ключевых:
-        const docNumCol = config.columns.find(c => c.field === 'doc_number');
-        const factDateCol = config.columns.find(c => c.field === 'fact_date');
-
-        // Рендерим первые два строго первыми: № документа и Дата
-        if (docNumCol) html += await renderField(docNumCol);
-        if (factDateCol) html += await renderField(factDateCol);
-
-        // Склад -> МОЛ -> Покупатель -> Продавец -> Гос. номер машины
-        if (warehouseCol) html += await renderField(warehouseCol);
-        if (molCol) html += await renderField(molCol);
-        
-        const customerCol = config.columns.find(c => c.field === 'customer_id');
-        if (customerCol) html += await renderField(customerCol);
-
-        // Ищем поле продавца в конфиге (если есть seller_id, seller или user_id)
-        const explicitSellerCol = config.columns.find(c => c.field === 'seller_id' || c.field === 'seller');
-        if (explicitSellerCol) {
-            html += await renderField(explicitSellerCol);
-        }
-        
-        // Гос. номер машины строго под продавцом
-        if (carCol) html += await renderField(carCol);
-
-        const isPostedCol = config.columns.find(c => c.field === 'is_posted');
-        if (isPostedCol) {
-            try {
-                html += await renderField(isPostedCol);
-            } catch (e) {
-                console.error("💥 Ошибка рендеринга is_posted:", e);
-            }
-        }
-    } else {
-        console.error("❌ config.columns не найден!");
-    }
     } catch (renderErr) {
         console.error("💥 ОШИБКА ВНУТРИ ЦИКЛА РЕНДЕРИНГА ПОЛЕЙ:", renderErr);
     }
