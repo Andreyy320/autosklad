@@ -2325,7 +2325,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-    const carCol = config.columns.find(c => c.field === 'car_id');
+   const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
@@ -2334,7 +2334,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id') continue;
             html += await renderField(col);
 
-            if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
+            if (col.field === 'customer_id') {
                 html += await renderField(warehouseCol); // Сначала склад
                 html += await renderField(molCol);      // Затем МОЛ
             }
