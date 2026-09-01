@@ -4159,17 +4159,28 @@ async function openRealizationForm(entity, item = null) {
                         usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
                     });
 
+                    // Сохраняем текущее выбранное значение до перерисовки опций (если оно не передано через измененный склад)
+                    const activeMolVal = isUserChange ? '' : currentMolValue;
+
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                     let isCurrentStillValid = false;
 
                     mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        // ПРОВЕРКА ПРИВЯЗКИ МОЛ К СКЛАДУ:
+                        // Поддерживаем как поле warehouse_id в самом МОЛ, так и связь через массив/таблицу warehouse_mols, если она есть
+                        const mWarehouseId = m.warehouse_id || m.skald_id;
+                        const matchesWarehouse = !selectedWarehouseId || 
+                            (mWarehouseId && String(mWarehouseId) === String(selectedWarehouseId)) ||
+                            (Array.isArray(m.warehouses) && m.warehouses.some(wId => String(wId) === String(selectedWarehouseId))) ||
+                            (Array.isArray(m.skalds) && m.skalds.some(sId => String(sId) === String(selectedWarehouseId)));
+
+                        if (matchesWarehouse) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = m.user_fio || usersMap[m.user_id] || m.name || m.description || `МОЛ #${m.id}`;
 
-                            if (String(m.id) === String(currentMolValue)) {
+                            if (String(m.id) === String(activeMolVal)) {
                                 option.selected = true;
                                 isCurrentStillValid = true;
                             }
@@ -4179,6 +4190,8 @@ async function openRealizationForm(entity, item = null) {
 
                     if (isUserChange && !isCurrentStillValid) {
                         mol.value = '';
+                    } else if (!isUserChange && isCurrentStillValid) {
+                        mol.value = activeMolVal;
                     }
                 } catch (err) {
                     console.error('❌ Ошибка при фильтрации МОЛ:', err);
