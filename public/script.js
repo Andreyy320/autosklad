@@ -2426,7 +2426,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         async function filterMols() {
             const selectedWarehouseId = warehouse.value;
-            const currentMolValue = mol.value;
+            const currentMolValue = mol.getAttribute('data-selected') || mol.value;
 
             try {
                 const [molRes, usersRes] = await Promise.all([
@@ -2446,6 +2446,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                 mols.forEach(m => {
+                    // Приводим к строке для надежного сравнения ID складов
                     if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                         const option = document.createElement('option');
                         option.value = m.id;
@@ -2468,9 +2469,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
             filterMols();
         });
 
-        if (warehouse.value) {
-            filterMols();
+        // Сохраняем текущее выбранное значение МОЛ в атрибут, чтобы оно не терялось при перерисовке
+        if (mol.value) {
+            mol.setAttribute('data-selected', mol.value);
         }
+
+        // Запускаем фильтрацию сразу при открытии формы
+        filterMols();
     });
 
     if (zaphastiSelect) {
