@@ -3875,7 +3875,16 @@ async function openRealizationForm(entity, item = null) {
                 const records = await response.json();
                 console.log("📦 Полученные записи для автонумерации:", records);
                 if (records.length > 0) {
-                    const maxId = Math.max(...records.map(r => r.id || 0));
+                    // Исправление: извлекаем числовой суффикс из doc_number (например, 'РЛ-11' -> 11),
+                    // чтобы автонумерация не падала, если id записей не соответствуют номерам документов.
+                    const numericIds = records.map(r => {
+                        if (r.doc_number && typeof r.doc_number === 'string') {
+                            const match = r.doc_number.match(/\d+$/);
+                            if (match) return parseInt(match[0], 10);
+                        }
+                        return r.id || 0;
+                    });
+                    const maxId = Math.max(...numericIds, 0);
                     nextId = maxId + 1;
                 }
             } else {
@@ -4246,7 +4255,7 @@ async function openRealizationForm(entity, item = null) {
                 headers: { 
                     'Content-Type': 'application/json',
                     'x-user-id': currentUserId
-                },
+anah                         },
                 body: JSON.stringify(data)
             });
 
@@ -4254,7 +4263,7 @@ async function openRealizationForm(entity, item = null) {
 
             if (response.ok) {
                 closeDrawer();
-                showAppNotification('Реализация успешно сохранена', 'success');
+                showAppInstanceNotification('Реализация успешно сохранена', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -4266,7 +4275,7 @@ async function openRealizationForm(entity, item = null) {
         } catch (err) {
             console.error("❌ Ошибка соединения при сохранении:", err);
             showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
+            isSubmitting, isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
     });
