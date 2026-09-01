@@ -2694,17 +2694,36 @@ async function openReceiptForm(entity, item = null) {
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             let refItems = [];
+            
             if (col.ref === 'mol') {
                 try {
-                    const molRes = await fetch('/api/mol');
-                    if (molRes.ok) refItems = await molRes.json();
-                    
-                    const currentWarehouseVal = item ? (item.warehouse_id || item.warehouse) : '';
-                    if (currentWarehouseVal) {
-                        refItems = refItems.filter(m => String(m.warehouse_id) === String(currentWarehouseVal));
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+                    const mols = molRes.ok ? await molRes.json() : [];
+                    const users = usersRes.ok ? await usersRes.json() : [];
+
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
+
+                    // Определяем текущий выбранный склад в форме (поддерживаем разные варианты полей склада)
+                    const currentWarehouseId = item ? (item.warehouse_id || item.warehouse_from_id || item.warehouse_to_id || item.warehouse) : '';
+
+                    refItems = mols.map(m => ({
+                        id: m.id,
+                        warehouse_id: m.warehouse_id,
+                        name: m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`
+                    }));
+
+                    // Если склад уже выбран, сразу фильтруем список на этапе генерации HTML
+                    if (currentWarehouseId) {
+                        refItems = refItems.filter(m => String(m.warehouse_id) === String(currentWarehouseId));
                     }
                 } catch (e) {
-                    console.error('Ошибка загрузки МОЛ для селекта', e);
+                    console.error('Ошибка загрузки МОЛ при генерации формы', e);
                 }
             } else {
                 refItems = await fetchReferenceData(col.ref);
@@ -2840,10 +2859,6 @@ async function openReceiptForm(entity, item = null) {
                 mol.value = '';
                 filterMols();
             });
-
-            if (warehouse.value) {
-                filterMols();
-            }
         });
     }
 
