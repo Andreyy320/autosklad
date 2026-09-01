@@ -3917,6 +3917,7 @@ async function openRealizationForm(entity, item = null) {
     const warehouseCol = config?.columns?.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
     async function renderField(col) {
+        console.log("⚙️ Рендерим поле:", col?.field);
         if (!col || col.field === 'id' || col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
 
