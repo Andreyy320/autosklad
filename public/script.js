@@ -4182,16 +4182,7 @@ function openActiveEntityForm(action, item = null) {
                 openEntityForm(entity, item);
             }
             break;
-
-        case 'Ремонт':
-        case 'repairs':
-            if (typeof openRepairForm === 'function') {
-                openRepairForm(item);
-            } else {
-                openEntityForm(entity, item);
-            }
-            break;
-
+            
         default:
             // Для остальных справочников используем стандартную универсальную форму
             if (typeof openEntityForm === 'function') {
