@@ -2630,6 +2630,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
 }
 
 async function openReceiptForm(entity, item = null) {
+    // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
+    // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
+    if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
+        item = entity;
+    } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
+        // Если item передан как строка/пустой, но entity оказался объектом
+        if (entity && typeof entity === 'object') {
+            item = entity;
+        }
+    }
+
     const config = getConfig('receipts');
     const drawer = getOrCreateDrawer();
     
@@ -2937,7 +2948,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 
 async function openMoveForm(entity, item = null, parentId = null) {
     console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
