@@ -2326,9 +2326,20 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
-    const skladCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id' || c.field === 'warehouse_from_id');
+    const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
-    if (entity === 'repairs' && carCol && molCol) {
+    if (entity === 'repairs' && carCol && warehouseCol && molCol) {
+        for (const col of config.columns) {
+            if (col.field === 'car_id' || col.field === 'mol_id' || col.field === 'mol_from_id' || col.field === 'warehouse_id' || col.field === 'skald_id') continue;
+            html += await renderField(col);
+
+            if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
+                html += await renderField(carCol);
+                html += await renderField(warehouseCol);
+                html += await renderField(molCol);
+            }
+        }
+    } else if (entity === 'repairs' && carCol && molCol) {
         for (const col of config.columns) {
             if (col.field === 'car_id' || col.field === 'mol_id' || col.field === 'mol_from_id') continue;
             html += await renderField(col);
@@ -2350,8 +2361,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     } else {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
-            // Пропускаем вывод складских полей в общем цикле, чтобы вывести их в нужном порядке ниже, если они есть
-            if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'warehouse_from_id' || col.field === 'mol_id' || col.field === 'mol_from_id') continue;
 
             if (col.field === 'autoservice' && carCol) {
                 html += await renderField(carCol);
@@ -2362,14 +2371,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie' && entity !== 'repairs') {
                 html += await renderField(carCol);
             }
-        }
-
-        // Рендерим склад и сразу под ним МОЛ (склад и мол рядом друг с другом: сначала склад, под ним МОЛ)
-        if (skladCol) {
-            html += await renderField(skladCol);
-        }
-        if (molCol) {
-            html += await renderField(molCol);
         }
 
         if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
@@ -2404,7 +2405,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-        { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        { warehouse: formElement.querySelector('[name="skald_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
     ];
 
     warehouseMolPairs.forEach(({ warehouse, mol }) => {
