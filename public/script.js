@@ -2431,7 +2431,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     warehouseMolPairs.forEach(({ warehouse, mol }) => {
         if (!warehouse || !mol) return;
 
-        async function filterMols() {
+        async function filterMols(isUserChange = false) {
             const selectedWarehouseId = warehouse.value;
             const currentMolValue = mol.value;
 
@@ -2452,6 +2452,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                let isCurrentStillValid = false;
+
                 mols.forEach(m => {
                     if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                         const option = document.createElement('option');
@@ -2461,22 +2463,26 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                         if (String(m.id) === String(currentMolValue)) {
                             option.selected = true;
+                            isCurrentStillValid = true;
                         }
                         mol.appendChild(option);
                     }
                 });
+
+                if (isUserChange && !isCurrentStillValid) {
+                    mol.value = '';
+                }
             } catch (err) {
                 console.error('Ошибка при фильтрации МОЛ:', err);
             }
         }
 
         warehouse.addEventListener('change', () => {
-            mol.value = '';
-            filterMols();
+            filterMols(true);
         });
 
         if (warehouse.value) {
-            filterMols();
+            filterMols(false);
         }
     });
 
@@ -2716,18 +2722,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (!errorContainer) {
                     errorContainer = document.createElement('div');
                     errorContainer.id = 'form-error-banner';
-                    errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
+                    errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;';
                     formElement.prepend(errorContainer);
                 }
-                errorContainer.innerHTML = `<strong>Ошибка:</strong> ${errorMsg}`;
-                
+                errorContainer.textContent = errorMsg;
+
+                isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
-                isSubmitting = false;
             }
         } catch (err) {
             showAppNotification('Ошибка соединения с сервером', 'error');
-            if (saveButton) saveButton.disabled = false;
             isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
         }
     });
 }
@@ -3824,6 +3830,8 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
+
+
 async function openRealizationForm(entity, item = null) {
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
@@ -4013,7 +4021,6 @@ async function openRealizationForm(entity, item = null) {
 
         if (col.field === 'customer_id') {
             if (carCol) html += await renderField(carCol);
-            // Сначала выводим склад, а затем МОЛ под ним
             if (warehouseCol) html += await renderField(warehouseCol);
             if (molCol) html += await renderField(molCol);
         }
@@ -4072,7 +4079,6 @@ async function openRealizationForm(entity, item = null) {
         });
     }
 
-    // Точная логика фильтрации склада и МОЛ
     if (formElement) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
