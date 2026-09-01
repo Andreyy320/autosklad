@@ -2450,11 +2450,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        warehouse.addEventListener('change', () => {
-            mol.value = '';
-            filterMols();
-        });
-
+        // Привязываем событие смены склада и сразу запускаем фильтрацию
+        warehouse.addEventListener('change', filterMols);
+        
+        // Если склад уже выбран (например, при редактировании документа), отфильтруем список сразу
         if (warehouse.value) {
             filterMols();
         }
@@ -2714,13 +2713,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
                 formElement.prepend(errorContainer);
             }
-            errorContainer.innerHTML = `<strong>Ошибка соединения:</strong> ${err.message}`;
+            errorContainer.innerHTML = `<strong>Сетевая ошибка:</strong> ${err.message}`;
 
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
     });
 }
+
 async function openReceiptForm(entity, item = null) {
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
     // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
