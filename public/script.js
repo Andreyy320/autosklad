@@ -2816,8 +2816,9 @@ async function openReceiptForm(entity, item = null) {
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols() {
+            async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
+                // Сохраняем текущее выбранное значение МОЛ, если оно было
                 const currentMolValue = mol.value;
 
                 try {
@@ -2837,6 +2838,8 @@ async function openReceiptForm(entity, item = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    let isCurrentStillValid = false;
+
                     mols.forEach(m => {
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
@@ -2845,22 +2848,29 @@ async function openReceiptForm(entity, item = null) {
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
+                                isCurrentStillValid = true;
                             }
                             mol.appendChild(option);
                         }
                     });
+
+                    // Если пользователь сам сменил склад и старый МОЛ не принадлежит этому складу, сбрасываем его
+                    if (isUserChange && !isCurrentStillValid) {
+                        mol.value = '';
+                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
+                // Передаем true, чтобы при ручном изменении склада старый неподходящий МОЛ сбрасывался
+                filterMols(true);
             });
 
+            // При инициализации формы просто подтягиваем список под выбранный склад без сброса
             if (warehouse.value) {
-                filterMols();
+                filterMols(false);
             }
         });
     }
