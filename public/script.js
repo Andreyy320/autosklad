@@ -2654,23 +2654,15 @@ async function openReceiptForm(entity, item = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
-    // Заранее подгружаем справочники для мгновенной корректной отрисовки
+    // Заранее забираем актуальный список МОЛ с учетом JOIN из вашего эндпоинта /api/mol
     let allMols = [];
-    let molUsersMap = {};
     try {
-        const [molRes, usersRes] = await Promise.all([
-            fetch('/api/mol'),
-            fetch('/api/mol_users')
-        ]);
-        if (molRes.ok) allMols = await molRes.json();
-        if (usersRes.ok) {
-            const users = await usersRes.json();
-            users.forEach(u => {
-                molUsersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-            });
+        const molRes = await fetch('/api/mol');
+        if (molRes.ok) {
+            allMols = await molRes.json();
         }
     } catch (e) {
-        console.error('Ошибка предзагрузки справочников МОЛ:', e);
+        console.error('Ошибка предварительной загрузки МОЛ:', e);
     }
 
     let html = `
@@ -2720,21 +2712,19 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
-            const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
-            // Специальная логика для первичной генерации mol_id с учетом уже выбранного склада
             if (col.field === 'mol_id') {
                 const currentWarehouseId = item ? (item.warehouse_id || item.warehouse) : '';
-                refItems.forEach(refItem => {
-                    // Если склад выбран, показываем только привязанные к нему МОЛ. Если склад не выбран — пустой список или все (по вашему выбору, здесь фильтруем строго по складу)
-                    if (!currentWarehouseId || String(refItem.warehouse_id) === String(currentWarehouseId)) {
-                        const displayName = molUsersMap[refItem.user_id] || refItem.name || refItem.description || (`МОЛ #${refItem.id}`);
-                        const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                        optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                allMols.forEach(m => {
+                    if (!currentWarehouseId || String(m.warehouse_id) === String(currentWarehouseId)) {
+                        const displayName = m.user_fio || m.name || m.description || (`МОЛ #${m.id}`);
+                        const selected = (val !== '' && val !== null && String(m.id) === String(val)) ? 'selected' : '';
+                        optionsHtml += `<option value="${m.id}" ${selected}>${displayName}</option>`;
                     }
                 });
             } else {
+                const refItems = await fetchReferenceData(col.ref);
                 refItems.forEach(refItem => {
                     const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
                     const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
@@ -2804,7 +2794,6 @@ async function openReceiptForm(entity, item = null) {
         });
     }
 
-    // Жесткая привязка динамического выбора МОЛ по выбранному складу
     if (formElement) {
         const warehouse = formElement.querySelector('[name="warehouse_id"]');
         const mol = formElement.querySelector('[name="mol_id"]');
@@ -2815,7 +2804,6 @@ async function openReceiptForm(entity, item = null) {
                 const currentMolValue = mol.value;
 
                 try {
-                    // Используем уже полученные или запрашиваем актуальные
                     let mols = allMols;
                     if (mols.length === 0) {
                         const molRes = await fetch('/api/mol');
@@ -2825,11 +2813,10 @@ async function openReceiptForm(entity, item = null) {
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                     mols.forEach(m => {
-                        // Показываем МОЛ строго для выбранного склада
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            option.textContent = molUsersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = m.user_fio || m.name || m.description || `МОЛ #${m.id}`;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
@@ -2838,14 +2825,18 @@ async function openReceiptForm(entity, item = null) {
                         }
                     });
                 } catch (err) {
-                    console.error('Ошибка при динамической фильтрации МОЛ:', err);
+                    console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = ''; // Сбрасываем выбранный МОЛ при смене склада
-                filterMols();   // Перестраиваем список
+                mol.value = '';
+                filterMols();
             });
+
+            if (warehouse.value) {
+                filterMols();
+            }
         }
     }
 
