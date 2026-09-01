@@ -2812,11 +2812,8 @@ async function openReceiptForm(entity, item = null) {
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                     mols.forEach(m => {
-                        // Проверяем разные возможные варианты названия поля связи со складом
-                        const molWarehouseId = m.warehouse_id || m.warehouse || (m.warehouse_obj && m.warehouse_obj.id);
+                        const molWarehouseId = m.warehouse_id || m.warehouse_from_id || m.warehouse_to_id || m.skladi_id || (m.warehouse_obj && m.warehouse_obj.id);
 
-                        // Если склад выбран, показываем только те МОЛ, у которых совпадает warehouse_id. 
-                        // Если склад не выбран, можно либо ничего не показывать, либо показывать все.
                         if (!selectedWarehouseId || String(molWarehouseId) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
