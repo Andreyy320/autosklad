@@ -2614,55 +2614,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     });
 }
 
-async function updateMolsForWarehouse(warehouseSelectId, molSelectId, currentMolValue = '') {
-    const warehouse = document.querySelector(warehouseSelectId);
-    const mol = document.querySelector(molSelectId);
-    
-    if (!warehouse || !mol) return;
-
-    const selectedWarehouseId = warehouse.value;
-
-    try {
-        const [molRes, usersRes] = await Promise.all([
-            fetch('/api/mol'),
-            fetch('/api/mol_users')
-        ]);
-
-        if (!molRes.ok) return;
-        const mols = await molRes.json();
-        const users = usersRes.ok ? await usersRes.json() : [];
-
-        // ПОСМОТРИТЕ В КОНСОЛИ БРАУЗЕРА, ЧТО ПРИХОДИТ:
-        console.log('Выбранный склад ID:', selectedWarehouseId);
-        console.log('Список МОЛ с сервера:', mols);
-
-        const usersMap = {};
-        users.forEach(u => {
-            usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-        });
-
-        mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
-        mols.forEach(m => {
-            // Проверьте, как именно называется поле связи (например: warehouse_id, store_id, id_warehouse и т.д.)
-            const molWarehouseId = m.warehouse_id || m.store_id;
-
-            if (!selectedWarehouseId || String(molWarehouseId) === String(selectedWarehouseId)) {
-                const option = document.createElement('option');
-                option.value = m.id;
-                option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-
-                if (String(m.id) === String(currentMolValue)) {
-                    option.selected = true;
-                }
-                mol.appendChild(option);
-            }
-        });
-    } catch (err) {
-        console.error('Ошибка при загрузке и фильтрации МОЛ:', err);
-    }
-}
-
 async function openReceiptForm(entity, item = null) {
     const config = getConfig('receipts');
     const drawer = getOrCreateDrawer();
@@ -2749,19 +2700,25 @@ async function openReceiptForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-        } else if (col.ref && col.field !== 'mol_id') {
+        } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             refItems.forEach(refItem => {
-                const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || (`Запись #${refItem.id}`);
+                let displayName = '';
+                if (col.ref === 'cars') {
+                    const gos = refItem.gos_number || refItem.car_number || '';
+                    const mdl = refItem.model || refItem.car_model || '';
+                    displayName = (gos && mdl) ? `${gos} (${mdl})` : (gos || mdl || `Запись #${refItem.id}`);
+                } else {
+                    displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                }
+
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-        } else if (col.field === 'mol_id') {
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}"><option value="">-- Сначала выберите склад --</option></select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -2824,20 +2781,62 @@ async function openReceiptForm(entity, item = null) {
     }
 
     if (formElement) {
-        const warehouse = formElement.querySelector('[name="warehouse_id"]');
-        const mol = formElement.querySelector('[name="mol_id"]');
+        const pairs = [
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        ];
 
-        if (warehouse && mol) {
+        pairs.forEach(({ warehouse, mol }) => {
+            if (!warehouse || !mol) return;
+
+            async function filterMols() {
+                const selectedWarehouseId = warehouse.value;
+                const currentMolValue = mol.value;
+
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+
+                    if (!molRes.ok) return;
+                    const mols = await molRes.json();
+                    const users = usersRes.ok ? await usersRes.json() : [];
+
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
+
+                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                    mols.forEach(m => {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+
+                            if (String(m.id) === String(currentMolValue)) {
+                                option.selected = true;
+                            }
+                            mol.appendChild(option);
+                        }
+                    });
+                } catch (err) {
+                    console.error('Ошибка при фильтрации МОЛ:', err);
+                }
+            }
+
             warehouse.addEventListener('change', () => {
                 mol.value = '';
-                updateMolsForWarehouse('#entity-form [name="warehouse_id"]', '#entity-form [name="mol_id"]', '');
+                filterMols();
             });
 
             if (warehouse.value) {
-                // Если склад уже заполнен (при редактировании), подгружаем нужный МОЛ
-                updateMolsForWarehouse('#entity-form [name="warehouse_id"]', '#entity-form [name="mol_id"]', item ? item.mol_id : '');
+                filterMols();
             }
-        }
+        });
     }
 
     const deleteBtn = drawer.querySelector('#delete-btn');
@@ -2923,6 +2922,7 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
+
 
 async function openMoveForm(entity, item = null, parentId = null) {
     console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
