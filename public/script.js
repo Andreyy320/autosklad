@@ -3544,6 +3544,11 @@ async function openRepairForm(item = null, parentId = null) {
                     const art = refItem.article ? `[${refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                } else if (referenceName === 'customer_cars' || referenceName === 'cars') {
+                    const gos = refItem.gos_number || refItem.car_number || '';
+                    const mdl = refItem.model || refItem.car_model || '';
+                    const brd = refItem.brand || refItem.car_brand || '';
+                    displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
                 } else {
                     displayName = refItem.name || refItem.title || (`Запись #${refItem.id}`);
                 }
@@ -3552,7 +3557,6 @@ async function openRepairForm(item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            // Исправление: используем именно zaphast_id для выпадающего списка
             const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
             const fieldNameForSelect = (col.field === 'zaphasti_id') ? 'zaphast_id' : col.field;
             inputHtml = `<select name="${fieldNameForSelect}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
@@ -3570,7 +3574,17 @@ async function openRepairForm(item = null, parentId = null) {
         `;
     }
 
-    for (const col of config.columns) {
+    // Переставляем поля местами: находим поле автомобиля (car_id) и МОЛ, чтобы выстроить нужном порядке
+    const columns = [...config.columns];
+    const carColIndex = columns.findIndex(c => c.field === 'car_id');
+    const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
+
+    if (carColIndex !== -1 && molColIndex !== -1 && carColIndex > molColIndex) {
+        const [carCol] = columns.splice(carColIndex, 1);
+        columns.splice(molColIndex, 0, carCol);
+    }
+
+    for (const col of columns) {
         html += await renderField(col);
     }
 
@@ -3717,13 +3731,11 @@ async function openRepairForm(item = null, parentId = null) {
             data.repair_id = parentId;
         }
 
-        // Принудительное выравнивание ключей под требования базы данных (zaphast_id)
         if (data.zaphasti_id !== undefined && data.zaphast_id === undefined) {
             data.zaphast_id = data.zaphasti_id;
             delete data.zaphasti_id;
         }
 
-        // --- ЛОГИРОВАНИЕ ДАННЫХ ПЕРЕД ОТПРАВКОЙ НА СЕРВЕР ---
         console.group('[Form Submit] Отправка данных на сервер');
         console.log('Entity:', entity);
         console.log('Parent ID (argument):', parentId);
@@ -3734,7 +3746,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
         console.log('Итоговый объект data для JSON.stringify:', data);
         console.groupEnd();
-        // ----------------------------------------------------
 
         try {
             const isEdit = item && item.id;
@@ -4166,12 +4177,20 @@ function openActiveEntityForm(action, item = null) {
         case 'Перемещение':
         case 'moves':
             if (typeof openMovementForm === 'function') {
-                openMovementForm(item);
+                openMoveForm(item);
             } else {
                 openEntityForm(entity, item);
             }
             break;
 
+        case 'Ремонт':
+        case 'repairs':
+            if (typeof openRepairForm === 'function') {
+                openRepairForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
 
         default:
             // Для остальных справочников используем стандартную универсальную форму
@@ -4183,7 +4202,6 @@ function openActiveEntityForm(action, item = null) {
             break;
     }
 }
-
 
 
 
