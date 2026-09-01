@@ -3832,10 +3832,9 @@ async function openRealizationForm(entity, item = null) {
         entityValue: entity,
         itemType: typeof item,
         itemValue: item,
-        stack: new Error().stack // Покажет, откуда именно пришел вызов
+        stack: new Error().stack
     });
 
-    // Поддержка вызова, если первым аргументом передали сам объект (item)
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
         console.log("⚠️ Первый аргумент оказался объектом item, переназначили:", item);
@@ -3875,8 +3874,6 @@ async function openRealizationForm(entity, item = null) {
                 const records = await response.json();
                 console.log("📦 Полученные записи для автонумерации:", records);
                 if (records.length > 0) {
-                    // Исправление: извлекаем числовой суффикс из doc_number (например, 'РЛ-11' -> 11),
-                    // чтобы автонумерация не падала, если id записей не соответствуют номерам документов.
                     const numericIds = records.map(r => {
                         if (r.doc_number && typeof r.doc_number === 'string') {
                             const match = r.doc_number.match(/\d+$/);
@@ -4255,7 +4252,7 @@ async function openRealizationForm(entity, item = null) {
                 headers: { 
                     'Content-Type': 'application/json',
                     'x-user-id': currentUserId
-anah                         },
+                },
                 body: JSON.stringify(data)
             });
 
@@ -4275,7 +4272,7 @@ anah                         },
         } catch (err) {
             console.error("❌ Ошибка соединения при сохранении:", err);
             showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting, isSubmitting = false;
+            isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
     });
