@@ -2045,6 +2045,14 @@ function closeDrawer() {
 
 
 async function openEntityForm(entity, item = null, parentId = null) {
+    if (entity === 'realizations' || entity === 'Реализация') {
+        if (typeof openRealizationForm === 'function') {
+            return openRealizationForm(item);
+        } else {
+            console.error('Функция openRealizationForm не найдена');
+        }
+    }
+
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -2711,15 +2719,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
                     formElement.prepend(errorContainer);
                 }
-                errorContainer.innerHTML = `<strong>Ошибка (${response.status}):</strong> ${errorMsg}`;
-
-                isSubmitting = false;
+                errorContainer.innerHTML = `<strong>Ошибка:</strong> ${errorMsg}`;
+                
                 if (saveButton) saveButton.disabled = false;
+                isSubmitting = false;
             }
         } catch (err) {
             showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
+            isSubmitting = false;
         }
     });
 }
@@ -3817,6 +3825,407 @@ async function openRepairForm(item = null, parentId = null) {
     });
 }
 
+async function openRealizationForm(entity, item = null) {
+    if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
+        item = entity;
+    } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
+        if (entity && typeof entity === 'object') {
+            item = entity;
+        }
+    }
+
+    const config = getConfig('realizations');
+    const drawer = getOrCreateDrawer();
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    if (!item || !item.id) {
+        let nextId = 1;
+        const prefix = 'РЛ-';
+
+        try {
+            const response = await fetch('/api/realizations');
+            if (response.ok) {
+                const records = await response.json();
+                if (records.length > 0) {
+                    const maxId = Math.max(...records.map(r => r.id || 0));
+                    nextId = maxId + 1;
+                }
+            } else {
+                console.warn(`Сервер вернул не OK при автонумерации реализаций: ${response.status}`);
+            }
+        } catch (e) {
+            console.error('Не удалось получить список реализаций для автонумерации', e);
+        }
+
+        item = { 
+            doc_number: `${prefix}${nextId}`,
+            is_posted: false,
+            fact_date: currentDateTime
+        };
+    }
+
+    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать реализацию' : 'Добавить: Реализация'}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="realizations" data-item-id="${item && item.id ? item.id : ''}">
+    `;
+
+    const carCol = config.columns.find(c => c.field === 'car_id');
+    const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
+    const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
+
+    async function renderField(col) {
+        if (!col || col.field === 'id' || col.insert === false) return '';
+        if ((col.update === false || col.edit === false) && item && item.id) return '';
+
+        let val = '';
+        if (item) {
+            const possibleKeys = [col.field, col.field.replace('_id', ''), col.field + '_id', col.ref];
+            for (const k of possibleKeys) {
+                if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
+                    val = item[k];
+                    break;
+                }
+            }
+            if (val && typeof val === 'object' && val.id !== undefined) {
+                val = val.id;
+            }
+        }
+
+        let inputHtml = '';
+        let fieldReadonly = col.readonly;
+        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+            fieldReadonly = true;
+        }
+
+        const controlStyle = fieldReadonly 
+            ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
+            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+        if (col.field === 'is_posted') {
+            const statusItems = await fetchReferenceData('statuses');
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            
+            statusItems.forEach(st => {
+                const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
+                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+            });
+
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.ref) {
+            let refItems = [];
+            if (col.ref === 'customer_cars' || col.field === 'car_id') {
+                const targetCustomerId = (item && item.customer_id) ? item.customer_id : null;
+                if (targetCustomerId) {
+                    try {
+                        const carRes = await fetch(`/api/customer_cars?customer_id=${targetCustomerId}`);
+                        if (carRes.ok) refItems = await carRes.json();
+                    } catch (e) {
+                        console.error('Ошибка загрузки машин покупателя:', e);
+                    }
+                } else {
+                    try {
+                        const carRes = await fetch(`/api/customer_cars`);
+                        if (carRes.ok) refItems = await carRes.json();
+                    } catch (e) {
+                        console.error('Ошибка загрузки списка машин:', e);
+                    }
+                }
+            } else {
+                refItems = await fetchReferenceData(col.ref);
+            }
+
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            
+            refItems.forEach(refItem => {
+                let displayName = '';
+                if (col.ref === 'cars' || col.ref === 'customer_cars' || col.field === 'car_id') {
+                    const gos = refItem.gos_number || refItem.car_number || '';
+                    const mdl = refItem.model || refItem.car_model || '';
+                    const brd = refItem.brand || refItem.car_brand || '';
+                    if (brd || mdl || gos) {
+                        displayName = `${brd} ${mdl} (${gos})`.trim();
+                    } else {
+                        displayName = `Авто #${refItem.id}`;
+                    }
+                } else {
+                    displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                }
+
+                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+            });
+
+            let extraAttributes = '';
+            if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
+            else if (col.field === 'car_id') extraAttributes = 'id="car-select"';
+            else if (col.field === 'warehouse_id' || col.field === 'skald_id') extraAttributes = 'id="warehouse_id" class="warehouse-select"';
+            else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = 'id="mol_id" class="mol-select"';
+
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            let formattedVal = '';
+            if (col.field === 'fact_date' && !val && isPosted) {
+                val = currentDateTime;
+            }
+
+            if (val) {
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const minutes = String(d.getMinutes()).padStart(2, '0');
+                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        } else if (col.field === 'description') {
+            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else {
+            inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        }
+
+        return `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${col.label}:
+                ${inputHtml}
+            </label>
+        `;
+    }
+
+    for (const col of config.columns) {
+        if (col.field === 'car_id' || col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id' || col.field === 'mol_from_id') {
+            continue;
+        }
+        html += await renderField(col);
+
+        if (col.field === 'customer_id') {
+            if (carCol) html += await renderField(carCol);
+            if (warehouseCol) html += await renderField(warehouseCol);
+            if (molCol) html += await renderField(molCol);
+        }
+    }
+
+    html += `
+                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                </div>
+            </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    let rawFormElement = drawer.querySelector('#entity-form');
+    const formElement = rawFormElement.cloneNode(true);
+    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    const customerSelect = formElement.querySelector('#customer-select');
+    const carSelect = formElement.querySelector('#car-select');
+    const warehouseSelect = formElement.querySelector('.warehouse-select');
+    const molSelect = formElement.querySelector('.mol-select');
+
+    if (customerSelect && carSelect) {
+        customerSelect.addEventListener('change', async () => {
+            const selectedCustomerId = customerSelect.value;
+            const currentCarValue = carSelect.value;
+
+            carSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
+            if (!selectedCustomerId) return;
+
+            try {
+                const response = await fetch(`/api/customer_cars?customer_id=${selectedCustomerId}`);
+                if (!response.ok) return;
+                const cars = await response.json();
+
+                cars.forEach(car => {
+                    const gos = car.gos_number || car.car_number || '';
+                    const mdl = car.model || car.car_model || '';
+                    const brd = car.brand || car.car_brand || '';
+                    let displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
+
+                    const option = document.createElement('option');
+                    option.value = car.id;
+                    option.textContent = displayName;
+
+                    if (String(car.id) === String(currentCarValue)) {
+                        option.selected = true;
+                    }
+                    carSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Ошибка при запросе машин покупателя:', err);
+            }
+        });
+    }
+
+    if (warehouseSelect && molSelect) {
+        async function filterMols(isUserChange = false) {
+            const selectedWarehouseId = warehouseSelect.value;
+            const currentMolValue = molSelect.value;
+
+            try {
+                const [molRes, usersRes] = await Promise.all([
+                    fetch('/api/mol'),
+                    fetch('/api/mol_users')
+                ]);
+
+                if (!molRes.ok) return;
+                const mols = await molRes.json();
+                const users = usersRes.ok ? await usersRes.json() : [];
+
+                const usersMap = {};
+                users.forEach(u => {
+                    usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                });
+
+                molSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
+                let isCurrentStillValid = false;
+
+                mols.forEach(m => {
+                    if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        const option = document.createElement('option');
+                        option.value = m.id;
+                        option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+
+                        if (String(m.id) === String(currentMolValue)) {
+                            option.selected = true;
+                            isCurrentStillValid = true;
+                        }
+                        molSelect.appendChild(option);
+                    }
+                });
+
+                if (isUserChange && !isCurrentStillValid) {
+                    molSelect.value = '';
+                }
+            } catch (err) {
+                console.error('Ошибка при фильтрации МОЛ:', err);
+            }
+        }
+
+        warehouseSelect.addEventListener('change', () => {
+            filterMols(true);
+        });
+
+        if (warehouseSelect.value) {
+            filterMols(false);
+        }
+    }
+
+    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
+    const factDateInput = formElement.querySelector('[name="fact_date"]');
+    
+    if (isPostedSelect && factDateInput) {
+        isPostedSelect.addEventListener('change', () => {
+            if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
+                factDateInput.value = currentDateTime;
+            } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
+                factDateInput.value = '';
+            }
+        });
+    }
+
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить эту реализацию?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
+                    try {
+                        const response = await fetch(`/api/realizations/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
+
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Реализация успешно удалена', 'success');
+                            refreshData();
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении реализации', 'error');
+                        }
+                    } catch (err) {
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                }
+            );
+        });
+    }
+
+    let isSubmitting = false;
+
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        const saveButton = formElement.querySelector('#save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/realizations/${item.id}` : `/api/realizations`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Реализация успешно сохранена', 'success');
+                refreshData();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка при сохранении реализации', 'error');
+                isSubmitting = false; 
+                if (saveButton) saveButton.disabled = false;
+            }
+        } catch (err) {
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+        }
+    });
+}
+
+
 
 
 
@@ -4201,6 +4610,15 @@ function openActiveEntityForm(action, item = null) {
         case 'moves':
             if (typeof openMovementForm === 'function') {
                 openMoveForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
+
+        case 'Реализация':
+        case 'realizations':
+            if (typeof openRealizationForm === 'function') {
+                openRealizationForm(item);
             } else {
                 openEntityForm(entity, item);
             }
