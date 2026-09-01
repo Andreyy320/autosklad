@@ -4042,21 +4042,24 @@ async function openRealizationForm(entity, item = null) {
        if (config && config.columns) {
         for (const col of config.columns) {
             try {
-                if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
+                if (['customer_id', 'car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
                     continue; 
                 }
                 
                 html += await renderField(col);
-
-                if (col.field === 'customer_id') {
-                    if (warehouseCol) html += await renderField(warehouseCol); // Сначала Склад
-                    if (molCol) html += await renderField(molCol);             // Затем МОЛ
-                    if (carCol) html += await renderField(carCol);             // Затем Гос. номер
-                }
             } catch (fieldErr) {
                 console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
             }
         }
+
+        // Порядок: Склад -> МОЛ -> Покупатель -> Гос. номер машины
+        if (warehouseCol) html += await renderField(warehouseCol);
+        if (molCol) html += await renderField(molCol);
+        
+        const customerCol = config.columns.find(c => c.field === 'customer_id');
+        if (customerCol) html += await renderField(customerCol);
+        
+        if (carCol) html += await renderField(carCol);
 
         const isPostedCol = config.columns.find(c => c.field === 'is_posted');
         if (isPostedCol) {
