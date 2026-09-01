@@ -3829,6 +3829,8 @@ async function openRepairForm(item = null, parentId = null) {
 
 
 async function openRealizationForm(entity, item = null) {
+  
+  console.log("🚀 openRealizationForm вызвана для сущности:", entity, "item:", item);
     // Поддержка вызова, если первым аргументом передали сам объект (item)
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
