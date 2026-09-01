@@ -2069,6 +2069,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'РЛ-';
         } else if (entity === 'moves' || entity === 'move_items') {
             prefix = 'ПМ-';
+        } else if (entity === 'receipts' || entity === 'receipt_items') {
+            prefix = 'ПР-';
         }
 
         try {
@@ -2093,6 +2095,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         if (entity === 'realization_items') {
             item.currency = 'Рубль ПМР';
+        } else if (entity === 'receipt_items') {
+            item.currency = 'Рубль ПМР';
         }
 
         config.columns.forEach(col => {
@@ -2106,6 +2110,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     } else {
         if (entity === 'realization_items' && !item.currency) {
+            item.currency = 'Рубль ПМР';
+        } else if (entity === 'receipt_items' && !item.currency) {
             item.currency = 'Рубль ПМР';
         }
     }
@@ -2192,6 +2198,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
         if (entity === 'realization_items' && col.field === 'currency' && !val) {
+            val = 'Рубль ПМР';
+        } else if (entity === 'receipt_items' && col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
 
