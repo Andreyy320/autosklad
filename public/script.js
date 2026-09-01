@@ -2272,9 +2272,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
                         const art = refItem.article ? `[${refItem.article}] ` : '';
                         const nm = refItem.name || refItem.title || '';
                         displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
-                     } else if (referenceName === 'mol') {
-    displayName = refItem.user_fio || refItem.name || refItem.login || (refItem.description && !refItem.description.includes('#') ? refItem.description : '') || `МОЛ #${refItem.id}`;
-
+                    } else if (referenceName === 'mol') {
+                        displayName = refItem.user_fio || refItem.name || refItem.login || (refItem.description && !refItem.description.includes('#') ? refItem.description : '') || `МОЛ #${refItem.id}`;
                     } else {
                         displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                     }
@@ -2327,7 +2326,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-   const carCol = config.columns.find(c => c.field === 'car_id');
+    const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
@@ -2426,7 +2425,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         async function filterMols() {
             const selectedWarehouseId = warehouse.value;
-            const currentMolValue = mol.getAttribute('data-selected') || mol.value;
+            const currentMolValue = mol.value;
 
             try {
                 const [molRes, usersRes] = await Promise.all([
@@ -2446,7 +2445,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
                 mols.forEach(m => {
-                    // Приводим к строке для надежного сравнения ID складов
                     if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                         const option = document.createElement('option');
                         option.value = m.id;
@@ -2469,13 +2467,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
             filterMols();
         });
 
-        // Сохраняем текущее выбранное значение МОЛ в атрибут, чтобы оно не терялось при перерисовке
-        if (mol.value) {
-            mol.setAttribute('data-selected', mol.value);
+        if (warehouse.value) {
+            filterMols();
         }
-
-        // Запускаем фильтрацию сразу при открытии формы
-        filterMols();
     });
 
     if (zaphastiSelect) {
@@ -2719,21 +2713,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
                 errorContainer.innerHTML = `<strong>Ошибка (${response.status}):</strong> ${errorMsg}`;
 
-                isSubmitting = false; 
+                isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            showAppNotification('Ошибка соединения с сервером: ' + err.message, 'error');
-            
-            let errorContainer = formElement.querySelector('#form-error-banner');
-            if (!errorContainer) {
-                errorContainer = document.createElement('div');
-                errorContainer.id = 'form-error-banner';
-                errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; border: 1px solid #fecaca;';
-                formElement.prepend(errorContainer);
-            }
-            errorContainer.innerHTML = `<strong>Сетевая ошибка:</strong> ${err.message}`;
-
+            showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
