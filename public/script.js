@@ -2700,6 +2700,9 @@ async function openReceiptForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.field === 'mol_id') {
+            // Для поля мол_id делаем пустой select по умолчанию, заполним динамически ниже через фильтрацию по складу
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}"><option value="">-- Сначала выберите склад --</option></select>`;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -2777,9 +2780,15 @@ async function openReceiptForm(entity, item = null) {
         const mol = formElement.querySelector('[name="mol_id"]');
 
         if (warehouse && mol) {
-            async function filterMols() {
+            async function filterMols(resetMol = false) {
                 const selectedWarehouseId = warehouse.value;
-                const currentMolValue = mol.value;
+                const currentMolValue = resetMol ? '' : (val || mol.value);
+
+                if (!selectedWarehouseId) {
+                    mol.innerHTML = '<option value="">-- Сначала выберите склад --</option>';
+                    mol.value = '';
+                    return;
+                }
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -2798,30 +2807,41 @@ async function openReceiptForm(entity, item = null) {
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    let foundSelected = false;
                     mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        // Фильтруем записи из таблицы mol по выбранному складу
+                        if (String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
-                            option.value = m.id;
+                            // В качестве значения option.value отправляем id пользователя (или m.id, в зависимости от того, что требует колонка mol_id в receipts). 
+                            // Судя по твоему старому коду, сюда подставлялся m.id из таблицы mol:
+                            option.value = m.id; 
                             option.textContent = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
+                                foundSelected = true;
                             }
                             mol.appendChild(option);
                         }
                     });
+
+                    if (!foundSelected) {
+                        mol.value = '';
+                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
+                filterMols(true); // При смене склада сбрасываем выбранного МОЛ
             });
 
+            // Инициализация при открытии формы (если склад уже выбран или редактируется существующий элемент)
+            // Сохраняем значение из текущего item, если оно есть
+            const val = item ? item.mol_id : '';
             if (warehouse.value) {
-                filterMols();
+                filterMols(false);
             }
         }
     }
@@ -2909,7 +2929,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 
 async function openMoveForm(entity, item = null, parentId = null) {
     console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
@@ -4081,10 +4100,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
-            await sendLog('auth', 'LOGIN', null, { 
-                info: `Пользователь ${login} вошел в систему` 
-            });
-
             loadData('users', 'Пользователи');
 
             if (typeof checkRemindersOnStart === 'function') {
@@ -4101,6 +4116,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
+
 function logout() {
     localStorage.clear(); 
     location.reload();
