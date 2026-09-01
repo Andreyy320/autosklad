@@ -2733,7 +2733,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (saveButton) saveButton.disabled = false;
         }
     });
-}
 
 async function openReceiptForm(entity, item = null) {
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
