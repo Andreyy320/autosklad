@@ -4054,6 +4054,91 @@ function editSelectedEntity() {
     }
     openEntityForm(currentEntity, selectedItem);
 }
+
+
+
+
+
+// Универсальная функция открытия формы добавления или изменения в зависимости от текущей сущности
+function openActiveEntityForm(action, item = null) {
+    // Определяем текущую сущность (если это редактирование, берем активную строку/раздел)
+    const entity = action === 'edit' ? (typeof getSelectedEntityName === 'function' ? getSelectedEntityName() : currentEntity) : currentEntity;
+
+    // Распределяем в зависимости от выбранного раздела (документа или справочника)
+    switch (entity) {
+        case 'Приход':
+        case 'receipts':
+            if (typeof openReceiptForm === 'function') {
+                openReceiptForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
+            
+        case 'Перемещение':
+        case 'move':
+            if (typeof openMovementForm === 'function') {
+                openMovementForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
+
+        case 'Ремонт':
+        case 'repairs':
+            if (typeof openRepairForm === 'function') {
+                openRepairForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
+
+        case 'Реализация':
+        case 'realizations':
+            if (typeof openRealizationForm === 'function') {
+                openRealizationForm(item);
+            } else {
+                openEntityForm(entity, item);
+            }
+            break;
+
+        default:
+            // Для остальных справочников используем стандартную универсальную форму
+            if (typeof openEntityForm === 'function') {
+                openEntityForm(entity, item);
+            } else {
+                console.error('Функция openEntityForm не найдена');
+            }
+            break;
+    }
+}
+
+// Обновленная функция для кнопки «Изменить»
+function editSelectedEntity() {
+    // Получаем выбранный элемент таблицы (проверь название своей функции выбора строки, если оно отличается)
+    const selectedItem = typeof getSelectedTableItem === 'function' ? getSelectedTableItem() : null;
+    
+    if (!selectedItem && typeof currentTableSelectedItem === 'undefined') {
+        alert('Выберите элемент для изменения');
+        return;
+    }
+    
+    const itemToEdit = selectedItem || window.currentTableSelectedItem;
+    openActiveEntityForm('edit', itemToEdit);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
