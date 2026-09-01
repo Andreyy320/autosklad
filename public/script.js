@@ -4038,27 +4038,26 @@ async function openRealizationForm(entity, item = null) {
         `;
     }
 
- try {
+   try {
        if (config && config.columns) {
         for (const col of config.columns) {
             try {
                 if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id', 'is_posted'].includes(col.field)) {
-                    continue; // Пропускаем те поля, которые рендерим отдельно или управляем ими вручную
+                    continue; 
                 }
                 
                 html += await renderField(col);
 
                 if (col.field === 'customer_id') {
-                    if (warehouseCol) html += await renderField(warehouseCol);
-                    if (molCol) html += await renderField(molCol);
-                    if (carCol) html += await renderField(carCol);
+                    if (warehouseCol) html += await renderField(warehouseCol); // Сначала Склад
+                    if (molCol) html += await renderField(molCol);             // Затем МОЛ
+                    if (carCol) html += await renderField(carCol);             // Затем Гос. номер
                 }
             } catch (fieldErr) {
                 console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
             }
         }
 
-        // Принудительно рендерим is_posted в самом конце или в нужном месте, если его не было в колонах
         const isPostedCol = config.columns.find(c => c.field === 'is_posted');
         if (isPostedCol) {
             try {
