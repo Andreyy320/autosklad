@@ -4039,7 +4039,7 @@ async function openRealizationForm(entity, item = null) {
 
     if (config && config.columns) {
         for (const col of config.columns) {
-            if (col.field === 'car_id' || col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id' || col.field === 'mol_from_id') {
+            if (['car_id', 'warehouse_id', 'skald_id', 'mol_id', 'mol_from_id'].includes(col.field)) {
                 continue;
             }
             html += await renderField(col);
