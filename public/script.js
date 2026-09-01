@@ -2325,18 +2325,26 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-   const carCol = config.columns.find(c => c.field === 'car_id');
+    const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
-    if (entity === 'realizations' && warehouseCol && molCol) {
+  if (entity === 'realizations') {
+        const warehouseField = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
+        const molField = config.columns.find(c => c.field === 'mol_id');
+        const carField = config.columns.find(c => c.field === 'car_id');
+
         for (const col of config.columns) {
-            if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id') continue;
+            // Пропускаем их, чтобы вывести в нужном месте вручную
+            if (['warehouse_id', 'skald_id', 'mol_id', 'car_id'].includes(col.field)) continue;
+            
             html += await renderField(col);
 
+            // После поля покупателя выводим Склад, затем МОЛ, затем Гос. номер
             if (col.field === 'customer_id') {
-                html += await renderField(warehouseCol); // Сначала склад
-                html += await renderField(molCol);      // Затем МОЛ
+                if (warehouseField) html += await renderField(warehouseField);
+                if (molField) html += await renderField(molField);
+                if (carField) html += await renderField(carField);
             }
         }
     } else if (entity === 'repairs' && carCol && warehouseCol && molCol) {
