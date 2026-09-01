@@ -4158,6 +4158,7 @@ async function openRealizationForm(entity, item = null) {
             const updateMolOptions = async (isUserChange = false) => {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
+                console.log("🔄 [DEBUG WAREHOUSE] Обновление МОЛ для склада ID:", selectedWarehouseId, "Текущий МОЛ:", currentMolValue);
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -4204,16 +4205,22 @@ async function openRealizationForm(entity, item = null) {
                     } else if (!isUserChange && isCurrentStillValid) {
                         mol.value = activeMolVal;
                     }
+                    console.log("✅ [DEBUG WAREHOUSE] Список МОЛ успешно обновлен. Выбрано значение:", mol.value);
                 } catch (err) {
-                    console.error('❌ Ошибка при обновлении списка МОЛ для склада:', err);
+                    console.error('❌ [DEBUG WAREHOUSE] Ошибка при обновлении списка МОЛ для склада:', err);
                 }
             };
 
             warehouse.addEventListener('change', () => {
+                console.log("🔄 [DEBUG WAREHOUSE] Склад изменен пользователем на ID:", warehouse.value);
                 updateMolOptions(true);
             });
 
             if (warehouse.value) {
+                console.log("🚀 [DEBUG WAREHOUSE] Склад уже заполнен при открытии, подгружаем МОЛ для ID:", warehouse.value);
+                updateMolOptions(false);
+            } else {
+                console.log("⚠️ [DEBUG WAREHOUSE] Склад не выбран при открытии формы, подгружаем все МОЛ по умолчанию.");
                 updateMolOptions(false);
             }
         });
@@ -4323,6 +4330,8 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
+
+
 // Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
