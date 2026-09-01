@@ -4668,20 +4668,18 @@ function deleteSelectedEntity() {
         }
     );
 }
-
-// Единая корректная функция изменения (редактирования) выбранной строки
 function editSelectedEntity() {
     if (!selectedItem) {
-        // Используем ваше уведомление вместо стандартного alert, чтобы стиль приложения не ломался
         showAppNotification('Пожалуйста, выберите строку для изменения (кликните один раз на строку в таблице).', 'warning');
         return;
     }
 
-    // Если для receipts нужна специфичная форма, проверяем её, иначе открываем стандартную openEntityForm
     if (currentEntity === 'receipts' && typeof openReceiptForm === 'function') {
         openReceiptForm(selectedItem);
     } else if (currentEntity === 'moves' && typeof openMovementForm === 'function') {
         openMovementForm(selectedItem);
+    } else if (currentEntity === 'realizations' && typeof openRealizationForm === 'function') {
+        openRealizationForm(currentEntity, selectedItem); // или просто openRealizationForm(selectedItem), в зависимости от того, сколько аргументов принимает ваша функция
     } else {
         openEntityForm(currentEntity, selectedItem);
     }
@@ -4707,7 +4705,7 @@ function openActiveEntityForm(action, item = null) {
         case 'Перемещение':
         case 'moves':
             if (typeof openMovementForm === 'function') {
-                openMoveForm(item);
+                openMovementForm(item);
             } else {
                 openEntityForm(entity, item);
             }
