@@ -2324,11 +2324,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-    const carCol = config.columns.find(c => c.field === 'car_id');
+   const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
-    if (entity === 'repairs' && carCol && warehouseCol && molCol) {
+    if (entity === 'realizations' && warehouseCol && molCol) {
+        for (const col of config.columns) {
+            if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id') continue;
+            html += await renderField(col);
+
+            if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
+                html += await renderField(warehouseCol);
+                html += await renderField(molCol);
+            }
+        }
+    } else if (entity === 'repairs' && carCol && warehouseCol && molCol) {
         for (const col of config.columns) {
             if (col.field === 'car_id' || col.field === 'mol_id' || col.field === 'mol_from_id' || col.field === 'warehouse_id' || col.field === 'skald_id') continue;
             html += await renderField(col);
@@ -2450,10 +2460,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        // Привязываем событие смены склада и сразу запускаем фильтрацию
-        warehouse.addEventListener('change', filterMols);
-        
-        // Если склад уже выбран (например, при редактировании документа), отфильтруем список сразу
+        warehouse.addEventListener('change', () => {
+            mol.value = '';
+            filterMols();
+        });
+
         if (warehouse.value) {
             filterMols();
         }
