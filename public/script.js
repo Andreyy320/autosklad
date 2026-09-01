@@ -3826,8 +3826,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
-
-
 async function openRealizationForm(entity, item = null) {
   
   console.log("🚀 openRealizationForm вызвана для сущности:", entity, "item:", item);
@@ -4242,8 +4240,6 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
-
-
 // Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
