@@ -2043,16 +2043,9 @@ function closeDrawer() {
 
 }
 
+
 async function openEntityForm(entity, item = null, parentId = null) {
-    
-    // Принудительно меняем порядок полей для реализации
-    if (entity === 'realizations' && config && config.columns) {
-        config.columns.sort((a, b) => {
-            const order = { 'warehouse_id': 1, 'skald_id': 1, 'mol_id': 2 };
-            return (order[a.field] || 99) - (order[b.field] || 99);
-        });
-    }
-    
+ 
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -2338,22 +2331,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
-  if (entity === 'realizations') {
-        const warehouseField = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
-        const molField = config.columns.find(c => c.field === 'mol_id');
-        const carField = config.columns.find(c => c.field === 'car_id');
-
+    if (entity === 'realizations' && warehouseCol && molCol) {
         for (const col of config.columns) {
-            // Пропускаем их, чтобы вывести в нужном месте вручную
-            if (['warehouse_id', 'skald_id', 'mol_id', 'car_id'].includes(col.field)) continue;
-            
+            // Убираем всё лишнее для realizations: оставляем только doc_number, is_posted, fact_date, customer_id, warehouse_id/skald_id, mol_id, car_id, description
+            const allowedRealizationsFields = ['doc_number', 'is_posted', 'fact_date', 'customer_id', 'warehouse_id', 'skald_id', 'mol_id', 'car_id', 'description'];
+            if (!allowedRealizationsFields.includes(col.field)) continue;
+
+            if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id') continue;
             html += await renderField(col);
 
-            // После поля покупателя выводим Склад, затем МОЛ, затем Гос. номер
-            if (col.field === 'customer_id') {
-                if (warehouseField) html += await renderField(warehouseField);
-                if (molField) html += await renderField(molField);
-                if (carField) html += await renderField(carField);
+            if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
+                html += await renderField(warehouseCol);
+                html += await renderField(molCol);
             }
         }
     } else if (entity === 'repairs' && carCol && warehouseCol && molCol) {
@@ -2396,12 +2385,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
             html += await renderField(col);
 
-            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie' && entity !== 'repairs' && entity !== 'realizations') {
+            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie' && entity !== 'repairs') {
                 html += await renderField(carCol);
             }
         }
 
-        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs' && entity !== 'realizations') {
+        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
             if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
                 html += await renderField(carCol);
             }
@@ -2730,18 +2719,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 if (!errorContainer) {
                     errorContainer = document.createElement('div');
                     errorContainer.id = 'form-error-banner';
-                    errorContainer.style.color = '#ef4444';
-                    errorContainer.style.fontSize = '12px';
-                    errorContainer.style.marginTop = '8px';
+                    errorContainer.style.cssText = 'background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;';
                     formElement.prepend(errorContainer);
                 }
                 errorContainer.textContent = errorMsg;
-
+                
                 isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error('Ошибка при отправке формы:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
@@ -3843,6 +3829,7 @@ async function openRepairForm(item = null, parentId = null) {
 
 
 async function openRealizationForm(entity, item = null) {
+    // Поддержка вызова, если первым аргументом передали сам объект (item)
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
     } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
@@ -4023,16 +4010,18 @@ async function openRealizationForm(entity, item = null) {
         `;
     }
 
+    // Исключаем их из основного цикла, чтобы выстроить в нужном порядке принудительно
     for (const col of config.columns) {
         if (col.field === 'car_id' || col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'mol_id' || col.field === 'mol_from_id') {
             continue;
         }
         html += await renderField(col);
 
+        // Строгий порядок: Покупатель -> Склад -> МОЛ -> Гос. номер
         if (col.field === 'customer_id') {
-            if (carCol) html += await renderField(carCol);
             if (warehouseCol) html += await renderField(warehouseCol);
             if (molCol) html += await renderField(molCol);
+            if (carCol) html += await renderField(carCol);
         }
     }
 
