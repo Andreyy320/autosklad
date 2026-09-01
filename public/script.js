@@ -2228,7 +2228,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             const referenceName = col.ref;
             let refItems = [];
 
-            if (referenceName === 'customer_cars' || referenceName === 'cars') {
+            if (referenceName === 'customer_cars') {
                 const targetCustomerId = (item && item.customer_id) ? item.customer_id : null;
                 if (targetCustomerId) {
                     try {
@@ -2237,22 +2237,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки машин покупателя при открытии:', e);
                     }
-                } 
-                if (!refItems || refItems.length === 0) {
+                } else if (item && item.car_id) {
                     try {
                         const carRes = await fetch(`/api/customer_cars`);
                         if (carRes.ok) {
-                            refItems = await carRes.json();
+                            const allCars = await carRes.json();
+                            refItems = allCars;
                         }
                     } catch (e) {
-                        try {
-                            const carRes2 = await fetch(`/api/cars`);
-                            if (carRes2.ok) {
-                                refItems = await carRes2.json();
-                            }
-                        } catch (err) {
-                            console.error('Ошибка загрузки списка машин:', err);
-                        }
+                        console.error('Ошибка загрузки списка машин:', e);
                     }
                 }
             } else {
@@ -2288,7 +2281,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            // Динамические ID для связок (включая складские warehouse / mol)
             let extraAttributes = '';
             if (col.field === 'car_id') extraAttributes = 'id="car-select"';
             else if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
@@ -2332,24 +2324,26 @@ async function openEntityForm(entity, item = null, parentId = null) {
         `;
     }
 
-    // Собираем поля один раз в правильном порядке, исключая дубликаты car_id и авто-вставок
-    let renderedFieldsHtml = '';
     const carCol = config.columns.find(c => c.field === 'car_id');
-    const processedFields = new Set();
+    const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
 
-    if (entity === 'autostrahovanie' && carCol) {
+    if (entity === 'repairs' && carCol && molCol) {
+        for (const col of config.columns) {
+            if (col.field === 'car_id' || col.field === 'mol_id' || col.field === 'mol_from_id') continue;
+            html += await renderField(col);
+
+            if (col.field === 'doc_number' || col.field === 'date' || col.field === 'customer_id') {
+                html += await renderField(carCol);
+                html += await renderField(molCol);
+            }
+        }
+    } else if (entity === 'autostrahovanie' && carCol) {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue;
-            if (!processedFields.has(col.field)) {
-                renderedFieldsHtml += await renderField(col);
-                processedFields.add(col.field);
-            }
+            html += await renderField(col);
             
             if (col.field === 'end_date' || col.field === 'next_date' || col.field.includes('end') || col.field.includes('next')) {
-                if (!processedFields.has(carCol.field)) {
-                    renderedFieldsHtml += await renderField(carCol);
-                    processedFields.add(carCol.field);
-                }
+                html += await renderField(carCol);
             }
         }
     } else {
@@ -2357,36 +2351,22 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (col.field === 'car_id') continue; 
 
             if (col.field === 'autoservice' && carCol) {
-                if (!processedFields.has(carCol.field)) {
-                    renderedFieldsHtml += await renderField(carCol);
-                    processedFields.add(carCol.field);
-                }
+                html += await renderField(carCol);
             }
 
-            if (!processedFields.has(col.field)) {
-                renderedFieldsHtml += await renderField(col);
-                processedFields.add(col.field);
-            }
+            html += await renderField(col);
 
-            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie') {
-                if (!processedFields.has(carCol.field)) {
-                    renderedFieldsHtml += await renderField(carCol);
-                    processedFields.add(carCol.field);
-                }
+            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie' && entity !== 'repairs') {
+                html += await renderField(carCol);
             }
         }
 
-        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id')) {
+        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
             if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
-                if (!processedFields.has(carCol.field)) {
-                    renderedFieldsHtml += await renderField(carCol);
-                    processedFields.add(carCol.field);
-                }
+                html += await renderField(carCol);
             }
         }
     }
-
-    html += renderedFieldsHtml;
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
@@ -2409,7 +2389,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
 
-    // Логика фильтрации МОЛ по складам (для перемещений и т.п.)
     const warehouseMolPairs = [
         { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
