@@ -2070,6 +2070,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ПМ-';
         } else if (entity === 'receipts' || entity === 'receipt_items') {
             prefix = 'ПР-';
+        } else if (entity === 'repairs' || entity === 'repair') {
+            prefix = 'РЕМ-';
         }
 
         try {
@@ -2247,6 +2249,16 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (e) {
                         console.error('Ошибка загрузки списка машин:', e);
                     }
+                } else {
+                    // Чтобы для ремонтов всегда загружался полный список машин для выбора гос. номера
+                    try {
+                        const carRes = await fetch(`/api/customer_cars`);
+                        if (carRes.ok) {
+                            refItems = await carRes.json();
+                        }
+                    } catch (e) {
+                        refItems = await fetchReferenceData(referenceName);
+                    }
                 }
             } else {
                 refItems = await fetchReferenceData(referenceName);
@@ -2281,7 +2293,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            // Динамические ID для связок (включая складские warehouse / mol)
             let extraAttributes = '';
             if (col.field === 'car_id') extraAttributes = 'id="car-select"';
             else if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
@@ -2336,6 +2347,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 html += await renderField(carCol);
             }
         }
+    } else if ((entity === 'repairs' || entity === 'repair') && carCol) {
+        // Поднимаем car_id (Гос номер) наверх для ремонтов (например, после даты или типа документа)
+        for (const col of config.columns) {
+            if (col.field === 'car_id') continue;
+
+            html += await renderField(col);
+
+            // Вставляем гос. номер сразу после поля даты документа или типа документа
+            if (col.field === 'date' || col.field === 'doc_date' || col.field === 'repair_type') {
+                html += await renderField(carCol);
+            }
+        }
     } else {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
@@ -2379,7 +2402,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
 
-    // Логика фильтрации МОЛ по складам (для перемещений и т.п.)
     const warehouseMolPairs = [
         { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
         { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
@@ -4182,7 +4204,7 @@ function openActiveEntityForm(action, item = null) {
                 openEntityForm(entity, item);
             }
             break;
-            
+
         default:
             // Для остальных справочников используем стандартную универсальную форму
             if (typeof openEntityForm === 'function') {
