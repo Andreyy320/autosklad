@@ -1631,7 +1631,7 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ (ищем склады, где этот пользователь назначен МОЛом)
+        // Фильтр по МОЛ (фильтруем по ID пользователя, привязанного к складу)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
             molFilterClause += ` AND lm.user_id = $${paramIndex}`;
