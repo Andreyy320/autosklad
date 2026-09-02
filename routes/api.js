@@ -1624,14 +1624,14 @@ router.get('/stock_balances', async (req, res) => {
         let warehouseFilterClause = '';
         let molFilterClause = '';
 
-        // Фильтр по складу для основного запроса
+        // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
             warehouseFilterClause += ` AND s.id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Фильтр по МОЛ для основного запроса
+        // Фильтр по МОЛ (ищем склады, где этот пользователь назначен МОЛом)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
             molFilterClause += ` AND lm.user_id = $${paramIndex}`;
@@ -1640,7 +1640,7 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Группируем остатки партий по складам и запчастям
+                -- Группируем остатки партий по складам и запчастям из warehouse_batches
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
@@ -1649,7 +1649,7 @@ router.get('/stock_balances', async (req, res) => {
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
-                -- Берем самую свежую привязку МОЛ для каждого склада
+                -- Берем самую свежую привязку МОЛ для каждого склада из таблицы mol
                 SELECT DISTINCT ON (warehouse_id)
                     warehouse_id,
                     user_id
