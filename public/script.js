@@ -6124,7 +6124,7 @@ async function loadReceiptDetailTable(fetchUrl) {
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    const config = getConfig('receipt_items');
+    const config = getConfig('money_receipts_detail');
     if (detailTitle && config) detailTitle.innerText = config.title;
 
     if (detailHeaderTr && config && config.columns) {
@@ -6135,7 +6135,7 @@ async function loadReceiptDetailTable(fetchUrl) {
         }).join('');
     }
 
-    const colCount = config && config.columns ? config.columns.length : 5;
+    const colCount = config && config.columns ? config.columns.length : 8;
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
 
     try {
@@ -6166,11 +6166,22 @@ async function loadReceiptDetailTable(fetchUrl) {
 
 // Загрузка спецификации услуг (работ)
 async function loadReceiptWorksDetailTable(fetchUrl) {
-    // Если у вас отдельная таблица для услуг, можно завести конфиг или рендерить в elements
-    const detailBody = document.getElementById('detail-body'); // Или отдельный tbody для услуг, если есть
-    const config = getConfig('receipt_works') || getConfig('receipt_items'); // Фолбек на конфиг
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
 
-    const colCount = config && config.columns ? config.columns.length : 5;
+    const config = getConfig('money_receipts_works_detail');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 8;
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка услуг...</td></tr>`;
 
     try {
@@ -6188,14 +6199,7 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
         detailBody.innerHTML = '';
         items.forEach(item => {
             const tr = document.createElement('tr');
-            // Если для услуг используется отдельный рендер в getConfig, он применится, иначе дефолт
-            if (config && typeof config.renderWork === 'function') {
-                tr.innerHTML = config.renderWork(item);
-            } else if (config && typeof config.render === 'function') {
-                tr.innerHTML = config.render(item);
-            } else {
-                tr.innerHTML = `<td>${item.work_name || ''}</td><td>${item.quantity}</td><td>${item.total_rub}</td>`;
-            }
+            tr.innerHTML = config.render(item);
             detailBody.appendChild(tr);
         });
     } catch (err) {
