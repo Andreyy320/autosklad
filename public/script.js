@@ -5514,6 +5514,8 @@ async function loadData(entity, title, customParams = {}) {
 
 
 
+
+
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -5540,9 +5542,10 @@ async function openPaymentHistory(receiptId, docNumber) {
         }
 
         let rowsHtml = payments.map(p => {
-            const pDate = p.payment_date ? new Date(p.payment_date).toLocaleDateString() : '—';
+            // Исправлено с p.payment_date на p.date в соответствии со структурой базы данных
+            const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
             const pAmount = Number(p.amount || 0).toFixed(2);
-            const pComment = p.comment || '—'; // Исправлено здесь
+            const pComment = p.comment || '—';
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
