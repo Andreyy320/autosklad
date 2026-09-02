@@ -4672,10 +4672,10 @@ router.delete('/receipt_items/:id', async (req, res) => {
 });
 
 
-// POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом новой таблицы warehouse_batches
+// POST /api/move_items - добавление позиции перемещения с подробными логами остатков и FIFO по warehouse_batches
 router.post('/move_items', async (req, res) => {
-    console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items) с FIFO по warehouse_batches`);
+    console.log(`\n========================================`);
+    console.log(`📦 [MOVE DEBUG START] Запрос на перемещение позиции`);
     console.log(`[BODY]:`, req.body);
 
     const { zaphasti_id, currency, quantity, description, move_id } = req.body;
@@ -4693,7 +4693,7 @@ router.post('/move_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Проверяем документ перемещения, его склады и статус проведения (is_posted) с получением doc_number
+        // 1. Проверяем документ перемещения, его склады и статус проведения
         const moveCheck = await client.query('SELECT warehouse_from_id, warehouse_to_id, is_posted, doc_number FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -4721,7 +4721,7 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Получаем актуальные партии из нашей новой таблицы warehouse_batches с учетом списаний по FIFO
+        // 2. Получаем актуальные партии из warehouse_batches с расчетом уже потраченного количества
         const batchesQuery = `
             SELECT 
                 wb.id AS batch_id,
@@ -4777,18 +4777,27 @@ router.post('/move_items', async (req, res) => {
                 receipt_id: b.receipt_id,
                 doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
                 price: price,
+                initial: initial,
+                spent: spent,
                 available: available > 0 ? available : 0
             };
         }).filter(b => b.available > 0);
 
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
-        console.log(`[FIFO DEBUG] Запрошено к добавлению: ${requestedQty} шт.`);
-        console.log(`[FIFO DEBUG] Реально доступно на складе (через warehouse_batches):`, totalAvailableStock);
-        console.log(`[FIFO DEBUG] Доступные партии:`, batches);
+        // КРАСИВОЕ ВИЗУАЛЬНОЕ ЛОГИРОВАНИЕ СОСТОЯНИЯ СКЛАДА ДО ПЕРЕМЕЩЕНИЯ
+        console.log(`\n📋 [СКЛАД-ИСТОЧНИК ID: ${warehouseFromId}] Состояние остатков для запчасти ID: ${zaphasti_id}`);
+        console.log(`----------------------------------------`);
+        batches.forEach((b, idx) => {
+            console.log(` Партия #${idx + 1} | Док: ${b.doc_number} | Цена: ${b.price} руб. | Было: ${b.initial} | Списано ранее: ${b.spent} | Доступно: ${b.available} шт.`);
+        });
+        console.log(`----------------------------------------`);
+        console.log(`📊 ИТОГО доступно на складе: ${totalAvailableStock} шт.`);
+        console.log(`🎯 ПЕРЕНОСИМ ЗАПРОС: ${requestedQty} шт. (Документ перемещения: ${moveDocNumber}, ID: ${move_id})\n`);
 
         if (requestedQty > totalAvailableStock) {
             await client.query('ROLLBACK');
+            console.log(`❌ [ERROR] Недостаточно товара! Требуется: ${requestedQty}, а доступно: ${totalAvailableStock}`);
             return res.status(400).json({ 
                 error: `Недостаточно товара на выбранном складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь перенести: ${requestedQty} шт.` 
             });
@@ -4798,7 +4807,9 @@ router.post('/move_items', async (req, res) => {
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
 
-        // 3. Распределяем строго по партиям FIFO из warehouse_batches
+        console.log(`🔄 [FIFO РАСПРЕДЕЛЕНИЕ НАЧАТО]`);
+
+        // 3. Распределяем по партиям FIFO с подробным логом каждой операции списания
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -4806,8 +4817,9 @@ router.post('/move_items', async (req, res) => {
             if (takeQty <= 0) continue;
 
             const totalRub = takeQty * batch.price;
+            const leftoverInBatchAfterMove = batch.available - takeQty;
 
-            console.log(`➡️ [FIFO STEP] Партия Пр-во ID: ${batch.receipt_id} (Док: ${batch.doc_number}): берем ${takeQty} шт. по цене ${batch.price}`);
+            console.log(`   ➡️ Из партии "${batch.doc_number}" (Цена: ${batch.price} руб.): забираем ${takeQty} шт. | Останется в этой партии после перенеса: ${leftoverInBatchAfterMove} шт.`);
 
             const insertQuery = `
                 INSERT INTO "move_items" 
@@ -4854,16 +4866,24 @@ router.post('/move_items', async (req, res) => {
             remainingToDistribute -= takeQty;
         }
 
-        // Страховка на случай непредвиденного остатка
         if (remainingToDistribute > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий warehouse_batches.' });
+            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество.' });
         }
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Успешно добавлено строк перемещения: ${createdRecords.length}`);
-        return res.status(201).json(createdRecords);
+        const finalStockLeft = totalAvailableStock - requestedQty;
+        console.log(`\n✅ [SUCCESS] Перемещение успешно зафиксировано!`);
+        console.log(`📦 Всего перенесено: ${requestedQty} шт.`);
+        console.log(`📉 Остаток этой запчасти на складе-источнике после перемещения: ${finalStockLeft} шт.`);
+        console.log(`========================================\n`);
+
+        return res.status(201).json({
+            message: 'Позиция успешно добавлена с учетом FIFO',
+            items: createdRecords,
+            stock_left_after_move: finalStockLeft
+        });
 
     } catch (err) {
         await client.query('ROLLBACK');
