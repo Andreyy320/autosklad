@@ -5248,25 +5248,21 @@ async function loadData(entity, title, customParams = {}) {
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
-    const paySupplierBtn = document.getElementById('pay-supplier-btn');
 
     if (btnAdd && btnEdit && btnDelete) {
         if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
-            if (paySupplierBtn) paySupplierBtn.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
-            // Для расходов по поставщикам (накладных): показываем Добавить и Оплатить, скрываем Изменить и Удалить
+            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
-            if (paySupplierBtn) paySupplierBtn.style.display = 'inline-block';
         } else {
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'inline-block';
             btnDelete.style.display = 'inline-block';
-            if (paySupplierBtn) paySupplierBtn.style.display = 'none';
         }
     }
 
@@ -5371,6 +5367,7 @@ async function loadData(entity, title, customParams = {}) {
                         <input type="text" 
                                data-column="${col.field}" 
                                oninput="filterTable()" 
+                               placeholder="Фильтр..."
                                style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
                     </th>
                 `;
@@ -5521,7 +5518,6 @@ async function loadData(entity, title, customParams = {}) {
 
 
 
-
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -5667,7 +5663,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
-    const paySupplierBtn = document.getElementById('pay-supplier-btn');
 
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
@@ -5681,7 +5676,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
@@ -5695,7 +5689,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
     else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
@@ -5711,7 +5704,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
@@ -5732,7 +5724,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
 
         loadExpenseDetailTable(fetchUrl);
         return; 
@@ -5797,7 +5788,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         mainTableBody.innerHTML = '';
 
-        // ОСОБЫЙ РЕЖИМ ДЛЯ НАКЛАДНЫХ: Группировка по месяцам с плажками-аккордеонами
         if (currentEntity === 'expenses_by_receipts') {
             const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
@@ -5833,7 +5823,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 const group = groups[key];
                 const currentGIdx = groupIndex++;
 
-                // Шапка месяца (аккордеон)
                 const headerTr = document.createElement('tr');
                 headerTr.style.background = '#f1f5f9';
                 headerTr.style.cursor = 'pointer';
@@ -5842,9 +5831,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                         <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
                         ${group.title} &nbsp;|&nbsp; 
-                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} ₽</span> &nbsp;|&nbsp; 
-                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)} ₽</span> &nbsp;|&nbsp; 
-                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)} ₽</span>
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)} </span>
                     </td>
                 `;
                 mainTableBody.appendChild(headerTr);
@@ -5860,7 +5849,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     childRows.push(tr);
                 });
 
-                // Клик на сворачивание/разворачивание
                 headerTr.addEventListener('click', () => {
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
@@ -5874,7 +5862,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             });
 
         } else {
-            // Обычный вывод для остальных таблиц (склады, поставщики и т.д.)
             currentItems.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
