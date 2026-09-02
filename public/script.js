@@ -5255,6 +5255,7 @@ async function loadData(entity, title, customParams = {}) {
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
+            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -5437,7 +5438,6 @@ async function loadData(entity, title, customParams = {}) {
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForCustomers = document.getElementById('tabs-for-customers');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
 
         if (carTabsBar) {
             if (tabsForCars) tabsForCars.style.display = 'none';
@@ -5445,7 +5445,6 @@ async function loadData(entity, title, customParams = {}) {
             if (tabsForRepairs) tabsForRepairs.style.display = 'none';
             if (tabsForCustomers) tabsForCustomers.style.display = 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
 
             if (entity === 'car_cards') {
                 carTabsBar.style.display = 'flex';
