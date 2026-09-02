@@ -4165,6 +4165,39 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
     }
 });
     
+
+// GET-эндпоинт для получения истории оплат по конкретной накладной
+router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
+    try {
+        const receiptId = parseInt(req.params.id);
+
+        if (!receiptId || isNaN(receiptId)) {
+            return res.status(400).json({ error: 'Некорректный ID накладной' });
+        }
+
+        const query = `
+            SELECT 
+                id,
+                supplier_id,
+                receipt_id,
+                amount,
+                payment_date,
+                comment
+            FROM supplier_payments
+            WHERE receipt_id = $1
+            ORDER BY payment_date DESC, id DESC;
+        `;
+
+        const result = await pool.query(query, [receiptId]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ Ошибка получения истории оплат:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
 router.get('/get-receipt-logs', async (req, res) => {
     try {

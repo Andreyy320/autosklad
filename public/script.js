@@ -1948,10 +1948,16 @@ expenses_by_receipts: {
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
         const sum = Number(item.total_expense_sum || 0).toFixed(2);
-        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const totalPaidNum = Number(item.total_paid || 0);
+        const formattedPaid = totalPaidNum.toFixed(2);
         const debtSum = Number(item.debt_sum || 0).toFixed(2);
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
+
+        // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
+        const paidHtml = totalPaidNum > 0 
+            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid} ₽</span>`
+            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid} ₽</span>`;
 
         return `
             <td><b>№ ${docTitle}</b></td>
@@ -1960,7 +1966,7 @@ expenses_by_receipts: {
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${qty}</td>
             <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
+            <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: bold; color: ${Number(debtSum) > 0 ? '#dc2626' : '#6b7280'};">
                 ${debtSum} ₽
             </td>
@@ -1996,6 +2002,7 @@ expense_payments: {
         `;
     }
 }
+
 }
 
 
@@ -5507,6 +5514,73 @@ async function loadData(entity, title, customParams = {}) {
 
 
 
+async function openPaymentHistory(receiptId, docNumber) {
+    const drawer = getOrCreateDrawer();
+    
+    // Показываем прелоадер в шторке пока грузим данные
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная № ${docNumber}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
+    `;
+    openDrawer();
+
+    try {
+        // Запрашиваем историю платежей для этой накладной с бэкенда
+        let response = await fetch(`/api/expenses_by_receipts/${receiptId}/payments`);
+        if (!response.ok) throw new Error('Не удалось загрузить историю');
+        
+        let payments = await response.json();
+
+        if (!payments || payments.length === 0) {
+            drawer.querySelector('div:last-child').innerHTML = 'По этой накладной еще не было оплат.';
+            return;
+        }
+
+        let rowsHtml = payments.map(p => {
+            const pDate = p.payment_date ? new Date(p.payment_date).toLocaleDateString() : '—';
+            const pAmount = Number(p.amount || 0).toFixed(2);
+            const pComment = p.comment || '—'; // Исправлено здесь
+            return `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; color: #4b5563;">${pDate}</td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} ₽</td>
+                    <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
+                </tr>
+            `;
+        }).join('');
+
+        drawer.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная № ${docNumber}</h3>
+                <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                    <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb; text-align: left;">
+                        <th style="padding: 8px; color: #374151;">Дата</th>
+                        <th style="padding: 8px; color: #374151; text-align: right;">Сумма</th>
+                        <th style="padding: 8px; color: #374151;">Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px;">
+                <button type="button" onclick="closeDrawer()" style="width: 100%; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Закрыть</button>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error(err);
+        drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории платежей</span>';
+    }
+}
 
 function openPaymentDrawer(receiptId, debtSum, docNumber) {
     const drawer = getOrCreateDrawer();
