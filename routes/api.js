@@ -1631,10 +1631,16 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ
+        // Фильтр по МОЛ: оставляем только те склады, которые закреплены за этим пользователем в таблице mol
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            molFilterClause += ` AND lm.user_id = $${paramIndex}`;
+            molFilterClause += ` AND s.id IN (
+                SELECT warehouse_id FROM (
+                    SELECT DISTINCT ON (warehouse_id) warehouse_id, user_id 
+                    FROM mol 
+                    ORDER BY warehouse_id, id DESC
+                ) latest_sub WHERE latest_sub.user_id = $${paramIndex}
+            )`;
             paramIndex++;
         }
 
@@ -1671,10 +1677,10 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
             CROSS JOIN skladi s
-            LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
-            LEFT JOIN users u ON lm.user_id = u.id
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
+            LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
+            LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
             ${warehouseFilterClause}
             ${molFilterClause}
