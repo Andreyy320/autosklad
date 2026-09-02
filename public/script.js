@@ -5250,12 +5250,11 @@ async function loadData(entity, title, customParams = {}) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
-            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -5270,11 +5269,11 @@ async function loadData(entity, title, customParams = {}) {
     const detailToolbar = document.getElementById('detail-toolbar');
 
     if (detailContainer) {
-        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || entity === 'expenses_by_receipts') {
+        if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'expenses_by_receipts') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -5415,26 +5414,6 @@ async function loadData(entity, title, customParams = {}) {
                     const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                     loadDetailData(detailEntity, item.id);
-                } else if (entity === 'money_receipts_by_sklad') {
-                    console.log('📦 [Клик по складу] Проваливаемся к покупателям склада:', item.sklad_id);
-                    window.currentSkladId = item.sklad_id;
-                    loadData('money_receipts', `Покупатели склада: ${item.sklad_name || 'Основной склад'}`, { sklad_id: item.sklad_id });
-                } else if (entity === 'money_receipts') {
-                    const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active');
-                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-
-                    const targetSkladId = item.sklad_id || customParams.sklad_id || window.currentSkladId || '';
-                    if (targetSkladId) {
-                        window.currentSkladId = targetSkladId;
-                    }
-
-                    const payload = {
-                        customer_id: item.customer_id || item.id,
-                        sklad_id: targetSkladId,
-                        realization_id: item.realization_id || item.id
-                    };
-                    console.log('🔍 [Клик по покупателю в money_receipts] Отправляем payload в loadDetailData:', { detailEntity, payload });
-                    loadDetailData(detailEntity, payload);
                 } else if (entity === 'cars') {
                     loadDetailData('car_details', item.id);
                 } else if (entity === 'postavhik') {
@@ -5488,14 +5467,6 @@ async function loadData(entity, title, customParams = {}) {
                 if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
                 selectedItem = null;
                 if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
-                carTabsBar.style.display = 'flex';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-                selectedItem = null;
-                if (customParams.sklad_id) {
-                    window.currentSkladId = customParams.sklad_id;
-                }
-                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
             } else if (entity === 'customers') {
                 carTabsBar.style.display = 'flex';
                 if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
@@ -5514,7 +5485,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 
