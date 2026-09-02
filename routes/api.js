@@ -1622,7 +1622,7 @@ router.get('/stock_balances', async (req, res) => {
         let paramIndex = 1;
 
         let warehouseFilterClause = '';
-        let molJoinClause = '';
+        let molFilterClause = '';
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
@@ -1631,11 +1631,10 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ: ограничиваем выборку складов прямо на этапе соединения, 
-        // чтобы в `skladi s` оставались только те склады, которые закреплены за этим МОЛом
+        // Фильтр по МОЛ
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            molJoinClause += ` AND lm.user_id = $${paramIndex}`;
+            molFilterClause += ` AND lm.user_id = $${paramIndex}`;
             paramIndex++;
         }
 
@@ -1672,14 +1671,13 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
             CROSS JOIN skladi s
-            LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id ${molJoinClause}
+            LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             WHERE 1=1
             ${warehouseFilterClause}
-            -- Если выбран МОЛ, отсекаем склады, которые к нему не относятся (где lm.user_id стал NULL из-за условий соединения)
-            ${mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' ? 'AND lm.user_id IS NOT NULL' : ''}
+            ${molFilterClause}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
