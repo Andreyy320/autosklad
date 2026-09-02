@@ -1850,47 +1850,61 @@ money_receipts_by_sklad: {
 },
 
 
-
 expenses_by_sklad: {
     title: 'Аналитика расходов (закупок) по складам',
     columns: [
-        { field: 'sklad_name', label: 'Склад', width: '220px' },
-        { field: 'total_receipts', label: 'Закупок', width: '80px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
-        { field: 'total_expense_sum', label: 'Сумма закупки', width: '130px', align: 'right' }
+        { field: 'sklad_name', label: 'Склад', width: '200px' },
+        { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '80px', align: 'right' },
+        { field: 'total_expense_sum', label: 'Сумма закупки', width: '120px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '120px', align: 'right' },
+        { field: 'total_debt', label: 'Долг', width: '120px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const totalDebt = Number(item.total_debt || 0).toFixed(2);
 
         return `
             <td><span style="color: #d97706; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center;">${item.total_receipts || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626; font-size: 14px;">-${expenseSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} ₽</td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
+                ${totalDebt} ₽
+            </td>
         `;
     }
 },
-
 expenses_by_suppliers: {
     title: 'Аналитика закупленных товаров по поставщикам',
     columns: [
-        { field: 'postavhik_name', label: 'Поставщик', width: '200px' },
-        { field: 'sklad_name', label: 'Склад поступления', width: '130px' },
-        { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во', width: '75px', align: 'right' },
-        { field: 'total_expense_sum', label: 'Сумма затрат', width: '120px', align: 'right' }
+        { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
+        { field: 'sklad_name', label: 'Склад поступления', width: '120px' },
+        { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'total_expense_sum', label: 'Сумма затрат', width: '110px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const totalDebt = Number(item.total_debt || 0).toFixed(2);
 
         return `
             <td><b>${item.postavhik_name || 'Основной поставщик'}</b></td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center;">${item.total_receipts || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} ₽</td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
+                ${totalDebt} ₽
+            </td>
         `;
     }
 },
@@ -1918,20 +1932,23 @@ expense_items: {
     }
 },
 
-
 expenses_by_receipts: {
     title: 'Список накладных (документов прихода)',
     columns: [
-        { field: 'doc_number', label: '№ Документа', width: '130px' },
-        { field: 'date', label: 'Дата', width: '150px' },
-        { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
-        { field: 'sklad_name', label: 'Склад', width: '130px' },
-        { field: 'total_qty', label: 'Кол-во', width: '75px', align: 'right' },
-        { field: 'total_expense_sum', label: 'Сумма', width: '120px', align: 'right' }
+        { field: 'doc_number', label: '№ Документа', width: '120px' },
+        { field: 'date', label: 'Дата', width: '110px' },
+        { field: 'postavhik_name', label: 'Поставщик', width: '160px' },
+        { field: 'sklad_name', label: 'Склад', width: '120px' },
+        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'total_expense_sum', label: 'Сумма', width: '110px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
         const sum = Number(item.total_expense_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const debtSum = Number(item.debt_sum || 0).toFixed(2);
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
 
         return `
@@ -1940,7 +1957,11 @@ expenses_by_receipts: {
             <td>${item.postavhik_name || '—'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${qty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} ₽</td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: ${Number(debtSum) > 0 ? '#dc2626' : '#6b7280'};">
+                ${debtSum} ₽
+            </td>
         `;
     }
 }
