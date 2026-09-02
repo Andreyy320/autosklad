@@ -1664,7 +1664,7 @@ router.get('/stock_balances', async (req, res) => {
             )
             SELECT 
                 z.id,
-                st.warehouse_id,
+                s.id AS warehouse_id,
                 z.article AS artikul,
                 z.code,
                 z.name,
