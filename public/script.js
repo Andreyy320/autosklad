@@ -6209,7 +6209,7 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
 }
 
 // ==========================================
-// КЛИКЕР ДЛЯ ТАБЛИЦЫ (СКЛАДЫ -> ПОКУПАТЕЛИ -> ДОКУМЕНТЫ)
+// КЛИКЕР ДЛЯ ТАБЛИЦЫ (СКЛАДЫ -> ПОКУПАТЕЛИ)
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
@@ -6219,66 +6219,36 @@ if (tableBodyForReceipts) {
     newTableBody.addEventListener('click', async (e) => {
         if (
             currentEntity !== 'money_receipts_by_sklad' && 
-            currentEntity !== 'money_receipts_by_customers' && 
-            currentEntity !== 'money_receipts'
+            currentEntity !== 'money_receipts_by_customers'
         ) {
             return;
         }
 
         const tr = e.target.closest('tr');
         if (!tr) return;
-        
-        // Игнорируем клики по строкам-шапкам месяцев
-        if (tr.style.background && tr.style.background.includes('rgb(241, 245, 249)')) {
-            return;
-        }
 
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        const rowsArray = Array.from(newTableBody.querySelectorAll('tr:not([style*="background: rgb(241, 245, 249)"])'));
+        const rowsArray = Array.from(newTableBody.querySelectorAll('tr'));
         const rowIndex = rowsArray.indexOf(tr);
 
         if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
             selectedItem = currentItems[rowIndex];
         } else {
             const id = tr.getAttribute('data-id');
-            selectedItem = currentItems.find(i => String(i.id || i.realization_id || i.sklad_id || i.customer_id) === String(id));
+            selectedItem = currentItems.find(i => String(i.id || i.sklad_id || i.customer_id) === String(id));
         }
         
         const id = tr.getAttribute('data-id');
         console.log(`📥 [КЛИК] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
-        const detailContainer = document.getElementById('detail-container');
-
         if (selectedItem) {
             if (currentEntity === 'money_receipts_by_sklad') {
                 loadReceiptMainData('money_receipts_by_customers', selectedItem);
             } else if (currentEntity === 'money_receipts_by_customers') {
-                loadReceiptMainData('money_receipts', selectedItem);
-            } else if (currentEntity === 'money_receipts') {
-                let realizationId = selectedItem.realization_id || selectedItem.id || id;
-                if (realizationId) {
-                    window.currentRealizationId = realizationId;
-                }
-
-                let skladId = window.currentSkladId || '';
-                let customerId = window.currentCustomerId || '';
-                let currentRealization = window.currentRealizationId || '';
-
-                // По умолчанию при клике на документ загружаем запчасти (или смотрим какой таб активен)
-                const activeTabBtn = document.querySelector('#tabs-for-money-receipts .active, #tabs-for-money-receipts button.active');
-                const currentSubTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
-
-                if (detailContainer) detailContainer.style.display = 'flex';
-
-                if (currentSubTab === 'money_receipts_works_detail' || currentSubTab === 'realization_works') {
-                    const fetchUrlWorks = `/api/money_receipts_works_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    loadReceiptWorksDetailTask(fetchUrlWorks);
-                } else {
-                    const fetchUrlDetail = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    loadReceiptDetailTable(fetchUrlDetail);
-                }
+                // Остановились на покупателях, дальше уровень документов не вызываем
+                console.log('ℹ️ Выбран покупатель, уровень документов временно отключен.');
             }
         }
     });
