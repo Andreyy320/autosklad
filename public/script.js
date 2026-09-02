@@ -6182,10 +6182,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.className = `group-row-rec-${currentGIdx}`;
                     tr.innerHTML = config.render(item);
                     
-                    // Клик по строке документа загружает детализацию внизу
+                    // Клик по строке документа сохраняет выбранный элемент и загружает детализацию
                     tr.addEventListener('click', () => {
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
+                        
+                        selectedItem = item; // Сохраняем глобально для табов
                         window.currentRealizationId = item.realization_id || item.id;
                         
                         loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${window.currentRealizationId}`);
@@ -6216,6 +6218,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.addEventListener('click', () => {
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
+
+                    selectedItem = item; // Сохраняем глобально
 
                     if (currentEntity === 'money_receipts_by_sklad') {
                         loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
@@ -6295,7 +6299,6 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
         if (!worksBody) return;
         if (items.length === 0) return;
 
-        // Логика отрисовки услуг (при необходимости добавьте ваш рендер)
         console.log("Загружены работы/услуги:", items);
     } catch (err) {
         console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
@@ -6307,7 +6310,6 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
-    // Удаляем старый обработчик через клонирование, чтобы не плодить дубликаты
     const newTableBody = tableBodyForReceipts.cloneNode(true);
     tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
 
@@ -6331,11 +6333,9 @@ if (tableBodyForReceipts) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // Ищем элемент в массиве currentItems
         const rowsArray = Array.from(newTableBody.querySelectorAll('tr:not([style*="background: rgb(241, 245, 249)"])'));
         const rowIndex = rowsArray.indexOf(tr);
 
-        let selectedItem = null;
         if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
             selectedItem = currentItems[rowIndex];
         } else {
@@ -6354,7 +6354,6 @@ if (tableBodyForReceipts) {
             } else if (currentEntity === 'money_receipts_by_customers') {
                 loadReceiptMainData('money_receipts', selectedItem);
             } else if (currentEntity === 'money_receipts') {
-                // Жестко фиксируем id реализации из любых возможных полей объекта
                 let realizationId = selectedItem.realization_id || selectedItem.id || id;
                 if (realizationId) {
                     window.currentRealizationId = realizationId;
@@ -6369,7 +6368,6 @@ if (tableBodyForReceipts) {
 
                 if (detailContainer) detailContainer.style.display = 'flex';
                 
-                // Загружаем и товары, и работы в нижние таблицы
                 loadReceiptDetailTable(fetchUrlDetail);
                 loadReceiptWorksDetailTable(fetchUrlWorks);
             }
@@ -6377,8 +6375,64 @@ if (tableBodyForReceipts) {
     });
 }
 
+// ==========================================
+// ИСПРАВЛЕННЫЙ ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ ВНИЗУ
+// ==========================================
+function switchMoneyReceiptTab(tabName, btnElement) {
+    console.log('🔄 [switchMoneyReceiptTab] НАЧАЛО переключения таба:', { tabName, selectedItem });
+    
+    currentMoneyReceiptSubTab = tabName; 
 
+    const container = document.getElementById('tabs-for-money-receipts');
+    if (container) {
+        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
+    }
+    if (btnElement) {
+        btnElement.classList.add('active');
+        btnElement.setAttribute('data-tab', tabName);
+        console.log('✅ [switchMoneyReceiptTab] Активная кнопка установлена:', tabName);
+    } else {
+        console.warn('⚠️ [switchMoneyReceiptTab] btnElement не передан!');
+    }
 
+    const detailToolbar = document.getElementById('detail-toolbar');
+    if (detailToolbar) {
+        detailToolbar.style.display = 'flex';
+    }
+
+    if (selectedItem) {
+        // Определяем ID в зависимости от того, какой уровень сейчас выбран вверху
+        let realizationId = selectedItem.realization_id || selectedItem.id || window.currentRealizationId || '';
+        let customerId = selectedItem.customer_id || window.currentCustomerId || '';
+        let skladId = selectedItem.sklad_id || window.currentSkladId || '';
+
+        // Формируем URL в зависимости от выбранного подтаба снизу
+        let url = '';
+        if (tabName === 'money_receipts_detail' || tabName === 'realization_items') {
+            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+            loadReceiptDetailTable(url);
+        } else if (tabName === 'money_receipts_works_detail' || tabName === 'realization_works') {
+            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+            loadReceiptWorksDetailTable(url);
+        } else if (typeof loadDetailData === 'function') {
+            // Фолбек на универсальный метод, если передан другой кастомный таб
+            const payload = {
+                customer_id: customerId,
+                sklad_id: skladId,
+                realization_id: realizationId
+            };
+            loadDetailData(tabName, payload);
+        }
+
+        console.log(`🚀 [switchMoneyReceiptTab] Загрузка данных для таба "${tabName}" с URL:`, url);
+    } else {
+        console.warn('⚠️ [switchMoneyReceiptTab] ОШИБКА: selectedItem отсутствует (ничего не выбрано в верхней таблице)!');
+        const detailBody = document.getElementById('detail-body');
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите запись в верхней таблице</td></tr>`;
+        }
+    }
+}
 
 
 
@@ -7226,46 +7280,6 @@ function switchRepairTab(tabName, btnElement) {
 }
 let currentMoneyReceiptSubTab = 'money_receipts_detail';
 
-function switchMoneyReceiptTab(tabName, btnElement) {
-    console.log(' [switchMoneyReceiptTab] НАЧАЛО переключения таба:', { tabName, selectedItem });
-    
-    currentMoneyReceiptSubTab = tabName; 
-
-    const container = document.getElementById('tabs-for-money-receipts');
-    if (container) {
-        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
-    }
-    if (btnElement) {
-        btnElement.classList.add('active');
-        btnElement.setAttribute('data-tab', tabName);
-        console.log(' [switchMoneyReceiptTab] Активная кнопка установлена:', tabName);
-    } else {
-        console.warn(' [switchMoneyReceiptTab] btnElement не передан!');
-    }
-
-    const detailToolbar = document.getElementById('detail-toolbar');
-    if (detailToolbar) {
-        detailToolbar.style.display = 'flex';
-    }
-
-    if (selectedItem) {
-        const payload = {
-            customer_id: selectedItem.customer_id || selectedItem.id,
-            sklad_id: selectedItem.sklad_id || window.currentSkladId || ''
-        };
-        console.log(' [switchMoneyReceiptTab] Сформирован payload для загрузки:', payload);
-
-        // Вызываем загрузку и логируем прямо перед вызовом
-        console.log(` [switchMoneyReceiptTab] Вызываем loadDetailData для сущности: ${tabName}`);
-        loadDetailData(tabName, payload);
-    } else {
-        console.warn(' [switchMoneyReceiptTab] ОШИБКА: selectedItem отсутствует (ничего не выбрано в верхней таблице)!');
-        const detailBody = document.getElementById('detail-body');
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите запись в верхней таблице</td></tr>`;
-        }
-    }
-}
 
 
     const detailBody = document.getElementById('detail-body');
