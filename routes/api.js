@@ -4964,7 +4964,7 @@ router.put('/move_items/:id', async (req, res) => {
         console.log(`[FIFO PUT DEBUG] Запрошено количество: ${requestedQty} шт.`);
         console.log(`[FIFO PUT DEBUG] Доступно на складе-источнике (честный остаток):`, totalAvailableStock);
 
-        if (requestedQuery > totalAvailableStock) {
+        if (requestedQty > totalAvailableStock) {
             await client.query('ROLLBACK');
             return res.status(400).json({ 
                 error: `Недостаточно товара на выбранном складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь установить: ${requestedQty} шт.` 
