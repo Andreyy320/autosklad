@@ -1616,6 +1616,8 @@ router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
 
+        console.log(`[DEBUG] /stock_balances запрошен с параметрами:`, { date, warehouse_id, mol_id });
+
         const queryParams = [];
         let paramIndex = 1;
 
@@ -1678,6 +1680,9 @@ router.get('/stock_balances', async (req, res) => {
             ${molFilterClause}
             ORDER BY z.name ASC, s.name ASC;
         `;
+
+        console.log(`[DEBUG] SQL Query:\n${query}`);
+        console.log(`[DEBUG] Query Params:`, queryParams);
 
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
