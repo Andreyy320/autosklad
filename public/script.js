@@ -1950,7 +1950,8 @@ expenses_by_receipts: {
         const sum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
-        const debtSum = Number(item.debt_sum || 0).toFixed(2);
+        const debtSumNum = Number(item.debt_sum || 0);
+        const debtSum = debtSumNum.toFixed(2);
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
@@ -1958,6 +1959,14 @@ expenses_by_receipts: {
         const paidHtml = totalPaidNum > 0 
             ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid} ₽</span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid} ₽</span>`;
+
+        // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить»
+        const actionHtml = debtSumNum <= 0 
+            ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
+            : `<button type="button" onclick="openPaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
+                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+            </button>`;
 
         return `
             <td><b>№ ${docTitle}</b></td>
@@ -1967,14 +1976,11 @@ expenses_by_receipts: {
             <td style="text-align: right;">${qty}</td>
             <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
-            <td style="text-align: right; font-weight: bold; color: ${Number(debtSum) > 0 ? '#dc2626' : '#6b7280'};">
+            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
                 ${debtSum} ₽
             </td>
             <td style="text-align: center;">
-                <button type="button" onclick="openPaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
-                    style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                    Оплатить
-                </button>
+                ${actionHtml}
             </td>
         `;
     }
