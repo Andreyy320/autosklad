@@ -4286,7 +4286,6 @@ async function writeRepairLog(client, req, data) {
     }
 }
 
-
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
     const client = await pool.connect();
@@ -4308,9 +4307,9 @@ router.post('/receipt_items', async (req, res) => {
             return res.status(400).json({ error: 'Не указан ID прихода (receipt_id) или запчасти (zaphasti_id).' });
         }
 
-        // 2. Проверяем, проведен ли уже родительский документ (receipts), и забираем нужные поля для лога (warehouse_id, supplier_id, doc_number)
+        // 2. Проверяем, проведен ли уже родительский документ (receipts), и забираем нужные поля для лога и склада (warehouse_id, supplier_id, doc_number, date)
         const receiptCheck = await client.query(
-            'SELECT is_posted, warehouse_id, supplier_id, doc_number FROM receipts WHERE id = $1',
+            'SELECT is_posted, warehouse_id, supplier_id, doc_number, date FROM receipts WHERE id = $1',
             [receipt_id]
         );
 
@@ -4363,7 +4362,24 @@ router.post('/receipt_items', async (req, res) => {
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
 
-        // 5. Запись лога в новую изолированную таблицу receipt_logs
+        // 5. Запись в таблицу остатков партий (warehouse_batches) для учета на складе
+        const batchQuery = `
+            INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+            VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
+            RETURNING *;
+        `;
+        const batchResult = await client.query(batchQuery, [
+            receiptData.warehouse_id,
+            zaphasti_id,
+            receipt_id,
+            priceRub,
+            numQty,
+            receiptData.date
+        ]);
+        
+        console.log('📦 [WAREHOUSE BATCH CREATED]:', batchResult.rows[0]);
+
+        // 6. Запись лога в новую изолированную таблицу receipt_logs
         await writeReceiptLog(client, req, {
             action: 'INSERT',
             receipt_id: receipt_id,
@@ -4381,8 +4397,10 @@ router.post('/receipt_items', async (req, res) => {
 
         await client.query('COMMIT');
 
+        console.log(`✅ [SUCCESS] Позиция ID ${createdItem.id} добавлена в приход ${receipt_id} и успешно зафиксирована на складе ( warehouse_id: ${receiptData.warehouse_id}, qty: ${numQty} )`);
+
         return res.status(201).json({
-            message: 'Позиция успешно добавлена в приход',
+            message: 'Позиция успешно добавлена в приход и на склад',
             item: createdItem
         });
 
@@ -6047,6 +6065,10 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
+
+
+
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
