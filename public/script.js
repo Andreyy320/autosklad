@@ -1900,8 +1900,8 @@ expenses_by_suppliers: {
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center;">${item.total_receipts || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} ₽</td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} </td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
             <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
                 ${totalDebt} ₽
             </td>
@@ -1942,7 +1942,8 @@ expenses_by_receipts: {
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
@@ -1950,18 +1951,50 @@ expenses_by_receipts: {
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtSum = Number(item.debt_sum || 0).toFixed(2);
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
+        const docTitle = item.doc_number || item.id;
 
         return `
-            <td><b>№ ${item.doc_number || item.id}</b></td>
+            <td><b>№ ${docTitle}</b></td>
             <td><span style="color: #4b5563;">${formattedDate}</span></td>
             <td>${item.postavhik_name || '—'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${qty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} ₽</td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
             <td style="text-align: right; font-weight: bold; color: ${Number(debtSum) > 0 ? '#dc2626' : '#6b7280'};">
                 ${debtSum} ₽
             </td>
+            <td style="text-align: center;">
+                <button type="button" onclick="openPaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
+                    style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                    Оплатить
+                </button>
+            </td>
+        `;
+    }
+},
+
+expense_payments: {
+    title: 'История всех оплат',
+    columns: [
+        { field: 'payment_date', label: 'Дата оплаты', width: '130px' },
+        { field: 'doc_number', label: '№ Накладной', width: '120px' },
+        { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
+        { field: 'amount', label: 'Сумма оплаты', width: '120px', align: 'right' },
+        { field: 'payment_method', label: 'Способ', width: '120px' },
+        { field: 'comment', label: 'Комментарий', width: '200px' }
+    ],
+    render: (item) => {
+        const amount = Number(item.amount || 0).toFixed(2);
+        const date = item.payment_date ? new Date(item.payment_date).toLocaleDateString() : '—';
+
+        return `
+            <td><span style="color: #4b5563;">${date}</span></td>
+            <td><b>№ ${item.doc_number || item.parent_id}</b></td>
+            <td>${item.postavhik_name || '—'}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount} ₽</td>
+            <td><span style="color: #0284c7;">${item.payment_method || 'Наличные'}</span></td>
+            <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
 }
@@ -5472,6 +5505,76 @@ async function loadData(entity, title, customParams = {}) {
         console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
         currentItems = [];
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
+    }
+}
+
+
+
+
+// 1. Функция открывает твою шторку с формой оплаты
+function openPaymentDrawer(receiptId, debtSum, docNumber) {
+    const drawer = getOrCreateDrawer(); // Используем твою функцию шторки
+    
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата накладной № ${docNumber}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+
+        <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма к оплате (Долг: ${debtSum} ₽)</label>
+                <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Способ оплаты</label>
+                <select id="payment-method" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff;">
+                    <option value="Наличные">Наличные</option>
+                    <option value="Карта">Карта</option>
+                    <option value="Перевод">Перевод</option>
+                </select>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
+                <textarea id="payment-comment" placeholder="Примечание к платежу..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button type="submit" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
+            </div>
+        </form>
+    `;
+
+    openDrawer(); // Вызываем твою функцию анимации открытия шторки
+}
+
+// 2. Функция отправляет данные на сервер при нажатии «Сохранить»
+async function submitPayment(event, receiptId) {
+    event.preventDefault();
+    
+    const payload = {
+        receipt_id: receiptId,
+        amount: parseFloat(document.getElementById('payment-amount').value),
+        payment_method: document.getElementById('payment-method').value,
+        comment: document.getElementById('payment-comment').value
+    };
+
+    let response = await fetch('/api/expense_payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+        closeDrawer(); // Закрываем шторку
+        if (typeof loadTableData === 'function') loadTableData(); // Перезагружаем таблицу, чтобы обновились долги
+    } else {
+        alert('Ошибка при сохранении платежа');
     }
 }
 
