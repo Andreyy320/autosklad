@@ -5484,48 +5484,86 @@ function paySupplier() {
     const receiptId = selectedItem.id || selectedItem.receipt_id;
     const debtAmount = selectedItem.dolgt || selectedItem.debt || selectedItem.sum || 0;
 
-    showConfirmModal(
-        'Оплата накладной',
-        `Вы хотите внести оплату по документу (ID: ${receiptId})? Остаток долга: ${debtAmount}`,
-        async () => {
-            const currentUserId = localStorage.getItem('currentUserId') || '';
+    // Создаем кастомное модальное окно с полями ввода
+    const modalId = 'custom-pay-modal';
+    let existingModal = document.getElementById(modalId);
+    if (existingModal) existingModal.remove();
 
-            try {
-                const response = await fetch(`/api/expenses_by_receipts/${receiptId}/pay`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-user-id': currentUserId
-                    },
-                    body: JSON.stringify({
-                        amount: debtAmount,
-                        postavhik_id: window.currentPostavhikId,
-                        sklad_id: window.currentSkladId
-                    })
-                });
+    const modalHtml = `
+        <div id="${modalId}" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+            <div style="background: #fff; padding: 20px; border-radius: 8px; width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #333;">Оплата накладной (ID: ${receiptId})</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #666;">Остаток долга:</label>
+                    <input type="text" id="pay-debt-info" value="${debtAmount}" disabled style="width: 100%; padding: 8px; box-sizing: border-box; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
 
-                const resultData = await response.json().catch(() => ({}));
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #333;">Сумма к оплате:</label>
+                    <input type="number" id="pay-amount-input" value="${debtAmount}" step="0.01" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
 
-                if (response.ok) {
-                    showAppNotification('Оплата успешно проведена', 'success');
-                    selectedItem = null;
-                    
-                    if (typeof loadExpenseMainData === 'function') {
-                        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
-                    } else if (typeof refreshData === 'function') {
-                        refreshData();
-                    }
-                } else {
-                    showAppNotification(resultData.error || 'Ошибка при проведении оплаты', 'error');
-                }
-            } catch (err) {
-                console.error('Ошибка соединения при оплате:', err);
-                showAppNotification('Ошибка соединения с сервером', 'error');
-            }
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="pay-cancel-btn" style="padding: 8px 16px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;">Отмена</button>
+                    <button id="pay-submit-btn" style="padding: 8px 16px; background: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Оплатить</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    document.getElementById('pay-cancel-btn').onclick = () => {
+        document.getElementById(modalId).remove();
+    };
+
+    document.getElementById('pay-submit-btn').onclick = async () => {
+        const amountInputVal = document.getElementById('pay-amount-input').value;
+        const paymentAmount = parseFloat(amountInputVal);
+
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+            showAppNotification('Введите корректную сумму оплаты', 'warning');
+            return;
         }
-    );
-}
 
+        const currentUserId = localStorage.getItem('currentUserId') || '';
+
+        try {
+            const response = await fetch(`/api/expenses_by_receipts/${receiptId}/pay`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
+                },
+                body: JSON.stringify({
+                    amount: paymentAmount,
+                    postavhik_id: window.currentPostavhikId,
+                    sklad_id: window.currentSkladId
+                })
+            });
+
+            const resultData = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                showAppNotification('Оплата успешно проведена', 'success');
+                selectedItem = null;
+                document.getElementById(modalId).remove();
+                
+                if (typeof loadExpenseMainData === 'function') {
+                    loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+                } else if (typeof refreshData === 'function') {
+                    refreshData();
+                }
+            } else {
+                showAppNotification(resultData.error || 'Ошибка при проведении оплаты', 'error');
+            }
+        } catch (err) {
+            console.error('Ошибка соединения при оплате:', err);
+            showAppNotification('Ошибка соединения с сервером', 'error');
+        }
+    };
+}
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
