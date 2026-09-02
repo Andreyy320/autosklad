@@ -5971,7 +5971,6 @@ if (tableBodyForExpenses) {
 }
 
 
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6187,11 +6186,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.addEventListener('click', () => {
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
-                        window.currentRealizationId = item.realization_id;
+                        window.currentRealizationId = item.realization_id || item.id;
                         
-                        // Загружаем и товары, и работы по этой реализации
-                        loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${item.realization_id}`);
-                        loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${item.realization_id}`);
+                        loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${window.currentRealizationId}`);
+                        loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${window.currentRealizationId}`);
                     });
 
                     mainTableBody.appendChild(tr);
@@ -6220,10 +6218,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.classList.add('selected-row');
 
                     if (currentEntity === 'money_receipts_by_sklad') {
-                        // Переход на уровень покупателей выбранного склада
                         loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
                     } else if (currentEntity === 'money_receipts_by_customers') {
-                        // Переход на уровень документов выбранного покупателя
                         loadReceiptMainData('money_receipts', item.customer_id || item.id);
                     }
                 });
@@ -6299,11 +6295,13 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
         if (!worksBody) return;
         if (items.length === 0) return;
 
-        // Логика отрисовки услуг
+        // Логика отрисовки услуг (при необходимости добавьте ваш рендер)
+        console.log("Загружены работы/услуги:", items);
     } catch (err) {
         console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
     }
 }
+
 // ==========================================
 // ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ ПРИХОДОВ / РЕАЛИЗАЦИЙ
 // ==========================================
@@ -6313,7 +6311,7 @@ if (tableBodyForReceipts) {
         if (
             currentEntity !== 'money_receipts_by_sklad' && 
             currentEntity !== 'money_receipts_by_customers' && 
-            currentEntity !== 'money_receipts_by_receipts'
+            currentEntity !== 'money_receipts'
         ) {
             return;
         }
@@ -6321,7 +6319,7 @@ if (tableBodyForReceipts) {
         const tr = e.target.closest('tr');
         if (!tr) return;
         
-        // Игнорируем клики по строкам-шапкам месяцев (если они есть)
+        // Игнорируем клики по строкам-шапкам месяцев
         if (tr.style.background && tr.style.background.includes('rgb(241, 245, 249)')) {
             return;
         }
@@ -6332,6 +6330,7 @@ if (tableBodyForReceipts) {
         const rowsArray = Array.from(tableBodyForReceipts.querySelectorAll('tr'));
         const rowIndex = rowsArray.indexOf(tr);
 
+        let selectedItem = null;
         if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
             selectedItem = currentItems[rowIndex];
         } else {
@@ -6339,8 +6338,6 @@ if (tableBodyForReceipts) {
             selectedItem = currentItems.find(i => String(i.id || i.realization_id || i.sklad_id || i.customer_id) === String(id));
         }
         
-        selectedDetailItem = null;  
-
         const id = tr.getAttribute('data-id');
         console.log(`📥 [КЛИК В ПРИХОДАХ] Сущность: "${currentEntity}", Индекс: ${rowIndex}, ID строки: ${id}`, selectedItem);
 
@@ -6366,8 +6363,8 @@ if (tableBodyForReceipts) {
             if (currentEntity === 'money_receipts_by_sklad') {
                 loadReceiptMainData('money_receipts_by_customers', selectedItem);
             } else if (currentEntity === 'money_receipts_by_customers') {
-                loadReceiptMainData('money_receipts_by_receipts', selectedItem);
-            } else if (currentEntity === 'money_receipts_by_receipts') {
+                loadReceiptMainData('money_receipts', selectedItem);
+            } else if (currentEntity === 'money_receipts') {
                 let realizationId = selectedItem.realization_id || selectedItem.id || id;
                 if (realizationId) {
                     window.currentRealizationId = realizationId;
@@ -6381,6 +6378,7 @@ if (tableBodyForReceipts) {
 
                 if (detailContainer) detailContainer.style.display = 'flex';
                 loadReceiptDetailTable(fetchUrl);
+                loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${currentRealization}`);
             }
         }
     });
