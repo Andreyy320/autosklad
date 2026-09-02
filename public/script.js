@@ -5511,9 +5511,8 @@ async function loadData(entity, title, customParams = {}) {
 
 
 
-// 1. Функция открывает твою шторку с формой оплаты
 function openPaymentDrawer(receiptId, debtSum, docNumber) {
-    const drawer = getOrCreateDrawer(); // Используем твою функцию шторки
+    const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -5523,18 +5522,9 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
 
         <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма к оплате (Долг: ${debtSum} ₽)</label>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} ₽)</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Способ оплаты</label>
-                <select id="payment-method" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff;">
-                    <option value="Наличные">Наличные</option>
-                    <option value="Карта">Карта</option>
-                    <option value="Перевод">Перевод</option>
-                </select>
             </div>
 
             <div>
@@ -5550,31 +5540,35 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
         </form>
     `;
 
-    openDrawer(); // Вызываем твою функцию анимации открытия шторки
+    openDrawer();
 }
 
-// 2. Функция отправляет данные на сервер при нажатии «Сохранить»
 async function submitPayment(event, receiptId) {
     event.preventDefault();
     
     const payload = {
         receipt_id: receiptId,
         amount: parseFloat(document.getElementById('payment-amount').value),
-        payment_method: document.getElementById('payment-method').value,
         comment: document.getElementById('payment-comment').value
     };
 
-    let response = await fetch('/api/expense_payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
+    try {
+        let response = await fetch('/api/expense_payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-    if (response.ok) {
-        closeDrawer(); // Закрываем шторку
-        if (typeof loadTableData === 'function') loadTableData(); // Перезагружаем таблицу, чтобы обновились долги
-    } else {
-        alert('Ошибка при сохранении платежа');
+        if (response.ok) {
+            closeDrawer();
+            showAppNotification('Платёж успешно сохранен', 'success');
+            if (typeof loadTableData === 'function') loadTableData();
+        } else {
+            showAppNotification('Ошибка при сохранении платежа', 'error');
+        }
+    } catch (err) {
+        console.error('Ошибка сети:', err);
+        showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
 
@@ -7300,7 +7294,8 @@ const navMap = {
     'Расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
     'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
     'Накладные поставщика': 'expenses_by_receipts',
-    'Спецификация расходов': 'expense_items'         // Поменяли "Детали расходов" для единообразия
+    'Спецификация расходов': 'expense_items',
+    'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
 
 function updateFilterPanels(entity) {
