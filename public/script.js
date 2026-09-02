@@ -7163,21 +7163,22 @@ document.querySelectorAll('.nav-link').forEach(link => {
             const btnDelete = document.getElementById('btn-delete');
             const paySupplierBtn = document.getElementById('pay-supplier-btn');
 
-            // Проверяем, является ли раздел Расходами
-            const isExpenses = (text === 'Расходы' || entity === 'расходы' || entity === 'expenses');
+            // Проверяем, является ли текущий раздел расходами (включая expenses_by_receipts)
+            const isExpenses = (text === 'Расходы' || entity === 'расходы' || entity === 'expenses' || entity === 'expenses_by_receipts');
 
             if (isExpenses) {
-                // Панель показываем, кнопку "Добавить" оставляем, остальные скрываем
+                // Показываем панель, кнопку Добавить и кнопку Оплатить, скрываем Изменить и Удалить
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
                 if (btnAdd) btnAdd.style.setProperty('display', 'inline-flex', 'important');
                 if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
                 if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
-                if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'none', 'important');
+                if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'inline-flex', 'important');
             } else if (readOnlyMainEntities.includes(entity)) {
                 // Для остальных чисто read-only скрываем всю панель
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
+                if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'none', 'important');
             } else {
-                // Для обычных разделов показываем панель и все основные кнопки управления
+                // Для обычных разделов показываем основные кнопки, Оплатить скрываем
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
                 if (btnAdd) btnAdd.style.setProperty('display', 'inline-flex', 'important');
                 if (btnEdit) btnEdit.style.setProperty('display', 'inline-flex', 'important');
@@ -7200,7 +7201,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity === 'stock_movement' || 
             entity === 'postavhik' || 
             entity === 'counterparties' || 
-            entity === 'customers'
+            entity === 'customers' ||
+            entity === 'expenses_by_receipts'
         ) {
             if (detailContainer) detailContainer.style.display = 'flex';
             
@@ -7261,7 +7263,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (carTabsBar) carTabsBar.style.display = 'none';
         }
         
-        // Если выбрали Расходы, запускаем нашу новую изолированную функцию
+        // Если выбрали Расходы (основной или по приходам), вызываем нужную загрузку
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             loadExpenseMainData('expenses_by_sklad');
             return;
@@ -7276,6 +7278,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
+
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
