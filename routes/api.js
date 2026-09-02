@@ -1621,19 +1621,28 @@ router.get('/stock_balances', async (req, res) => {
 
         let warehouseFilter = '';
         let molFilter = '';
+        let mainWarehouseFilter = '';
+        let mainMolFilter = '';
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
             warehouseFilter += ` AND wb.warehouse_id = $${paramIndex}`;
+            mainWarehouseFilter += ` AND s.id = $${paramIndex}`;
             paramIndex++;
         }
 
         // Фильтр по МОЛ
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            molFilter += ` AND mol_table.user_id = $${paramIndex}`;
+            molFilter += ` AND lm.user_id = $${paramIndex}`;
+            mainMolFilter += ` AND lm.user_id = $${paramIndex}`;
             paramIndex++;
+        }
+
+        // Фильтр по дате (если потребуется в будущем, заготовка сохранена)
+        if (date && date.trim() !== '' && date !== 'undefined') {
+            // Если нужно будет фильтровать по дате партий, можно добавить сюда условие
         }
 
         const query = `
@@ -1675,8 +1684,8 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
-            ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
-            ${mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' ? `AND lm.user_id = ${Number(mol_id)}` : ''}
+            ${mainWarehouseFilter}
+            ${mainMolFilter}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
