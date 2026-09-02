@@ -4674,7 +4674,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
     }
 });
 
-
 // POST /api/move_items - перемещение с прямым обновлением warehouse_batches (FIFO по партиям склада)
 router.post('/move_items', async (req, res) => {
     console.log(`\n========================================`);
@@ -4725,6 +4724,16 @@ router.post('/move_items', async (req, res) => {
         if (warehouseFromId === warehouseToId) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
+        }
+
+        // Защита от дублирования: проверяем, не добавлена ли уже эта запчасть в данный документ перемещения
+        const existingItemCheck = await client.query(
+            'SELECT id FROM move_items WHERE move_id = $1 AND zaphasti_id = $2',
+            [move_id, zaphasti_id]
+        );
+        if (existingItemCheck.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Эта запчасть уже добавлена в данный документ перемещения. Измените существующую позицию или удалите её перед добавлением заново.' });
         }
 
         // 2. Берем реальные активные партии со склада-источника прямо из warehouse_batches (где количество > 0)
