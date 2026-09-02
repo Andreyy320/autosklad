@@ -1870,10 +1870,10 @@ expenses_by_sklad: {
             <td><span style="color: #d97706; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center;">${item.total_receipts || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} ₽</td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} </td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
             <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
-                ${totalDebt} ₽
+                ${totalDebt} 
             </td>
         `;
     }
@@ -1903,7 +1903,7 @@ expenses_by_suppliers: {
             <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} </td>
             <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
             <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
-                ${totalDebt} ₽
+                ${totalDebt} 
             </td>
         `;
     }
@@ -1957,8 +1957,8 @@ expenses_by_receipts: {
 
         // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
         const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid} ₽</span>`
-            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid} ₽</span>`;
+            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid} </span>`
+            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
         // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить»
         const actionHtml = debtSumNum <= 0 
@@ -1977,7 +1977,7 @@ expenses_by_receipts: {
             <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
-                ${debtSum} ₽
+                ${debtSum} 
             </td>
             <td style="text-align: center;">
                 ${actionHtml}
@@ -2003,7 +2003,7 @@ expense_payments: {
             <td><span style="color: #4b5563;">${date}</span></td>
             <td><b>№ ${item.doc_number || item.parent_id}</b></td>
             <td>${item.postavhik_name || '—'}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount} ₽</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount}</td>
             <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
@@ -5555,7 +5555,7 @@ async function openPaymentHistory(receiptId, docNumber) {
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
-                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} ₽</td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} </td>
                     <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
                 </tr>
             `;
@@ -5602,7 +5602,7 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
 
         <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} ₽)</label>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
             </div>
@@ -5653,95 +5653,6 @@ async function submitPayment(event, receiptId) {
     }
 }
 
-function paySupplier() {
-    if (!selectedItem) {
-        showAppNotification('Пожалуйста, выберите накладную для оплаты (кликните один раз на строку в таблице).', 'warning');
-        return;
-    }
-
-    const receiptId = selectedItem.id || selectedItem.receipt_id;
-    const debtAmount = selectedItem.dolgt || selectedItem.debt || selectedItem.sum || 0;
-
-    // Создаем кастомное модальное окно с полями ввода
-    const modalId = 'custom-pay-modal';
-    let existingModal = document.getElementById(modalId);
-    if (existingModal) existingModal.remove();
-
-    const modalHtml = `
-        <div id="${modalId}" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
-            <div style="background: #fff; padding: 20px; border-radius: 8px; width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #333;">Оплата накладной (ID: ${receiptId})</h3>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #666;">Остаток долга:</label>
-                    <input type="text" id="pay-debt-info" value="${debtAmount}" disabled style="width: 100%; padding: 8px; box-sizing: border-box; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #333;">Сумма к оплате:</label>
-                    <input type="number" id="pay-amount-input" value="${debtAmount}" step="0.01" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                    <button id="pay-cancel-btn" style="padding: 8px 16px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;">Отмена</button>
-                    <button id="pay-submit-btn" style="padding: 8px 16px; background: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Оплатить</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    document.getElementById('pay-cancel-btn').onclick = () => {
-        document.getElementById(modalId).remove();
-    };
-
-    document.getElementById('pay-submit-btn').onclick = async () => {
-        const amountInputVal = document.getElementById('pay-amount-input').value;
-        const paymentAmount = parseFloat(amountInputVal);
-
-        if (isNaN(paymentAmount) || paymentAmount <= 0) {
-            showAppNotification('Введите корректную сумму оплаты', 'warning');
-            return;
-        }
-
-        const currentUserId = localStorage.getItem('currentUserId') || '';
-
-        try {
-            const response = await fetch(`/api/expenses_by_receipts/${receiptId}/pay`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': currentUserId
-                },
-                body: JSON.stringify({
-                    amount: paymentAmount,
-                    postavhik_id: window.currentPostavhikId,
-                    sklad_id: window.currentSkladId
-                })
-            });
-
-            const resultData = await response.json().catch(() => ({}));
-
-            if (response.ok) {
-                showAppNotification('Оплата успешно проведена', 'success');
-                selectedItem = null;
-                document.getElementById(modalId).remove();
-                
-                if (typeof loadExpenseMainData === 'function') {
-                    loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
-                } else if (typeof refreshData === 'function') {
-                    refreshData();
-                }
-            } else {
-                showAppNotification(resultData.error || 'Ошибка при проведении оплаты', 'error');
-            }
-        } catch (err) {
-            console.error('Ошибка соединения при оплате:', err);
-            showAppNotification('Ошибка соединения с сервером', 'error');
-        }
-    };
-}
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
@@ -5885,14 +5796,94 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
 
         mainTableBody.innerHTML = '';
-        currentItems.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
-            tr.style.cursor = 'pointer';
-            tr.innerHTML = config.render(item);
 
-            mainTableBody.appendChild(tr);
-        });
+        // ОСОБЫЙ РЕЖИМ ДЛЯ НАКЛАДНЫХ: Группировка по месяцам с плажками-аккордеонами
+        if (currentEntity === 'expenses_by_receipts') {
+            const monthNames = [
+                "января", "февраля", "марта", "апреля", "мая", "июня", 
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            ];
+
+            const groups = {};
+            currentItems.forEach(item => {
+                const dateObj = item.date ? new Date(item.date) : new Date();
+                const month = dateObj.getMonth();
+                const year = dateObj.getFullYear();
+                const key = `${year}-${String(month).padStart(2, '0')}`;
+                const title = `${monthNames[month]} ${year} года`;
+
+                if (!groups[key]) {
+                    groups[key] = {
+                        title: title,
+                        totalSum: 0,
+                        totalPaid: 0,
+                        totalDebt: 0,
+                        items: []
+                    };
+                }
+
+                groups[key].items.push(item);
+                groups[key].totalSum += Number(item.total_expense_sum || 0);
+                groups[key].totalPaid += Number(item.total_paid || 0);
+                groups[key].totalDebt += Number(item.debt_sum || 0);
+            });
+
+            let groupIndex = 0;
+            Object.keys(groups).sort().reverse().forEach(key => {
+                const group = groups[key];
+                const currentGIdx = groupIndex++;
+
+                // Шапка месяца (аккордеон)
+                const headerTr = document.createElement('tr');
+                headerTr.style.background = '#f1f5f9';
+                headerTr.style.cursor = 'pointer';
+                headerTr.style.fontWeight = 'bold';
+                headerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+                        <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
+                        ${group.title} &nbsp;|&nbsp; 
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} ₽</span> &nbsp;|&nbsp; 
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)} ₽</span> &nbsp;|&nbsp; 
+                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)} ₽</span>
+                    </td>
+                `;
+                mainTableBody.appendChild(headerTr);
+
+                const childRows = [];
+                group.items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.dataset.id = item.id || item.receipt_id || '';
+                    tr.style.cursor = 'pointer';
+                    tr.className = `group-row-${currentGIdx}`;
+                    tr.innerHTML = config.render(item);
+                    mainTableBody.appendChild(tr);
+                    childRows.push(tr);
+                });
+
+                // Клик на сворачивание/разворачивание
+                headerTr.addEventListener('click', () => {
+                    const icon = document.getElementById(`icon-${currentGIdx}`);
+                    const isHidden = childRows[0].style.display === 'none';
+                    
+                    childRows.forEach(tr => {
+                        tr.style.display = isHidden ? '' : 'none';
+                    });
+                    
+                    icon.innerText = isHidden ? '[-]' : '[+]';
+                });
+            });
+
+        } else {
+            // Обычный вывод для остальных таблиц (склады, поставщики и т.д.)
+            currentItems.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = config.render(item);
+
+                mainTableBody.appendChild(tr);
+            });
+        }
 
     } catch (err) {
         console.error('❌ [loadExpenseMainData ОШИБКА]:', err);
