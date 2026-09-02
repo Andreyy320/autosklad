@@ -1619,19 +1619,20 @@ router.get('/stock_balances', async (req, res) => {
         const queryParams = [];
         let paramIndex = 1;
 
-        let extraFilters = '';
+        let warehouseFilter = '';
+        let molFilter = '';
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
-            extraFilters += ` AND wb.warehouse_id = $${paramIndex}`;
+            warehouseFilter += ` AND wb.warehouse_id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Фильтр по МОЛ
+        // Фильтр по МОЛ для остатков
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            extraFilters += ` AND mol_table.user_id = $${paramIndex}`;
+            molFilter += ` AND mol_table.user_id = $${paramIndex}`;
             paramIndex++;
         }
 
@@ -1643,7 +1644,9 @@ router.get('/stock_balances', async (req, res) => {
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                WHERE 1=1 ${extraFilters}
+                LEFT JOIN skladi s ON wb.warehouse_id = s.id
+                LEFT JOIN mol mol_table ON mol_table.warehouse_id = s.id AND (mol_table.date_removed IS NULL OR mol_table.date_removed > NOW())
+                WHERE 1=1 ${warehouseFilter} ${molFilter}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             )
             SELECT 
@@ -1667,6 +1670,7 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN users u ON mol_table.user_id = u.id
             WHERE 1=1
             ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
+            ${mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' ? `AND mol_table.user_id = ${Number(mol_id)}` : ''}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
