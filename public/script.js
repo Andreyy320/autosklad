@@ -5974,7 +5974,6 @@ if (tableBodyForExpenses) {
 
 
 
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -5989,7 +5988,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
-    // 1 уровень: Склады
+    // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
         window.currentCustomerId = null;
@@ -6002,7 +6001,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Покупатели выбранного склада
+    // 2 уровень: Покупатели выбранного склада (отображаем всех для выбранного склада)
     else if (currentReceiptView === 'money_receipts_by_customers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
@@ -6015,46 +6014,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-    } 
-    // 3 уровень: Документы (реализации) по покупателю и складу
-    else if (currentReceiptView === 'money_receipts') {
-        let customerId = parentId && typeof parentId === 'object' ? (parentId.customer_id || parentId.id) : parentId;
-        if (customerId) window.currentCustomerId = customerId;
-        window.currentRealizationId = null;
-
-        let skladId = window.currentSkladId || '';
-        let currentCustomer = window.currentCustomerId || '';
-
-        fetchUrl = `/api/money_receipts?customer_id=${currentCustomer}${skladId ? '&sklad_id=' + skladId : ''}`;
-        if (detailContainer) detailContainer.style.display = 'none';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-    } 
-    // 4 уровень: Детализация (если вызывается напрямую)
-    else if (currentReceiptView === 'receipt_items') {
-        let realizationId = parentId && typeof parentId === 'object' ? (parentId.realization_id || parentId.id || parentId.document_id) : parentId;
-        
-        if (realizationId !== undefined && realizationId !== null && realizationId !== '') {
-            window.currentRealizationId = realizationId;
-        }
-
-        let skladId = window.currentSkladId || '';
-        let customerId = window.currentCustomerId || '';
-        let currentRealization = window.currentRealizationId || '';
-
-        fetchUrl = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
-
-        currentEntity = currentReceiptView; 
-        if (detailContainer) detailContainer.style.display = 'flex';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-
-        loadReceiptDetailTable(fetchUrl);
-        return; 
     }
 
     currentEntity = currentReceiptView;
@@ -6127,114 +6086,30 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         mainTableBody.innerHTML = '';
 
-        // Отрисовка сгруппированных документов (если открыт уровень конкретного покупателя)
-        if (currentEntity === 'money_receipts') {
-            const monthNames = [
-                "января", "февраля", "марта", "апреля", "мая", "июня", 
-                "июля", "августа", "сентября", "октября", "ноября", "декабря"
-            ];
+        // Обычный вывод для уровней складов или покупателей
+        currentItems.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = item.id || item.sklad_id || item.customer_id || '';
+            tr.style.cursor = 'pointer';
+            tr.innerHTML = config.render(item);
 
-            const groups = {};
-            currentItems.forEach(item => {
-                const dateObj = item.date ? new Date(item.date) : new Date();
-                const month = dateObj.getMonth();
-                const year = dateObj.getFullYear();
-                const key = `${year}-${String(month).padStart(2, '0')}`;
-                const title = `${monthNames[month]} ${year} года`;
+            // Настраиваем переходы по уровням по клику на строки
+            tr.addEventListener('click', () => {
+                document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+                tr.classList.add('selected-row');
 
-                if (!groups[key]) {
-                    groups[key] = {
-                        title: title,
-                        totalSum: 0,
-                        totalParts: 0,
-                        totalWorks: 0,
-                        items: []
-                    };
+                selectedItem = item; // Сохраняем глобально
+
+                if (currentEntity === 'money_receipts_by_sklad') {
+                    loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
+                } else if (currentEntity === 'money_receipts_by_customers') {
+                    // Пока остановимся здесь, дальше уровень документов не трогаем
+                    console.вывод?.('Выбран покупатель, уровень документов пока исключен');
                 }
-
-                groups[key].items.push(item);
-                groups[key].totalSum += Number(item.total_realization_sum || 0);
-                groups[key].totalParts += Number(item.parts_sum || 0);
-                groups[key].totalWorks += Number(item.works_sum || 0);
             });
 
-            let groupIndex = 0;
-            Object.keys(groups).sort().reverse().forEach(key => {
-                const group = groups[key];
-                const currentGIdx = groupIndex++;
-
-                const headerTr = document.createElement('tr');
-                headerTr.style.background = '#f1f5f9';
-                headerTr.style.cursor = 'pointer';
-                headerTr.style.fontWeight = 'bold';
-                headerTr.innerHTML = `
-                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
-                        <span id="icon-rec-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
-                        ${group.title} &nbsp;|&nbsp; 
-                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} </span> &nbsp;|&nbsp; 
-                        Запчасти: <span style="color:#16a34a;">${group.totalParts.toFixed(2)} </span> &nbsp;|&nbsp; 
-                        Работы: <span style="color:#2563eb;">${group.totalWorks.toFixed(2)} </span>
-                    </td>
-                `;
-                mainTableBody.appendChild(headerTr);
-
-                const childRows = [];
-                group.items.forEach(item => {
-                    const tr = document.createElement('tr');
-                    tr.dataset.id = item.realization_id || item.id || '';
-                    tr.style.cursor = 'pointer';
-                    tr.className = `group-row-rec-${currentGIdx}`;
-                    tr.innerHTML = config.render(item);
-                    
-                    // Клик по строке документа сохраняет выбранный элемент и загружает детализацию
-                    tr.addEventListener('click', () => {
-                        document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
-                        tr.classList.add('selected-row');
-                        
-                        selectedItem = item; // Сохраняем глобально для табов
-                        window.currentRealizationId = item.realization_id || item.id;
-                        
-                        loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${window.currentRealizationId}`);
-                        loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${window.currentRealizationId}`);
-                    });
-
-                    mainTableBody.appendChild(tr);
-                    childRows.push(tr);
-                });
-
-                headerTr.addEventListener('click', () => {
-                    const icon = document.getElementById(`icon-rec-${currentGIdx}`);
-                    const isHidden = childRows[0].style.display === 'none';
-                    childRows.forEach(tr => { tr.style.display = isHidden ? '' : 'none'; });
-                    icon.innerText = isHidden ? '[-]' : '[+]';
-                });
-            });
-
-        } else {
-            // Обычный вывод для уровней складов или покупателей
-            currentItems.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.dataset.id = item.id || item.realization_id || item.sklad_id || item.customer_id || '';
-                tr.style.cursor = 'pointer';
-                tr.innerHTML = config.render(item);
-
-                // Настраиваем переходы по уровням по клику на строки
-                tr.addEventListener('click', () => {
-                    document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
-                    tr.classList.add('selected-row');
-
-                    selectedItem = item; // Сохраняем глобально
-
-                    if (currentEntity === 'money_receipts_by_sklad') {
-                        loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
-                    } else if (currentEntity === 'money_receipts_by_customers') {
-                        loadReceiptMainData('money_receipts', item.customer_id || item.id);
-                    }
-                });
-
-                mainTableBody.appendChild(tr);
-            });
-        }
+            mainTableBody.appendChild(tr);
+        });
 
     } catch (err) {
         console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
@@ -6243,6 +6118,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
 
 // Загрузка спецификации товаров (запчастей)
 async function loadReceiptDetailTable(fetchUrl) {
