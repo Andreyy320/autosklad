@@ -3056,26 +3056,36 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе реализации не указан склад, с которого списываются запчасти.' });
         }
 
-        // Если менялась сама запчасть, или склад, или количество — нам нужно «вернуть» количество старой позиции обратно на склад в таблицу warehouse_batches перед проверкой остатков и новым списанием.
-        // То есть при изменении мы можем откатить влияние старой позиции: если склад и запчасть совпадают, старое количество временно доступно. 
-        // Самый надежный способ в рамках транзакции с warehouse_batches: если это та же самая запчасть на том же складе (или даже на разных), временно возвращаем количество старой позиции в её партию (или партию по income_document_id), выполняем пересчет, а затем списываем заново по FIFO.
-        
-        // Давайте вернем количество старой позиции в warehouse_batches:
+        // Возвращаем количество старой позиции обратно на склад в таблицу warehouse_batches (без кривого ON CONFLICT без индекса)
         if (currentItem.income_document_id && currentItem.zaphasti_id) {
-            await client.query(`
-                INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (zaphasti_id, warehouse_id, receipt_id, price_rub)
-                DO UPDATE SET quantity = warehouse_batches.quantity + EXCLUDED.quantity
-            `, [
-                currentItem.zaphasti_id, 
-                sklad_id, // или склад старой реализации, но здесь для упрощения считаем склад целевой/текущий
-                currentItem.income_document_id, 
-                currentItem.purchase_price || 0, 
-                currentItem.quantity
-            ]);
+            // Сначала проверяем, существует ли точно такая же партия
+            const existingBatchCheck = await client.query(`
+                SELECT id FROM warehouse_batches 
+                WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4
+            `, [currentItem.zaphasti_id, sklad_id, currentItem.income_document_id, currentItem.purchase_price || 0]);
+
+            if (existingBatchCheck.rows.length > 0) {
+                // Если есть — обновляем количество
+                await client.query(`
+                    UPDATE warehouse_batches 
+                    SET quantity = quantity + $1 
+                    WHERE id = $2
+                `, [currentItem.quantity, existingBatchCheck.rows.length > 0 ? existingBatchCheck.rows[0].id : null]);
+            } else {
+                // Если нет — вставляем новую строку партии
+                await client.query(`
+                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [
+                    currentItem.zaphasti_id, 
+                    sklad_id, 
+                    currentItem.income_document_id, 
+                    currentItem.purchase_price || 0, 
+                    currentItem.quantity
+                ]);
+            }
         } else {
-            // Если income_document_id не был задан, просто найдем любую подходящую партию или первую попавшуюся на складе для возврата
+            // Если income_document_id не был задан, находим любую подходящую партию или первую попавшуюся на складе для возврата
             const fallbackBatch = await client.query(`
                 SELECT id FROM warehouse_batches 
                 WHERE zaphasti_id = $1 AND warehouse_id = $2 
@@ -3084,6 +3094,12 @@ router.put('/realization_items/:id', async (req, res) => {
 
             if (fallbackBatch.rows.length > 0) {
                 await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, fallbackBatch.rows[0].id]);
+            } else {
+                // Если вообще нет партий для этой запчасти на складе, создаем базовую запись партии
+                await client.query(`
+                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+                    VALUES ($1, $2, NULL, $3, $4)
+                `, [currentItem.zaphasti_id, sklad_id, currentItem.purchase_price || 0, currentItem.quantity]);
             }
         }
 
@@ -3098,7 +3114,7 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 4. Получаем актуальные остатки партий из warehouse_batches с блокировкой FOR UPDATE
+        // 4. Получаем актуальные остатки партий из warehouse_batches с исправленным JOIN и блокировкой FOR UPDATE OF wb
         const batchesQuery = `
             SELECT 
                 wb.id AS batch_id,
@@ -3108,10 +3124,10 @@ router.put('/realization_items/:id', async (req, res) => {
                 wb.price_rub,
                 wb.quantity AS available_qty
             FROM warehouse_batches wb
-            LEFT JOIN receipts r ON wb.receipt_id = r.id
+            JOIN receipts r ON wb.receipt_id = r.id
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
-            FOR UPDATE;
+            FOR UPDATE OF wb;
         `;
 
         const batchesRes = await client.query(batchesQuery, [targetZaphastiId, sklad_id]);
@@ -3352,20 +3368,34 @@ router.delete('/realization_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе реализации не указан склад.' });
         }
 
-        // 3. Возвращаем количество удаляемой позиции обратно на склад в таблицу warehouse_batches
+        // 3. Возвращаем количество удаляемой позиции обратно на склад в таблицу warehouse_batches (без некорректного ON CONFLICT без уникального индекса)
         if (currentItem.income_document_id && currentItem.zaphasti_id) {
-            await client.query(`
-                INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (zaphasti_id, warehouse_id, receipt_id, price_rub)
-                DO UPDATE SET quantity = warehouse_batches.quantity + EXCLUDED.quantity
-            `, [
-                currentItem.zaphasti_id, 
-                sklad_id, 
-                currentItem.income_document_id, 
-                currentItem.purchase_price || 0, 
-                currentItem.quantity
-            ]);
+            // Проверяем наличие точной партии на складе
+            const existingBatchCheck = await client.query(`
+                SELECT id FROM warehouse_batches 
+                WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4
+            `, [currentItem.zaphasti_id, sklad_id, currentItem.income_document_id, currentItem.purchase_price || 0]);
+
+            if (existingBatchCheck.rows.length > 0) {
+                // Если партия найдена — просто увеличиваем её остаток
+                await client.query(`
+                    UPDATE warehouse_batches 
+                    SET quantity = quantity + $1 
+                    WHERE id = $2
+                `, [currentItem.quantity, existingBatchCheck.rows[0].id]);
+            } else {
+                // Если партия не найдена — создаем новую запись партии
+                await client.query(`
+                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [
+                    currentItem.zaphasti_id, 
+                    sklad_id, 
+                    currentItem.income_document_id, 
+                    currentItem.purchase_price || 0, 
+                    currentItem.quantity
+                ]);
+            }
         } else {
             // Если income_document_id по какой-то причине не был сохранен, находим любую активную партию этой запчасти на складе для возврата
             const fallbackBatch = await client.query(`
