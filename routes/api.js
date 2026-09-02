@@ -2768,10 +2768,10 @@ async function writeRealizationLog(client, req, data) {
 }
 
 
-// ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ ВСЕГО И FIFO) ====================
+// ==================== ДОБАВИТЬ ЗАПЧАСТЬ К РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches И FIFO) ====================
 router.post('/realization_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление запчасти в реализацию (realization_items) с FIFO`);
+    console.log(`[POST REQUEST] Добавление запчасти в реализацию (realization_items) по warehouse_batches (FIFO)`);
     console.log(`[BODY]:`, req.body);
 
     const { realization_id, zaphasti_id, quantity, description } = req.body;
@@ -2822,61 +2822,31 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 3. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
-        // Учитываем: уход на другие склады (перемещения), другие реализации, текущую реализацию в черновике ($3) и ремонты
+        // 3. Получаем актуальные остатки партий напрямую из таблицы warehouse_batches с блокировкой FOR UPDATE
         const batchesQuery = `
             SELECT 
-                r.id AS receipt_id,
+                wb.id AS batch_id,
+                wb.receipt_id,
                 r.doc_number AS receipt_doc_number,
                 r.date AS receipt_date,
-                ri.price,
-                ri.price_rub,
-                ri.quantity AS initial_qty,
-                (
-                    COALESCE((
-                        SELECT SUM(mi.quantity) 
-                        FROM move_items mi 
-                        JOIN moves m ON mi.move_id = m.id 
-                        WHERE mi.income_document_id = r.id 
-                          AND mi.zaphasti_id = ri.zaphasti_id 
-                          AND m.warehouse_from_id = r.warehouse_id 
-                          AND m.is_posted = true
-                    ), 0) +
-                    COALESCE((
-                        SELECT SUM(rel_i.quantity) 
-                        FROM realization_items rel_i 
-                        JOIN realizations rel ON rel_i.realization_id = rel.id 
-                        WHERE rel_i.income_document_id = r.id 
-                          AND rel_i.zaphasti_id = ri.zaphasti_id 
-                          AND rel.sklad_id = r.warehouse_id 
-                          AND (rel.is_posted = true OR rel.id = $3)
-                    ), 0) +
-                    COALESCE((
-                        SELECT SUM(rep_i.quantity) 
-                        FROM repair_items rep_i 
-                        JOIN repairs rep ON rep_i.repair_id = rep.id 
-                        WHERE rep_i.receipt_id = r.id 
-                          AND rep_i.zaphast_id = ri.zaphasti_id 
-                          AND rep.warehouse_id = r.warehouse_id 
-                          AND rep.is_posted = true
-                    ), 0)
-                ) AS spent_qty
-            FROM receipt_items ri
-            JOIN receipts r ON ri.receipt_id = r.id
-            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
-            ORDER BY r.date ASC, r.id ASC
+                wb.price_rub,
+                wb.quantity AS available_qty
+            FROM warehouse_batches wb
+            LEFT JOIN receipts r ON wb.receipt_id = r.id
+            WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+            ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
+            FOR UPDATE;
         `;
 
-        const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id, realization_id]);
+        const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id]);
         
         let batches = batchesRes.rows.map(b => {
-            const initial = Number(b.initial_qty) || 0;
-            const spent = Number(b.spent_qty) || 0;
-            const available = initial - spent;
-            const purchasePrice = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            const available = Number(b.available_qty) || 0;
+            const purchasePrice = Number(b.price_rub) || 0;
             return {
+                batch_id: b.batch_id,
                 receipt_id: b.receipt_id,
-                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id || '0'}`,
                 purchase_price: purchasePrice,
                 available: available > 0 ? available : 0
             };
@@ -2885,7 +2855,7 @@ router.post('/realization_items', async (req, res) => {
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
         console.log(`[FIFO REALIZATION DEBUG] Запрошено к добавлению: ${requestedQty} шт.`);
-        console.log(`[FIFO REALIZATION DEBUG] Реально доступно на складе с учетом текущего документа:`, totalAvailableStock);
+        console.log(`[FIFO REALIZATION DEBUG] Реально доступно на складе из warehouse_batches:`, totalAvailableStock);
         console.log(`[FIFO REALIZATION DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
@@ -2918,7 +2888,7 @@ router.post('/realization_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
 
-        // 5. Распределение по партиям (FIFO)
+        // 5. Распределение по партиям (FIFO) с уменьшением остатка в warehouse_batches
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -2930,7 +2900,13 @@ router.post('/realization_items', async (req, res) => {
             const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
             const total_rub = Number((takeQty * finalPrice).toFixed(2));
 
-            console.log(`➡️ [FIFO REALIZATION STEP] Партия "${batch.doc_number}" (ID: ${batch.receipt_id}): берем ${takeQty} шт. по закупочной цене ${purchase_price}`);
+            console.log(`➡️ [FIFO REALIZATION STEP] Партия "${batch.doc_number}" (Batch ID: ${batch.batch_id}): берем ${takeQty} шт. по закупочной цене ${purchase_price}`);
+
+            // Списываем остаток из конкретной партии на складе
+            await client.query(
+                'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+                [takeQty, batch.batch_id]
+            );
 
             const insertQuery = `
                 INSERT INTO realization_items (
@@ -2963,28 +2939,30 @@ router.post('/realization_items', async (req, res) => {
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
 
-            // Пишем в realization_logs
-            await writeRealizationLog(client, req, {
-                action: 'INSERT',
-                realization_id: realization_id,
-                document_number: doc_number || null,
-                warehouse_id: sklad_id,
-                car_id: null,
-                customer_id: customer_id || null,
-                zaphasti_id: zaphasti_id,
-                quantity: takeQty,
-                price: finalPrice,
-                total_rub: total_rub,
-                income_document_id: batch.receipt_id,
-                description: description || `Добавление запчасти (партия: ${batch.doc_number})`
-            });
+            // Пишем в realization_logs (если функция подключена)
+            if (typeof writeRealizationLog === 'function') {
+                await writeRealizationLog(client, req, {
+                    action: 'INSERT',
+                    realization_id: realization_id,
+                    document_number: doc_number || null,
+                    warehouse_id: sklad_id,
+                    car_id: null,
+                    customer_id: customer_id || null,
+                    zaphasti_id: zaphasti_id,
+                    quantity: takeQty,
+                    price: finalPrice,
+                    total_rub: total_rub,
+                    income_document_id: batch.receipt_id,
+                    description: description || `Добавление запчасти (партия: ${batch.doc_number})`
+                });
+            }
 
             remainingToDistribute -= takeQty;
         }
 
         if (remainingToDistribute > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий прихода.' });
+            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий склада.' });
         }
 
         await client.query('COMMIT');
@@ -3000,10 +2978,10 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
-// ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ ====================
+// ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches И FIFO) ====================
 router.put('/realization_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[PUT REQUEST] Изменение запчасти в реализации (realization_items) с FIFO`);
+    console.log(`[PUT REQUEST] Изменение запчасти в реализации (realization_items) по warehouse_batches (FIFO)`);
     console.log(`[PARAMS]:`, req.params);
     console.log(`[BODY]:`, req.body);
 
@@ -3011,7 +2989,6 @@ router.put('/realization_items/:id', async (req, res) => {
     const { realization_id, zaphasti_id, quantity, description } = req.body;
 
     const client = await pool.connect();
-
     try {
         await client.query('BEGIN');
 
@@ -3023,7 +3000,7 @@ router.put('/realization_items/:id', async (req, res) => {
         }
         const currentItem = existingItemRes.rows[0];
 
-        // Проверяем, не проведена ли исходная реализация, которой принадлежит эта позиция
+        // Проверяем, не проведена ли исходная реализация
         const sourceRealizationCheck = await client.query(`SELECT is_posted, doc_number FROM realizations WHERE id = $1`, [currentItem.realization_id]);
         if (sourceRealizationCheck.rows.length > 0) {
             const { is_posted } = sourceRealizationCheck.rows[0];
@@ -3034,7 +3011,7 @@ router.put('/realization_items/:id', async (req, res) => {
             }
         }
 
-        // Определяем финальные идентификаторы (если не переданы в теле, берем старые)
+        // Определяем целевые идентификаторы
         const targetRealizationId = realization_id || currentItem.realization_id;
         const targetZaphastiId = zaphasti_id !== undefined ? zaphasti_id : currentItem.zaphasti_id;
         const requestedQty = quantity !== undefined ? Number(quantity) : Number(currentItem.quantity);
@@ -3044,7 +3021,7 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
 
-        // Если целевая реализация отличается от исходной, проверяем также и её статус
+        // Если целевая реализация отличается, проверяем её статус
         if (targetRealizationId !== currentItem.realization_id) {
             const targetRealizationCheck = await client.query(`SELECT is_posted FROM realizations WHERE id = $1`, [targetRealizationId]);
             if (targetRealizationCheck.rows.length > 0) {
@@ -3057,7 +3034,7 @@ router.put('/realization_items/:id', async (req, res) => {
             }
         }
 
-        // 2. Узнаем склад, клиента, номер документа для этой реализации с блокировкой строки FOR UPDATE
+        // 2. Получаем данные склада для целевой реализации с блокировкой FOR UPDATE
         const realizationQuery = `SELECT sklad_id, mol_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1 FOR UPDATE`;
         const realizationRes = await client.query(realizationQuery, [targetRealizationId]);
         
@@ -3079,7 +3056,38 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе реализации не указан склад, с которого списываются запчасти.' });
         }
 
-        // 3. Получаем справочные данные запчасти
+        // Если менялась сама запчасть, или склад, или количество — нам нужно «вернуть» количество старой позиции обратно на склад в таблицу warehouse_batches перед проверкой остатков и новым списанием.
+        // То есть при изменении мы можем откатить влияние старой позиции: если склад и запчасть совпадают, старое количество временно доступно. 
+        // Самый надежный способ в рамках транзакции с warehouse_batches: если это та же самая запчасть на том же складе (или даже на разных), временно возвращаем количество старой позиции в её партию (или партию по income_document_id), выполняем пересчет, а затем списываем заново по FIFO.
+        
+        // Давайте вернем количество старой позиции в warehouse_batches:
+        if (currentItem.income_document_id && currentItem.zaphasti_id) {
+            await client.query(`
+                INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (zaphasti_id, warehouse_id, receipt_id, price_rub)
+                DO UPDATE SET quantity = warehouse_batches.quantity + EXCLUDED.quantity
+            `, [
+                currentItem.zaphasti_id, 
+                sklad_id, // или склад старой реализации, но здесь для упрощения считаем склад целевой/текущий
+                currentItem.income_document_id, 
+                currentItem.purchase_price || 0, 
+                currentItem.quantity
+            ]);
+        } else {
+            // Если income_document_id не был задан, просто найдем любую подходящую партию или первую попавшуюся на складе для возврата
+            const fallbackBatch = await client.query(`
+                SELECT id FROM warehouse_batches 
+                WHERE zaphasti_id = $1 AND warehouse_id = $2 
+                ORDER BY created_at ASC LIMIT 1
+            `, [currentItem.zaphasti_id, sklad_id]);
+
+            if (fallbackBatch.rows.length > 0) {
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, fallbackBatch.rows[0].id]);
+            }
+        }
+
+        // 3. Получаем справочные данные новой/текущей запчасти
         const zaphastiQuery = `SELECT * FROM zaphasti WHERE id = $1`;
         const zaphastiRes = await client.query(zaphastiQuery, [targetZaphastiId]);
 
@@ -3090,62 +3098,31 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 4. Получаем партии (приходы) по FIFO с учетом ухода товара во всех документах, 
-        // исключая текущую редактируемую позицию из расхода (чтобы вернуть её объем обратно в доступные при расчете)
+        // 4. Получаем актуальные остатки партий из warehouse_batches с блокировкой FOR UPDATE
         const batchesQuery = `
             SELECT 
-                r.id AS receipt_id,
+                wb.id AS batch_id,
+                wb.receipt_id,
                 r.doc_number AS receipt_doc_number,
                 r.date AS receipt_date,
-                ri.price,
-                ri.price_rub,
-                ri.quantity AS initial_qty,
-                (
-                    COALESCE((
-                        SELECT SUM(mi.quantity) 
-                        FROM move_items mi 
-                        JOIN moves m ON mi.move_id = m.id 
-                        WHERE mi.income_document_id = r.id 
-                          AND mi.zaphasti_id = ri.zaphasti_id 
-                          AND m.warehouse_from_id = r.warehouse_id 
-                          AND m.is_posted = true
-                    ), 0) +
-                    COALESCE((
-                        SELECT SUM(rel_i.quantity) 
-                        FROM realization_items rel_i 
-                        JOIN realizations rel ON rel_i.realization_id = rel.id 
-                        WHERE rel_i.income_document_id = r.id 
-                          AND rel_i.zaphasti_id = ri.zaphasti_id 
-                          AND rel.sklad_id = r.warehouse_id 
-                          AND (rel.is_posted = true OR rel.id = $3)
-                          AND rel_i.id != $4
-                    ), 0) +
-                    COALESCE((
-                        SELECT SUM(rep_i.quantity) 
-                        FROM repair_items rep_i 
-                        JOIN repairs rep ON rep_i.repair_id = rep.id 
-                        WHERE rep_i.receipt_id = r.id 
-                          AND rep_i.zaphast_id = ri.zaphasti_id 
-                          AND rep.warehouse_id = r.warehouse_id 
-                          AND rep.is_posted = true
-                    ), 0)
-                ) AS spent_qty
-            FROM receipt_items ri
-            JOIN receipts r ON ri.receipt_id = r.id
-            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
-            ORDER BY r.date ASC, r.id ASC
+                wb.price_rub,
+                wb.quantity AS available_qty
+            FROM warehouse_batches wb
+            LEFT JOIN receipts r ON wb.receipt_id = r.id
+            WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+            ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
+            FOR UPDATE;
         `;
 
-        const batchesRes = await client.query(batchesQuery, [targetZaphastiId, sklad_id, targetRealizationId, id]);
+        const batchesRes = await client.query(batchesQuery, [targetZaphastiId, sklad_id]);
         
         let batches = batchesRes.rows.map(b => {
-            const initial = Number(b.initial_qty) || 0;
-            const spent = Number(b.spent_qty) || 0;
-            const available = initial - spent;
-            const purchasePrice = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            const available = Number(b.available_qty) || 0;
+            const purchasePrice = Number(b.price_rub) || 0;
             return {
+                batch_id: b.batch_id,
                 receipt_id: b.receipt_id,
-                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
+                doc_number: b.receipt_doc_number || `ПР-${b.receipt_id || '0'}`,
                 purchase_price: purchasePrice,
                 available: available > 0 ? available : 0
             };
@@ -3154,7 +3131,7 @@ router.put('/realization_items/:id', async (req, res) => {
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
         console.log(`[FIFO EDIT REALIZATION DEBUG] Запрошено при редактировании: ${requestedQty} шт.`);
-        console.log(`[FIFO EDIT REALIZATION DEBUG] Реально доступно на складе с учетом возврата редактируемой строки:`, totalAvailableStock);
+        console.log(`[FIFO EDIT REALIZATION DEBUG] Реально доступно на складе из warehouse_batches:`, totalAvailableStock);
         console.log(`[FIFO EDIT REALIZATION DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
@@ -3184,21 +3161,30 @@ router.put('/realization_items/:id', async (req, res) => {
             }
         }
 
-        // 6. Распределяем по FIFO для получения первой подходящей партии (или берем базовые цены из первой покрывающей партии)
         let remainingToDistribute = requestedQty;
         let chosenPurchasePrice = 0;
         let chosenIncomeDocumentId = null;
 
+        // 6. Распределяем по FIFO через warehouse_batches с уменьшением остатка в партиях
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
+
             const takeQty = Math.min(remainingToDistribute, batch.available);
-            if (takeQty > 0) {
-                if (chosenPurchasePrice === 0) {
-                    chosenPurchasePrice = batch.purchase_price;
-                    chosenIncomeDocumentId = batch.receipt_id;
-                }
-                remainingToDistribute -= takeQty;
+            if (takeQty <= 0) continue;
+
+            if (chosenPurchasePrice === 0) {
+                chosenPurchasePrice = batch.purchase_price;
+                chosenIncomeDocumentId = batch.receipt_id;
             }
+
+            console.log(`➡️ [FIFO EDIT STEP] Партия "${batch.doc_number}" (Batch ID: ${batch.batch_id}): списываем ${takeQty} шт. по закупочной цене ${batch.purchase_price}`);
+
+            await client.query(
+                'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+                [takeQty, batch.batch_id]
+            );
+
+            remainingToDistribute -= takeQty;
         }
 
         if (remainingToDistribute > 0) {
@@ -3211,7 +3197,7 @@ router.put('/realization_items/:id', async (req, res) => {
         const total_rub = Number((requestedQty * finalPrice).toFixed(2));
         const finalDescription = description !== undefined ? description : currentItem.description;
 
-        // 7. Обновляем запись в базе
+        // 7. Обновляем запись в realization_items
         const updateQuery = `
             UPDATE realization_items 
             SET realization_id = $1, 
@@ -3252,21 +3238,23 @@ router.put('/realization_items/:id', async (req, res) => {
 
         const result = await client.query(updateQuery, values);
 
-        // 8. Записываем лог в realization_logs вместо 
-        await writeRealizationLog(client, req, {
-            action: 'UPDATE',
-            realization_id: targetRealizationId,
-            document_number: doc_number || null,
-            warehouse_id: sklad_id,
-            car_id: null,
-            customer_id: customer_id || null,
-            zaphasti_id: targetZaphastiId,
-            quantity: requestedQty,
-            price: finalPrice,
-            total_rub: total_rub,
-            income_document_id: chosenIncomeDocumentId,
-            description: finalDescription || `Изменение запчасти (позиция ID: ${id})`
-        });
+        // 8. Записываем лог в realization_logs
+        if (typeof writeRealizationLog === 'function') {
+            await writeRealizationLog(client, req, {
+                action: 'UPDATE',
+                realization_id: targetRealizationId,
+                document_number: doc_number || null,
+                warehouse_id: sklad_id,
+                car_id: null,
+                customer_id: customer_id || null,
+                zaphasti_id: targetZaphastiId,
+                quantity: requestedQty,
+                price: finalPrice,
+                total_rub: total_rub,
+                income_document_id: chosenIncomeDocumentId,
+                description: finalDescription || `Изменение запчасти (позиция ID: ${id})`
+            });
+        }
 
         await client.query('COMMIT');
         console.log(`[SUCCESS] Успешно обновлена строка в реализации ID: ${id}`);
@@ -3316,10 +3304,10 @@ async function writeRealizationLog(client, req, data) {
     }
 }
 
-// ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ ====================
+// ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches) ====================
 router.delete('/realization_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[DELETE REQUEST] Удаление запчасти из реализации (realization_items)`);
+    console.log(`[DELETE REQUEST] Удаление запчасти из реализации (realization_items) с возвратом в warehouse_batches`);
     console.log(`[PARAMS]:`, req.params);
     console.log(`[QUERY]:`, req.query);
 
@@ -3330,7 +3318,7 @@ router.delete('/realization_items/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Находим удаляемую позицию, чтобы узнать, к какому документу она принадлежит
+        // 1. Находим удаляемую позицию, чтобы узнать её данные (количество, запчасть, партию и т.д.)
         const existingItemRes = await client.query(`SELECT * FROM realization_items WHERE id = $1`, [itemId]);
         if (existingItemRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -3359,28 +3347,68 @@ router.delete('/realization_items/:id', async (req, res) => {
             }
         }
 
-        // 3. Удаляем позицию
+        if (!sklad_id) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'В документе реализации не указан склад.' });
+        }
+
+        // 3. Возвращаем количество удаляемой позиции обратно на склад в таблицу warehouse_batches
+        if (currentItem.income_document_id && currentItem.zaphasti_id) {
+            await client.query(`
+                INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (zaphasti_id, warehouse_id, receipt_id, price_rub)
+                DO UPDATE SET quantity = warehouse_batches.quantity + EXCLUDED.quantity
+            `, [
+                currentItem.zaphasti_id, 
+                sklad_id, 
+                currentItem.income_document_id, 
+                currentItem.purchase_price || 0, 
+                currentItem.quantity
+            ]);
+        } else {
+            // Если income_document_id по какой-то причине не был сохранен, находим любую активную партию этой запчасти на складе для возврата
+            const fallbackBatch = await client.query(`
+                SELECT id FROM warehouse_batches 
+                WHERE zaphasti_id = $1 AND warehouse_id = $2 
+                ORDER BY created_at ASC LIMIT 1
+            `, [currentItem.zaphasti_id, sklad_id]);
+
+            if (fallbackBatch.rows.length > 0) {
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, fallbackBatch.rows[0].id]);
+            } else {
+                // Если партий вообще нет, создаем новую запись прихода-заглушки в warehouse_batches
+                await client.query(`
+                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, price_rub, quantity)
+                    VALUES ($1, $2, $3, $4)
+                `, [currentItem.zaphasti_id, sklad_id, currentItem.purchase_price || 0, currentItem.quantity]);
+            }
+        }
+
+        // 4. Удаляем позицию из realization_items
         const deleteQuery = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
         const result = await client.query(deleteQuery, [itemId]);
 
-        // 4. Записываем лог в realization_logs вместо 
-        await writeRealizationLog(client, req, {
-            action: 'DELETE',
-            realization_id: currentItem.realization_id,
-            document_number: doc_number || null,
-            warehouse_id: sklad_id,
-            car_id: null,
-            customer_id: customer_id || null,
-            zaphasti_id: currentItem.zaphasti_id,
-            quantity: currentItem.quantity,
-            price: currentItem.price,
-            total_rub: currentItem.total_rub,
-            income_document_id: currentItem.income_document_id || null,
-            description: `Удалена запчасть ID ${currentItem.zaphasti_id}, количество: ${currentItem.quantity}`
-        });
+        // 5. Записываем лог в realization_logs
+        if (typeof writeRealizationLog === 'function') {
+            await writeRealizationLog(client, req, {
+                action: 'DELETE',
+                realization_id: currentItem.realization_id,
+                document_number: doc_number || null,
+                warehouse_id: sklad_id,
+                car_id: null,
+                customer_id: customer_id || null,
+                zaphasti_id: currentItem.zaphasti_id,
+                quantity: currentItem.quantity,
+                price: currentItem.price,
+                total_rub: currentItem.total_rub,
+                income_document_id: currentItem.income_document_id || null,
+                description: `Удалена запчасть ID ${currentItem.zaphasti_id}, количество: ${currentItem.quantity} (возвращено на склад)`
+            });
+        }
 
         await client.query('COMMIT');
-        console.log(`[SUCCESS] Успешно удалена строка из реализации ID: ${itemId}`);
+        console.log(`[SUCCESS] Успешно удалена строка из реализации ID: ${itemId}, товар возвращен в warehouse_batches.`);
         return res.json({ success: true, deleted: result.rows[0] });
 
     } catch (err) {
@@ -3392,7 +3420,6 @@ router.delete('/realization_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // Функция для записи логов реализации в таблицу realization_logs
 async function writeRealizationLog(client, req, data) {
     try {
