@@ -5544,13 +5544,13 @@ async function submitPayment(event, receiptId) {
     event.preventDefault();
     
     const payload = {
-        receipt_id: receiptId,
         amount: parseFloat(document.getElementById('payment-amount').value),
         comment: document.getElementById('payment-comment').value
     };
 
     try {
-        let response = await fetch('/api/expense_payments', {
+        // Стучимся на твой существующий бэкенд-эндпоинт с ID накладной в строке
+        let response = await fetch(`/api/expenses_by_receipts/${receiptId}/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -5561,7 +5561,8 @@ async function submitPayment(event, receiptId) {
             showAppNotification('Платёж успешно сохранен', 'success');
             if (typeof loadTableData === 'function') loadTableData();
         } else {
-            showAppNotification('Ошибка при сохранении платежа', 'error');
+            const errData = await response.json().catch(() => ({}));
+            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
         }
     } catch (err) {
         console.error('Ошибка сети:', err);
