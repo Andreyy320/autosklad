@@ -6001,24 +6001,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Покупатели выбранного склада
-    else if (currentReceiptView === 'money_receipts_by_customers') {
+    // 2 уровень: Документы (реализации) выбранного склада
+    else if (currentReceiptView === 'money_receipts') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
-
-        fetchUrl = `/api/money_receipts_by_customers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
-        if (detailContainer) detailContainer.style.display = 'none';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-    }
-    // 3 уровень: Реализации (документы) выбранного склада
-    else if (currentReceiptView === 'money_receipts') {
-        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
-        if (skladId) window.currentSkladId = skladId;
 
         fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
@@ -6101,7 +6089,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Вывод данных для текущего уровня
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
-            tr.dataset.id = item.id || item.sklad_id || item.customer_id || item.realization_id || '';
+            tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
@@ -6113,8 +6101,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 selectedItem = item; // Сохраняем глобально
 
                 if (currentEntity === 'money_receipts_by_sklad') {
-                    loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
-                } else if (currentEntity === 'money_receipts_by_customers') {
                     loadReceiptMainData('money_receipts', item);
                 } else if (currentEntity === 'money_receipts') {
                     console.log('Выбрана конкретная реализация:', item);
