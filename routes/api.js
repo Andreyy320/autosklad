@@ -1611,7 +1611,7 @@ router.get('/repair_history', async (req, res) => {
 });
 
 
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (СУММАРНО ПО СКЛАДАМ) ====================
+// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1619,112 +1619,37 @@ router.get('/stock_balances', async (req, res) => {
         const queryParams = [];
         let paramIndex = 1;
 
-        let dateConditionReceipts = '';
-        let dateConditionMoves = '';
-        let dateConditionRepairs = '';
-        let dateConditionRealizations = '';
-
-        // Фильтр по дате: берем всё С выбранной даты и до текущего момента (>=)
-        if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
-            const formattedDate = date.replace('T', ' '); // Корректируем формат из datetime-local
-            queryParams.push(formattedDate);
-            dateConditionReceipts = `AND r.date >= $${paramIndex}::timestamp`;
-            dateConditionMoves = `AND m.date >= $${paramIndex}::timestamp`;
-            dateConditionRepairs = `AND rep.doc_date >= $${paramIndex}::timestamp`;
-            dateConditionRealizations = `AND r_rel.doc_date >= $${paramIndex}::timestamp`; // Учитываем дату документа реализации
-            paramIndex++;
-        }
-
         let extraFilters = '';
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
-            extraFilters += ` AND st.warehouse_id = $${paramIndex}`;
+            extraFilters += ` AND wb.warehouse_id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Фильтр по МОЛ
+        // Фильтр по МОЛ (если у складов есть привязка к mol_id)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            extraFilters += ` AND st.mol_id = $${paramIndex}`;
+            extraFilters += ` AND s.mol_id = $${paramIndex}`;
             paramIndex++;
         }
 
+        // Примечание: параметр date в классическом FIFO-учете по текущим актуальным остаткам 
+        // обычно не отматывает партии назад (для исторических остаток на произвольную дату нужна 
+        // отдельная логика движка регистров накопления), поэтому берем актуальный срез warehouse_batches.
+        
         const query = `
-            WITH warehouse_stocks AS (
-                -- 1. Приходы на склады (с выбранной даты по текущий момент)
+            WITH aggregated_stocks AS (
+                -- Схлопываем остатки из таблицы warehouse_batches по товарам и складам
                 SELECT 
-                    ri.zaphasti_id,
-                    r.warehouse_id,
-                    r.mol_id,
-                    SUM(ri.quantity) as qty
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
-                WHERE r.warehouse_id IS NOT NULL ${dateConditionReceipts}
-                GROUP BY ri.zaphasti_id, r.warehouse_id, r.mol_id
-
-                UNION ALL
-
-                -- 2. Приход от перемещений (куда привезли, с выбранной даты)
-                SELECT 
-                    mi.zaphasti_id,
-                    m.warehouse_to_id AS warehouse_id,
-                    m.mol_to_id AS mol_id,
-                    SUM(mi.quantity) as qty
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_to_id IS NOT NULL ${dateConditionMoves}
-                GROUP BY mi.zaphasti_id, m.warehouse_to_id, m.mol_to_id
-
-                UNION ALL
-
-                -- 3. Расход от перемещений (откуда увезли, с выбранной даты)
-                SELECT 
-                    mi.zaphasti_id,
-                    m.warehouse_from_id AS warehouse_id,
-                    m.mol_from_id AS mol_id,
-                    -SUM(mi.quantity) as qty
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_from_id IS NOT NULL ${dateConditionMoves}
-                GROUP BY mi.zaphasti_id, m.warehouse_from_id, m.mol_from_id
-
-                UNION ALL
-
-                -- 4. Расход на списания в ремонт (откуда списали, с выбранной даты)
-                SELECT 
-                    rep_i.zaphast_id AS zaphasti_id,
-                    rep.warehouse_id,
-                    rep.mol_id,
-                    -SUM(rep_i.quantity) as qty
-                FROM repair_items rep_i
-                JOIN repairs rep ON rep_i.repair_id = rep.id
-                WHERE rep.warehouse_id IS NOT NULL ${dateConditionRepairs}
-                GROUP BY rep_i.zaphast_id, rep.warehouse_id, rep.mol_id
-
-                UNION ALL
-
-                -- 5. Расход по реализациям (продажи запчастей со складов)
-                SELECT 
-                    ri_rel.zaphasti_id,
-                    r_rel.sklad_id AS warehouse_id,
-                    r_rel.mol_id,
-                    -SUM(ri_rel.quantity) as qty
-                FROM realization_items ri_rel
-                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                WHERE r_rel.sklad_id IS NOT NULL ${dateConditionRealizations}
-                GROUP BY ri_rel.zaphasti_id, r_rel.sklad_id, r_rel.mol_id
-            ),
-            aggregated_stocks AS (
-                -- Схлопываем всё строго по связке: Товар + Склад + МОЛ
-                SELECT 
-                    zaphasti_id,
-                    warehouse_id,
-                    mol_id,
-                    SUM(qty) AS total_qty
-                FROM warehouse_stocks
-                GROUP BY zaphasti_id, warehouse_id, mol_id
+                    wb.zaphasti_id,
+                    wb.warehouse_id,
+                    SUM(wb.quantity) AS total_qty
+                FROM warehouse_batches wb
+                LEFT JOIN skladi s ON wb.warehouse_id = s.id
+                WHERE wb.quantity > 0 ${extraFilters}
+                GROUP BY wb.zaphasti_id, wb.warehouse_id
             )
             SELECT 
                 z.id,
@@ -1740,20 +1665,22 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
-            LEFT JOIN aggregated_stocks st ON z.id = st.zaphasti_id
+            JOIN aggregated_stocks st ON z.id = st.zaphasti_id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN skladi s ON st.warehouse_id = s.id
-            LEFT JOIN mol mol_table ON st.mol_id = mol_table.id
+            LEFT JOIN mol mol_table ON s.mol_id = mol_table.id
             LEFT JOIN users u ON mol_table.user_id = u.id
-            WHERE 1=1 ${extraFilters}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
+        console.log(`[SUCCESS] Получены актуальные остатки из warehouse_batches. Записей: ${result.rows.length}`);
+
     } catch (err) {
-        console.error("Ошибка в /stock_balances:", err.message);
+        console.error("❌ [ERROR] Ошибка в /stock_balances:", err.message);
+        console.error(err.stack);
         res.status(500).json({ error: err.message });
     }
 });
