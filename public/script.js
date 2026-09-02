@@ -7329,7 +7329,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -7340,11 +7339,7 @@ async function loadDetailData(entity, parentId) {
             'part_movement_details', 
             'stock_batches', 
             'stock_balances', 
-            'car_general',
-            'money_receipts',
-            'money_receipts_by_sklad',
-            'money_receipts_detail',
-            'money_receipts_works_detail'
+            'car_general'
         ];
 
         if (readOnlyEntities.includes(entity)) {
@@ -7355,13 +7350,10 @@ async function loadDetailData(entity, parentId) {
     }
 
     let activeEntity = entity;
-    if (activeEntity === 'money_receipts') {
-        activeEntity = currentMoneyReceiptSubTab || 'money_receipts_detail';
-    }
     console.log(`📌 [loadDetailData] activeEntity определен как: "${activeEntity}"`);
 
     let cleanParentId = parentId;
-    const skipObjectCleaning = ['stock_batches', 'part_movement_details', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
+    const skipObjectCleaning = ['stock_batches', 'part_movement_details'];
     
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || parentId.accident_id || parentId.id_accident || '';
@@ -7369,16 +7361,13 @@ async function loadDetailData(entity, parentId) {
     console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
 
     let checkEntity = entity;
-    if (checkEntity === 'money_receipts') {
-        checkEntity = activeEntity;
-    }
 
     const configCheck = getConfig(checkEntity); 
     const tbodyCheck = document.getElementById('detail-body');
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
-    const allowedWithoutId = ['stock_balances', 'money_receipts', 'money_receipts_by_sklad', 'money_receipts_detail', 'money_receipts_works_detail'];
+    const allowedWithoutId = ['stock_balances'];
     
     const hasValidParam = parentId && (typeof parentId === 'object' || String(parentId).trim() !== '');
     if (!hasValidParam && !allowedWithoutId.includes(entity) && !allowedWithoutId.includes(activeEntity)) {
@@ -7431,43 +7420,6 @@ async function loadDetailData(entity, parentId) {
         const endDate = document.getElementById('movement-end-date')?.value || '';
 
         fetchUrl = `/api/part_movement_details?zaphasti_id=${zId}&warehouse_id=${wId}&start_date=${startDate}&end_date=${endDate}`;
-    } else if (entity === 'money_receipts' || entity === 'money_receipts_detail' || entity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_works_detail' || activeEntity === 'money_receipts_detail') {
-        let realizationId = '';
-        let customerId = '';
-        let skladId = '';
-
-        if (parentId && typeof parentId === 'object') {
-            realizationId = parentId.realization_id || parentId.id || '';
-            customerId = parentId.customer_id || parentId.counterparty_id || parentId.client_id || '';
-            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id_sklad || window.currentSkladId || ''; 
-        } else {
-            customerId = parentId;
-            skladId = window.currentSkladId || '';
-        }
-        
-        let apiRoute = activeEntity;
-        if (!['money_receipts_detail', 'money_receipts_works_detail'].includes(apiRoute)) {
-            apiRoute = currentMoneyReceiptSubTab || 'money_receipts_detail';
-        }
-
-        if (!realizationId && window._lastLoadedRealizationId && !customerId) {
-            console.warn(`⚠️ [loadDetailData] Пропущен старый/паразитный запрос по клиенту, удерживаем realization_id=${window._lastLoadedRealizationId}`);
-            realizationId = window._lastLoadedRealizationId;
-        }
-
-        if (realizationId && typeof realizationId !== 'object') {
-            window._lastLoadedRealizationId = realizationId;
-            fetchUrl = `/api/${apiRoute}?realization_id=${realizationId}`;
-        } else {
-            window._lastLoadedRealizationId = null;
-            if (!customerId && skladId) {
-                fetchUrl = `/api/${apiRoute}?sklad_id=${skladId}`;
-            } else if (customerId) {
-                fetchUrl = `/api/${apiRoute}?customer_id=${customerId}${skladId ? '&sklad_id=' + skladId : ''}`;
-            } else {
-                fetchUrl = `/api/${apiRoute}`;
-            }
-        }
     } else if (entity === 'postavhik_contacts') {
         queryParamName = 'postavhik_id';
     } else if (entity === 'counterparty_contacts') {
@@ -7495,8 +7447,6 @@ async function loadDetailData(entity, parentId) {
 
     const thead = headerTr ? headerTr.closest('thead') : null;
     
-    // БЛОК ОТЛАДКИ И ИСПРАВЛЕНИЯ: Полностью удаляем старую строку фильтра, 
-    // чтобы она не дублировалась и не ломала верстку при смене вкладок.
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
         console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
@@ -7566,10 +7516,6 @@ async function loadDetailData(entity, parentId) {
             realization_items: 'Спецификация реализации',
             realization_works: 'Спецификация услуг',
             realization_payments: 'Платежи реализации',
-            money_receipts: 'Аналитика продаж по покупателям и складам',
-            money_receipts_by_sklad: 'Склады',
-            money_receipts_detail: 'Детализация: купленные товары',
-            money_receipts_works_detail: 'Детализация: оказанные услуги',
             postavhik_contacts: 'Контакты поставщика',
             counterparty_contacts: 'Контакты контрагента',
             customer_contacts: 'Контакты клиента',
@@ -7588,10 +7534,6 @@ async function loadDetailData(entity, parentId) {
                 titleElement.innerText = `Ремонт (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'realization_id') {
                 titleElement.innerText = `Реализация (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
-            } else if (activeEntity === 'money_receipts_detail') {
-                titleElement.innerText = `Детализация: купленные товары | Позиций: ${items.length}`;
-            } else if (activeEntity === 'money_receipts_works_detail') {
-                titleElement.innerText = `Детализация: оказанные услуги | Позиций: ${items.length}`;
             } else if (entity === 'stock_batches') {
                 titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
