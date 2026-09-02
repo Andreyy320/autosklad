@@ -5462,9 +5462,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const mainTableBody = document.getElementById('table-body');
     const mainHeaderTr = document.getElementById('table-headers');
 
-    // 1. Уровень складов
+    // 1. Уровень складов (Сбрасываем нижние сохраненные фильтры)
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
+        window.currentSkladId = null;
+        window.currentPostavhikId = null;
+        window.currentReceiptId = null;
+
         fetchUrl = `/api/expenses_by_sklad`;
         if (detailContainer) detailContainer.style.display = 'none';
     } 
@@ -5472,6 +5476,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         window.currentSkladId = skladId || window.currentSkladId;
+        window.currentPostavhikId = null;
+        window.currentReceiptId = null;
+
         fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
     } 
@@ -5479,6 +5486,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
         if (postavhikId) window.currentPostavhikId = postavhikId;
+        window.currentReceiptId = null;
 
         let skladId = window.currentSkladId || '';
         let currentPostavhik = window.currentPostavhikId || '';
@@ -5490,7 +5498,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
         
-        // 🛠 Исправление: если передан новый ID, обязательно обновляем глобальную переменную
         if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
             window.currentReceiptId = receiptId;
         }
@@ -5571,7 +5578,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
             
-            // 🛠 Универсальный сбор ID, чтобы у каждого документа точно проставился правильный data-id
+            // Универсальный сбор ID
             tr.dataset.id = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
             
             tr.style.cursor = 'pointer';
@@ -5661,7 +5668,7 @@ if (tableBodyForExpenses) {
             selectedItem = currentItems[rowIndex];
         } else {
             const id = tr.getAttribute('data-id');
-            selectedItem = currentItems.find(i => String(i.id || i.receipt_id) === String(id));
+            selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
         }
         
         selectedDetailItem = null;  
@@ -5693,7 +5700,6 @@ if (tableBodyForExpenses) {
             } else if (currentEntity === 'expenses_by_suppliers') {
                 loadExpenseMainData('expenses_by_receipts', selectedItem);
             } else if (currentEntity === 'expenses_by_receipts') {
-                // 🛠 Прямое обновление нижней таблицы без прогона через loadExpenseMainData
                 let receiptId = selectedItem.receipt_id || selectedItem.id || id;
                 if (receiptId) {
                     window.currentReceiptId = receiptId;

@@ -2049,6 +2049,7 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+Ы
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
@@ -3917,13 +3918,22 @@ router.get('/money_receipts_works_detail', async (req, res) => {
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
         const query = `
+            WITH sklad_payments AS (
+                -- Считаем сколько всего денег отдали поставщикам в разрезе складов
+                SELECT rec.warehouse_id, SUM(sp.amount) AS total_paid
+                FROM supplier_payments sp
+                JOIN receipts rec ON sp.receipt_id = rec.id
+                GROUP BY rec.warehouse_id
+            )
             SELECT 
                 sk.id AS id,
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
             FROM skladi sk
             LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
             LEFT JOIN (
@@ -3931,7 +3941,8 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 FROM receipt_items ri
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
-            GROUP BY sk.id, sk.name
+            LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
+            GROUP BY sk.id, sk.name, spay.total_paid
             ORDER BY total_expense_sum DESC;
         `;
         const result = await pool.query(query);
@@ -3948,6 +3959,12 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const { sklad_id } = req.query;
 
         const listQuery = `
+            WITH supplier_paid AS (
+                SELECT sp.supplier_id, rec.warehouse_id, SUM(sp.amount) AS total_paid
+                FROM supplier_payments sp
+                LEFT JOIN receipts rec ON sp.receipt_id = rec.id
+                GROUP BY sp.supplier_id, rec.warehouse_id
+            )
             SELECT 
                 p.id AS id,
                 p.id AS postavhik_id,
@@ -3955,21 +3972,21 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 sk.name::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
             FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
             LEFT JOIN (
-                SELECT 
-                    ri.receipt_id, 
-                    SUM(ri.quantity) AS total_qty, 
-                    SUM(ri.total_rub) AS total_sum
+                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                 FROM receipt_items ri
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN supplier_paid spay ON spay.supplier_id = p.id AND (spay.warehouse_id = rec.warehouse_id OR spay.warehouse_id IS NULL)
             WHERE rec.is_posted = true
               AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-            GROUP BY p.id, p.name, sk.name
+            GROUP BY p.id, p.name, sk.name, spay.total_paid
             ORDER BY total_expense_sum DESC;
         `;
         
@@ -3998,18 +4015,24 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 sk.name::text AS sklad_name,
                 rec.date,
                 COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
-                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum
+                COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum,
+                COALESCE(pay.paid_sum, 0)::numeric AS total_paid,
+                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0))::numeric AS debt_sum
             FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
             LEFT JOIN (
-                SELECT 
-                    ri.receipt_id, 
-                    SUM(ri.quantity) AS total_qty, 
-                    SUM(ri.total_rub) AS total_sum
+                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                 FROM receipt_items ri
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN (
+                -- Считаем сколько оплачено именно по этой накладной
+                SELECT receipt_id, SUM(amount) AS paid_sum
+                FROM supplier_payments
+                WHERE receipt_id IS NOT NULL
+                GROUP BY receipt_id
+            ) pay ON rec.id = pay.receipt_id
             WHERE rec.is_posted = true
         `;
 
@@ -4037,7 +4060,6 @@ router.get('/expenses_by_receipts', async (req, res) => {
     }
 });
 
-// 4. Детали (позиции) конкретной накладной (уровень 4 / таблица деталей)
 router.get('/expense_items', async (req, res) => {
     try {
         const postavhikId = req.query.postavhik_id;
@@ -4047,6 +4069,8 @@ router.get('/expense_items', async (req, res) => {
         let query = `
             SELECT 
                 ri.id AS id,
+                ri.receipt_id AS receipt_id,
+                COALESCE(rec.doc_number, 'Без номера')::text AS doc_number,
                 COALESCE(z.name, 'Запчасть')::text AS part_name,
                 COALESCE(z.article, '—')::text AS article,
                 ri.quantity::numeric AS quantity,
@@ -4085,8 +4109,6 @@ router.get('/expense_items', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 
 
     
