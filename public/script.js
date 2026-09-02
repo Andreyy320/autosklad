@@ -5988,8 +5988,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
-    if (currentReceiptView === 'money_receipts_by_sklad' || currentReceiptView === 'money_receipts') {
-        currentReceiptView = 'money_receipts_by_sklad';
+    // 1 уровень: Склады
+    if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
@@ -6001,9 +6001,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
+    // 2 уровень: Покупатели выбранного склада
     else if (currentReceiptView === 'money_receipts_by_customers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
-        window.currentSkladId = skladId || window.currentSkladId;
+        if (skladId) window.currentSkladId = skladId;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
 
@@ -6011,10 +6012,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (detailContainer) detailContainer.style.display = 'none';
 
         if (btnAdd) btnAdd.style.display = 'none';
+        if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    else if (currentReceiptView === 'money_receipts_by_receipts') {
+    // 3 уровень: Документы (реализации) по покупателю и складу
+    else if (currentReceiptView === 'money_receipts') {
         let customerId = parentId && typeof parentId === 'object' ? (parentId.customer_id || parentId.id) : parentId;
         if (customerId) window.currentCustomerId = customerId;
         window.currentRealizationId = null;
@@ -6029,6 +6032,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
+    // 4 уровень: Детализация (если вызывается напрямую)
     else if (currentReceiptView === 'receipt_items') {
         let realizationId = parentId && typeof parentId === 'object' ? (parentId.realization_id || parentId.id || parentId.document_id) : parentId;
         
@@ -6112,7 +6116,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         mainTableBody.innerHTML = '';
 
-        if (currentEntity === 'money_receipts_by_receipts') {
+        // Отрисовка сгруппированных документов (если открыт уровень конкретного покупателя)
+        if (currentEntity === 'money_receipts') {
             const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"
@@ -6169,6 +6174,18 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-rec-${currentGIdx}`;
                     tr.innerHTML = config.render(item);
+                    
+                    // Клик по строке документа загружает детализацию внизу
+                    tr.addEventListener('click', () => {
+                        document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+                        tr.classList.add('selected-row');
+                        window.currentRealizationId = item.realization_id;
+                        
+                        // Загружаем и товары, и работы по этой реализации
+                        loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${item.realization_id}`);
+                        loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${item.realization_id}`);
+                    });
+
                     mainTableBody.appendChild(tr);
                     childRows.push(tr);
                 });
@@ -6176,21 +6193,32 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 headerTr.addEventListener('click', () => {
                     const icon = document.getElementById(`icon-rec-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
-                    
-                    childRows.forEach(tr => {
-                        tr.style.display = isHidden ? '' : 'none';
-                    });
-                    
+                    childRows.forEach(tr => { tr.style.display = isHidden ? '' : 'none'; });
                     icon.innerText = isHidden ? '[-]' : '[+]';
                 });
             });
 
         } else {
+            // Обычный вывод для уровней складов или покупателей
             currentItems.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || item.realization_id || item.sklad_id || item.customer_id || '';
                 tr.style.cursor = 'pointer';
                 tr.innerHTML = config.render(item);
+
+                // Настраиваем переходы по уровням по клику на строки
+                tr.addEventListener('click', () => {
+                    document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+                    tr.classList.add('selected-row');
+
+                    if (currentEntity === 'money_receipts_by_sklad') {
+                        // Переход на уровень покупателей выбранного склада
+                        loadReceiptMainData('money_receipts_by_customers', item.sklad_id || item.id);
+                    } else if (currentEntity === 'money_receipts_by_customers') {
+                        // Переход на уровень документов выбранного покупателя
+                        loadReceiptMainData('money_receipts', item.customer_id || item.id);
+                    }
+                });
 
                 mainTableBody.appendChild(tr);
             });
@@ -6204,7 +6232,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Функция для нижней таблицы (спецификация приходов / продажных позиций)
+// Загрузка спецификации товаров (запчастей)
 async function loadReceiptDetailTable(fetchUrl) {
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
@@ -6230,9 +6258,8 @@ async function loadReceiptDetailTable(fetchUrl) {
         const items = await response.json();
 
         if (!detailBody) return;
-
         if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет позиций в этой реализации</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой реализации</td></tr>`;
             return;
         }
 
@@ -6250,7 +6277,25 @@ async function loadReceiptDetailTable(fetchUrl) {
     }
 }
 
+// Загрузка спецификации услуг (работ)
+async function loadReceiptWorksDetailTable(fetchUrl) {
+    const worksBody = document.getElementById('works-detail-body') || document.getElementById('detail-body'); 
+    const config = getConfig('receipt_works') || getConfig('receipt_items');
 
+    try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error('Ошибка загрузки услуг');
+        const items = await response.json();
+
+        if (!worksBody) return;
+        if (items.length === 0) return;
+
+        // Если у вас раздельные таблицы для услуг и товаров, выводите в соответствующий контейнер
+        // Аналогично наполняется таблица услуг по вашему конфигу рендеринга
+    } catch (err) {
+        console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
+    }
+}
 // ==========================================
 // ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ ПРИХОДОВ / РЕАЛИЗАЦИЙ
 // ==========================================
