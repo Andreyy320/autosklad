@@ -6207,7 +6207,7 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
 }
 
 // ==========================================
-// КЛИКЕР ДЛЯ ТАБЛИЦЫ (СКЛАДЫ -> ПОКУПАТЕЛИ)
+// КЛИКЕР ДЛЯ ТАБЛИЦЫ (СКЛАДЫ -> ДОКУМЕНТЫ)
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
@@ -6217,7 +6217,7 @@ if (tableBodyForReceipts) {
     newTableBody.addEventListener('click', async (e) => {
         if (
             currentEntity !== 'money_receipts_by_sklad' && 
-            currentEntity !== 'money_receipts_by_customers'
+            currentEntity !== 'money_receipts'
         ) {
             return;
         }
@@ -6235,7 +6235,7 @@ if (tableBodyForReceipts) {
             selectedItem = currentItems[rowIndex];
         } else {
             const id = tr.getAttribute('data-id');
-            selectedItem = currentItems.find(i => String(i.id || i.sklad_id || i.customer_id) === String(id));
+            selectedItem = currentItems.find(i => String(i.id || i.sklad_id || i.realization_id) === String(id));
         }
         
         const id = tr.getAttribute('data-id');
@@ -6243,10 +6243,20 @@ if (tableBodyForReceipts) {
 
         if (selectedItem) {
             if (currentEntity === 'money_receipts_by_sklad') {
-                loadReceiptMainData('money_receipts_by_customers', selectedItem);
-            } else if (currentEntity === 'money_receipts_by_customers') {
-                // Остановились на покупателях, дальше уровень документов не вызываем
-                console.log('ℹ️ Выбран покупатель, уровень документов временно отключен.');
+                // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
+                loadReceiptMainData('money_receipts', item);
+            } else if (currentEntity === 'money_receipts') {
+                // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу (запчасти или услуги в зависимости от активного таба)
+                window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
+                
+                const detailContainer = document.getElementById('detail-container');
+                if (detailContainer) detailContainer.style.display = 'block';
+
+                // Загружаем данные в нижнюю таблицу в зависимости от того, какой таб сейчас выбран (запчасти/услуги)
+                const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
+                const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
+                
+                switchMoneyReceiptTab(activeTab, activeBtn);
             }
         }
     });
