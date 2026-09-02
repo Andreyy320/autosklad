@@ -5476,7 +5476,6 @@ async function loadData(entity, title, customParams = {}) {
 }
 
 
-
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -5487,6 +5486,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const mainTableBody = document.getElementById('table-body');
     const mainHeaderTr = document.getElementById('table-headers');
 
+    // Элементы кнопок на панели управления
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
+    const paySupplierBtn = document.getElementById('pay-supplier-btn');
+
     // 1. Уровень складов (Сбрасываем нижние сохраненные фильтры)
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
@@ -5496,6 +5501,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_sklad`;
         if (detailContainer) detailContainer.style.display = 'none';
+
+        // Управление кнопками для уровня складов
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
     // 2. Уровень поставщиков (фильтруем по выбранному складу)
     else if (currentExpenseView === 'expenses_by_suppliers') {
@@ -5506,8 +5517,14 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
+
+        // Управление кнопками для уровня поставщиков
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
-    // 3. Уровень накладных (фильтруем по поставщику И складу)
+    // 3. Уровень накладных (фильтруем по поставщику И складу) -> ТУТ НУЖНА КНОПКА ОПЛАТИТЬ!
     else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
         if (postavhikId) window.currentPostavhikId = postavhikId;
@@ -5518,6 +5535,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
+
+        // Управление кнопками для уровня накладных: включаем Оплатить
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+        if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'inline-flex', 'important');
     } 
     // 4. Уровень позиций
     else if (currentExpenseView === 'expense_items') {
@@ -5535,6 +5558,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         currentEntity = currentExpenseView; 
         if (detailContainer) detailContainer.style.display = 'flex';
+
+        // Управление кнопками для позиций
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnEdit.style.display = 'none';
+        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
+
         loadExpenseDetailTable(fetchUrl);
         return; 
     }
