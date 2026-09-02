@@ -7163,20 +7163,26 @@ document.querySelectorAll('.nav-link').forEach(link => {
             const btnDelete = document.getElementById('btn-delete');
             const paySupplierBtn = document.getElementById('pay-supplier-btn');
 
-            if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
+            // Проверяем, является ли раздел Расходами
+            const isExpenses = (text === 'Расходы' || entity === 'расходы' || entity === 'expenses');
+
+            if (isExpenses) {
+                // Панель показываем, кнопку "Добавить" оставляем, остальные скрываем
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
-                if (btnAdd) btnAdd.style.display = 'inline-flex';
-                if (btnEdit) btnEdit.style.display = 'none';
-                if (btnDelete) btnDelete.style.display = 'none';
-                if (paySupplierBtn) paySupplierBtn.style.display = 'none';
+                if (btnAdd) btnAdd.style.setProperty('display', 'inline-flex', 'important');
+                if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
+                if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
+                if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'none', 'important');
             } else if (readOnlyMainEntities.includes(entity)) {
+                // Для остальных чисто read-only скрываем всю панель
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
             } else {
+                // Для обычных разделов показываем панель и все основные кнопки управления
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
-                if (btnAdd) btnAdd.style.display = 'inline-flex';
-                if (btnEdit) btnEdit.style.display = 'inline-flex';
-                if (btnDelete) btnDelete.style.display = 'inline-flex';
-                if (paySupplierBtn) paySupplierBtn.style.display = 'none';
+                if (btnAdd) btnAdd.style.setProperty('display', 'inline-flex', 'important');
+                if (btnEdit) btnEdit.style.setProperty('display', 'inline-flex', 'important');
+                if (btnDelete) btnDelete.style.setProperty('display', 'inline-flex', 'important');
+                if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'none', 'important');
             }
         }
 
