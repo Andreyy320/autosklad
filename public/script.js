@@ -6896,6 +6896,7 @@ async function postReceipt(receiptId) {
     );
 }
 
+
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -6912,13 +6913,7 @@ if (tableBody) {
 
         const id = tr.getAttribute('data-id');
         
-        if (currentEntity === 'money_receipts') {
-            selectedItem = currentItems.find(i => i.id == id || i.customer_id == id);
-        } else if (currentEntity === 'money_receipts_by_sklad') {
-            selectedItem = currentItems.find(i => i.id == id || i.sklad_id == id);
-        } else {
-            selectedItem = currentItems.find(i => i.id == id);
-        }
+        selectedItem = currentItems.find(i => i.id == id);
 
         if (!selectedItem) {
             const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
@@ -6948,11 +6943,7 @@ if (tableBody) {
                 currentEntity === 'stock_batches' ||
                 currentEntity === 'part_movement_details' ||
                 currentEntity === 'car_general' ||
-                currentEntity === 'car_cards' ||
-                currentEntity === 'money_receipts' ||
-                currentEntity === 'money_receipts_by_sklad' ||
-                currentEntity === 'money_receipts_detail' ||
-                currentEntity === 'money_receipts_works_detail'
+                currentEntity === 'car_cards'
             ) {
                 actionButtonsBar.style.display = 'none';
             } else {
@@ -7015,7 +7006,7 @@ if (tableBody) {
                 const subTab = match ? match[1] : 'repair_items';
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
                 loadDetailData(subTab, selectedItem.id);
-            } else if (currentEntity === 'realizations' || currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
+            } else if (currentEntity === 'realizations') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -7024,42 +7015,17 @@ if (tableBody) {
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 const realizationsTabs = document.getElementById('tabs-for-realizations');
-                const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
-                
-                if (realizationsTabs) realizationsTabs.style.display = (currentEntity === 'realizations') ? 'flex' : 'none';
-                if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = (currentEntity === 'money_receipts') ? 'flex' : 'none';
+                if (realizationsTabs) realizationsTabs.style.display = 'flex';
 
-                if (currentEntity === 'money_receipts_by_sklad') {
-                    if (!e.isTrusted) return;
-                    loadData('money_receipts', `Покупатели склада: ${selectedItem.sklad_name || 'Основной'}`, { sklad_id: selectedItem.sklad_id });
-                } else if (currentEntity === 'money_receipts') {
-                    const activeMoneyTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active') || document.querySelector('#tabs-for-money-receipts button, #tabs-for-money-receipts .money-receipt-tab-btn');
-                    let subTabName = activeMoneyTab ? (activeMoneyTab.getAttribute('data-tab') || 'money_receipts_detail') : 'money_receipts_detail';
-                    
-                    if (subTabName === 'realization_items') subTabName = 'money_receipts_detail';
-                    if (subTabName === 'realization_works') subTabName = 'money_receipts_works_detail';
-
-                    if (typeof currentMoneyReceiptSubTab !== 'undefined') currentMoneyReceiptSubTab = subTabName;
-
-                    loadDetailData(subTabName, {
-                        customer_id: selectedItem.customer_id,
-                        sklad_id: selectedItem.sklad_id,
-                        realization_id: selectedItem.realization_id || selectedItem.id,
-                    });
-                } else {
-                    const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
-                    const subTabName = activeRealizationTab ? (activeRealizationTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
-                    if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-                    loadDetailData(subTabName, selectedItem.id);
-                }
+                const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
+                const subTabName = activeRealizationTab ? (activeRealizationTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
+                if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
+                loadDetailData(subTabName, selectedItem.id);
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                
-                const moneyReceiptsTabs = document.getElementById('tabs-for-money-receipts');
-                if (moneyReceiptsTabs) moneyReceiptsTabs.style.display = 'none';
 
                 if (carTabsPanel) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
@@ -7085,7 +7051,6 @@ if (tableBody) {
         }
     });
 }
-
 
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
