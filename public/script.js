@@ -1981,8 +1981,7 @@ expense_payments: {
         { field: 'doc_number', label: '№ Накладной', width: '120px' },
         { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
         { field: 'amount', label: 'Сумма оплаты', width: '120px', align: 'right' },
-        { field: 'payment_method', label: 'Способ', width: '120px' },
-        { field: 'comment', label: 'Комментарий', width: '200px' }
+        { field: 'comment', label: 'Комментарий', width: '250px' }
     ],
     render: (item) => {
         const amount = Number(item.amount || 0).toFixed(2);
@@ -1993,12 +1992,10 @@ expense_payments: {
             <td><b>№ ${item.doc_number || item.parent_id}</b></td>
             <td>${item.postavhik_name || '—'}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount} ₽</td>
-            <td><span style="color: #0284c7;">${item.payment_method || 'Наличные'}</span></td>
             <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
 }
-
 }
 
 
