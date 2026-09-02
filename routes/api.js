@@ -1629,7 +1629,7 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ для остатков
+        // Фильтр по МОЛ
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
             molFilter += ` AND mol_table.user_id = $${paramIndex}`;
@@ -1644,10 +1644,16 @@ router.get('/stock_balances', async (req, res) => {
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                LEFT JOIN skladi s ON wb.warehouse_id = s.id
-                LEFT JOIN mol mol_table ON mol_table.warehouse_id = s.id AND (mol_table.date_removed IS NULL OR mol_table.date_removed > NOW())
-                WHERE 1=1 ${warehouseFilter} ${molFilter}
+                WHERE 1=1 ${warehouseFilter}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
+            ),
+            latest_mol AS (
+                -- Берем самую свежую привязку МОЛ для каждого склада
+                SELECT DISTINCT ON (warehouse_id)
+                    warehouse_id,
+                    user_id
+                FROM mol
+                ORDER BY warehouse_id, id DESC
             )
             SELECT 
                 z.id,
@@ -1666,11 +1672,11 @@ router.get('/stock_balances', async (req, res) => {
             CROSS JOIN skladi s
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
-            LEFT JOIN mol mol_table ON mol_table.warehouse_id = s.id AND (mol_table.date_removed IS NULL OR mol_table.date_removed > NOW())
-            LEFT JOIN users u ON mol_table.user_id = u.id
+            LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
+            LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
             ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
-            ${mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' ? `AND mol_table.user_id = ${Number(mol_id)}` : ''}
+            ${mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' ? `AND lm.user_id = ${Number(mol_id)}` : ''}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
