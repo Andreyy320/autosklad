@@ -5742,6 +5742,7 @@ function paySupplier() {
         }
     };
 }
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -5799,7 +5800,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
     } 
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
@@ -5820,7 +5821,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        if (paySupplierBtn) paySupplierBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (paySupplierBtn) paySupplierBtn.style.display = 'none';
 
         loadExpenseDetailTable(fetchUrl);
         return; 
@@ -5900,7 +5901,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 // Функция для нижней таблицы (спецификация запчастей)
 async function loadExpenseDetailTable(fetchUrl) {
     const detailBody = document.getElementById('detail-body');
@@ -5946,7 +5946,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-
 // ==========================================
 // ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
 // ==========================================
