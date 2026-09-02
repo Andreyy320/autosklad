@@ -1695,6 +1695,7 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
