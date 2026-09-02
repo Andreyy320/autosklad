@@ -1628,7 +1628,12 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ убран, так как в таблице skladi нет колонки mol_id (МОЛ хранится в документах или таблицах движений)
+        // Фильтр по МОЛ
+        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
+            queryParams.push(mol_id);
+            extraFilters += ` AND mol_table.user_id = $${paramIndex}`;
+            paramIndex++;
+        }
 
         const query = `
             WITH aggregated_stocks AS (
@@ -1651,13 +1656,15 @@ router.get('/stock_balances', async (req, res) => {
                 z.price_group,
                 z.description,
                 COALESCE(s.name, 'Основной склад') AS sklad,
-                'Не назначен' AS mol,
+                COALESCE(u.name, 'Не назначен') AS mol,
                 COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
             CROSS JOIN skladi s
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
+            LEFT JOIN mol mol_table ON mol_table.warehouse_id = s.id AND (mol_table.date_removed IS NULL OR mol_table.date_removed > NOW())
+            LEFT JOIN users u ON mol_table.user_id = u.id
             WHERE 1=1
             ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
             ORDER BY z.name ASC, s.name ASC;
