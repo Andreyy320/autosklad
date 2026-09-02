@@ -6303,11 +6303,15 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
 }
 
 // ==========================================
-// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ ПРИХОДОВ / РЕАЛИЗАЦИЙ
+// ИСПРАВЛЕННЫЙ КЛИКЕР ДЛЯ ПРИХОДОВ / РЕАЛИЗАЦИЙ
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
-    tableBodyForReceipts.addEventListener('click', async (e) => {
+    // Удаляем старый обработчик через клонирование, чтобы не плодить дубликаты
+    const newTableBody = tableBodyForReceipts.cloneNode(true);
+    tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
+
+    newTableBody.addEventListener('click', async (e) => {
         if (
             currentEntity !== 'money_receipts_by_sklad' && 
             currentEntity !== 'money_receipts_by_customers' && 
@@ -6327,7 +6331,8 @@ if (tableBodyForReceipts) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        const rowsArray = Array.from(tableBodyForReceipts.querySelectorAll('tr'));
+        // Ищем элемент в массиве currentItems
+        const rowsArray = Array.from(newTableBody.querySelectorAll('tr:not([style*="background: rgb(241, 245, 249)"])'));
         const rowIndex = rowsArray.indexOf(tr);
 
         let selectedItem = null;
@@ -6339,25 +6344,9 @@ if (tableBodyForReceipts) {
         }
         
         const id = tr.getAttribute('data-id');
-        console.log(`📥 [КЛИК В ПРИХОДАХ] Сущность: "${currentEntity}", Индекс: ${rowIndex}, ID строки: ${id}`, selectedItem);
+        console.log(`📥 [КЛИК] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
-        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-        const tabsForCars = document.getElementById('tabs-for-cars');
-        const tabsForAccidents = document.getElementById('tabs-for-accidents');
-        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
-        const tabsForRealizations = document.getElementById('tabs-for-realizations');
         const detailContainer = document.getElementById('detail-container');
-
-        if (carTabsPanel) carTabsPanel.style.display = 'none';
-        if (tabsForCars) tabsForCars.style.display = 'none';
-        if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-        if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-        if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-
-        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-        if (actionButtonsBar) {
-            actionButtonsBar.style.display = 'none';
-        }
 
         if (selectedItem) {
             if (currentEntity === 'money_receipts_by_sklad') {
@@ -6365,6 +6354,7 @@ if (tableBodyForReceipts) {
             } else if (currentEntity === 'money_receipts_by_customers') {
                 loadReceiptMainData('money_receipts', selectedItem);
             } else if (currentEntity === 'money_receipts') {
+                // Жестко фиксируем id реализации из любых возможных полей объекта
                 let realizationId = selectedItem.realization_id || selectedItem.id || id;
                 if (realizationId) {
                     window.currentRealizationId = realizationId;
@@ -6374,17 +6364,18 @@ if (tableBodyForReceipts) {
                 let customerId = window.currentCustomerId || '';
                 let currentRealization = window.currentRealizationId || '';
 
-                const fetchUrl = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+                const fetchUrlDetail = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+                const fetchUrlWorks = `/api/money_receipts_works_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
 
                 if (detailContainer) detailContainer.style.display = 'flex';
-                loadReceiptDetailTable(fetchUrl);
-                loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${currentRealization}`);
+                
+                // Загружаем и товары, и работы в нижние таблицы
+                loadReceiptDetailTable(fetchUrlDetail);
+                loadReceiptWorksDetailTable(fetchUrlWorks);
             }
         }
     });
 }
-
-
 
 
 
