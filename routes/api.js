@@ -2822,7 +2822,7 @@ router.post('/realization_items', async (req, res) => {
 
         const zap = zaphastiRes.rows[0];
 
-        // 3. Получаем актуальные остатки партий напрямую из таблицы warehouse_batches с блокировкой FOR UPDATE
+        // 3. Получаем актуальные остатки партий напрямую из таблицы warehouse_batches с блокировкой FOR UPDATE OF wb
         const batchesQuery = `
             SELECT 
                 wb.id AS batch_id,
@@ -2832,10 +2832,10 @@ router.post('/realization_items', async (req, res) => {
                 wb.price_rub,
                 wb.quantity AS available_qty
             FROM warehouse_batches wb
-            LEFT JOIN receipts r ON wb.receipt_id = r.id
+            JOIN receipts r ON wb.receipt_id = r.id
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
-            FOR UPDATE;
+            FOR UPDATE OF wb;
         `;
 
         const batchesRes = await client.query(batchesQuery, [zaphasti_id, sklad_id]);
