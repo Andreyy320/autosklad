@@ -1628,27 +1628,24 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ (если у складов есть привязка к mol_id)
+        // Фильтр по МОЛ (проверяем связь через склады или напрямую)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
+            // Если в таблице skladi нет mol_id, этот фильтр можно скорректировать под твою структуру
             extraFilters += ` AND s.mol_id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Примечание: параметр date в классическом FIFO-учете по текущим актуальным остаткам 
-        // обычно не отматывает партии назад (для исторических остаток на произвольную дату нужна 
-        // отдельная логика движка регистров накопления), поэтому берем актуальный срез warehouse_batches.
-        
         const query = `
             WITH aggregated_stocks AS (
-                -- Схлопываем остатки из таблицы warehouse_batches по товарам и складам
+                -- Группируем остатки партий по складам и запчастям
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
                 LEFT JOIN skladi s ON wb.warehouse_id = s.id
-                WHERE wb.quantity > 0 ${extraFilters}
+                WHERE 1=1 ${extraFilters}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             )
             SELECT 
@@ -1665,18 +1662,20 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
-            JOIN aggregated_stocks st ON z.id = st.zaphasti_id
+            CROSS JOIN skladi s
+            LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
-            LEFT JOIN skladi s ON st.warehouse_id = s.id
             LEFT JOIN mol mol_table ON s.mol_id = mol_table.id
             LEFT JOIN users u ON mol_table.user_id = u.id
+            WHERE 1=1
+            ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
-        console.log(`[SUCCESS] Получены актуальные остатки из warehouse_batches. Записей: ${result.rows.length}`);
+        console.log(`[SUCCESS] Получены остатки по складам. Записей: ${result.rows.length}`);
 
     } catch (err) {
         console.error("❌ [ERROR] Ошибка в /stock_balances:", err.message);
