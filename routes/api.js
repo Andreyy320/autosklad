@@ -4672,10 +4672,10 @@ router.delete('/receipt_items/:id', async (req, res) => {
 });
 
 
-// POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом текущего документа
+// POST /api/move_items - добавление позиции перемещения с корректным FIFO и учетом новой таблицы warehouse_batches
 router.post('/move_items', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items) с FIFO`);
+    console.log(`[POST REQUEST] Добавление позиции перемещения (move_items) с FIFO по warehouse_batches`);
     console.log(`[BODY]:`, req.body);
 
     const { zaphasti_id, currency, quantity, description, move_id } = req.body;
@@ -4721,48 +4721,48 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Склад-источник и склад-получатель не могут быть одинаковыми.' });
         }
 
-        // 2. Получаем актуальные партии (приходы) и их реальные остатки по FIFO
+        // 2. Получаем актуальные партии из нашей новой таблицы warehouse_batches с учетом списаний по FIFO
         const batchesQuery = `
             SELECT 
-                r.id AS receipt_id,
+                wb.id AS batch_id,
+                wb.receipt_id,
                 r.doc_number AS receipt_doc_number,
-                r.date AS receipt_date,
-                ri.price,
-                ri.price_rub,
-                ri.quantity AS initial_qty,
+                wb.created_at AS receipt_date,
+                wb.price_rub,
+                wb.quantity AS initial_qty,
                 (
                     COALESCE((
                         SELECT SUM(mi.quantity) 
                         FROM move_items mi 
                         JOIN moves m ON mi.move_id = m.id 
-                        WHERE mi.income_document_id = r.id 
-                          AND mi.zaphasti_id = ri.zaphasti_id 
-                          AND m.warehouse_from_id = r.warehouse_id 
+                        WHERE mi.income_document_id = wb.receipt_id 
+                          AND mi.zaphasti_id = wb.zaphasti_id 
+                          AND m.warehouse_from_id = wb.warehouse_id 
                           AND (m.is_posted = true OR m.id = $3)
                     ), 0) +
                     COALESCE((
                         SELECT SUM(rel_i.quantity) 
                         FROM realization_items rel_i 
                         JOIN realizations rel ON rel_i.realization_id = rel.id 
-                        WHERE rel_i.income_document_id = r.id 
-                          AND rel_i.zaphasti_id = ri.zaphasti_id 
-                          AND rel.sklad_id = r.warehouse_id 
+                        WHERE rel_i.income_document_id = wb.receipt_id 
+                          AND rel_i.zaphasti_id = wb.zaphasti_id 
+                          AND rel.sklad_id = wb.warehouse_id 
                           AND rel.is_posted = true
                     ), 0) +
                     COALESCE((
                         SELECT SUM(rep_i.quantity) 
                         FROM repair_items rep_i 
                         JOIN repairs rep ON rep_i.repair_id = rep.id 
-                        WHERE rep_i.receipt_id = r.id 
-                          AND rep_i.zaphast_id = ri.zaphasti_id 
-                          AND rep.warehouse_id = r.warehouse_id 
+                        WHERE rep_i.receipt_id = wb.receipt_id 
+                          AND rep_i.zaphast_id = wb.zaphasti_id 
+                          AND rep.warehouse_id = wb.warehouse_id 
                           AND rep.is_posted = true
                     ), 0)
                 ) AS spent_qty
-            FROM receipt_items ri
-            JOIN receipts r ON ri.receipt_id = r.id
-            WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
-            ORDER BY r.date ASC, r.id ASC
+            FROM warehouse_batches wb
+            LEFT JOIN receipts r ON wb.receipt_id = r.id
+            WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2
+            ORDER BY wb.created_at ASC, wb.id ASC
         `;
 
         const batchesRes = await client.query(batchesQuery, [zaphasti_id, warehouseFromId, move_id]);
@@ -4771,8 +4771,9 @@ router.post('/move_items', async (req, res) => {
             const initial = Number(b.initial_qty) || 0;
             const spent = Number(b.spent_qty) || 0;
             const available = initial - spent;
-            const price = Number(b.price_rub !== undefined && b.price_rub !== null ? b.price_rub : b.price) || 0;
+            const price = Number(b.price_rub) || 0;
             return {
+                batch_id: b.batch_id,
                 receipt_id: b.receipt_id,
                 doc_number: b.receipt_doc_number || `ПР-${b.receipt_id}`,
                 price: price,
@@ -4783,7 +4784,7 @@ router.post('/move_items', async (req, res) => {
         const totalAvailableStock = batches.reduce((sum, b) => sum + b.available, 0);
 
         console.log(`[FIFO DEBUG] Запрошено к добавлению: ${requestedQty} шт.`);
-        console.log(`[FIFO DEBUG] Реально доступно на складе с учетом текущего документа:`, totalAvailableStock);
+        console.log(`[FIFO DEBUG] Реально доступно на складе (через warehouse_batches):`, totalAvailableStock);
         console.log(`[FIFO DEBUG] Доступные партии:`, batches);
 
         if (requestedQty > totalAvailableStock) {
@@ -4797,7 +4798,7 @@ router.post('/move_items', async (req, res) => {
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
 
-        // 3. Распределяем строго по партиям FIFO
+        // 3. Распределяем строго по партиям FIFO из warehouse_batches
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -4806,7 +4807,7 @@ router.post('/move_items', async (req, res) => {
 
             const totalRub = takeQty * batch.price;
 
-            console.log(`➡️ [FIFO STEP] Партия "${batch.doc_number}" (ID: ${batch.receipt_id}): берем ${takeQty} шт. по цене ${batch.price}`);
+            console.log(`➡️ [FIFO STEP] Партия Пр-во ID: ${batch.receipt_id} (Док: ${batch.doc_number}): берем ${takeQty} шт. по цене ${batch.price}`);
 
             const insertQuery = `
                 INSERT INTO "move_items" 
@@ -4832,21 +4833,23 @@ router.post('/move_items', async (req, res) => {
             createdRecords.push(newRecord);
 
             // 4. Запись лога перемещения через writeMoveLog
-            await writeMoveLog(client, req, {
-                action: 'INSERT',
-                move_id: move_id,
-                document_number: moveDocNumber,
-                warehouse_from_id: warehouseFromId,
-                warehouse_to_id: warehouseToId,
-                zaphasti_id: zaphasti_id,
-                quantity: takeQty,
-                price: batch.price,
-                currency: curr,
-                price_rub: batch.price,
-                total_rub: totalRub,
-                income_document_id: batch.receipt_id,
-                description: description || 'Добавлена позиция в перемещение'
-            });
+            if (typeof writeMoveLog === 'function') {
+                await writeMoveLog(client, req, {
+                    action: 'INSERT',
+                    move_id: move_id,
+                    document_number: moveDocNumber,
+                    warehouse_from_id: warehouseFromId,
+                    warehouse_to_id: warehouseToId,
+                    zaphasti_id: zaphasti_id,
+                    quantity: takeQty,
+                    price: batch.price,
+                    currency: curr,
+                    price_rub: batch.price,
+                    total_rub: totalRub,
+                    income_document_id: batch.receipt_id,
+                    description: description || 'Добавлена позиция в перемещение'
+                });
+            }
 
             remainingToDistribute -= takeQty;
         }
@@ -4854,12 +4857,12 @@ router.post('/move_items', async (req, res) => {
         // Страховка на случай непредвиденного остатка
         if (remainingToDistribute > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий прихода.' });
+            return res.status(400).json({ error: 'Ошибка распределения партий FIFO: не удалось покрыть запрошенное количество за счет существующих партий warehouse_batches.' });
         }
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Успешно добавлено строк: ${createdRecords.length}`);
+        console.log(`[SUCCESS] Успешно добавлено строк перемещения: ${createdRecords.length}`);
         return res.status(201).json(createdRecords);
 
     } catch (err) {
@@ -4871,7 +4874,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 // PUT /api/move_items/:id - редактирование позиции перемещения с исправленным FIFO и учетом других строк текущего документа
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
