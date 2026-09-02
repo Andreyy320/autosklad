@@ -4110,7 +4110,60 @@ router.get('/expense_items', async (req, res) => {
     }
 });
 
+// POST-эндпоинт для проведения оплаты по накладной
+router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
+    try {
+        const receiptId = parseInt(req.params.id);
+        const { amount, postavhik_id, sklad_id, comment } = req.body;
 
+        if (!receiptId || isNaN(receiptId)) {
+            return res.status(400).json({ error: 'Некорректный ID накладной' });
+        }
+
+        const paymentAmount = parseFloat(amount);
+        if (!paymentAmount || paymentAmount <= 0) {
+            return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
+        }
+
+        // 1. Проверяем, существует ли вообще такая накладная и получаем её supplier_id, если он не передан с клиента
+        const receiptCheck = await pool.query(
+            `SELECT id, supplier_id FROM receipts WHERE id = $1`,
+            [receiptId]
+        );
+
+        if (receiptCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Накладная не найдена' });
+        }
+
+        const supplierId = postavhik_id ? parseInt(postavhik_id) : receiptCheck.rows[0].supplier_id;
+
+        // 2. Вставляем запись об оплате в твою таблицу supplier_payments
+        const insertQuery = `
+            INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        
+        const values = [
+            supplierId, 
+            receiptId, 
+            paymentAmount, 
+            comment || 'Оплата по накладной'
+        ];
+
+        const result = await pool.query(insertQuery, values);
+
+        res.json({ 
+            success: true, 
+            message: 'Оплата успешно сохранена',
+            payment: result.rows[0] 
+        });
+
+    } catch (err) {
+        console.error('❌ Ошибка при проведении оплаты (expenses_by_receipts/pay):', err);
+        res.status(500).json({ error: err.message });
+    }
+});
     
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
 router.get('/get-receipt-logs', async (req, res) => {
