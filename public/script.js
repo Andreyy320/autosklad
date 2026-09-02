@@ -5971,6 +5971,10 @@ if (tableBodyForExpenses) {
 }
 
 
+
+
+
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6288,25 +6292,48 @@ async function loadReceiptDetailTable(fetchUrl) {
 
 // Загрузка спецификации услуг (работ)
 async function loadReceiptWorksDetailTable(fetchUrl) {
-    const worksBody = document.getElementById('works-detail-body') || document.getElementById('detail-body'); 
-    
+    // Если у вас отдельная таблица для услуг, можно завести конфиг или рендерить в elements
+    const detailBody = document.getElementById('detail-body'); // Или отдельный tbody для услуг, если есть
+    const config = getConfig('receipt_works') || getConfig('receipt_items'); // Фолбек на конфиг
+
+    const colCount = config && config.columns ? config.columns.length : 5;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка услуг...</td></tr>`;
+
     try {
         const response = await fetch(fetchUrl);
         const responseText = await response.text();
         if (!response.ok) throw new Error('Ошибка загрузки услуг');
         const items = JSON.parse(responseText);
 
-        if (!worksBody) return;
-        if (items.length === 0) return;
+        if (!detailBody) return;
+        if (items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет услуг в этой реализации</td></tr>`;
+            return;
+        }
 
-        console.log("Загружены работы/услуги:", items);
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            // Если для услуг используется отдельный рендер в getConfig, он применится, иначе дефолт
+            if (config && typeof config.renderWork === 'function') {
+                tr.innerHTML = config.renderWork(item);
+            } else if (config && typeof config.render === 'function') {
+                tr.innerHTML = config.render(item);
+            } else {
+                tr.innerHTML = `<td>${item.work_name || ''}</td><td>${item.quantity}</td><td>${item.total_rub}</td>`;
+            }
+            detailBody.appendChild(tr);
+        });
     } catch (err) {
         console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки услуг</td></tr>`;
+        }
     }
 }
 
 // ==========================================
-// ИСПРАВЛЕННЫЙ КЛИКЕР ДЛЯ ПРИХОДОВ / РЕАЛИЗАЦИЙ
+// КЛИКЕР ДЛЯ ТАБЛИЦЫ (СКЛАДЫ -> ПОКУПАТЕЛИ -> ДОКУМЕНТЫ)
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
@@ -6363,23 +6390,29 @@ if (tableBodyForReceipts) {
                 let customerId = window.currentCustomerId || '';
                 let currentRealization = window.currentRealizationId || '';
 
-                const fetchUrlDetail = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
-                const fetchUrlWorks = `/api/money_receipts_works_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+                // По умолчанию при клике на документ загружаем запчасти (или смотрим какой таб активен)
+                const activeTabBtn = document.querySelector('#tabs-for-money-receipts .active, #tabs-for-money-receipts button.active');
+                const currentSubTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
 
                 if (detailContainer) detailContainer.style.display = 'flex';
-                
-                loadReceiptDetailTable(fetchUrlDetail);
-                loadReceiptWorksDetailTable(fetchUrlWorks);
+
+                if (currentSubTab === 'money_receipts_works_detail' || currentSubTab === 'realization_works') {
+                    const fetchUrlWorks = `/api/money_receipts_works_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+                    loadReceiptWorksDetailTask(fetchUrlWorks);
+                } else {
+                    const fetchUrlDetail = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+                    loadReceiptDetailTable(fetchUrlDetail);
+                }
             }
         }
     });
 }
 
 // ==========================================
-// ИСПРАВЛЕННЫЙ ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ ВНИЗУ
+// ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ ВНИЗУ (ЗАПЧАСТИ / УСЛУГИ)
 // ==========================================
 function switchMoneyReceiptTab(tabName, btnElement) {
-    console.log('🔄 [switchMoneyReceiptTab] НАЧАЛО переключения таба:', { tabName, selectedItem });
+    console.log('🔄 [switchMoneyReceiptTab] Переключение нижнего таба:', { tabName, selectedItem });
     
     currentMoneyReceiptSubTab = tabName; 
 
@@ -6390,9 +6423,6 @@ function switchMoneyReceiptTab(tabName, btnElement) {
     if (btnElement) {
         btnElement.classList.add('active');
         btnElement.setAttribute('data-tab', tabName);
-        console.log('✅ [switchMoneyReceiptTab] Активная кнопка установлена:', tabName);
-    } else {
-        console.warn('⚠️ [switchMoneyReceiptTab] btnElement не передан!');
     }
 
     const detailToolbar = document.getElementById('detail-toolbar');
@@ -6401,12 +6431,10 @@ function switchMoneyReceiptTab(tabName, btnElement) {
     }
 
     if (selectedItem) {
-        // Определяем ID в зависимости от того, какой уровень сейчас выбран вверху
         let realizationId = selectedItem.realization_id || selectedItem.id || window.currentRealizationId || '';
         let customerId = selectedItem.customer_id || window.currentCustomerId || '';
         let skladId = selectedItem.sklad_id || window.currentSkladId || '';
 
-        // Формируем URL в зависимости от выбранного подтаба снизу
         let url = '';
         if (tabName === 'money_receipts_detail' || tabName === 'realization_items') {
             url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
@@ -6414,26 +6442,17 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         } else if (tabName === 'money_receipts_works_detail' || tabName === 'realization_works') {
             url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
             loadReceiptWorksDetailTable(url);
-        } else if (typeof loadDetailData === 'function') {
-            // Фолбек на универсальный метод, если передан другой кастомный таб
-            const payload = {
-                customer_id: customerId,
-                sklad_id: skladId,
-                realization_id: realizationId
-            };
-            loadDetailData(tabName, payload);
         }
 
-        console.log(`🚀 [switchMoneyReceiptTab] Загрузка данных для таба "${tabName}" с URL:`, url);
+        console.log(`🚀 [switchMoneyReceiptTab] Загрузка данных для нижнего таба "${tabName}" с URL:`, url);
     } else {
-        console.warn('⚠️ [switchMoneyReceiptTab] ОШИБКА: selectedItem отсутствует (ничего не выбрано в верхней таблице)!');
+        console.warn('⚠️ [switchMoneyReceiptTab] Запись в верхней таблице не выбрана!');
         const detailBody = document.getElementById('detail-body');
         if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите запись в верхней таблице</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите документ в верхней таблице</td></tr>`;
         }
     }
 }
-
 
 
 
