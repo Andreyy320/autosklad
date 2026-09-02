@@ -4166,7 +4166,6 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
 });
     
 
-// GET-эндпоинт для получения истории оплат по конкретной накладной
 router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
     try {
         const receiptId = parseInt(req.params.id);
@@ -4180,12 +4179,12 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
                 id,
                 supplier_id,
                 receipt_id,
+                date,
                 amount,
-                payment_date,
                 comment
             FROM supplier_payments
             WHERE receipt_id = $1
-            ORDER BY payment_date DESC, id DESC;
+            ORDER BY date DESC, id DESC;
         `;
 
         const result = await pool.query(query, [receiptId]);
