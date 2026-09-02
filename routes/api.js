@@ -2060,6 +2060,16 @@ router.get('/part_movement_details', async (req, res) => {
         const queryParams = [zaphasti_id];
         let paramIndex = 2;
 
+        let currentWarehouseId = null;
+        let warehouseCondition = '';
+
+        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
+            currentWarehouseId = parseInt(warehouse_id, 10);
+            queryParams.push(currentWarehouseId);
+            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
+            paramIndex++;
+        }
+
         let dateCondition = '';
         if (start_date && start_date.trim() !== '' && start_date !== 'undefined' && start_date !== 'null') {
             queryParams.push(start_date.replace('T', ' '));
@@ -2072,14 +2082,11 @@ router.get('/part_movement_details', async (req, res) => {
             paramIndex++;
         }
 
-        let warehouseCondition = '';
-        let currentWarehouseId = null;
-        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
-            currentWarehouseId = parseInt(warehouse_id, 10);
+        // Передаем currentWarehouseId параметром в запрос, чтобы не хардкодить его при старте сервера
+        if (currentWarehouseId !== null) {
             queryParams.push(currentWarehouseId);
-            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
-            paramIndex++;
         }
+        const whParamIndex = currentWarehouseId !== null ? paramIndex++ : null;
 
         const query = `
             WITH all_ops AS (
@@ -2115,12 +2122,12 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
                     CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
                     CASE 
-                        WHEN ${currentWarehouseId ? 'm.warehouse_from_id = ' + currentWarehouseId : 'FALSE'} THEN (-1 * mi.quantity)
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
                     COALESCE(mi.price, 0) AS price,
                     CASE 
-                        WHEN ${currentWarehouseId ? 'm.warehouse_from_id = ' + currentWarehouseId : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, 0))
                         ELSE (mi.quantity * COALESCE(mi.price, 0))
                     END AS sum,
                     mi.description,
@@ -2205,7 +2212,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
