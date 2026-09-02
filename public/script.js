@@ -4756,10 +4756,6 @@ function openActiveEntityForm(action, item = null) {
 
 
 
-
-
-
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -7277,6 +7273,73 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         }
     });
 });
+
+
+
+
+
+// === ЛОГИКА РАБОТЫ КНОПКИ «ОПЛАТИТЬ» И МОДАЛЬНОГО ОКНА ===
+
+// 1. При клике на кнопку «Оплатить» открываем модальное окно
+document.getElementById('pay-supplier-btn')?.addEventListener('click', () => {
+    // Проверка: выбран ли поставщик (если нужно)
+    const modal = document.getElementById('payment-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+});
+
+// 2. Закрытие модального окна по кнопке «Отмена»
+document.getElementById('close-payment-modal')?.addEventListener('click', () => {
+    const modal = document.getElementById('payment-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+});
+
+// 3. Отправка формы оплаты на сервер при нажатии «Сохранить»
+document.getElementById('payment-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const amountInput = document.getElementById('pay-amount');
+    const commentInput = document.getElementById('pay-comment');
+    
+    if (!amountInput) return;
+
+    const amount = amountInput.value;
+    const comment = commentInput ? commentInput.value : '';
+
+    try {
+        // Запрос к твоему бэкенду (путь /api/... можно поменять под твои эндпоинты)
+        const response = await fetch('/api/supplier_payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: parseFloat(amount),
+                comment: comment
+            })
+        });
+
+        if (!response.ok) throw new Error('Ошибка при сохранении');
+
+        // Закрываем окно и очищаем поля
+        document.getElementById('payment-modal').style.display = 'none';
+        amountInput.value = '';
+        if (commentInput) commentInput.value = '';
+
+        alert('✅ Оплата успешно сохранена!');
+
+        // Обновляем данные на странице, если есть такая функция
+        if (typeof refreshData === 'function') {
+            refreshData();
+        }
+
+    } catch (err) {
+        console.error('Ошибка:', err);
+        alert('❌ Не удалось выполнить оплату');
+    }
+});
+
 
 
 
