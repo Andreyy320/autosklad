@@ -6003,6 +6003,378 @@ if (tableBodyForExpenses) {
 
 
 
+
+
+async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
+    console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
+
+    let fetchUrl = '';
+    let currentReceiptView = entity;
+
+    const detailContainer = document.getElementById('detail-container');
+    const mainTableBody = document.getElementById('table-body');
+    const mainHeaderTr = document.getElementById('table-headers');
+
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
+
+    if (currentReceiptView === 'money_receipts_by_sklad' || currentReceiptView === 'money_receipts') {
+        currentReceiptView = 'money_receipts_by_sklad';
+        window.currentSkladId = null;
+        window.currentCustomerId = null;
+        window.currentRealizationId = null;
+
+        fetchUrl = `/api/money_receipts_by_sklad`;
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+    } 
+    else if (currentReceiptView === 'money_receipts_by_customers') {
+        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
+        window.currentSkladId = skladId || window.currentSkladId;
+        window.currentCustomerId = null;
+        window.currentRealizationId = null;
+
+        fetchUrl = `/api/money_receipts_by_customers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+    } 
+    else if (currentReceiptView === 'money_receipts_by_receipts') {
+        let customerId = parentId && typeof parentId === 'object' ? (parentId.customer_id || parentId.id) : parentId;
+        if (customerId) window.currentCustomerId = customerId;
+        window.currentRealizationId = null;
+
+        let skladId = window.currentSkladId || '';
+        let currentCustomer = window.currentCustomerId || '';
+
+        fetchUrl = `/api/money_receipts?customer_id=${currentCustomer}${skladId ? '&sklad_id=' + skladId : ''}`;
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+    } 
+    else if (currentReceiptView === 'receipt_items') {
+        let realizationId = parentId && typeof parentId === 'object' ? (parentId.realization_id || parentId.id || parentId.document_id) : parentId;
+        
+        if (realizationId !== undefined && realizationId !== null && realizationId !== '') {
+            window.currentRealizationId = realizationId;
+        }
+
+        let skladId = window.currentSkladId || '';
+        let customerId = window.currentCustomerId || '';
+        let currentRealization = window.currentRealizationId || '';
+
+        fetchUrl = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+
+        currentEntity = currentReceiptView; 
+        if (detailContainer) detailContainer.style.display = 'flex';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        loadReceiptDetailTable(fetchUrl);
+        return; 
+    }
+
+    currentEntity = currentReceiptView;
+
+    const config = getConfig(currentEntity);
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
+
+    if (mainHeaderTr && visibleColumns.length > 0) {
+        mainHeaderTr.innerHTML = visibleColumns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+
+        const thead = mainHeaderTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, mainHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, mainHeaderTr);
+        }
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
+    }
+
+    try {
+        const response = await fetch(fetchUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
+
+        currentItems = await response.json();
+        if (!mainTableBody) return;
+
+        if (currentItems.length === 0) {
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            return;
+        }
+
+        mainTableBody.innerHTML = '';
+
+        if (currentEntity === 'money_receipts_by_receipts') {
+            const monthNames = [
+                "января", "февраля", "марта", "апреля", "мая", "июня", 
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            ];
+
+            const groups = {};
+            currentItems.forEach(item => {
+                const dateObj = item.date ? new Date(item.date) : new Date();
+                const month = dateObj.getMonth();
+                const year = dateObj.getFullYear();
+                const key = `${year}-${String(month).padStart(2, '0')}`;
+                const title = `${monthNames[month]} ${year} года`;
+
+                if (!groups[key]) {
+                    groups[key] = {
+                        title: title,
+                        totalSum: 0,
+                        totalParts: 0,
+                        totalWorks: 0,
+                        items: []
+                    };
+                }
+
+                groups[key].items.push(item);
+                groups[key].totalSum += Number(item.total_realization_sum || 0);
+                groups[key].totalParts += Number(item.parts_sum || 0);
+                groups[key].totalWorks += Number(item.works_sum || 0);
+            });
+
+            let groupIndex = 0;
+            Object.keys(groups).sort().reverse().forEach(key => {
+                const group = groups[key];
+                const currentGIdx = groupIndex++;
+
+                const headerTr = document.createElement('tr');
+                headerTr.style.background = '#f1f5f9';
+                headerTr.style.cursor = 'pointer';
+                headerTr.style.fontWeight = 'bold';
+                headerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+                        <span id="icon-rec-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
+                        ${group.title} &nbsp;|&nbsp; 
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Запчасти: <span style="color:#16a34a;">${group.totalParts.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Работы: <span style="color:#2563eb;">${group.totalWorks.toFixed(2)} </span>
+                    </td>
+                `;
+                mainTableBody.appendChild(headerTr);
+
+                const childRows = [];
+                group.items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.dataset.id = item.realization_id || item.id || '';
+                    tr.style.cursor = 'pointer';
+                    tr.className = `group-row-rec-${currentGIdx}`;
+                    tr.innerHTML = config.render(item);
+                    mainTableBody.appendChild(tr);
+                    childRows.push(tr);
+                });
+
+                headerTr.addEventListener('click', () => {
+                    const icon = document.getElementById(`icon-rec-${currentGIdx}`);
+                    const isHidden = childRows[0].style.display === 'none';
+                    
+                    childRows.forEach(tr => {
+                        tr.style.display = isHidden ? '' : 'none';
+                    });
+                    
+                    icon.innerText = isHidden ? '[-]' : '[+]';
+                });
+            });
+
+        } else {
+            currentItems.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = item.id || item.realization_id || item.sklad_id || item.customer_id || '';
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = config.render(item);
+
+                mainTableBody.appendChild(tr);
+            });
+        }
+
+    } catch (err) {
+        console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
+        if (mainTableBody) {
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
+        }
+    }
+}
+
+// Функция для нижней таблицы (спецификация приходов / продажных позиций)
+async function loadReceiptDetailTable(fetchUrl) {
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const config = getConfig('receipt_items');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 5;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error('Ошибка загрузки позиций');
+        const items = await response.json();
+
+        if (!detailBody) return;
+
+        if (items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет позиций в этой реализации</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.render(item);
+            detailBody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
+        }
+    }
+}
+
+
+// ==========================================
+// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ ПРИХОДОВ / РЕАЛИЗАЦИЙ
+// ==========================================
+const tableBodyForReceipts = document.getElementById('table-body');
+if (tableBodyForReceipts) {
+    tableBodyForReceipts.addEventListener('click', async (e) => {
+        if (
+            currentEntity !== 'money_receipts_by_sklad' && 
+            currentEntity !== 'money_receipts_by_customers' && 
+            currentEntity !== 'money_receipts_by_receipts'
+        ) {
+            return;
+        }
+
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        
+        // Игнорируем клики по строкам-шапкам месяцев (если они есть)
+        if (tr.style.background && tr.style.background.includes('rgb(241, 245, 249)')) {
+            return;
+        }
+
+        document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+        tr.style.background = '#e2e8f0';
+
+        const rowsArray = Array.from(tableBodyForReceipts.querySelectorAll('tr'));
+        const rowIndex = rowsArray.indexOf(tr);
+
+        if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
+            selectedItem = currentItems[rowIndex];
+        } else {
+            const id = tr.getAttribute('data-id');
+            selectedItem = currentItems.find(i => String(i.id || i.realization_id || i.sklad_id || i.customer_id) === String(id));
+        }
+        
+        selectedDetailItem = null;  
+
+        const id = tr.getAttribute('data-id');
+        console.log(`📥 [КЛИК В ПРИХОДАХ] Сущность: "${currentEntity}", Индекс: ${rowIndex}, ID строки: ${id}`, selectedItem);
+
+        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
+        const tabsForCars = document.getElementById('tabs-for-cars');
+        const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const detailContainer = document.getElementById('detail-container');
+
+        if (carTabsPanel) carTabsPanel.style.display = 'none';
+        if (tabsForCars) tabsForCars.style.display = 'none';
+        if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+        if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+        if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+
+        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+        if (actionButtonsBar) {
+            actionButtonsBar.style.display = 'none';
+        }
+
+        if (selectedItem) {
+            if (currentEntity === 'money_receipts_by_sklad') {
+                loadReceiptMainData('money_receipts_by_customers', selectedItem);
+            } else if (currentEntity === 'money_receipts_by_customers') {
+                loadReceiptMainData('money_receipts_by_receipts', selectedItem);
+            } else if (currentEntity === 'money_receipts_by_receipts') {
+                let realizationId = selectedItem.realization_id || selectedItem.id || id;
+                if (realizationId) {
+                    window.currentRealizationId = realizationId;
+                }
+
+                let skladId = window.currentSkladId || '';
+                let customerId = window.currentCustomerId || '';
+                let currentRealization = window.currentRealizationId || '';
+
+                const fetchUrl = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+
+                if (detailContainer) detailContainer.style.display = 'flex';
+                loadReceiptDetailTable(fetchUrl);
+            }
+        }
+    });
+}
+
+
+
+
+
+
+
+
+
+
+
+
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
