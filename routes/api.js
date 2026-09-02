@@ -1628,13 +1628,7 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ (проверяем связь через склады или напрямую)
-        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
-            queryParams.push(mol_id);
-            // Если в таблице skladi нет mol_id, этот фильтр можно скорректировать под твою структуру
-            extraFilters += ` AND s.mol_id = $${paramIndex}`;
-            paramIndex++;
-        }
+        // Фильтр по МОЛ убран, так как в таблице skladi нет колонки mol_id (МОЛ хранится в документах или таблицах движений)
 
         const query = `
             WITH aggregated_stocks AS (
@@ -1644,7 +1638,6 @@ router.get('/stock_balances', async (req, res) => {
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                LEFT JOIN skladi s ON wb.warehouse_id = s.id
                 WHERE 1=1 ${extraFilters}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             )
@@ -1658,15 +1651,13 @@ router.get('/stock_balances', async (req, res) => {
                 z.price_group,
                 z.description,
                 COALESCE(s.name, 'Основной склад') AS sklad,
-                COALESCE(u.name, 'Не назначен') AS mol,
+                'Не назначен' AS mol,
                 COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(z.unit, 'шт') AS unit
             FROM zaphasti z
             CROSS JOIN skladi s
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
-            LEFT JOIN mol mol_table ON s.mol_id = mol_table.id
-            LEFT JOIN users u ON mol_table.user_id = u.id
             WHERE 1=1
             ${warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' ? `AND s.id = ${Number(warehouse_id)}` : ''}
             ORDER BY z.name ASC, s.name ASC;
