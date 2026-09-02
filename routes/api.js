@@ -1701,6 +1701,8 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
@@ -1872,12 +1874,14 @@ router.get('/stock_movement', async (req, res) => {
     try {
         const { start_date, end_date, warehouse_id, mol_id } = req.query;
 
+        console.log(`[DEBUG] /stock_movement запрошен с параметрами:`, { start_date, end_date, warehouse_id, mol_id });
+
         const queryParams = [];
         let paramIndex = 1;
 
         let dateCondition = '';
 
-        // Фильтр по диапазону дат (если указаны обе или одна из них)
+        // Фильтр по диапазону дат для оборотов
         if (start_date && start_date.trim() !== '' && start_date !== 'undefined' && start_date !== 'null') {
             const formattedStart = start_date.replace('T', ' ');
             queryParams.push(formattedStart);
@@ -1892,17 +1896,26 @@ router.get('/stock_movement', async (req, res) => {
             paramIndex++;
         }
 
-        // Дополнительные фильтры по складу и МОЛ
-        let extraFilters = '';
+        let warehouseFilterClause = '';
+        let molFilterClause = '';
+
+        // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
-            queryParams.push(parseInt(warehouse_id, 10));
-            extraFilters += ` AND warehouse_id = $${paramIndex}::int`;
+            queryParams.push(warehouse_id);
+            warehouseFilterClause += ` AND warehouse_id = $${paramIndex}`;
             paramIndex++;
         }
 
+        // Фильтр по МОЛ (используем ту же надежную логику поиска актуального МОЛа для склада)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
-            queryParams.push(parseInt(mol_id, 10));
-            extraFilters += ` AND mol_id = $${paramIndex}::int`;
+            queryParams.push(mol_id);
+            molFilterClause += ` AND warehouse_id IN (
+                SELECT warehouse_id FROM (
+                    SELECT DISTINCT ON (warehouse_id) warehouse_id, user_id 
+                    FROM mol 
+                    ORDER BY warehouse_id, id DESC
+                ) latest_sub WHERE latest_sub.user_id = $${paramIndex}
+            )`;
             paramIndex++;
         }
 
@@ -1912,7 +1925,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT 
                     ri.zaphasti_id,
                     r.warehouse_id,
-                    r.mol_id,
                     r.date,
                     ri.quantity AS qty_in,
                     0 AS qty_out,
@@ -1928,7 +1940,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_to_id AS warehouse_id,
-                    m.mol_to_id AS mol_id,
                     m.date,
                     mi.quantity AS qty_in,
                     0 AS qty_out,
@@ -1944,7 +1955,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_from_id AS warehouse_id,
-                    m.mol_from_id AS mol_id,
                     m.date,
                     0 AS qty_in,
                     mi.quantity AS qty_out,
@@ -1960,7 +1970,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT 
                     rep_i.zaphast_id AS zaphasti_id,
                     rep.warehouse_id,
-                    rep.mol_id,
                     rep.doc_date AS date,
                     0 AS qty_in,
                     rep_i.quantity AS qty_out,
@@ -1976,7 +1985,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT 
                     ri_rel.zaphasti_id,
                     r_rel.sklad_id AS warehouse_id,
-                    r_rel.mol_id,
                     COALESCE(r_rel.doc_date, NOW()) AS date,
                     0 AS qty_in,
                     ri_rel.quantity AS qty_out,
@@ -1988,55 +1996,56 @@ router.get('/stock_movement', async (req, res) => {
             ),
             filtered_ops AS (
                 SELECT * FROM all_operations d
-                WHERE 1=1 ${extraFilters} ${dateCondition}
+                WHERE 1=1 
+                ${warehouseFilterClause}
+                ${molFilterClause}
+                ${dateCondition}
             ),
             calculated_turnover AS (
                 SELECT 
                     zaphasti_id,
                     warehouse_id,
-                    
-                    -- Приход за период (суммируем количества и общие суммы по разным ценам партий)
                     SUM(qty_in) AS income_qty,
                     SUM(sum_in) AS income_sum,
-                    
-                    -- Расход за период (включая перемещения, ремонты и реализации по их реальным ценам)
                     SUM(qty_out) AS outcome_qty,
                     SUM(sum_out) AS outcome_sum
-
                 FROM filtered_ops
                 GROUP BY zaphasti_id, warehouse_id
             )
             SELECT 
                 z.id AS zaphasti_id,
                 t.warehouse_id,
+                s.name AS sklad,
                 z.article AS artikul,
                 z.code,
                 z.name,
                 p.name AS manufacturer,
                 COALESCE(z.unit, 'шт') AS unit,
-                
                 COALESCE(t.income_qty, 0) AS income_qty,
                 COALESCE(t.income_sum, 0) AS income_sum,
-                
                 COALESCE(t.outcome_qty, 0) AS outcome_qty,
                 COALESCE(t.outcome_sum, 0) AS outcome_sum,
-                
                 (COALESCE(t.income_qty, 0) - COALESCE(t.outcome_qty, 0)) AS end_qty,
                 (COALESCE(t.income_sum, 0) - COALESCE(t.outcome_sum, 0)) AS end_sum,
-                
                 z.description
             FROM calculated_turnover t
             JOIN zaphasti z ON t.zaphasti_id = z.id
+            LEFT JOIN skladi s ON t.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             WHERE (COALESCE(t.income_qty, 0) <> 0 OR COALESCE(t.outcome_qty, 0) <> 0)
-            ORDER BY z.name ASC;
+            ORDER BY z.name ASC, s.name ASC;
         `;
+
+        console.log(`[DEBUG] SQL Query for /stock_movement executed`);
 
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
+        console.log(`[SUCCESS] Оборотная ведомость сформирована. Записей: ${result.rows.length}`);
+
     } catch (err) {
-        console.error("Ошибка в /stock_movement:", err.message);
+        console.error("❌ [ERROR] Ошибка в /stock_movement:", err.message);
+        console.error(err.stack);
         res.status(500).json({ error: err.message });
     }
 });
