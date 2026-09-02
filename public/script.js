@@ -5009,6 +5009,7 @@ async function applyFilters() {
         const config = getConfig('stock_balances');
         
         const tbody = document.getElementById('table-body');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
         currentItems.forEach(item => {
@@ -5026,7 +5027,10 @@ async function applyFilters() {
             tbody.appendChild(tr);
         });
 
-        document.getElementById('row-count').innerText = `Раздел: Остатки запчастей | Найдено строк: ${currentItems.length}`;
+        const rowCountEl = document.getElementById('row-count');
+        if (rowCountEl) {
+            rowCountEl.innerText = `Раздел: Остатки запчастей | Найдено строк: ${currentItems.length}`;
+        }
 
         if (currentItems.length > 0) {
             selectedItem = currentItems[0];
@@ -5038,14 +5042,15 @@ async function applyFilters() {
                 warehouse_id: wId 
             });
         } else {
-            emptyDetailBody();
+            selectedItem = null;
+            // Передаем 'stock_batches', чтобы emptyDetailBody знала, для какой сущности очищать детальную панель
+            emptyDetailBody('stock_batches'); 
         }
 
     } catch (err) {
         console.error('Ошибка применения фильтров:', err);
     }
 }
-
 
 async function loadWarehousesForMovement() {
     try {
