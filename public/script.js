@@ -5972,8 +5972,6 @@ if (tableBodyForExpenses) {
 
 
 
-
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6011,7 +6009,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         fetchUrl = `/api/money_receipts_by_customers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         if (detailContainer) detailContainer.style.display = 'none';
 
-        if (btnAdd) btnAdd.style.display = 'none';
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -6104,9 +6101,20 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             headers: { 'Content-Type': 'application/json' }
         });
 
-        if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
+        const responseText = await response.text();
 
-        currentItems = await response.json();
+        if (!response.ok) {
+            console.error(`❌ Сервер вернул ошибку [${response.status}]:`, responseText);
+            throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
+        }
+
+        try {
+            currentItems = JSON.parse(responseText);
+        } catch (e) {
+            console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
+            throw new Error('Ответ сервера не является валидным JSON (возможно, роут не существует или ошибка 500)');
+        }
+
         if (!mainTableBody) return;
 
         if (currentItems.length === 0) {
@@ -6254,8 +6262,9 @@ async function loadReceiptDetailTable(fetchUrl) {
 
     try {
         const response = await fetch(fetchUrl);
+        const responseText = await response.text();
         if (!response.ok) throw new Error('Ошибка загрузки позиций');
-        const items = await response.json();
+        const items = JSON.parse(responseText);
 
         if (!detailBody) return;
         if (items.length === 0) {
@@ -6280,18 +6289,17 @@ async function loadReceiptDetailTable(fetchUrl) {
 // Загрузка спецификации услуг (работ)
 async function loadReceiptWorksDetailTable(fetchUrl) {
     const worksBody = document.getElementById('works-detail-body') || document.getElementById('detail-body'); 
-    const config = getConfig('receipt_works') || getConfig('receipt_items');
-
+    
     try {
         const response = await fetch(fetchUrl);
+        const responseText = await response.text();
         if (!response.ok) throw new Error('Ошибка загрузки услуг');
-        const items = await response.json();
+        const items = JSON.parse(responseText);
 
         if (!worksBody) return;
         if (items.length === 0) return;
 
-        // Если у вас раздельные таблицы для услуг и товаров, выводите в соответствующий контейнер
-        // Аналогично наполняется таблица услуг по вашему конфигу рендеринга
+        // Логика отрисовки услуг
     } catch (err) {
         console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
     }
