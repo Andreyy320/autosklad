@@ -7120,142 +7120,156 @@ function updateFilterPanels(entity) {
     }
 }
 document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+
+        const text = link.innerText.trim();
+        let entity = navMap[text] || text.toLowerCase();
+        
+        // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
+        if (entity === 'money_receipts') {
+            entity = 'money_receipts_by_sklad';
+        }
+        
+        updateFilterPanels(entity);
+
+        const detailContainer = document.getElementById('detail-container');
+        const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
+        const tabsForCars = document.getElementById('tabs-for-cars');
+        const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs');
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
+        const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
+
+        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+        if (actionButtonsBar) {
+            const readOnlyMainEntities = [
+                'stock_balances', 
+                'stock_movement', 
+                'money_receipts', 
+                'money_receipts_by_sklad', 
+                'money_receipts_detail',
+                'expenses_by_sklad',
+                'expenses_by_suppliers',
+                'expenses_by_receipts',
+                'expense_items'
+            ];
             
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
+            const btnAdd = document.getElementById('btn-add');
+            const btnEdit = document.getElementById('btn-edit');
+            const btnDelete = document.getElementById('btn-delete');
+            const paySupplierBtn = document.getElementById('pay-supplier-btn');
 
-            const text = link.innerText.trim();
-            let entity = navMap[text] || text.toLowerCase();
-            
-            // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
-            if (entity === 'money_receipts') {
-                entity = 'money_receipts_by_sklad';
-            }
-            
-            updateFilterPanels(entity);
-
-            const detailContainer = document.getElementById('detail-container');
-            const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
-            const tabsForCars = document.getElementById('tabs-for-cars');
-            const tabsForAccidents = document.getElementById('tabs-for-accidents');
-            const tabsForRepairs = document.getElementById('tabs-for-repairs');
-            const tabsForRealizations = document.getElementById('tabs-for-realizations');
-            const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
-
-            const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-            if (actionButtonsBar) {
-                const readOnlyMainEntities = [
-                    'stock_balances', 
-                    'stock_movement', 
-                    'money_receipts', 
-                    'money_receipts_by_sklad', 
-                    'money_receipts_detail',
-                    'expenses_by_sklad',
-                    'expenses_by_suppliers',
-                    'expenses_by_receipts',
-                    'expense_items'
-                ];
-                
-                if (readOnlyMainEntities.includes(entity) || entity === 'расходы' || entity === 'expenses') {
-                    actionButtonsBar.style.setProperty('display', 'none', 'important');
-                } else {
-                    actionButtonsBar.style.setProperty('display', 'flex', 'important');
-                }
-            }
-
-            if (
-                entity === 'receipts' || 
-                entity === 'moves' || 
-                entity === 'cars' || 
-                entity === 'car_cards' || 
-                entity === 'accidents' || 
-                entity === 'repairs' || 
-                entity === 'realizations' || 
-                entity === 'money_receipts' || 
-                entity === 'money_receipts_by_sklad' ||
-                entity === 'stock_balances' || 
-                entity === 'stock_movement' || 
-                entity === 'postavhik' || 
-                entity === 'counterparties' || 
-                entity === 'customers'
-            ) {
-                if (detailContainer) detailContainer.style.display = 'flex';
-                
-                if (carTabsBar) {
-                    if (
-                        entity === 'car_cards' || 
-                        entity === 'accidents' || 
-                        entity === 'repairs' || 
-                        entity === 'realizations' || 
-                        entity === 'money_receipts' || 
-                        entity === 'money_receipts_by_sklad'
-                    ) {
-                        carTabsBar.style.display = 'flex';
-                    } else {
-                        carTabsBar.style.display = 'none';
-                    }
-                }
-
-                if (entity === 'car_cards') {
-                    if (tabsForCars) tabsForCars.style.display = 'flex';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                } else if (entity === 'accidents') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                } else if (entity === 'repairs') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                } else if (entity === 'realizations') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
-                } else {
-                    if (tabsForCars) tabsForCars.style.display = 'none';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                    if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
-                }
-            } else {
-                if (detailContainer) detailContainer.style.display = 'none';
-                if (carTabsBar) carTabsBar.style.display = 'none';
-            }
-            
-            // Если выбрали Расходы, запускаем нашу новую изолированную функцию
             if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
-                loadExpenseMainData('expenses_by_sklad');
-                return;
+                actionButtonsBar.style.setProperty('display', 'flex', 'important');
+                if (btnAdd) btnAdd.style.display = 'inline-flex';
+                if (btnEdit) btnEdit.style.display = 'none';
+                if (btnDelete) btnDelete.style.display = 'none';
+                if (paySupplierBtn) paySupplierBtn.style.display = 'none';
+            } else if (readOnlyMainEntities.includes(entity)) {
+                actionButtonsBar.style.setProperty('display', 'none', 'important');
+            } else {
+                actionButtonsBar.style.setProperty('display', 'flex', 'important');
+                if (btnAdd) btnAdd.style.display = 'inline-flex';
+                if (btnEdit) btnEdit.style.display = 'inline-flex';
+                if (btnDelete) btnDelete.style.display = 'inline-flex';
+                if (paySupplierBtn) paySupplierBtn.style.display = 'none';
+            }
+        }
+
+        if (
+            entity === 'receipts' || 
+            entity === 'moves' || 
+            entity === 'cars' || 
+            entity === 'car_cards' || 
+            entity === 'accidents' || 
+            entity === 'repairs' || 
+            entity === 'realizations' || 
+            entity === 'money_receipts' || 
+            entity === 'money_receipts_by_sklad' ||
+            entity === 'stock_balances' || 
+            entity === 'stock_movement' || 
+            entity === 'postavhik' || 
+            entity === 'counterparties' || 
+            entity === 'customers'
+        ) {
+            if (detailContainer) detailContainer.style.display = 'flex';
+            
+            if (carTabsBar) {
+                if (
+                    entity === 'car_cards' || 
+                    entity === 'accidents' || 
+                    entity === 'repairs' || 
+                    entity === 'realizations' || 
+                    entity === 'money_receipts' || 
+                    entity === 'money_receipts_by_sklad'
+                ) {
+                    carTabsBar.style.display = 'flex';
+                } else {
+                    carTabsBar.style.display = 'none';
+                }
             }
 
-            // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
-            loadData(entity, text, () => {
-                const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
-                if ($firstRow.length) {
-                    $firstRow.trigger('click');
-                }
-            });
+            if (entity === 'car_cards') {
+                if (tabsForCars) tabsForCars.style.display = 'flex';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'accidents') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'repairs') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'realizations') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
+            } else {
+                if (tabsForCars) tabsForCars.style.display = 'none';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'none';
+            }
+        } else {
+            if (detailContainer) detailContainer.style.display = 'none';
+            if (carTabsBar) carTabsBar.style.display = 'none';
+        }
+        
+        // Если выбрали Расходы, запускаем нашу новую изолированную функцию
+        if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
+            loadExpenseMainData('expenses_by_sklad');
+            return;
+        }
+
+        // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
+        loadData(entity, text, () => {
+            const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
+            if ($firstRow.length) {
+                $firstRow.trigger('click');
+            }
         });
     });
-
+});
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
@@ -7278,67 +7292,7 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 
 
 
-// === ЛОГИКА РАБОТЫ КНОПКИ «ОПЛАТИТЬ» И МОДАЛЬНОГО ОКНА ===
 
-// 1. При клике на кнопку «Оплатить» открываем модальное окно
-document.getElementById('pay-supplier-btn')?.addEventListener('click', () => {
-    // Проверка: выбран ли поставщик (если нужно)
-    const modal = document.getElementById('payment-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
-});
-
-// 2. Закрытие модального окна по кнопке «Отмена»
-document.getElementById('close-payment-modal')?.addEventListener('click', () => {
-    const modal = document.getElementById('payment-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-});
-
-// 3. Отправка формы оплаты на сервер при нажатии «Сохранить»
-document.getElementById('payment-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const amountInput = document.getElementById('pay-amount');
-    const commentInput = document.getElementById('pay-comment');
-    
-    if (!amountInput) return;
-
-    const amount = amountInput.value;
-    const comment = commentInput ? commentInput.value : '';
-
-    try {
-        // Запрос к твоему бэкенду (путь /api/... можно поменять под твои эндпоинты)
-        const response = await fetch('/api/supplier_payments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: parseFloat(amount),
-                comment: comment
-            })
-        });
-
-        if (!response.ok) throw new Error('Ошибка при сохранении');
-
-        // Закрываем окно и очищаем поля
-        document.getElementById('payment-modal').style.display = 'none';
-        amountInput.value = '';
-        if (commentInput) commentInput.value = '';
-
-        alert('✅ Оплата успешно сохранена!');
-
-        // Обновляем данные на странице, если есть такая функция
-        if (typeof refreshData === 'function') {
-            refreshData();
-        }
-
-    } catch (err) {
-        console.error('Ошибка:', err);
-        alert('❌ Не удалось выполнить оплату');
-    }
-});
 
 
 
