@@ -1619,30 +1619,21 @@ router.get('/stock_balances', async (req, res) => {
         const queryParams = [];
         let paramIndex = 1;
 
-        let warehouseFilter = '';
-        let molFilter = '';
-        let mainWarehouseFilter = '';
-        let mainMolFilter = '';
+        let warehouseFilterClause = '';
+        let molFilterClause = '';
 
-        // Фильтр по складу
+        // Фильтр по складу для основного запроса
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
-            warehouseFilter += ` AND wb.warehouse_id = $${paramIndex}`;
-            mainWarehouseFilter += ` AND s.id = $${paramIndex}`;
+            warehouseFilterClause += ` AND s.id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Фильтр по МОЛ
+        // Фильтр по МОЛ для основного запроса
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
-            molFilter += ` AND lm.user_id = $${paramIndex}`;
-            mainMolFilter += ` AND lm.user_id = $${paramIndex}`;
+            molFilterClause += ` AND lm.user_id = $${paramIndex}`;
             paramIndex++;
-        }
-
-        // Фильтр по дате (если потребуется в будущем, заготовка сохранена)
-        if (date && date.trim() !== '' && date !== 'undefined') {
-            // Если нужно будет фильтровать по дате партий, можно добавить сюда условие
         }
 
         const query = `
@@ -1653,7 +1644,6 @@ router.get('/stock_balances', async (req, res) => {
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                WHERE 1=1 ${warehouseFilter}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
@@ -1684,8 +1674,8 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
-            ${mainWarehouseFilter}
-            ${mainMolFilter}
+            ${warehouseFilterClause}
+            ${molFilterClause}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
