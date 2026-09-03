@@ -3709,7 +3709,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-item-id="${item && item.id ? item.id : ''}">
@@ -3746,7 +3746,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        if (isPosted) {
+        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
             fieldReadonly = true;
         }
 
@@ -3763,7 +3763,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const referenceName = col.ref;
             console.log(`[openRepairForm] Загрузка справочника для поля ${col.field}:`, referenceName);
@@ -3838,9 +3838,9 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
-                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
             </form>
     `;
@@ -3866,7 +3866,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     }
 
     // Фильтрация МОЛ по складу для ремонта
-    if (formElement && !isPosted) {
+    if (formElement) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
             { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
@@ -3979,6 +3979,14 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+
+        // Сбор значений из заблокированных полей (disabled), которые не попадают в FormData напрямую
+        const disabledElements = formElement.querySelectorAll('select:disabled, input:disabled');
+        disabledElements.forEach(el => {
+            if (el.name) {
+                data[el.name] = el.value;
+            }
+        });
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -4497,16 +4505,6 @@ async function openRealizationForm(entity, item = null) {
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
-
-        // Защита: собираем значения отключенных полей (disabled), которые не попадают в FormData
-        const disabledElements = formElement.querySelectorAll('select:disabled, input:disabled');
-        disabledElements.forEach(el => {
-            if (el.name) {
-                data[el.name] = el.value;
-            }
-        });
-
-        // Защита: собираем значения элементов с атрибутом readonly, если требуется, или проверяем типы
         console.log("📦 Данные формы перед обработкой:", data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
