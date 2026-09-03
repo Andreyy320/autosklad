@@ -2898,12 +2898,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
 async function openReceiptForm(entity, item = null) {
     console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
 
-    // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
-    // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
     } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
-        // Если item передан как строка/пустой, но entity оказался объектом
         if (entity && typeof entity === 'object') {
             item = entity;
         }
@@ -2950,7 +2947,7 @@ async function openReceiptForm(entity, item = null) {
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать приход' : 'Добавить приход'}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать приход' : 'Добавить приход'} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="receipts" data-item-id="${item && item.id ? item.id : ''}">
@@ -2976,7 +2973,9 @@ async function openReceiptForm(entity, item = null) {
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+        
+        // Если документ проведен, ВСЕ поля (кроме снятия с проведения, если разрешено) блокируются
+        if (isPosted) {
             fieldReadonly = true;
         }
 
@@ -2993,7 +2992,8 @@ async function openReceiptForm(entity, item = null) {
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
+            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -3045,11 +3045,12 @@ async function openReceiptForm(entity, item = null) {
         `;
     }
 
+    // Если документ проведен, скрываем кнопку сохранения или делаем предупреждение
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
+                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
                 </div>
             </form>
     `;
@@ -3074,7 +3075,7 @@ async function openReceiptForm(entity, item = null) {
         });
     }
 
-    if (formElement) {
+    if (formElement && !isPosted) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
             { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
@@ -3086,7 +3087,6 @@ async function openReceiptForm(entity, item = null) {
 
             async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
-                // Сохраняем текущее выбранное значение МОЛ, если оно было
                 const currentMolValue = mol.value;
 
                 try {
@@ -3122,7 +3122,6 @@ async function openReceiptForm(entity, item = null) {
                         }
                     });
 
-                    // Если пользователь сам сменил склад и старый МОЛ не принадлежит этому складу, сбрасываем его
                     if (isUserChange && !isCurrentStillValid) {
                         mol.value = '';
                     }
@@ -3132,11 +3131,9 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
-                // Передаем true, чтобы при ручном изменении склада старый неподходящий МОЛ сбрасывался
                 filterMols(true);
             });
 
-            // При инициализации формы просто подтягиваем список под выбранный склад без сброса
             if (warehouse.value) {
                 filterMols(false);
             }
@@ -3226,7 +3223,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
