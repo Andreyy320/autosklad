@@ -6014,7 +6014,7 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
-    console.log(`[HISTORY LOG] Открытие истории поступлений: docId=${docId}, docNumber=${docNumber}, isRepair=${isRepair}`);
+    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", isRepair =`, isRepair);
     
     const drawer = getOrCreateDrawer();
     
@@ -6028,14 +6028,14 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
     openDrawer();
 
     try {
-        const fetchUrl = `/api/money_receipts/${docId}/payments?isRepair=${isRepair}`;
-        console.log(`[HISTORY LOG] Выполняется GET запрос на: ${fetchUrl}`);
+        const targetUrl = `/api/money_receipts/${docId}/payments?isRepair=${isRepair}`;
+        console.log(`[HISTORY LOG] Запрос истории по адресу: ${targetUrl}`);
 
-        let response = await fetch(fetchUrl);
+        let response = await fetch(targetUrl);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
         
         let payments = await response.json();
-        console.log(`[HISTORY LOG] Получены данные истории для docId=${docId}:`, payments);
+        console.log(`[HISTORY LOG] Получен массив платежей для документа ${docId}:`, payments);
 
         if (!payments || payments.length === 0) {
             drawer.querySelector('div:last-child').innerHTML = 'По этому документу еще не было поступлений.';
@@ -6080,13 +6080,13 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
         `;
 
     } catch (err) {
-        console.error('[HISTORY LOG ERROR]', err);
+        console.error('[HISTORY ERROR]', err);
         drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории поступлений</span>';
     }
 }
 
 function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
-    console.log(`[DRAWER LOG] Открытие формы оплаты: docId=${docId}, debtSum=${debtSum}, docNumber=${docNumber}, isRepair=${isRepair}`);
+    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", isRepair =`, isRepair);
     
     const drawer = getOrCreateDrawer();
     
@@ -6122,20 +6122,21 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
 async function submitIncomePayment(event, docId, isRepair) {
     event.preventDefault();
     
-    const amountVal = parseFloat(document.getElementById('payment-amount').value);
+    const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
     const commentVal = document.getElementById('payment-comment').value;
+    const docType = isRepair ? 'repair' : 'realization';
 
     const payload = {
-        amount: amountVal,
+        amount: parsedAmount,
         comment: commentVal,
-        type: isRepair ? 'repair' : 'realization'
+        type: docType
     };
 
-    console.log(`[SUBMIT LOG] Отправка платежа на сервер:`, {
+    console.log(`[SUBMIT LOG] Отправка платежа:`, {
         url: `/api/money_receipts/${docId}/pay`,
         docId: docId,
-        isRepair: isRepair,
-        payload: payload
+        isRepairFlag: isRepair,
+        payloadToSend: payload
     });
 
     try {
@@ -6145,21 +6146,21 @@ async function submitIncomePayment(event, docId, isRepair) {
             body: JSON.stringify(payload)
         });
 
-        console.log(`[SUBMIT LOG] Ответ сервера статус:`, response.status);
+        console.log(`[SUBMIT LOG] Ответ сервера (статус):`, response.status);
 
         if (response.ok) {
-            let resData = await.json().catch(() => ({}));
-            console.log(`[SUBMIT LOG] Платёж успешно принят бэкендом:`, resData);
+            let resData = await response.json().catch(() => ({}));
+            console.log(`[SUBMIT LOG SUCCESS] Сервер успешно зафиксировал платеж:`, resData);
             closeDrawer();
             showAppNotification('Платёж успешно сохранен', 'success');
             if (typeof loadTableData === 'function') loadTableData();
         } else {
             const errData = await response.json().catch(() => ({}));
-            console.warn(`[SUBMIT LOG WARN] Ошибка от сервера:`, errData);
+            console.warn(`[SUBMIT LOG ERROR] Сервер вернул ошибку:`, errData);
             showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
         }
     } catch (err) {
-        console.error('[SUBMIT LOG ERROR] Ошибка сети при отправке:', err);
+        console.error('[SUBMIT NETWORK ERROR]:', err);
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
