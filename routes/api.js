@@ -3825,6 +3825,7 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             WITH calc_data AS (
+                -- 1. Обычные реализации (покупатели)
                 SELECT 
                     real.id AS id,
                     real.id AS realization_id,
@@ -3875,6 +3876,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
+                -- 2. Внутренние ремонты автомобилей
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3892,7 +3894,11 @@ router.get('/money_receipts', async (req, res) => {
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
+                    
+                    -- Плюс запчасти в ремонте = Продажа запчастей минус их закупка
                     (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    
+                    -- Услуги (работы) в ремонте = Сумма всех работ
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
@@ -3955,8 +3961,6 @@ router.get('/money_receipts', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
-        console.error('📄 Текст ошибки (message):', err.message);
-        console.error('🧩 Стек ошибки (stack):', err.stack);
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
