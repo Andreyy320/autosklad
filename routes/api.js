@@ -3753,44 +3753,38 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
             SELECT 
-                sk.id AS id,
                 sk.id AS sklad_id,
-                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
-                COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                sk.name AS sklad_name,
+                COUNT(real.id) AS total_orders,
+                COALESCE(SUM(sub_i.parts_qty), 0)::numeric AS parts_qty,
                 COALESCE(SUM(sub_i.parts_sum), 0)::numeric AS parts_sum,
                 COALESCE(SUM(sub_w.works_sum), 0)::numeric AS works_sum,
-                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum,
+                COALESCE(SUM(sub_i.parts_sum + sub_w.works_sum), 0)::numeric AS total_realization_sum,
                 COALESCE(SUM(sub_p.paid_sum), 0)::numeric AS total_paid,
-                ((COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0)) - COALESCE(SUM(sub_p.paid_sum), 0))::numeric AS debt_sum
-            FROM realizations real
-            LEFT JOIN skladi sk ON real.sklad_id = sk.id
-            -- Подзапрос для суммирования запчастей по конкретной реализации
+                COALESCE(SUM((sub_i.parts_sum + sub_w.works_sum) - sub_p.paid_sum), 0)::numeric AS debt_sum,
+                COALESCE(SUM((sub_i.parts_sum - sub_i.total_purchase_sum) + sub_w.works_sum), 0)::numeric AS net_profit
+            FROM skladi sk
+            LEFT JOIN realizations real ON real.sklad_id = sk.id AND real.is_posted = true
             LEFT JOIN (
-                SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
-                FROM realization_items ri
-                GROUP BY ri.realization_id
+                SELECT realization_id, SUM(quantity) AS parts_qty, SUM(purchase_price * quantity) AS total_purchase_sum, SUM(total_rub) AS parts_sum
+                FROM realization_items GROUP BY realization_id
             ) sub_i ON real.id = sub_i.realization_id
-            -- Подзапрос для суммирования услуг по конкретной реализации
             LEFT JOIN (
-                SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
-                FROM realization_works rw
-                GROUP BY rw.realization_id
+                SELECT realization_id, SUM(total_rub) AS works_sum
+                FROM realization_works GROUP BY realization_id
             ) sub_w ON real.id = sub_w.realization_id
-            -- Подзапрос для суммирования оплат по конкретной реализации
             LEFT JOIN (
-                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
-                FROM customer_payments cp
-                GROUP BY cp.realization_id
+                SELECT realization_id, SUM(amount) AS paid_sum
+                FROM customer_payments GROUP BY cp.realization_id -- или cp
+                GROUP BY realization_id
             ) sub_p ON real.id = sub_p.realization_id
-            WHERE real.is_posted = true
             GROUP BY sk.id, sk.name
-            ORDER BY total_realization_sum DESC;
+            ORDER BY sk.name;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения аналитики по складам:', err);
+        console.error('Ошибка:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
