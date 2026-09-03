@@ -7718,6 +7718,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity === 'realizations' || 
             entity === 'money_receipts' || 
             entity === 'money_receipts_by_sklad' ||
+            entity === 'expenses_by_sklad' ||
+            entity === 'expenses_by_suppliers' ||
+            entity === 'expenses_by_receipts' ||
+            entity === 'expense_items' ||
+            entity === 'расходы' ||
+            entity === 'expenses' ||
             entity === 'stock_balances' || 
             entity === 'stock_movement' || 
             entity === 'postavhik' || 
@@ -7784,7 +7790,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         }
         
         // Если выбрали Расходы, запускаем нашу изолированную функцию
-        if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
+        if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses' || entity === 'expenses_by_sklad') {
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
@@ -7795,7 +7801,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             return;
         }
 
-        // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
+        // Для всех остальных разделов вызываем стандартный loadData
         loadData(entity, text, () => {
             const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
             if ($firstRow.length) {
@@ -7804,7 +7810,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
