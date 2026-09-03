@@ -4107,11 +4107,10 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
-// POST-эндпоинт для проведения оплаты (поддерживает и реализации, и ремонты)
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
-        const { amount, customer_id, comment } = req.body;
+        const { amount, customer_id, comment, type } = req.body; // Принимаем type с фронта
 
         if (!docId || isNaN(docId)) {
             return res.status(400).json({ error: 'Некорректный ID документа' });
@@ -4126,33 +4125,33 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         let realizationId = null;
         let repairId = null;
 
-        // 1. Сначала проверяем, есть ли такая реализация
-        const realizationCheck = await pool.query(
-            `SELECT id, customer_id FROM realizations WHERE id = $1`,
-            [docId]
-        );
-
-        if (realizationCheck.rows.length > 0) {
-            // Это реализация
-            realizationId = docId;
-            customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
-        } else {
-            // 2. Если реализации нет, проверяем, вдруг это ремонт
+        // Строгая проверка по типу, который пришел с фронтенда, чтобы ID не пересекались
+        if (type === 'repair') {
             const repairCheck = await pool.query(
                 `SELECT id FROM repairs WHERE id = $1`,
                 [docId]
             );
 
             if (repairCheck.rows.length === 0) {
-                return res.status(404).json({ error: 'Документ (реализация или ремонт) не найден' });
+                return res.status(404).json({ error: 'Документ ремонта не найден' });
             }
 
-            // Это ремонт (у него нет customer_id и realization_id, зато есть repair_id)
             repairId = docId;
-            customerId = null; 
+            customerId = null;
+        } else {
+            const realizationCheck = await pool.query(
+                `SELECT id, customer_id FROM realizations WHERE id = $1`,
+                [docId]
+            );
+
+            if (realizationCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Документ реализации не найден' });
+            }
+
+            realizationId = docId;
+            customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
         }
 
-        // 3. Вставляем запись об оплате в таблицу customer_payments с учетом того, что это (реализация или ремонт)
         const insertQuery = `
             INSERT INTO customer_payments (customer_id, realization_id, repair_id, amount, comment)
             VALUES ($1, $2, $3, $4, $5)
@@ -4180,7 +4179,6 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // GET-эндпоинт для получения истории оплат (работает и для реализаций, и для ремонтов, подтягивая имя или машину)
 router.get('/money_receipts/:id/payments', async (req, res) => {
     try {
