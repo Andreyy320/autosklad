@@ -6221,7 +6221,10 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         const responseText = await response.text();
 
         if (!response.ok) throw new Error('Ошибка загрузки данных');
-        const items = JSON.parse(responseText);
+        const data = JSON.parse(responseText);
+
+        // Универсальное определение массива данных (поддерживает как прямой массив, так и объект с полем items)
+        const items = Array.isArray(data) ? data : (data.items || []);
 
         if (!detailBody) return;
         if (items.length === 0) {
@@ -6230,7 +6233,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
 
         detailBody.innerHTML = '';
-        items.items.forEach(item => { // или items, если бэкенд возвращает прямой массив
+        items.forEach(item => {
             const tr = document.createElement('tr');
             
             // Если это услуга (item_type === 'work' или есть признаки работы)
