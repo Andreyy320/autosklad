@@ -4161,6 +4161,7 @@ async function openRealizationForm(entity, item = null) {
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать реализацию' : 'Добавить: Реализация'}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
+        ${isPosted ? '<div style="background: #fef3c7; color: #92400e; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">🔒 <b>Документ проведен.</b> Изменение и удаление заблокированы.</div>' : ''}
         <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="realizations" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
@@ -4185,7 +4186,8 @@ async function openRealizationForm(entity, item = null) {
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+        // Защитный механизм: если документ проведен, все поля кроме статуса проведения блокируются
+        if (isPosted && col.field !== 'is_posted') {
             fieldReadonly = true;
         }
 
@@ -4202,7 +4204,7 @@ async function openRealizationForm(entity, item = null) {
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             let refItems = [];
             if (col.ref === 'customer_cars' || col.field === 'car_id') {
@@ -4328,8 +4330,8 @@ async function openRealizationForm(entity, item = null) {
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    ${!isPosted ? `<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>` : `<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить изменения (снять проведение)</button>`}
+                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                     <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
             </form>
@@ -4345,7 +4347,7 @@ async function openRealizationForm(entity, item = null) {
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
 
-    if (customerSelect && carSelect) {
+    if (customerSelect && carSelect && !isPosted) {
         customerSelect.addEventListener('change', async () => {
             const selectedCustomerId = customerSelect.value;
             const currentCarValue = carSelect.value;
@@ -4354,7 +4356,7 @@ async function openRealizationForm(entity, item = null) {
         });
     }
 
-    if (formElement) {
+    if (formElement && !isPosted) {
         const warehouseMolPairs = [
             { 
                 warehouse: formElement.querySelector('[name="warehouse_from_id"]') || formElement.querySelector('[name="skald_from_id"]') || formElement.querySelector('[name="sklad_from_id"]'), 
@@ -4461,6 +4463,10 @@ async function openRealizationForm(entity, item = null) {
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
+            if (isPosted) {
+                showAppNotification('Невозможно удалить проведенный документ!', 'error');
+                return;
+            }
             showConfirmModal(
                 'Подтверждение удаления',
                 'Вы уверены, что хотите удалить эту реализацию?',
@@ -4517,7 +4523,7 @@ async function openRealizationForm(entity, item = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            console.log(`🚀 Отправка запроса [${method}] на ${url} с данными:`, data);
+            console.log(`🚀 Отправка запроса [${method}] on ${url} с данными:`, data);
 
             const response = await fetch(url, {
                 method: method,
