@@ -6487,7 +6487,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -6507,9 +6506,6 @@ function getCurrentDetailEntity() {
         return res;
     }
 
-    // ИСПРАВЛЕНИЕ ДЛЯ РАСХОДОВ (Уровни: Склады -> Поставщики -> Накладные): 
-    // На первых двух уровнях возвращаем пустую строку (''), чтобы нижняя таблица ждала клика.
-    // На 3-м уровне (expenses_by_receipts) возвращаем 'expense_items' (или запрашиваем позиции накладной).
     if (currentEntity === 'expenses_by_sklad') {
         const res = ''; 
         console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
@@ -6552,28 +6548,30 @@ function getCurrentDetailEntity() {
         return res;
     }
     if (currentEntity === 'money_receipts_by_sklad') {
-        const res = ''; // Верхний уровень складов детализации не требует
+        const res = ''; 
         console.log(`📌 [getCurrentDetailEntity] Результат для money_receipts_by_sklad: (пусто)`);
         return res;
     }
 
     if (currentEntity === 'money_receipts') {
+        // 1. Сначала проверяем реальный активный таб в DOM, чтобы не залипать на старой переменной
+        const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
+        if (activeTab) {
+            const dataTab = activeTab.getAttribute('data-tab');
+            if (dataTab) {
+                console.log(`🔘 [getCurrentDetailEntity:money_receipts] Найден data-tab у активной кнопки: ${dataTab}`);
+                if (dataTab === 'realization_works' || dataTab === 'money_receipts_works_detail') return 'money_receipts_works_detail';
+                if (dataTab === 'realization_items' || dataTab === 'money_receipts_detail') return 'money_receipts_detail';
+                return dataTab;
+            }
+        }
+
+        // 2. Если в DOM ничего не подсвечено, смотрим на глобальную переменную
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
             console.log(`⚙️ [getCurrentDetailEntity:money_receipts] Найдено через currentMoneyReceiptSubTab: ${currentMoneyReceiptSubTab}`);
             if (currentMoneyReceiptSubTab === 'realization_works') return 'money_receipts_works_detail';
             if (currentMoneyReceiptSubTab === 'realization_items') return 'money_receipts_detail';
             return currentMoneyReceiptSubTab;
-        }
-
-        const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
-        if (activeTab) {
-            const dataTab = activeTab.getAttribute('data-tab');
-            if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:money_receipts] Найден data-tab у кнопки: ${dataTab}`);
-                if (dataTab === 'realization_works') return 'money_receipts_works_detail';
-                if (dataTab === 'realization_items') return 'money_receipts_detail';
-                return dataTab;
-            }
         }
 
         if (activeTab) {
@@ -6729,7 +6727,6 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
 
 function openDetailForm(mode) {
     if (!selectedItem) {
