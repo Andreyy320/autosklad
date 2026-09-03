@@ -6819,7 +6819,7 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        if (entity === 'receipts' || entity === 'moves' || entity === 'tehosmotr' || entity === 'autostrahovanie' || entity === 'accidents' || entity === 'repairs') {
+        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'tehosmotr' || entity === 'autostrahovanie' || entity === 'accidents' || entity === 'repairs') {
             const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1`, [id]);
             if (docCheck.rows.length === 0) {
                 await client.query('ROLLBACK');
