@@ -3672,6 +3672,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let prefix = 'РЕМ-';
 
         try {
+            console.log(`[openRepairForm] Запрос автонумерации для /api/${entity}`);
             const response = await fetch(`/api/${entity}`);
             if (response.ok) {
                 const records = await response.json();
@@ -3735,7 +3736,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     }
 
     for (const col of columns) {
-        if (col.field === 'id' || col.field === 'repair_id') continue;
+        if (col.field === 'id') continue;
+        if (col.field === 'repair_id') continue;
         if (col.insert === false) continue;
         if ((col.update === false || col.edit === false) && item && item.id) continue;
 
@@ -3764,7 +3766,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        if (isPosted) {
+        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
             fieldReadonly = true;
         }
 
@@ -3781,7 +3783,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const referenceName = col.ref;
             let refItems = await fetchReferenceData(referenceName);
@@ -3845,7 +3847,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
                     ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
             </form>
     `;
@@ -3881,7 +3883,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols() {
+            async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
 
@@ -3902,31 +3904,36 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
+                    let isCurrentStillValid = false;
+
                     mols.forEach(m => {
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-                            option.textContent = userName;
+                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
+                                isCurrentStillValid = true;
                             }
                             mol.appendChild(option);
                         }
                     });
+
+                    if (isUserChange && !isCurrentStillValid) {
+                        mol.value = '';
+                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
+                filterMols(true);
             });
 
             if (warehouse.value) {
-                filterMols();
+                filterMols(false);
             }
         });
     }
