@@ -3817,10 +3817,10 @@ router.get('/money_receipts', async (req, res) => {
                 (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                 COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                 ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
-                -- Скорректированный расчет чистой прибыли с учетом себестоимости работ (если она есть)
+                -- Чистая прибыль: (продажа запчастей - закупка запчастей по FIFO) + полная сумма работ
                 (
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + 
-                    (COALESCE(sub_w.works_sum, 0) - COALESCE(sub_w.total_works_cost, 0))
+                    COALESCE(sub_w.works_sum, 0)
                 )::numeric AS net_profit
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
@@ -3836,13 +3836,12 @@ router.get('/money_receipts', async (req, res) => {
                 FROM realization_items ri
                 GROUP BY ri.realization_id
             ) sub_i ON real.id = sub_i.realization_id
-            -- Подзапрос для услуг (работ) — добавлена себестоимость работ (например, purchase_price или cost_price)
+            -- Подзапрос для услуг (работ)
             LEFT JOIN (
                 SELECT 
                     rw.realization_id, 
                     SUM(rw.quantity) AS works_qty,
-                    SUM(rw.total_rub) AS works_sum,
-                    SUM(COALESCE(rw.purchase_price, 0) * rw.quantity) AS total_works_cost
+                    SUM(rw.total_rub) AS works_sum
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
