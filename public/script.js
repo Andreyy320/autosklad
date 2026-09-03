@@ -5618,7 +5618,6 @@ async function submitPayment(event, receiptId) {
     }
 }
 
-
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -5648,7 +5647,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     } 
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
-        window.currentSkladId = skladId || window.currentSkladId;
+        if (skladId) window.currentSkladId = skladId;
         window.currentPostavhikId = null;
         window.currentReceiptId = null;
 
@@ -5765,9 +5764,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
             const groups = {};
             currentItems.forEach(item => {
-                const dateObj = item.date ? new Date(item.date) : new Date();
-                const month = dateObj.getMonth();
-                const year = dateObj.getFullYear();
+                // Подстраховка: проверяем разные варианты названий поля с датой
+                const rawDate = item.date || item.created_at || item.receipt_date;
+                const dateObj = rawDate ? new Date(rawDate) : new Date();
+                const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
+                const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
+                
                 const key = `${year}-${String(month).padStart(2, '0')}`;
                 const title = `${monthNames[month]} ${year} года`;
 
@@ -5782,7 +5784,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 }
 
                 groups[key].items.push(item);
-                groups[key].totalSum += Number(item.total_expense_sum || 0);
+                groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
                 groups[key].totalPaid += Number(item.total_paid || 0);
                 groups[key].totalDebt += Number(item.debt_sum || 0);
             });
@@ -5841,7 +5843,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             });
         }
 
-    } catch (err) {
+    } else {
         console.error('❌ [loadExpenseMainData ОШИБКА]:', err);
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
