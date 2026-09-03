@@ -3746,6 +3746,9 @@ router.delete('/realization_works/:id', async (req, res) => {
     }
 });
 
+
+
+
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3757,7 +3760,9 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.parts_sum), 0)::numeric AS parts_sum,
                 COALESCE(SUM(sub_w.works_sum), 0)::numeric AS works_sum,
-                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum
+                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum,
+                COALESCE(SUM(sub_p.paid_sum), 0)::numeric AS total_paid,
+                ((COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0)) - COALESCE(SUM(sub_p.paid_sum), 0))::numeric AS debt_sum
             FROM realizations real
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
             -- Подзапрос для суммирования запчастей по конкретной реализации
@@ -3772,6 +3777,12 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
+            -- Подзапрос для суммирования оплат по конкретной реализации
+            LEFT JOIN (
+                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                FROM customer_payments cp
+                GROUP BY cp.realization_id
+            ) sub_p ON real.id = sub_p.realization_id
             WHERE real.is_posted = true
             GROUP BY sk.id, sk.name
             ORDER BY total_realization_sum DESC;
@@ -3790,6 +3801,7 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             SELECT 
+                real.id AS id,
                 real.id AS realization_id,
                 real.doc_number::text AS doc_number,
                 real.doc_date AS date,
@@ -3802,7 +3814,9 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
                 COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
                 COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum
+                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
@@ -3821,6 +3835,11 @@ router.get('/money_receipts', async (req, res) => {
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
+            LEFT JOIN (
+                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                FROM customer_payments cp
+                GROUP BY cp.realization_id
+            ) sub_p ON real.id = sub_p.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
             ORDER BY real.doc_date DESC;
@@ -3832,7 +3851,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         const { realization_id, customer_id, sklad_id } = req.query;
@@ -3910,7 +3928,91 @@ router.get('/money_receipts_works_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+// POST-эндпоинт для проведения оплаты по реализации
+router.post('/money_receipts/:id/pay', async (req, res) => {
+    try {
+        const realizationId = parseInt(req.params.id);
+        const { amount, customer_id, comment } = req.body;
 
+        if (!realizationId || isNaN(realizationId)) {
+            return res.status(400).json({ error: 'Некорректный ID реализации' });
+        }
+
+        const paymentAmount = parseFloat(amount);
+        if (!paymentAmount || paymentAmount <= 0) {
+            return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
+        }
+
+        // 1. Проверяем, существует ли такая реализация и получаем её customer_id, если он не передан с клиента
+        const realizationCheck = await pool.query(
+            `SELECT id, customer_id FROM realizations WHERE id = $1`,
+            [realizationId]
+        );
+
+        if (realizationCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
+
+        const customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
+
+        // 2. Вставляем запись об оплате в таблицу customer_payments
+        const insertQuery = `
+            INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        
+        const values = [
+            customerId, 
+            realizationId, 
+            paymentAmount, 
+            comment || 'Оплата по реализации'
+        ];
+
+        const result = await pool.query(insertQuery, values);
+
+        res.json({ 
+            success: true, 
+            message: 'Оплата успешно сохранена',
+            payment: result.rows[0] 
+        });
+
+    } catch (err) {
+        console.error('❌ Ошибка при проведении оплаты (money_receipts/pay):', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET-эндпоинт для получения истории оплат по конкретной реализации
+router.get('/money_receipts/:id/payments', async (req, res) => {
+    try {
+        const realizationId = parseInt(req.params.id);
+
+        if (!realizationId || isNaN(realizationId)) {
+            return res.status(400).json({ error: 'Некорректный ID реализации' });
+        }
+
+        const query = `
+            SELECT 
+                id,
+                customer_id,
+                realization_id,
+                date,
+                amount,
+                comment
+            FROM customer_payments
+            WHERE realization_id = $1
+            ORDER BY date DESC, id DESC;
+        `;
+
+        const result = await pool.query(query, [realizationId]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ Ошибка получения истории оплат:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 
@@ -4195,6 +4297,7 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
