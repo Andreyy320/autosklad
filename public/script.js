@@ -6183,9 +6183,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     currentEntity = currentReceiptView;
 
     const config = getConfig(currentEntity);
-    // Убираем последние 3 колонки из конфига для отображения в таблице и фильтрах
-    const rawVisibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
-    const visibleColumns = currentReceiptView === 'money_receipts' ? rawVisibleColumns.slice(0, -3) : rawVisibleColumns;
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     if (mainHeaderTr && visibleColumns.length > 0) {
@@ -6240,7 +6238,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             currentItems = JSON.parse(responseText);
         } catch (e) {
             console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
-            throw new Error('Ответ сервера не является валидным JSON (возможно, роут не существует или ошибка 500)');
+            throw new Error('Ответ сервера не является валидным JSON');
         }
 
         if (!mainTableBody) return;
@@ -6252,42 +6250,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         mainTableBody.innerHTML = '';
 
-        // Вывод данных для текущего уровня
+        // Вывод данных — полностью используем твой config.render(item)
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
             tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
             tr.style.cursor = 'pointer';
-            
-            // Отрисовываем только нужные колонки (обрезаем последние 3 из config.render через временный контейнер или ручную обрезку ячеек)
-            const tempDiv = document.createElement('tr');
-            tempDiv.innerHTML = config.render(item);
-            const allCells = Array.from(tempDiv.children);
-            const truncatedCells = currentReceiptView === 'money_receipts' ? allCells.slice(0, -3) : allCells;
-            
-            tr.innerHTML = truncatedCells.map(cell => cell.outerHTML).join('');
-
-            // Добавляем одну общую колонку действий с кнопкой «Оплатить» (которая открывает форму)
-            if (currentReceiptView === 'money_receipts') {
-                const realizationId = item.realization_id || item.id || '';
-                const docNumber = item.doc_number || item.number || '';
-                const debtSum = Number(item.debt || item.remaining_debt || item.sum || 0);
-
-                let actionTd = document.createElement('td');
-                actionTd.className = 'row-actions-cell';
-                actionTd.style.textAlign = 'center';
-                actionTd.style.whiteSpace = 'nowrap';
-
-                if (debtSum <= 0) {
-                    actionTd.innerHTML = `
-                        <button type="button" title="Оплачено" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
-                    `;
-                } else {
-                    actionTd.innerHTML = `
-                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-weight: bold;">Оплатить</button>
-                    `;
-                }
-                tr.appendChild(actionTd);
-            }
+            tr.innerHTML = config.render(item);
 
             // Настраиваем переходы по уровням по клику на строки
             tr.addEventListener('click', () => {
@@ -6295,7 +6263,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                selectedItem = item; // Сохраняем глобально
+                selectedItem = item;
 
                 if (currentEntity === 'money_receipts_by_sklad') {
                     loadReceiptMainData('money_receipts', item);
@@ -6306,7 +6274,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     const tabsBlock = document.getElementById('tabs-for-money-receipts');
                     if (tabsBlock) {
                         tabsBlock.style.display = 'flex';
-                        console.log('🟢 Блок #tabs-for-money-receipts успешно показан');
                     }
 
                     const detailToolbar = document.getElementById('detail-toolbar');
@@ -6338,7 +6305,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
                     }
 
-                    console.log('🚀 Авто-загрузка дефолтного таба через getCurrentDetailEntity:', url);
                     loadReceiptDetailTable(url, detailEntity);
                 }
             });
