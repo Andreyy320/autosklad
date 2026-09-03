@@ -4185,7 +4185,7 @@ async function openRealizationForm(entity, item = null) {
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+        if (isPosted) {
             fieldReadonly = true;
         }
 
