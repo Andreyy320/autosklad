@@ -6522,9 +6522,6 @@ if (tableBodyForReceipts) {
 }
 
 
-
-
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
