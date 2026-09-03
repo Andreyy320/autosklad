@@ -3798,6 +3798,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
+        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id из фильтра:`, sklad_id);
 
         const query = `
             SELECT 
@@ -3818,11 +3819,11 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                 ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
                 
-                -- Чистый плюс по запчастям (продажа - закупка)
-                COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0) AS parts_profit,
+                -- Чистый плюс по запчастям (продажа запчастей - закупка запчастей)
+                (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                 
                 -- Сумма по работам идет целиком в плюс
-                COALESCE(sub_w.works_sum, 0) AS works_profit,
+                COALESCE(sub_w.works_sum, 0)::numeric AS works_profit,
 
                 -- Общий чистый плюс (запчасти маржа + работы)
                 (
@@ -3854,18 +3855,25 @@ router.get('/money_receipts', async (req, res) => {
             ) sub_w ON real.id = sub_w.realization_id
             -- Подзапрос для оплат
             LEFT JOIN (
-                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                SELECT cp.realization_id, cp.amount AS paid_sum
                 FROM customer_payments cp
-                GROUP BY cp.realization_id
             ) sub_p ON real.id = sub_p.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
             ORDER BY real.doc_date DESC;
         `;
+
         const result = await pool.query(query, [sklad_id || null]);
+
+        // 🔎 ВЫВОДИМ ПОДРОБНЫЕ ЛОГИ В КОНСОЛЬ СЕРВЕРА
+        console.log(`📊 [DEBUG /api/money_receipts] Найдено документов: ${result.rows.length} для склада ID: ${sklad_id || 'ВСЕ'}`);
+        result.rows.forEach(row => {
+            console.log(`   ➔ Док: ${row.doc_number} | Склад: ${row.sklad_name} | Запчасти (прод): ${row.parts_sum}, Закупка: ${row.total_purchase_sum}, Плюс запчасти: ${row.parts_profit} | Услуги: ${row.works_sum} | Общий плюс: ${row.net_profit}`);
+        });
+
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка:', err);
+        console.error('❌ Ошибка в /api/money_receipts:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
