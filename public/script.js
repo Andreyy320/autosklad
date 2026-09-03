@@ -7770,7 +7770,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
                     entity === 'money_receipts' || 
                     entity === 'money_receipts_by_sklad'
                 ) {
-                    carTabsBar.style.display = 'flex';
+                    carTabsBar.style.setProperty('display', 'flex', 'important');
                 } else {
                     carTabsBar.style.display = 'none';
                 }
@@ -7805,8 +7805,15 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                // Принудительно показываем табы приходов через setProperty с important, чтобы они точно не пропадали
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.setProperty('display', 'flex', 'important');
+                
+                // Жестко включаем панель табов приходов
+                if (tabsForMoneyReceipts) {
+                    tabsForMoneyReceipts.style.setProperty('display', 'flex', 'important');
+                    // Дополнительно страхуем внутренние кнопки таба, чтобы они тоже были видны
+                    tabsForMoneyReceipts.querySelectorAll('button, .tab-btn').forEach(btn => {
+                        btn.style.setProperty('display', 'inline-block', 'important');
+                    });
+                }
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -7819,19 +7826,19 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (carTabsBar) carTabsBar.style.display = 'none';
         }
         
-        // Если выбрали Расходы, запускаем нашу изолированную функцию
+        // Если выбрали Расходы, запускаем изолированную функцию
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
-        // Если выбрали Приходы, запускаем вашу изолированную функцию уровней складов
+        // Если выбрали Приходы, запускаем функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
 
-        // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
+        // Для остальных разделов
         loadData(entity, text, () => {
             const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
             if ($firstRow.length) {
