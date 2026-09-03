@@ -6131,8 +6131,6 @@ async function submitIncomePayment(event, realizationId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
-
 // Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями и табами
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
@@ -6261,21 +6259,28 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
-            // Добавляем колонку действий (кнопка истории и оплаты), если мы на 2 уровне (реализации)
+            // Добавляем колонку/кнопки действий (История и Оплата) для 2 уровня (money_receipts) — аналогично расходам
             if (currentReceiptView === 'money_receipts') {
-                const actionTd = document.createElement('td');
-                actionTd.style.textAlign = 'center';
-                actionTd.style.whiteSpace = 'nowrap';
-                
-                const realizationId = item.realization_id || item.id;
+                const realizationId = item.realization_id || item.id || '';
                 const docNumber = item.doc_number || item.number || '';
                 const debtSum = item.debt || item.remaining_debt || item.sum || 0;
 
+                // Проверяем, есть ли уже ячейка действий от render (если заложена в конфиге), 
+                // если нет — создаем или дописываем в последнюю ячейку, либо добавляем отдельную колонку. 
+                // Ниже реализован надежный вариант добавления кнопок прямо в строку (или в последнюю ячейку, если структура таблицы позволяет).
+                // Возьмем безопасный подход: если в последнем td нет кнопок действий, добавим их.
+                let actionTd = tr.querySelector('.row-actions-cell');
+                if (!actionTd) {
+                    actionTd = document.createElement('td');
+                    actionTd.style.textAlign = 'center';
+                    actionTd.style.whiteSpace = 'nowrap';
+                    tr.appendChild(actionTd);
+                }
+                
                 actionTd.innerHTML = `
                     <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; cursor: pointer; margin-right: 4px;">📋</button>
                     <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer;">💵</button>
                 `;
-                tr.appendChild(actionTd);
             }
 
             // Настраиваем переходы по уровням по клику на строки
