@@ -3968,6 +3968,7 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
@@ -4106,14 +4107,14 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
-// POST-эндпоинт для проведения оплаты по реализации
+// POST-эндпоинт для проведения оплаты (поддерживает и реализации, и ремонты)
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
-        const realizationId = parseInt(req.params.id);
+        const docId = parseInt(req.params.id);
         const { amount, customer_id, comment } = req.body;
 
-        if (!realizationId || isNaN(realizationId)) {
-            return res.status(400).json({ error: 'Некорректный ID реализации' });
+        if (!docId || isNaN(docId)) {
+            return res.status(400).json({ error: 'Некорректный ID документа' });
         }
 
         const paymentAmount = parseFloat(amount);
@@ -4121,30 +4122,49 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
 
-        // 1. Проверяем, существует ли такая реализация и получаем её customer_id, если он не передан с клиента
+        let customerId = null;
+        let realizationId = null;
+        let repairId = null;
+
+        // 1. Сначала проверяем, есть ли такая реализация
         const realizationCheck = await pool.query(
             `SELECT id, customer_id FROM realizations WHERE id = $1`,
-            [realizationId]
+            [docId]
         );
 
-        if (realizationCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Реализация не найдена' });
+        if (realizationCheck.rows.length > 0) {
+            // Это реализация
+            realizationId = docId;
+            customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
+        } else {
+            // 2. Если реализации нет, проверяем, вдруг это ремонт
+            const repairCheck = await pool.query(
+                `SELECT id FROM repairs WHERE id = $1`,
+                [docId]
+            );
+
+            if (repairCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Документ (реализация или ремонт) не найден' });
+            }
+
+            // Это ремонт (у него нет customer_id и realization_id, зато есть repair_id)
+            repairId = docId;
+            customerId = null; 
         }
 
-        const customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
-
-        // 2. Вставляем запись об оплате в таблицу customer_payments
+        // 3. Вставляем запись об оплате в таблицу customer_payments с учетом того, что это (реализация или ремонт)
         const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO customer_payments (customer_id, realization_id, repair_id, amount, comment)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
         
         const values = [
             customerId, 
             realizationId, 
+            repairId,
             paymentAmount, 
-            comment || 'Оплата по реализации'
+            comment || (repairId ? 'Оплата по ремонту' : 'Оплата по реализации')
         ];
 
         const result = await pool.query(insertQuery, values);
@@ -4161,29 +4181,40 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
     }
 });
 
-// GET-эндпоинт для получения истории оплат по конкретной реализации
+// GET-эндпоинт для получения истории оплат (работает и для реализаций, и для ремонтов, подтягивая имя или машину)
 router.get('/money_receipts/:id/payments', async (req, res) => {
     try {
-        const realizationId = parseInt(req.params.id);
+        const docId = parseInt(req.params.id);
 
-        if (!realizationId || isNaN(realizationId)) {
-            return res.status(400).json({ error: 'Некорректный ID реализации' });
+        if (!docId || isNaN(docId)) {
+            return res.status(400).json({ error: 'Некорректный ID документа' });
         }
 
         const query = `
             SELECT 
-                id,
-                customer_id,
-                realization_id,
-                date,
-                amount,
-                comment
-            FROM customer_payments
-            WHERE realization_id = $1
-            ORDER BY date DESC, id DESC;
+                cp.id,
+                cp.customer_id,
+                cp.realization_id,
+                cp.repair_id,
+                cp.date,
+                cp.amount,
+                cp.comment,
+                COALESCE(r.doc_number, rep.doc_number::text) AS doc_number,
+                CASE 
+                    WHEN cp.realization_id IS NOT NULL THEN COALESCE(c.name_full, c.name_short, 'Розничный покупатель')
+                    WHEN cp.repair_id IS NOT NULL THEN CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')
+                    ELSE '—'
+                END AS counterparty_name
+            FROM customer_payments cp
+            LEFT JOIN realizations r ON cp.realization_id = r.id
+            LEFT JOIN customers c ON r.customer_id = c.id
+            LEFT JOIN repairs rep ON cp.repair_id = rep.id
+            LEFT JOIN cars car ON rep.car_id = car.id
+            WHERE cp.realization_id = $1 OR cp.repair_id = $1
+            ORDER BY cp.date DESC, cp.id DESC;
         `;
 
-        const result = await pool.query(query, [realizationId]);
+        const result = await pool.query(query, [docId]);
         res.json(result.rows);
 
     } catch (err) {
@@ -4191,7 +4222,6 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 
 // 1. Расходы по складам (уровень 1)
