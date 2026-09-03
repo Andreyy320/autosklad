@@ -3612,7 +3612,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 async function openRepairForm(item = null, parentId = null) {
     console.log('[openRepairForm] СТАРТ. item:', item, 'parentId:', parentId);
 
-    const entity = 'repair_items';
+    const entity = 'repairs';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
