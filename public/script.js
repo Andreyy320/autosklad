@@ -6304,17 +6304,21 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
-// Единый переключатель табов внизу с интеграцией getCurrentDetailEntity
 function switchMoneyReceiptTab(tabName, btnElement) {
     console.log('🔄 [switchMoneyReceiptTab] НАЧАЛО переключения таба:', { tabName, selectedItem, currentRealizationId: window.currentRealizationId });
     
     currentMoneyReceiptSubTab = tabName; 
     console.log('📌 Установлен currentMoneyReceiptSubTab =', currentMoneyReceiptSubTab);
 
+    // Жестко гарантируем видимость контейнера при переключении табов
     const container = document.getElementById('tabs-for-money-receipts');
     console.log('🔍 Поиск контейнера табов #tabs-for-money-receipts:', container);
     if (container) {
-        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
+        container.style.setProperty('display', 'flex', 'important');
+        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.setProperty('display', 'inline-block', 'important');
+        });
     }
 
     if (btnElement) {
@@ -6331,7 +6335,7 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         detailToolbar.style.display = 'flex';
         const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
         actionButtons.forEach(btn => btn.style.display = 'none');
-        console.лог ? null : console.log('🎛️ Кнопки управления (add/edit/delete) скрыты в тулбаре детализации');
+        console.log('🎛️ Кнопки управления (add/edit/delete) скрыты в тулбаре детализации');
     }
 
     if (selectedItem || window.currentRealizationId) {
@@ -6339,14 +6343,14 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         let customerId = (selectedItem ? selectedItem.customer_id : null) || window.currentCustomerId || '';
         let skladId = (selectedItem ? selectedItem.sklad_id : null) || window.currentSkladId || '';
 
-        console.ق ? null : console.log('📦 Собранные параметры для запроса таба:', { realizationId, customerId, skladId });
+        console.log('📦 Собранные параметры для запроса таба:', { realizationId, customerId, skladId });
 
         // Динамически вычисляем ключ сущности через ваш свитч (getCurrentDetailEntity)
         const detailEntity = getCurrentDetailEntity();
         console.log('⚙️ Вычислено через getCurrentDetailEntity():', detailEntity);
 
         let url = '';
-        if (detailEntity === 'money_receipts_works_detail') {
+        if (detailEntity === 'money_receipts_works_detail' || tabName === 'money_receipts_works_detail') {
             url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
         } else {
             url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
