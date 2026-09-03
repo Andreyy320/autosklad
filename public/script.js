@@ -6183,7 +6183,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     currentEntity = currentReceiptView;
 
     const config = getConfig(currentEntity);
-    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    // Убираем последние 3 колонки из конфига для отображения в таблице и фильтрах
+    const rawVisibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const visibleColumns = currentReceiptView === 'money_receipts' ? rawVisibleColumns.slice(0, -3) : rawVisibleColumns;
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     if (mainHeaderTr && visibleColumns.length > 0) {
@@ -6255,36 +6257,36 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             const tr = document.createElement('tr');
             tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
             tr.style.cursor = 'pointer';
-            tr.innerHTML = config.render(item);
+            
+            // Отрисовываем только нужные колонки (обрезаем последние 3 из config.render через временный контейнер или ручную обрезку ячеек)
+            const tempDiv = document.createElement('tr');
+            tempDiv.innerHTML = config.render(item);
+            const allCells = Array.from(tempDiv.children);
+            const truncatedCells = currentReceiptView === 'money_receipts' ? allCells.slice(0, -3) : allCells;
+            
+            tr.innerHTML = truncatedCells.map(cell => cell.outerHTML).join('');
 
-            // Настройка кнопок действий только для документов (реализаций)
+            // Добавляем одну общую колонку действий с кнопкой «Оплатить» (которая открывает форму)
             if (currentReceiptView === 'money_receipts') {
                 const realizationId = item.realization_id || item.id || '';
                 const docNumber = item.doc_number || item.number || '';
                 const debtSum = Number(item.debt || item.remaining_debt || item.sum || 0);
 
-                let actionTd = tr.querySelector('.row-actions-cell');
-                if (!actionTd) {
-                    actionTd = document.createElement('td');
-                    actionTd.className = 'row-actions-cell';
-                    actionTd.style.textAlign = 'center';
-                    actionTd.style.whiteSpace = 'nowrap';
-                    tr.appendChild(actionTd);
-                }
+                let actionTd = document.createElement('td');
+                actionTd.className = 'row-actions-cell';
+                actionTd.style.textAlign = 'center';
+                actionTd.style.whiteSpace = 'nowrap';
 
                 if (debtSum <= 0) {
                     actionTd.innerHTML = `
-                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
-                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 4px;">📋</button>
-                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 2px;">💵</button>
+                        <button type="button" title="Оплачено" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
                     `;
                 } else {
                     actionTd.innerHTML = `
                         <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-weight: bold;">Оплатить</button>
-                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 4px;">📋</button>
-                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 2px;">💵</button>
                     `;
                 }
+                tr.appendChild(actionTd);
             }
 
             // Настраиваем переходы по уровням по клику на строки
