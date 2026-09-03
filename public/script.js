@@ -6474,12 +6474,12 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const data = JSON.parse(responseText);
 
-        // Универсальное определение массива данных (поддерживает как прямой массив, так и объект с полем items)
         const items = Array.isArray(data) ? data : (data.items || []);
 
         if (!detailBody) return;
         if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в этой реализации</td></tr>`;
+            // ИСПРАВЛЕНИЕ: Универсальная заглушка для продаж и ремонтов
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
 
@@ -6487,9 +6487,8 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         items.forEach(item => {
             const tr = document.createElement('tr');
             
-            // Если это услуга (item_type === 'work' или есть признаки работы)
             if (item.item_type === 'work' || item.is_work) {
-                tr.style.backgroundColor = '#f8fafc'; // легкая подсветка для услуг
+                tr.style.backgroundColor = '#f8fafc';
             }
             
             tr.innerHTML = config.render(item);
