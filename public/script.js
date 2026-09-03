@@ -5993,7 +5993,6 @@ async function loadExpenseDetailTable(fetchUrl) {
 }
 
 
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6034,6 +6033,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         
         if (detailContainer) detailContainer.style.display = 'block';
+        
+        // ВАЖНО: На уровне списка документов скрываем переключатели до тех пор, пока пользователь не кликнет на конкретную строку!
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
 
@@ -6121,6 +6122,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
             // Настраиваем переходы по уровням по клику на строки
             tr.addEventListener('click', () => {
+                console.log('🖱️ [Клик на строку верхней таблицы]:', item);
                 document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
@@ -6129,24 +6131,29 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 if (currentEntity === 'money_receipts_by_sklad') {
                     loadReceiptMainData('money_receipts', item);
                 } else if (currentEntity === 'money_receipts') {
-                    console.log('Выбрана конкретная реализация:', item);
+                    console.log('✅ Выбрана конкретная реализация, показываем табы и скрываем лишние кнопки:', item);
                     window.currentRealizationId = item.realization_id || item.id;
 
-                    // 1. ПОКАЗЫВАЕМ ТАБЫ (ПЕРЕКЛЮЧАТЕЛИ) НАД НИЖНЕЙ ТАБЛИЦЕЙ
+                    // 1. ПРИНУДИТЕЛЬНО ВКЛЮЧАЕМ ОТОБРАЖЕНИЕ БЛОКА ТАБОВ (ПЕРЕКЛЮЧАТЕЛЕЙ)
                     const tabsBlock = document.getElementById('tabs-for-money-receipts');
-                    if (tabsBlock) tabsBlock.style.display = 'flex';
+                    if (tabsBlock) {
+                        tabsBlock.style.display = 'flex';
+                        console.log('🟢 Блок #tabs-for-money-receipts успешно показан (display: flex)');
+                    } else {
+                        console.warn('⚠️ Элемент #tabs-for-money-receipts не найден в DOM!');
+                    }
 
-                    // 2. СКРЫВАЕМ КНОПКИ УПРАВЛЕНИЯ ВНИЗУ (Добавить, Изменить, Удалить)
-                    const detailAdd = document.getElementById('btn-add'); // либо специфичные селекторы если они другие
-                    const detailEdit = document.getElementById('btn-edit');
-                    const detailDelete = document.getElementById('btn-delete');
-                    
-                    // Также проверим тулбар целиком, если нужно скрыть только кнопки действий но оставить шапку:
+                    // 2. ЖЕСТКО СКРЫВАЕМ КНОПКИ "Добавить", "Изменить", "Удалить" ВНИЗУ
                     const detailToolbar = document.getElementById('detail-toolbar');
                     if (detailToolbar) {
-                        // Скрываем именно кнопки добавления/изменения/удаления внутри тулбара деталей
-                        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button.btn-add, button.btn-edit, button.btn-delete');
-                        actionButtons.forEach(btn => btn.style.display = 'none');
+                        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
+                        actionButtons.forEach(btn => {
+                            // Если кнопка не является табом переключения, гасим её
+                            if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
+                                btn.style.display = 'none';
+                            }
+                        });
+                        console.log('🔴 Кнопки управления внизу скрыты');
                     }
 
                     // Сбрасываем табы на первый ("Запчасти")
@@ -6159,7 +6166,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     let realizationId = item.realization_id || item.id || '';
                     let customerId = item.customer_id || '';
                     let skladId = item.sklad_id || window.currentSkladId || '';
-                    loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`);
+                    let url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                    
+                    console.log('🚀 Авто-загрузка дефолтного таба (запчасти):', url);
+                    loadReceiptDetailTable(url, 'money_receipts_detail');
                 }
             });
 
@@ -6174,8 +6184,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Единая функция загрузки детализации (запчасти или услуги) с использованием конфига по типу таба
+// Единая функция загрузки детализации (запчасти или услуги) с отладочными логами
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
+    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}, Таб: ${subTabName}`);
+    
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
@@ -6203,6 +6215,8 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     try {
         const response = await fetch(fetchUrl);
         const responseText = await response.text();
+        console.gi(`📥 [loadReceiptDetailTable] Ответ сервера (${response.status}):`, responseText.substring(0, 150));
+
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const items = JSON.parse(responseText);
 
@@ -6227,6 +6241,51 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
+// Переключатель табов внизу (запчасти / услуги)
+function switchMoneyReceiptTab(tabName, btnElement) {
+    console.log('🔄 [switchMoneyReceiptTab] Пользователь кликнул таб:', { tabName, selectedItem });
+    
+    currentMoneyReceiptSubTab = tabName; 
+
+    const container = document.getElementById('tabs-for-money-receipts');
+    if (container) {
+        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
+    }
+    if (btnElement) {
+        btnElement.classList.add('active');
+        btnElement.setAttribute('data-tab', tabName);
+    }
+
+    const detailToolbar = document.getElementById('detail-toolbar');
+    if (detailToolbar) {
+        detailToolbar.style.display = 'flex';
+        // Убеждаемся, что кнопки добавления/изменения скрыты при переключении табов просмотра
+        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
+        actionButtons.forEach(btn => btn.style.display = 'none');
+    }
+
+    if (selectedItem) {
+        let realizationId = selectedItem.realization_id || selectedItem.id || window.currentRealizationId || '';
+        let customerId = selectedItem.customer_id || window.currentCustomerId || '';
+        let skladId = selectedItem.sklad_id || window.currentSkladId || '';
+
+        let url = '';
+        if (tabName === 'money_receipts_detail' || tabName === 'realization_items') {
+            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+        } else if (tabName === 'money_receipts_works_detail' || tabName === 'realization_works') {
+            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+        }
+
+        loadReceiptDetailTable(url, tabName);
+        console.log(`🚀 [switchMoneyReceiptTab] Загрузка данных для нижнего таба "${tabName}" с URL:`, url);
+    } else {
+        console.warn('⚠️ [switchMoneyReceiptTab] Запись в верхней таблице не выбрана!');
+        const detailBody = document.getElementById('detail-body');
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите документ в верхней таблице</td></tr>`;
+        }
+    }
+}
 
 // ==========================================
 // ПЕРЕКЛЮЧАТЕЛЬ ТАБОВ ВНИЗУ (ЗАПЧАСТИ / УСЛУГИ)
