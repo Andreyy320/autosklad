@@ -5993,61 +5993,6 @@ async function loadExpenseDetailTable(fetchUrl) {
 }
 
 
-// Единая функция загрузки детализации (запчасти или услуги)
-async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
-    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}, Сущность/Таб: ${subTabName}`);
-    
-    const detailBody = document.getElementById('detail-body');
-    const detailTitle = document.getElementById('detail-title');
-    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
-    
-    const configKey = (subTabName === 'money_receipts_works_detail' || subTabName === 'realization_works') 
-        ? 'money_receipts_works_detail' 
-        : 'money_receipts_detail';
-
-    const config = getConfig(configKey);
-    if (detailTitle && config) detailTitle.innerText = config.title;
-
-    if (detailHeaderTr && config && config.columns) {
-        detailHeaderTr.innerHTML = config.columns.map(col => {
-            let widthStyle = col.width ? `width: ${col.width};` : '';
-            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-    }
-
-    const colCount = config && config.columns ? config.columns.length : 8;
-    const loadingText = configKey === 'money_receipts_works_detail' ? 'Загрузка услуг...' : 'Загрузка позиций...';
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${loadingText}</td></tr>`;
-
-    try {
-        const response = await fetch(fetchUrl);
-        const responseText = await response.text();
-
-        if (!response.ok) throw new Error('Ошибка загрузки данных');
-        const items = JSON.parse(responseText);
-
-        if (!detailBody) return;
-        if (items.length === 0) {
-            const emptyText = configKey === 'money_receipts_works_detail' ? 'Нет услуг в этой реализации' : 'Нет запчастей в этой реализации';
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${emptyText}</td></tr>`;
-            return;
-        }
-
-        detailBody.innerHTML = '';
-        items.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = config.render(item);
-            detailBody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
-        }
-    }
-}
-
 // Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями и табами
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
@@ -6241,6 +6186,61 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
+        }
+    }
+}
+
+// Единая функция загрузки детализации (запчасти или услуги)
+async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
+    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}, Сущность/Таб: ${subTabName}`);
+    
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const configKey = (subTabName === 'money_receipts_works_detail' || subTabName === 'realization_works') 
+        ? 'money_receipts_works_detail' 
+        : 'money_receipts_detail';
+
+    const config = getConfig(configKey);
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 8;
+    const loadingText = configKey === 'money_receipts_works_detail' ? 'Загрузка услуг...' : 'Загрузка позиций...';
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${loadingText}</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        const responseText = await response.text();
+
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
+        const items = JSON.parse(responseText);
+
+        if (!detailBody) return;
+        if (items.length === 0) {
+            const emptyText = configKey === 'money_receipts_works_detail' ? 'Нет услуг в этой реализации' : 'Нет запчастей в этой реализации';
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${emptyText}</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.render(item);
+            detailBody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
         }
     }
 }
@@ -6583,8 +6583,9 @@ function getCurrentDetailEntity() {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
                 console.log(`🔘 [getCurrentDetailEntity:money_receipts] Найден data-tab у активной кнопки: ${dataTab}`);
-                if (dataTab === 'realization_works' || dataTab === 'money_receipts_works_detail') return 'money_receipts_works_detail';
-                if (dataTab === 'realization_items' || dataTab === 'money_receipts_detail') return 'money_receipts_detail';
+                // Возвращаем то имя, которое ждет твоя нижняя таблица (config)
+                if (dataTab === 'money_receipts_works_detail' || dataTab === 'realization_works') return 'realization_works'; // или твой точный ключ нижней таблицы
+                if (dataTab === 'money_receipts_detail' || dataTab === 'realization_items') return 'realization_items';
                 return dataTab;
             }
         }
@@ -6592,40 +6593,25 @@ function getCurrentDetailEntity() {
         // 2. Если в DOM ничего не подсвечено, смотрим на глобальную переменную
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
             console.log(`⚙️ [getCurrentDetailEntity:money_receipts] Найдено через currentMoneyReceiptSubTab: ${currentMoneyReceiptSubTab}`);
-            if (currentMoneyReceiptSubTab === 'realization_works') return 'money_receipts_works_detail';
-            if (currentMoneyReceiptSubTab === 'realization_items') return 'money_receipts_detail';
+            if (currentMoneyReceiptSubTab === 'money_receipts_works_detail') return 'realization_works';
+            if (currentMoneyReceiptSubTab === 'money_receipts_detail') return 'realization_items';
             return currentMoneyReceiptSubTab;
         }
 
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
             if (text.includes('услуг') || text.includes('работ')) {
-                console.log(`📝 [getCurrentDetailEntity:money_receipts] Определено по тексту кнопки (услуг/работ): money_receipts_works_detail`);
-                return 'money_receipts_works_detail';
+                console.log(`📝 [getCurrentDetailEntity:money_receipts] Определено по тексту кнопки (услуг/работ)`);
+                return 'realization_works';
             }
             if (text.includes('запчаст')) {
-                console.log(`📝 [getCurrentDetailEntity:money_receipts] Определено по тексту кнопки (запчаст): money_receipts_detail`);
-                return 'money_receipts_detail';
-            }
-
-            const onclickAttr = activeTab.getAttribute('onclick') || '';
-            const match = onclickAttr.match(/(?:loadDetailData|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
-            if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:money_receipts] Определено по onclick: ${match[1]}`);
-                if (match[1] === 'realization_works') return 'money_receipts_works_detail';
-                if (match[1] === 'realization_items') return 'money_receipts_detail';
-                return match[1];
+                console.log(`📝 [getCurrentDetailEntity:money_receipts] Определено по тексту кнопки (запчаст)`);
+                return 'realization_items';
             }
         }
 
-        const activeText = document.querySelector('#tabs-for-money-receipts button.active')?.innerText || '';
-        if (activeText.toLowerCase().includes('услуг') || activeText.toLowerCase().includes('работ')) {
-            console.log(`📝 [getCurrentDetailEntity:money_receipts] Определено по запасной проверке текста: money_receipts_works_detail`);
-            return 'money_receipts_works_detail';
-        }
-
-        console.log(`📌 [getCurrentDetailEntity:money_receipts] Возвращаем дефолтное значение: money_receipts_detail`);
-        return 'money_receipts_detail';
+        console.log(`📌 [getCurrentDetailEntity:money_receipts] Возвращаем дефолтное значение для нижней таблицы`);
+        return 'realization_items';
     }
 
     if (currentEntity === 'realizations') {
