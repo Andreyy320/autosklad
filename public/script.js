@@ -5745,7 +5745,7 @@ async function openPaymentHistory(receiptId, docNumber) {
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
-                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} </td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">${pAmount} </td>
                     <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
                 </tr>
             `;
@@ -5792,7 +5792,7 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
 
         <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма (Долг: <span style="color: #16a34a; font-weight: 600;">${debtSum}</span>)</label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма (Долг: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span>)</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
@@ -6202,7 +6202,7 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
-                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} </td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">${pAmount} </td>
                     <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
                 </tr>
             `;
