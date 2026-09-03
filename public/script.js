@@ -1765,16 +1765,22 @@ money_receipts: {
     title: 'Аналитика продаж по покупателям и складам',
     columns: [
         { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
-        { field: 'sklad_name', label: 'Склад', width: '110px' },
+        { field: 'sklad_name', label: 'Склад списания', width: '110px' },
         { field: 'total_orders', label: 'Заказов', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '65px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Сумма', width: '95px', align: 'right' },
+        { field: 'total_purchase_sum', label: 'Закупка', width: '90px', align: 'right' },
+        { field: 'parts_sum', label: 'Запчасти', width: '90px', align: 'right' },
+        { field: 'works_sum', label: 'Услуги', width: '90px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Итого выручка', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '95px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '95px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '90px', align: 'center' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
+        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
+        const partsSum = Number(item.parts_sum || 0).toFixed(2);
+        const worksSum = Number(item.works_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
@@ -1782,12 +1788,10 @@ money_receipts: {
         const debtSum = debtSumNum.toFixed(2);
         const docTitle = item.counterparty_name || item.doc_number || item.id;
 
-        // Кликабельная сумма оплат для просмотра истории (если есть оплаты)
         const paidHtml = totalPaidNum > 0 
             ? `<span onclick="openIncomePaymentHistory('${item.id || item.realization_id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
-        // Кнопка приема оплаты, если есть долг
         const actionHtml = debtSumNum <= 0 
             ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
             : `<button type="button" onclick="openIncomePaymentDrawer('${item.id || item.realization_id}', '${debtSum}', '${docTitle}')" 
@@ -1800,6 +1804,9 @@ money_receipts: {
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center;">${item.total_orders || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
+            <td style="text-align: right; color: #666;">${purchaseSum}</td>
+            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
+            <td style="text-align: right; color: #0284c7; font-weight: 500;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
@@ -1850,7 +1857,11 @@ money_receipts_works_detail: {
         { field: 'doc_number', label: 'Документ', width: '100px' },
         { field: 'work_name', label: 'Наименование услуги', width: '220px' },
         { field: 'quantity', label: 'Кол-во', width: '70px', align: 'center' },
-        (Rest of columns and render logic unchanged)
+        { field: 'retail_price', label: 'Розница', width: '100px', align: 'right' },
+        { field: 'final_unit_price', label: 'Реализация', width: '100px', align: 'right' },
+        { field: 'discount_label', label: 'Скидка', width: '110px', align: 'center' },
+        { field: 'total_rub', label: 'Сумма РУБ', width: '110px', align: 'right' },
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const qty = Number(item.quantity || 0).toFixed(2);
