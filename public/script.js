@@ -6281,21 +6281,31 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         totalSum: 0,
                         totalPaid: 0,
                         totalDebt: 0,
-                        totalPartsProfit: 0,  // Чистая прибыль по запчастям
-                        totalWorksSum: 0,     // Сумма/прибыль по работам
-                        totalNetProfit: 0     // Общий чистый плюс
+                        totalPartsProfit: 0,  // Реальный плюс по запчастям с учетом оплат
+                        totalWorksSum: 0,     // Реальные услуги с учетом оплат
+                        totalNetProfit: 0     // Общий реальный плюс с учетом оплат
                     };
                 }
                 groupedByMonth[m.key].items.push(item);
                 
-                groupedByMonth[m.key].totalSum += Number(item.total_realization_sum || 0);
-                groupedByMonth[m.key].totalPaid += Number(item.total_paid || 0);
+                const realizationSum = Number(item.total_realization_sum || 0);
+                const paidSum = Number(item.total_paid || 0);
+                
+                // Коэффициент оплаты документа (от 0 до 1)
+                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : 0;
+
+                groupedByMonth[m.key].totalSum += realizationSum;
+                groupedByMonth[m.key].totalPaid += paidSum;
                 groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
                 
-                // Суммируем новые поля для шапки месяца
-                groupedByMonth[m.key].totalPartsProfit += Number(item.parts_profit || 0);
-                groupedByMonth[m.key].totalWorksSum += Number(item.works_sum || 0);
-                groupedByMonth[m.key].totalNetProfit += Number(item.net_profit || 0);
+                // Считаем прибыль по запчастям, услугам и общий плюс пропорционально оплате
+                const partProfitFull = Number(item.parts_profit || 0);
+                const workSumFull = Number(item.works_sum || 0);
+                const netProfitFull = Number(item.net_profit || 0);
+
+                groupedByMonth[m.key].totalPartsProfit += Number((partProfitFull * payRatio).toFixed(2));
+                groupedByMonth[m.key].totalWorksSum += Number((workSumFull * payRatio).toFixed(2));
+                groupedByMonth[m.key].totalNetProfit += Number((netProfitFull * payRatio).toFixed(2));
             });
 
             const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
