@@ -3912,7 +3912,8 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
+                        -- ИСПРАВЛЕНИЕ: заменено ri.price на ri.purchase_price для корректного расчета себестоимости запчастей в ремонтах
+                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
@@ -3962,13 +3963,20 @@ router.get('/money_receipts', async (req, res) => {
             ORDER BY date DESC;
         `;
 
+        console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметром склад:`, sklad_id || null);
         const result = await pool.query(query, [sklad_id || null]);
+        console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
+        
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
+        console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
+        console.error('📄 Текст ошибки (message):', err.message);
+        console.error('🧩 Стек ошибки (stack):', err.stack);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, repair_id, customer_id, sklad_id } = req.query;
