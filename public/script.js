@@ -5894,12 +5894,11 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 // ==========================================
-// 1. ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
+// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
 // ==========================================
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
     tableBodyForExpenses.addEventListener('click', async (e) => {
-        // Если это не расходы — сразу уходим и отдаем событие дальше
         if (
             currentEntity !== 'expenses_by_sklad' && 
             currentEntity !== 'expenses_by_suppliers' && 
@@ -5918,7 +5917,9 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
+        // Ищем элемент строго по ID, без привязки к порядковому индексу DOM-дерева
         selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
+        
         selectedDetailItem = null;  
 
         console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
@@ -5964,8 +5965,6 @@ if (tableBodyForExpenses) {
         }
     });
 }
-
-
 
 
 
@@ -6823,13 +6822,10 @@ async function postReceipt(receiptId) {
 }
 
 
-// ==========================================
-// 2. ОБЩИЙ КЛИКЕР ДЛЯ ВСЕХ ОСТАЛЬНЫХ СУЩНОСТЕЙ
-// ==========================================
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
-        // Если это сейчас расходы — общий кликер вообще не должен вмешиваться
+        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться (их обрабатывает отдельный кликер)
         if (
             currentEntity === 'expenses_by_sklad' || 
             currentEntity === 'expenses_by_suppliers' || 
@@ -6851,7 +6847,8 @@ if (tableBody) {
 
         const id = tr.getAttribute('data-id');
         
-        selectedItem = currentItems.find(i => i.id == id);
+        // Универсальный поиск элемента с поддержкой разных вариантов ID
+        selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
 
         if (!selectedItem) {
             const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
@@ -6890,6 +6887,8 @@ if (tableBody) {
         }
 
         if (selectedItem) {
+            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
+
             if (currentEntity === 'cars') {
                 if (carTabsPanel) carTabsPanel.style.display = 'none';
                 if (tabsForCars) tabsForCars.style.display = 'none';
@@ -6897,7 +6896,7 @@ if (tableBody) {
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
                 if (detailContainer) detailContainer.style.display = 'flex';
-                loadDetailData('car_details', selectedItem.id);
+                loadDetailData('car_details', itemId);
             } else if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
@@ -6911,12 +6910,12 @@ if (tableBody) {
                     const onclickAttr = activeCarTab.getAttribute('onclick');
                     const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
                     if (match && match[1]) {
-                        loadDetailData(match[1], selectedItem.id);
+                        loadDetailData(match[1], itemId);
                     } else {
-                        loadDetailData('car_general', selectedItem.id);
+                        loadDetailData('car_general', itemId);
                     }
                 } else {
-                    loadDetailData('car_general', selectedItem.id);
+                    loadDetailData('car_general', itemId);
                 }
             } else if (currentEntity === 'accidents') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
@@ -6930,7 +6929,7 @@ if (tableBody) {
                 const match = activeAccidentTab && activeAccidentTab.getAttribute('onclick')?.match(/'([^']+)'/);
                 const subTab = match ? match[1] : 'accident_invoices';
                 if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
-                loadDetailData(subTab, selectedItem.id);
+                loadDetailData(subTab, itemId);
             } else if (currentEntity === 'repairs') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
@@ -6943,7 +6942,7 @@ if (tableBody) {
                 const match = activeRepairTab && activeRepairTab.getAttribute('onclick')?.match(/'([^']+)'/);
                 const subTab = match ? match[1] : 'repair_items';
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
-                loadDetailData(subTab, selectedItem.id);
+                loadDetailData(subTab, itemId);
             } else if (currentEntity === 'realizations') {
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
@@ -6958,7 +6957,7 @@ if (tableBody) {
                 const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
                 const subTabName = activeRealizationTab ? (activeRealizationTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
                 if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
-                loadDetailData(subTabName, selectedItem.id);
+                loadDetailData(subTabName, itemId);
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -6971,24 +6970,25 @@ if (tableBody) {
 
                 if (currentEntity === 'receipts') {
                     if (detailContainer) detailContainer.style.display = 'flex';
-                    loadDetailData('receipt_items', selectedItem.id);
+                    loadDetailData('receipt_items', itemId);
                 } else if (currentEntity === 'moves') {
                     if (detailContainer) detailContainer.style.display = 'flex';
-                    loadDetailData('move_items', selectedItem.id);
+                    loadDetailData('move_items', itemId);
                 } else if (currentEntity === 'postavhik') {
                     if (detailContainer) detailContainer.style.display = 'flex';
-                    loadDetailData('postavhik_contacts', selectedItem.id);
+                    loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
                     if (detailContainer) detailContainer.style.display = 'flex';
-                    loadDetailData('counterparty_contacts', selectedItem.id);
+                    loadDetailData('counterparty_contacts', itemId);
                 } else if (currentEntity === 'customers') {
                     if (detailContainer) detailContainer.style.display = 'flex';
-                    loadDetailData('customer_contacts', selectedItem.id);
+                    loadDetailData('customer_contacts', itemId);
                 }
             }
         }
     });
 }
+
 
 
 tableBody.addEventListener('dblclick', (e) => {
