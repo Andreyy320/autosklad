@@ -3193,6 +3193,7 @@ async function openReceiptForm(entity, item = null) {
     });
 }
 
+
 async function openMoveForm(entity, item = null, parentId = null) {
     console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
@@ -3955,6 +3956,8 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
+
+
 async function openRealizationForm(entity, item = null) {
     console.log("🚀 openRealizationForm вызвана. Аргументы:", {
         entityType: typeof entity,
@@ -4811,8 +4814,8 @@ function editSelectedEntity() {
 
     if (currentEntity === 'receipts' && typeof openReceiptForm === 'function') {
         openReceiptForm(selectedItem);
-    } else if (currentEntity === 'moves' && typeof openMovementForm === 'function') {
-        openMovementForm(selectedItem);
+    } else if (currentEntity === 'moves' && typeof openMoveForm === 'function') {
+        openMoveForm(selectedItem);
     } else if (currentEntity === 'realizations' && typeof openRealizationForm === 'function') {
         openRealizationForm(currentEntity, selectedItem); // или просто openRealizationForm(selectedItem), в зависимости от того, сколько аргументов принимает ваша функция
     } else {
@@ -4839,8 +4842,8 @@ function openActiveEntityForm(action, item = null) {
             
         case 'Перемещение':
         case 'moves':
-            if (typeof openMovementForm === 'function') {
-                openMovementForm(item);
+            if (typeof openMoveForm === 'function') {
+                openMoveForm(item);
             } else {
                 openEntityForm(entity, item);
             }
