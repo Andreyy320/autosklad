@@ -2863,7 +2863,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 }
 
 async function openReceiptForm(entity, item = null) {
-    console.log('[openReceiptForm] СТАРТ: входящие параметры:', { entity, item });
+    console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
 
     // Умная проверка: если первый аргумент это не объект записи (например строка 'receipts'),
     // то смотрим на второй аргумент (item), либо сбрасываем в null, если передали пустяки.
@@ -2875,8 +2875,6 @@ async function openReceiptForm(entity, item = null) {
             item = entity;
         }
     }
-
-    console.log('[openReceiptForm] После нормализации item:', item);
 
     const config = getConfig('receipts');
     const drawer = getOrCreateDrawer();
@@ -2894,11 +2892,9 @@ async function openReceiptForm(entity, item = null) {
         const prefix = 'ПР-';
 
         try {
-            console.log('[openReceiptForm] Запрос автонумерации: GET /api/receipts');
             const response = await fetch('/api/receipts');
             if (response.ok) {
                 const records = await response.json();
-                console.log('[openReceiptForm] Получены записи для автонумерации:', records.length);
                 if (records.length > 0) {
                     const maxId = Math.max(...records.map(r => r.id || 0));
                     nextId = maxId + 1;
@@ -2915,9 +2911,6 @@ async function openReceiptForm(entity, item = null) {
             is_posted: false,
             fact_date: currentDateTime
         };
-        console.log('[openReceiptForm] Сгенерирован новый item для создания:', item);
-    } else {
-        console.log('[openReceiptForm] Режим редактирования существующего item с ID:', item.id);
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
@@ -3040,7 +3033,6 @@ async function openReceiptForm(entity, item = null) {
     
     if (isPostedSelect && factDateInput) {
         isPostedSelect.addEventListener('change', () => {
-            console.log('[openReceiptForm] Изменение статуса проведения is_posted на:', isPostedSelect.value);
             if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
                 factDateInput.value = currentDateTime;
             } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
@@ -3061,8 +3053,8 @@ async function openReceiptForm(entity, item = null) {
 
             async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
+                // Сохраняем текущее выбранное значение МОЛ, если оно было
                 const currentMolValue = mol.value;
-                console.log('[filterMols] Фильтрация МОЛ для склада ID:', selectedWarehouseId, { currentMolValue, isUserChange });
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -3097,6 +3089,7 @@ async function openReceiptForm(entity, item = null) {
                         }
                     });
 
+                    // Если пользователь сам сменил склад и старый МОЛ не принадлежит этому складу, сбрасываем его
                     if (isUserChange && !isCurrentStillValid) {
                         mol.value = '';
                     }
@@ -3106,9 +3099,11 @@ async function openReceiptForm(entity, item = null) {
             }
 
             warehouse.addEventListener('change', () => {
+                // Передаем true, чтобы при ручном изменении склада старый неподходящий МОЛ сбрасывался
                 filterMols(true);
             });
 
+            // При инициализации формы просто подтягиваем список под выбранный склад без сброса
             if (warehouse.value) {
                 filterMols(false);
             }
@@ -3123,7 +3118,6 @@ async function openReceiptForm(entity, item = null) {
                 'Вы уверены, что хотите удалить этот приход?',
                 async () => {
                     const currentUserId = localStorage.getItem('currentUserId') || '';
-                    console.log('[DELETE] Удаление прихода ID:', item.id);
                     try {
                         const response = await fetch(`/api/receipts/${item.id}`, {
                             method: 'DELETE',
@@ -3134,17 +3128,14 @@ async function openReceiptForm(entity, item = null) {
                         });
 
                         if (response.ok) {
-                            console.log('[DELETE] Приход успешно удален');
                             closeDrawer();
                             showAppNotification('Приход успешно удален', 'success');
                             refreshData();
                         } else {
                             const errData = await response.json().catch(() => ({}));
-                            console.error('[DELETE ERROR]', errData);
                             showAppNotification(errData.error || 'Ошибка при удалении прихода', 'error');
                         }
                     } catch (err) {
-                        console.error('[DELETE EXCEPTION]', err);
                         showAppNotification('Ошибка соединения с сервером', 'error');
                     }
                 }
@@ -3164,29 +3155,17 @@ async function openReceiptForm(entity, item = null) {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
-        
-        console.group('[DEBUG SUBMIT RECEIPTS] Содержимое FormData по полям:');
-        for (let [key, val] of formData.entries()) {
-            console.log(`%c[Field] ${key}:`, 'color: #0066cc; font-weight: bold;', val);
-        }
-        console.groupEnd();
-
         const data = Object.fromEntries(formData.entries());
-        console.log('[SUBMIT] Собрано в объект данных:', data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
-
-        console.log('[SUBMIT] Итоговый JSON для отправки на сервер:', data);
 
         try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/receipts/${item.id}` : `/api/receipts`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
-
-            console.log(`[SUBMIT] Отправка запроса: ${method} ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -3198,19 +3177,16 @@ async function openReceiptForm(entity, item = null) {
             });
 
             if (response.ok) {
-                console.log('[SUBMIT] Ответ сервера: Успешно');
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
-                console.error(`[SUBMIT ERROR] Сервер вернул ошибку ${response.status}:`, errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении прихода', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error('[SUBMIT EXCEPTION]', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
