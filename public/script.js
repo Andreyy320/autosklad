@@ -6144,308 +6144,156 @@ async function submitIncomePayment(event, realizationId) {
 }
 
 
-async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
-
-    let fetchUrl = '';
-    let currentReceiptView = entity;
-
-    const detailContainer = document.getElementById('detail-container');
-    const mainTableBody = document.getElementById('table-body');
-    const mainHeaderTr = document.getElementById('table-headers');
-
-    const btnAdd = document.getElementById('btn-add');
-    const btnEdit = document.getElementById('btn-edit');
-    const btnDelete = document.getElementById('btn-delete');
-
-    // 1 уровень: Склады (отображаем все)
-    if (currentReceiptView === 'money_receipts_by_sklad') {
-        window.currentSkladId = null;
-        window.currentCustomerId = null;
-        window.currentRealizationId = null;
-
-        fetchUrl = `/api/money_receipts_by_sklad`;
-        if (detailContainer) detailContainer.style.display = 'none';
-        
-        const tabsBlock = document.getElementById('tabs-for-money-receipts');
-        if (tabsBlock) tabsBlock.style.display = 'none';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-    } 
-    // 2 уровень: Документы (реализации и ремонты) выбранного склада
-    else if (currentReceiptView === 'money_receipts') {
-        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
-        if (skladId) window.currentSkladId = skladId;
-        window.currentCustomerId = null;
-        window.currentRealizationId = null;
-
-        fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
-        
-        if (detailContainer) detailContainer.style.display = 'block';
-        
-        const tabsBlock = document.getElementById('tabs-for-money-receipts');
-        if (tabsBlock) tabsBlock.style.display = 'none';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-    }
-
-    currentEntity = currentReceiptView;
-
-    const config = getConfig(currentEntity);
-    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
-    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
-
-    if (mainHeaderTr && visibleColumns.length > 0) {
-        mainHeaderTr.innerHTML = visibleColumns.map(col => {
-            let widthStyle = col.width ? `width: ${col.width};` : '';
-            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-
-        const thead = mainHeaderTr.closest('thead');
-        let filterRow = document.getElementById('table-filter-row');
-
-        if (!filterRow) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'table-filter-row';
-            thead.insertBefore(filterRow, mainHeaderTr);
-        } else {
-            thead.insertBefore(filterRow, mainHeaderTr);
-        }
-
-        filterRow.innerHTML = visibleColumns.map(col => {
-            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-            if (col.style && col.style.includes('display: none')) {
-                return `<th style="display: none; padding: 4px;"></th>`;
-            }
-            return `
-                <th ${styleAttr}>
-                    <input type="text" 
-                           data-column="${col.field}" 
-                           oninput="filterTable()" 
-                           placeholder="Фильтр..."
-                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                </th>
-            `;
-        }).join('');
-    }
-
+router.get('/money_receipts', async (req, res) => {
     try {
-        const response = await fetch(fetchUrl, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
+        const { sklad_id } = req.query;
+        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id из фильтра:`, sklad_id);
 
-        const responseText = await response.text();
+        const query = `
+            WITH calc_data AS (
+                -- 1. Обычные реализации (покупатели)
+                SELECT 
+                    real.id AS id,
+                    real.id AS realization_id,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    c.id AS customer_id,
+                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
+                    COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    
+                    -- Полная потенциальная прибыль документа (если всё оплатят)
+                    ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    
+                    -- Потенциальный плюс по запчастям и работам отдельно
+                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
+                FROM realizations real
+                JOIN customers c ON real.customer_id = c.id
+                LEFT JOIN skladi sk ON real.sklad_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.realization_id, 
+                        SUM(ri.quantity) AS parts_qty, 
+                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
+                        SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM realization_items ri
+                    GROUP BY ri.realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT 
+                        rw.realization_id, 
+                        SUM(rw.quantity) AS works_qty,
+                        SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
+                    FROM realization_works rw
+                    GROUP BY rw.realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+                  AND ($1::integer IS NULL OR real.sklad_id = $1)
 
-        if (!response.ok) {
-            console.error(`❌ Сервер вернул ошибку [${response.status}]:`, responseText);
-            throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
-        }
+                UNION ALL
 
-        try {
-            currentItems = JSON.parse(responseText);
-        } catch (e) {
-            console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
-            throw new Error('Ответ сервера не является валидным JSON');
-        }
-
-        if (!mainTableBody) return;
-
-        if (currentItems.length === 0) {
-            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
-            return;
-        }
-
-        mainTableBody.innerHTML = '';
-
-        // Если это уровень документов (money_receipts), группируем по месяцам с итогами
-        if (currentReceiptView === 'money_receipts') {
-            const getMonthData = (dateStr) => {
-                if (!dateStr) return { key: 'unknown', title: 'Без даты' };
-                const d = new Date(dateStr);
-                if (isNaN(d.getTime())) return { key: 'unknown', title: 'Без даты' };
+                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
+                SELECT 
+                    rep.id AS id,
+                    rep.id AS realization_id,
+                    CONCAT('', rep.doc_number)::text AS doc_number,
+                    rep.doc_date AS date,
+                    NULL::integer AS customer_id,
+                    CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(rep_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS total_retail_sum,
+                    COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
+                    
+                    -- Итоговая сумма ремонта = Запчасти + Работы
+                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
+                    
+                    COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
+                    
+                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
+                    0::numeric AS parts_profit,
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum_profit
+                FROM repairs rep
+                LEFT JOIN cars car ON rep.car_id = car.id
+                LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.repair_id,
+                        SUM(ri.quantity) AS parts_qty,
+                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM repair_items ri
+                    GROUP BY ri.repair_id
+                ) rep_i ON rep.id = rep_i.repair_id
+                LEFT JOIN (
+                    SELECT 
+                        rw.repair_id,
+                        SUM(COALESCE(rw.price, 0)) AS works_sum
+                    FROM repair_works rw
+                    GROUP BY rw.repair_id
+                ) rep_w ON rep.id = rep_w.repair_id
+                LEFT JOIN (
+                    SELECT cp.repair_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.repair_id
+                ) rep_p ON rep.id = rep_p.repair_id
+                WHERE rep.is_posted = true
+                  AND ($1::integer IS NULL OR rep.warehouse_id = $1)
+            )
+            SELECT 
+                id,
+                realization_id,
+                doc_number,
+                date,
+                customer_id,
+                counterparty_name,
+                sklad_name,
+                total_orders,
+                parts_qty,
+                total_purchase_sum,
+                total_retail_sum,
+                parts_sum,
+                works_sum,
+                total_realization_sum,
+                total_paid,
+                (total_realization_sum - total_paid)::numeric AS debt_sum,
+                parts_profit,
+                works_profit,
                 
-                const months = [
-                    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-                ];
-                const monthName = months[d.getMonth()];
-                const year = d.getFullYear();
-                return {
-                    key: `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-                    title: `${monthName} ${year} года`
-                };
-            };
+                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
+                CASE 
+                    WHEN total_realization_sum <= 0 THEN 0
+                    ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
+                END::numeric AS net_profit
 
-            const groupedByMonth = {};
-            currentItems.forEach(item => {
-                const m = getMonthData(item.date);
-                if (!groupedByMonth[m.key]) {
-                    groupedByMonth[m.key] = {
-                        title: m.title,
-                        items: [],
-                        totalSum: 0,
-                        totalPaid: 0,
-                        totalDebt: 0,
-                        totalPartsProfit: 0,  // Реальный плюс по запчастям с учетом оплат
-                        totalWorksSum: 0,     // Реальные услуги с учетом оплат
-                        totalNetProfit: 0     // Общий реальный плюс с учетом оплат
-                    };
-                }
-                groupedByMonth[m.key].items.push(item);
-                
-                const realizationSum = Number(item.total_realization_sum || 0);
-                const paidSum = Number(item.total_paid || 0);
-                
-                // Коэффициент оплаты документа (от 0 до 1)
-                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : 0;
+            FROM calc_data
+            ORDER BY date DESC;
+        `;
 
-                groupedByMonth[m.key].totalSum += realizationSum;
-                groupedByMonth[m.key].totalPaid += paidSum;
-                groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
-                
-                // Считаем прибыль по запчастям, услугам и общий плюс пропорционально оплате
-                const partProfitFull = Number(item.parts_profit || 0);
-                const workSumFull = Number(item.works_sum || 0);
-                const netProfitFull = Number(item.net_profit || 0);
-
-                groupedByMonth[m.key].totalPartsProfit += Number((partProfitFull * payRatio).toFixed(2));
-                groupedByMonth[m.key].totalWorksSum += Number((workSumFull * payRatio).toFixed(2));
-                groupedByMonth[m.key].totalNetProfit += Number((netProfitFull * payRatio).toFixed(2));
-            });
-
-            const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
-
-            sortedMonthKeys.forEach(monthKey => {
-                const group = groupedByMonth[monthKey];
-
-                const headerTr = document.createElement('tr');
-                headerTr.style.background = '#f8fafc';
-                headerTr.style.fontWeight = 'bold';
-                headerTr.style.borderTop = '2px solid #e2e8f0';
-                headerTr.style.borderBottom = '1px solid #e2e8f0';
-
-                // Вывод итогов месяца (включая разделение запчастей и услуг)
-                headerTr.innerHTML = `
-                    <td colspan="${colCount}" style="padding: 10px 12px; cursor: pointer;">
-                        <span style="color: #334155; margin-right: 12px;">[-] ${group.title}</span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Итого: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
-                    </td>
-                `;
-                
-                let isCollapsed = false;
-                const rowElements = [];
-
-                headerTr.addEventListener('click', () => {
-                    isCollapsed = !isCollapsed;
-                    rowElements.forEach(r => r.style.display = isCollapsed ? 'none' : '');
-                    const spanTitle = headerTr.querySelector('span');
-                    if (spanTitle) {
-                        spanTitle.textContent = spanTitle.textContent.replace(isCollapsed ? '[-]' : '[+]', isCollapsed ? '[+]' : '[-]');
-                    }
-                });
-
-                mainTableBody.appendChild(headerTr);
-
-                group.items.forEach(item => {
-                    const tr = document.createElement('tr');
-                    tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
-                    tr.style.cursor = 'pointer';
-                    tr.innerHTML = config.render(item);
-
-                    tr.addEventListener('click', () => {
-                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
-                        document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
-                        tr.classList.add('selected-row');
-
-                        selectedItem = item;
-
-                        window.currentRealizationId = item.realization_id || item.id;
-
-                        const tabsBlock = document.getElementById('tabs-for-money-receipts');
-                        if (tabsBlock) {
-                            tabsBlock.style.display = 'flex';
-                        }
-
-                        const detailToolbar = document.getElementById('detail-toolbar');
-                        if (detailToolbar) {
-                            const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
-                            actionButtons.forEach(btn => {
-                                if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
-                                    btn.style.display = 'none';
-                                }
-                            });
-                        }
-
-                        document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
-                            btn.classList.remove('active');
-                            if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
-                        });
-
-                        currentMoneyReceiptSubTab = 'money_receipts_detail';
-
-                        const detailEntity = getCurrentDetailEntity();
-                        let realizationId = item.realization_id || item.id || '';
-                        let customerId = item.customer_id || '';
-                        let skladId = item.sklad_id || window.currentSkladId || '';
-                        
-                        let url = '';
-                        if (detailEntity === 'money_receipts_works_detail') {
-                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        } else {
-                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        }
-
-                        loadReceiptDetailTable(url, detailEntity);
-                    });
-
-                    rowElements.push(tr);
-                    mainTableBody.appendChild(tr);
-                });
-            });
-
-        } else {
-            // Обычный вывод для 1 уровня (склады) без группировки по месяцам
-            currentItems.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
-                tr.style.cursor = 'pointer';
-                tr.innerHTML = config.render(item);
-
-                tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку верхней таблицы]:', item);
-                    document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
-                    tr.classList.add('selected-row');
-
-                    selectedItem = item;
-
-                    if (currentEntity === 'money_receipts_by_sklad') {
-                        loadReceiptMainData('money_receipts', item);
-                    }
-                });
-
-                mainTableBody.appendChild(tr);
-            });
-        }
-
+        const result = await pool.query(query, [sklad_id || null]);
+        res.json(result.rows);
     } catch (err) {
-        console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
-        if (mainTableBody) {
-            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
-        }
+        console.error('❌ Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
-}
-
+});
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
     
