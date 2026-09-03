@@ -3752,38 +3752,77 @@ router.delete('/realization_works/:id', async (req, res) => {
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
+            WITH combined_docs AS (
+                -- 1. Обычные продажи из realizations
+                SELECT 
+                    real.id,
+                    real.sklad_id,
+                    COALESCE(sub_i.total_qty, 0) AS total_qty,
+                    COALESCE(sub_i.parts_sum, 0) AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0) AS works_sum,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
+                    COALESCE(sub_p.paid_sum, 0) AS paid_sum
+                FROM realizations real
+                LEFT JOIN (
+                    SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
+                    FROM realization_items ri
+                    GROUP BY ri.realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
+                    FROM realization_works rw
+                    GROUP BY rw.realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+
+                UNION ALL
+
+                -- 2. Ремонты автомобилей из repairs (предполагаем наличие полей sklad_id, is_posted)
+                -- Укажите корректные имена таблиц для запчастей/услуг/оплат ремонта, если они отличаются (например, repair_items / repair_works)
+                SELECT 
+                    rep.id,
+                    rep.sklad_id,
+                    COALESCE(sub_rep_i.total_qty, 0) AS total_qty,
+                    COALESCE(sub_rep_i.parts_sum, 0) AS parts_sum,
+                    COALESCE(sub_rep_w.works_sum, 0) AS works_sum,
+                    (COALESCE(sub_rep_i.parts_sum, 0) + COALESCE(sub_rep_w.works_sum, 0)) AS total_sum,
+                    COALESCE(sub_rep_p.paid_sum, 0) AS paid_sum
+                FROM repairs rep
+                LEFT JOIN (
+                    SELECT r_item.repair_id, SUM(r_item.quantity) AS total_qty, SUM(r_item.total_rub) AS parts_sum
+                    FROM repair_items r_item -- замените на актуальное имя таблицы запчастей ремонта, если нужно
+                    GROUP BY r_item.repair_id
+                ) sub_rep_i ON rep.id = sub_rep_i.repair_id
+                LEFT JOIN (
+                    SELECT r_work.repair_id, SUM(r_work.total_rub) AS works_sum
+                    FROM repair_works r_work -- замените на актуальное имя таблицы услуг ремонта, если нужно
+                    GROUP BY r_work.repair_id
+                ) sub_rep_w ON rep.id = sub_rep_w.repair_id
+                LEFT JOIN (
+                    SELECT r_pay.repair_id, SUM(r_pay.amount) AS paid_sum
+                    FROM customer_payments r_pay -- или отдельная таблица оплат по ремонтам, если применимо
+                    GROUP BY r_pay.repair_id
+                ) sub_rep_p ON rep.id = sub_rep_p.repair_id
+                WHERE rep.is_posted = true
+            )
             SELECT 
                 sk.id AS id,
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
-                COUNT(DISTINCT real.id)::integer AS total_orders,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.parts_sum), 0)::numeric AS parts_sum,
-                COALESCE(SUM(sub_w.works_sum), 0)::numeric AS works_sum,
-                (COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0))::numeric AS total_realization_sum,
-                COALESCE(SUM(sub_p.paid_sum), 0)::numeric AS total_paid,
-                ((COALESCE(SUM(sub_i.parts_sum), 0) + COALESCE(SUM(sub_w.works_sum), 0)) - COALESCE(SUM(sub_p.paid_sum), 0))::numeric AS debt_sum
-            FROM realizations real
-            LEFT JOIN skladi sk ON real.sklad_id = sk.id
-            -- Подзапрос для суммирования запчастей по конкретной реализации
-            LEFT JOIN (
-                SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
-                FROM realization_items ri
-                GROUP BY ri.realization_id
-            ) sub_i ON real.id = sub_i.realization_id
-            -- Подзапрос для суммирования услуг по конкретной реализации
-            LEFT JOIN (
-                SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
-                FROM realization_works rw
-                GROUP BY rw.realization_id
-            ) sub_w ON real.id = sub_w.realization_id
-            -- Подзапрос для суммирования оплат по конкретной реализации
-            LEFT JOIN (
-                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
-                FROM customer_payments cp
-                GROUP BY cp.realization_id
-            ) sub_p ON real.id = sub_p.realization_id
-            WHERE real.is_posted = true
+                COUNT(DISTINCT doc.id)::integer AS total_orders,
+                COALESCE(SUM(doc.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(doc.parts_sum), 0)::numeric AS parts_sum,
+                COALESCE(SUM(doc.works_sum), 0)::numeric AS works_sum,
+                COALESCE(SUM(doc.total_sum), 0)::numeric AS total_realization_sum,
+                COALESCE(SUM(doc.paid_sum), 0)::numeric AS total_paid,
+                (COALESCE(SUM(doc.total_sum), 0) - COALESCE(SUM(doc.paid_sum), 0))::numeric AS debt_sum
+            FROM skladi sk
+            JOIN combined_docs doc ON doc.sklad_id = sk.id
             GROUP BY sk.id, sk.name
             ORDER BY total_realization_sum DESC;
         `;
