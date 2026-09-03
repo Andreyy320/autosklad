@@ -7697,7 +7697,6 @@ function updateFilterPanels(entity) {
         }
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -7806,7 +7805,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
                 if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.display = 'flex';
+                // Принудительно показываем табы приходов через setProperty с important, чтобы они точно не пропадали
+                if (tabsForMoneyReceipts) tabsForMoneyReceipts.style.setProperty('display', 'flex', 'important');
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
