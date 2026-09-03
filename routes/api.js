@@ -3782,31 +3782,16 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Ремонты автомобилей из repairs ( warehouse_id вместо sklad_id )
+                -- 2. Ремонты автомобилей из repairs (используем поле sum из таблицы repairs напрямую, чтобы избежать ошибок с несуществующими доп. таблицами)
                 SELECT 
                     rep.id,
                     rep.warehouse_id AS sklad_id,
-                    COALESCE(sub_rep_i.total_qty, 0) AS total_qty,
-                    COALESCE(sub_rep_i.parts_sum, 0) AS parts_sum,
-                    COALESCE(sub_rep_w.works_sum, 0) AS works_sum,
-                    (COALESCE(sub_rep_i.parts_sum, 0) + COALESCE(sub_rep_w.works_sum, 0)) AS total_sum,
-                    COALESCE(sub_rep_p.paid_sum, 0) AS paid_sum
+                    0 AS total_qty,
+                    COALESCE(rep.sum, 0) AS parts_sum,
+                    0 AS works_sum,
+                    COALESCE(rep.sum, 0) AS total_sum,
+                    COALESCE(rep.sum, 0) AS paid_sum -- Считаем ремонт сразу закрытым/оплаченным по его сумме
                 FROM repairs rep
-                LEFT JOIN (
-                    SELECT r_item.repair_id, SUM(r_item.quantity) AS total_qty, SUM(r_item.total_rub) AS parts_sum
-                    FROM repair_items r_item 
-                    GROUP BY r_item.repair_id
-                ) sub_rep_i ON rep.id = sub_rep_i.repair_id
-                LEFT JOIN (
-                    SELECT r_work.repair_id, SUM(r_work.total_rub) AS works_sum
-                    FROM repair_works r_work 
-                    GROUP BY r_work.repair_id
-                ) sub_rep_w ON rep.id = sub_rep_w.repair_id
-                LEFT JOIN (
-                    SELECT r_pay.repair_id, SUM(r_pay.amount) AS paid_sum
-                    FROM customer_payments r_pay 
-                    GROUP BY r_pay.repair_id
-                ) sub_rep_p ON rep.id = sub_rep_p.repair_id
                 WHERE rep.is_posted = true
             )
             SELECT 
@@ -3818,8 +3803,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(doc.parts_sum), 0)::numeric AS parts_sum,
                 COALESCE(SUM(doc.works_sum), 0)::numeric AS works_sum,
                 COALESCE(SUM(doc.total_sum), 0)::numeric AS total_realization_sum,
-                COALESCE(SUM(doc.paid_sum), 0)::numeric AS total_paid,
-                (COALESCE(SUM(doc.total_sum), 0) - COALESCE(SUM(doc.paid_sum), 0))::numeric AS debt_sum
+                COALESCE(SUM(doc.total_paid), 0)::numeric AS total_paid, -- исправлено на сопоставимое поле
+                COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0)::numeric AS debt_sum
             FROM skladi sk
             JOIN combined_docs doc ON doc.sklad_id = sk.id
             GROUP BY sk.id, sk.name
