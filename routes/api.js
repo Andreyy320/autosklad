@@ -3880,7 +3880,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (суммируем запчасти и работы через COALESCE)
+                -- 2. Внутренние ремонты автомобилей
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3895,12 +3895,13 @@ router.get('/money_receipts', async (req, res) => {
                     0::numeric AS total_retail_sum,
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
-                    -- Итоговая сумма ремонта = Сумма запчастей + Сумма работ (или берем rep.sum, если она заполняется верно)
-                    COALESCE(NULLIF(rep.sum, 0), COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0), 0)::numeric AS total_realization_sum,
+                    
+                    -- ИСПРАВЛЕНИЕ: Итоговая сумма = Сумма запчастей + Сумма работ
+                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, -- Для ремонта прибыль считаем как сумму работ
+                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
                     0::numeric AS parts_profit,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
