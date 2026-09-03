@@ -3880,7 +3880,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей
+                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3896,14 +3896,14 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     
-                    -- ИСПРАВЛЕНИЕ: Итоговая сумма = Сумма запчастей + Сумма работ
+                    -- Итоговая сумма ремонта = Запчасти + Работы
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
                     COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
                     0::numeric AS parts_profit,
-                    COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
                 LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
@@ -3968,7 +3968,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
