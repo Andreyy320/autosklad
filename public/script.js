@@ -7777,8 +7777,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const text = link.innerText.trim();
         let entity = navMap[text] || text.toLowerCase();
         
+        console.log(`🧭 [Меню] Клик по пункту: "${text}", вычислена сущность: "${entity}"`);
+
         // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
-        if (entity === 'money_receipts') {
+        if (entity === 'money_receipts' || text === 'Приходы') {
             entity = 'money_receipts_by_sklad';
         }
         
@@ -7879,8 +7881,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 // Жестко включаем панель табов приходов
                 if (tabsForMoneyReceipts) {
                     tabsForMoneyReceipts.style.setProperty('display', 'flex', 'important');
-                    // Дополнительно страхуем внутренние кнопки таба, чтобы они тоже были видны
-                    tabsForMoneyReceipts.querySelectorAll('button, .tab-btn').forEach(btn => {
+                    tabsForMoneyReceipts.querySelectorAll('button, .tab-btn, .money-receipt-tab-btn').forEach(btn => {
                         btn.style.setProperty('display', 'inline-block', 'important');
                     });
                 }
@@ -7904,6 +7905,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         // Если выбрали Приходы, запускаем функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+            console.🚀 ? null : console.log('🚀 Запуск загрузки главных данных по приходам (money_receipts_by_sklad)');
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
@@ -7917,7 +7919,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
