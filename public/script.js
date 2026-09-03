@@ -1818,41 +1818,40 @@ money_receipts: {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        // ИСПРАВЛЕНО: корректное определение ремонта по префиксу 'РЕМ' (поддерживает 'РЕМ:', 'РЕМ-', и т.д.)
         const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
         
         let counterpartyHtml = '';
         if (isRepair) {
-            counterpartyHtml = `<span style="color: #d97706; font-weight: 500;" title="Внутренний ремонт автомобиля">🚗 ${item.counterparty_name || 'Ремонт а/м'}</span>`;
+            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">🚗 ${item.counterparty_name || 'Ремонт а/м'}</span>`;
         } else {
-            counterpartyHtml = `<span>${item.counterparty_name || 'Розничный покупатель'}</span>`;
+            counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
         }
 
         const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
-            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
+            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
+            : `<span style="color: #334155;">${formattedPaid}</span>`;
 
         let actionHtml = '';
         if (debtSumNum <= 0) {
-            actionHtml = `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`;
+            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
         } else {
             actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
-                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                style="background: #334155; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                 Оплатить
               </button>`;
         }
 
         return `
-            <td><b>№ ${docTitle}</b></td>
-            <td><span style="color: #4b5563;">${formattedDate}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;">№ ${docTitle}</span></td>
+            <td><span style="color: #475569;">${formattedDate}</span></td>
             <td>${counterpartyHtml}</td>
-            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-            <td style="text-align: right;">${partsSum}</td>
-            <td style="text-align: right; color: #0284c7;">${worksSum}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
+            <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
+            <td style="text-align: right; color: #334155;">${partsSum}</td>
+            <td style="text-align: right; color: #334155;">${worksSum}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
             <td style="text-align: right;">${paidHtml}</td>
-            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
-                ${debtSum} 
+            <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
+                ${debtSum}
             </td>
             <td style="text-align: center;">
                 ${actionHtml}
@@ -1902,23 +1901,24 @@ money_receipts_detail: {
         const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
         const total = Number(item.total_rub || 0).toFixed(2);
 
-        // Если это услуга, можно сделать красивую визуализацию кода или подкрасить строку
+        // Строже оформляем тип (услуга или товар)
         const isWork = item.item_type === 'work';
-        const codeDisplay = isWork ? '<span style="color: #0284c7; font-weight: 600;">Услуга</span>' : (item.product_code || '—');
+        const codeDisplay = isWork 
+            ? '<span style="color: #334155; font-weight: 500;">Услуга</span>' 
+            : `<span style="color: #475569;">${item.product_code || '—'}</span>`;
 
         return `
-            <td><b>${item.doc_number || ''}</b></td>
+            <td><span style="font-weight: 500; color: #0f172a;">${item.doc_number || ''}</span></td>
             <td>${codeDisplay}</td>
-            <td><b>${item.item_name || item.product_name || '—'}</b></td>
-            <td style="text-align: center;">${qty}</td>
-            <td style="text-align: right; color: #666;">${purchase} </td>
-            <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} </td>
-            <td style="text-align: right; color: #0284c7; font-weight: 500;">${finalPrice} </td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${total} </td>
+            <td><span style="color: #0f172a;">${item.item_name || item.product_name || '—'}</span></td>
+            <td style="text-align: center; color: #334155;">${qty}</td>
+            <td style="text-align: right; color: #64748b;">${purchase}</td>
+            <td style="text-align: right; text-decoration: line-through; color: #94a3b8;">${retail}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${finalPrice}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${total}</td>
         `;
     }
 },
-
 money_receipts_works_detail: {
     title: 'Детализация: оказанные услуги и работы',
     columns: [
@@ -1940,18 +1940,17 @@ money_receipts_works_detail: {
         const desc = item.description || '';
 
         return `
-            <td><b>${item.doc_number || ''}</b></td>
-            <td><b>${item.work_name || '—'}</b></td>
-            <td style="text-align: center;">${qty}</td>
-            <td style="text-align: right; text-decoration: line-through; color: #999;">${retail}</td>
-            <td style="text-align: right; color: #0055ea; font-weight: 500;">${finalPrice}</td>
-            <td style="text-align: center; color: #555; font-size: 11px;">${discountText}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">${total}</td>
-            <td style="color: #666; font-style: italic;">${desc}</td>
+            <td><span style="font-weight: 600; color: #0f172a;">${item.doc_number || ''}</span></td>
+            <td><span style="font-weight: 500; color: #0f172a;">${item.work_name || '—'}</span></td>
+            <td style="text-align: center; color: #334155;">${qty}</td>
+            <td style="text-align: right; text-decoration: line-through; color: #94a3b8;">${retail}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${finalPrice}</td>
+            <td style="text-align: center; color: #64748b; font-size: 11px;">${discountText}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${total}</td>
+            <td style="color: #64748b; font-style: italic; font-size: 12px;">${desc}</td>
         `;
     }
 },
-
 
 
 expenses_by_sklad: {
