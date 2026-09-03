@@ -4837,53 +4837,48 @@ function editSelectedEntity() {
     }
 }
 
-
-// Универсальная функция открытия формы добавления или изменения в зависимости от текущей сущности
 function openActiveEntityForm(action, item = null) {
-    // Определяем текущую сущность (если это редактирование, берем активную строку/раздел)
     const entity = action === 'edit' ? (typeof getSelectedEntityName === 'function' ? getSelectedEntityName() : currentEntity) : currentEntity;
 
-    // Распределяем в зависимости от выбранного раздела (документа или справочника)
+    const actualItem = action === 'add' ? null : item;
+
     switch (entity) {
         case 'Приход':
         case 'receipts':
             if (typeof openReceiptForm === 'function') {
-                openReceiptForm(item);
+                openReceiptForm('receipts', actualItem);
             } else {
-                openEntityForm(entity, item);
+                openEntityForm(entity, actualItem);
             }
             break;
             
         case 'Перемещение':
         case 'moves':
             if (typeof openMoveForm === 'function') {
-                // Прямой вызов вашей новой функции с правильным порядком аргументов: (entity, item, parentId)
-                openMoveForm('moves', action === 'add' ? null : item, null);
+                openMoveForm('moves', actualItem, null);
             } else {
-                openEntityForm(entity, item);
+                openEntityForm(entity, actualItem);
             }
             break;
 
         case 'Реализация':
         case 'realizations':
             if (typeof openRealizationForm === 'function') {
-                openRealizationForm(item);
+                openRealizationForm('realizations', actualItem);
             } else {
-                openEntityForm(entity, item);
+                openEntityForm(entity, actualItem);
             }
             break;
             
         default:
-            // Для остальных справочников используем стандартную универсальную форму
             if (typeof openEntityForm === 'function') {
-                openEntityForm(entity, item);
+                openEntityForm(entity, actualItem);
             } else {
                 console.error('Функция openEntityForm не найдена');
             }
             break;
     }
 }
-
 
 
 
