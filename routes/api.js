@@ -3864,7 +3864,7 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
                     NULL::integer AS customer_id,
-                    CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_nomer, 'б/н'), ')')::text AS counterparty_name,
+                    CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
                     COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
@@ -3943,6 +3943,8 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
@@ -4079,6 +4081,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 // POST-эндпоинт для проведения оплаты по реализации
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
