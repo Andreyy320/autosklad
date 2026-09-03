@@ -6015,13 +6015,14 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
-
-async function openIncomePaymentHistory(realizationId, docNumber) {
+async function openIncomePaymentHistory(docId, docNumber) {
     const drawer = getOrCreateDrawer();
     
+    // Определяем, ремонт это или реализация по контексту или префиксу (или можно передавать флаг)
+    // Либо делаем универсальный заголовок, раз уж эндпоинт общий:
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: реализация № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: № ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
         <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
@@ -6029,13 +6030,13 @@ async function openIncomePaymentHistory(realizationId, docNumber) {
     openDrawer();
 
     try {
-        let response = await fetch(`/api/money_receipts/${realizationId}/payments`);
+        let response = await fetch(`/api/money_receipts/${docId}/payments`);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
         
         let payments = await response.json();
 
         if (!payments || payments.length === 0) {
-            drawer.querySelector('div:last-child').innerHTML = 'По этой реализации еще не было поступлений.';
+            drawer.querySelector('div:last-child').innerHTML = 'По этому документу еще не было поступлений.';
             return;
         }
 
@@ -6054,7 +6055,7 @@ async function openIncomePaymentHistory(realizationId, docNumber) {
 
         drawer.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: реализация № ${docNumber}</h3>
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: № ${docNumber}</h3>
                 <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
             </div>
             
@@ -6082,16 +6083,16 @@ async function openIncomePaymentHistory(realizationId, docNumber) {
     }
 }
 
-function openIncomePaymentDrawer(realizationId, debtSum, docNumber) {
+function openIncomePaymentDrawer(docId, debtSum, docNumber) {
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата реализации № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа № ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
-        <form id="pay-form" onsubmit="submitIncomePayment(event, '${realizationId}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitIncomePayment(event, '${docId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
                 <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
@@ -6114,7 +6115,7 @@ function openIncomePaymentDrawer(realizationId, debtSum, docNumber) {
     openDrawer();
 }
 
-async function submitIncomePayment(event, realizationId) {
+async function submitIncomePayment(event, docId) {
     event.preventDefault();
     
     const payload = {
@@ -6123,7 +6124,7 @@ async function submitIncomePayment(event, realizationId) {
     };
 
     try {
-        let response = await fetch(`/api/money_receipts/${realizationId}/pay`, {
+        let response = await fetch(`/api/money_receipts/${docId}/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -6142,7 +6143,6 @@ async function submitIncomePayment(event, realizationId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
