@@ -5920,21 +5920,14 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 
-// НАДЕЖНЫЙ КЛИКЕР С ПОИСКОМ ПО data-id (исправляет проблему с индексом месяцев)
+// НАДЕЖНЫЙ УНИВЕРСАЛЬНЫЙ КЛИКЕР ДЛЯ ВСЕХ УРОВНЕЙ РАСХОДОВ
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
+    // Очищаем старые обработчики через клонирование
     const newTableBodyExpenses = tableBodyForExpenses.cloneNode(true);
     tableBodyForExpenses.parentNode.replaceChild(newTableBodyExpenses, tableBodyForExpenses);
 
     newTableBodyExpenses.addEventListener('click', async (e) => {
-        if (
-            window.currentEntity !== 'expenses_by_sklad' && 
-            window.currentEntity !== 'expenses_by_suppliers' && 
-            window.currentEntity !== 'expenses_by_receipts'
-        ) {
-            return;
-        }
-
         const tr = e.target.closest('tr');
         if (!tr) return;
 
@@ -5944,8 +5937,7 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // ИСПРАВЛЕНИЕ: Ищем элемент напрямую по ID из массива currentItems, а не по индексу DOM, 
-        // так как строки месяцев ломали сопоставление rowIndex.
+        // Ищем выбранный элемент в текущем массиве данных
         if (window.currentItems && Array.isArray(window.currentItems)) {
             window.selectedItem = window.currentItems.find(i => 
                 String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id)
@@ -5954,50 +5946,36 @@ if (tableBodyForExpenses) {
         
         window.selectedDetailItem = null;  
 
-        const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-        const tabsForCars = document.getElementById('tabs-for-cars');
-        const tabsForAccidents = document.getElementById('tabs-for-accidents');
-        const tabsForRepairs = document.getElementById('tabs-for-repairs'); 
-        const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        const detailContainer = document.getElementById('detail-container');
+        // ПРОВАЛИВАЕМСЯ ПО УРОВНЯМ В ЗАВИСИМОСТИ ОТ ТЕКУЩЕГО СОСТОЯНИЯ
+        if (window.currentEntity === 'expenses_by_sklad') {
+            // Кликнули по складу -> открываем поставщиков этого склада
+            loadExpenseMainData('expenses_by_suppliers', window.selectedItem);
+        } 
+        else if (window.currentEntity === 'expenses_by_suppliers') {
+            // Кликнули по поставщику -> открываем накладные этого поставщика
+            loadExpenseMainData('expenses_by_receipts', window.selectedItem);
+        } 
+        else if (window.currentEntity === 'expenses_by_receipts') {
+            // Кликнули по накладной -> открываем позиции (запчасти) в нижней таблице
+            let receiptId = window.selectedItem.receipt_id || window.selectedItem.id || id;
+            if (receiptId) {
+                window.currentReceiptId = receiptId;
+            }
 
-        if (carTabsPanel) carTabsPanel.style.display = 'none';
-        if (tabsForCars) tabsForCars.style.display = 'none';
-        if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-        if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-        if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+            let skladId = window.currentSkladId || '';
+            let postavhikId = window.currentPostavhikId || '';
+            let currentReceipt = window.currentReceiptId || '';
 
-        const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-        if (actionButtonsBar) {
-            actionButtonsBar.style.display = 'none';
-        }
+            const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+            const detailContainer = document.getElementById('detail-container');
 
-        if (window.selectedItem) {
-            if (window.currentEntity === 'expenses_by_sklad') {
-                loadExpenseMainData('expenses_by_suppliers', window.selectedItem);
-            } else if (window.currentEntity === 'expenses_by_suppliers') {
-                loadExpenseMainData('expenses_by_receipts', window.selectedItem);
-            } else if (window.currentEntity === 'expenses_by_receipts') {
-                let receiptId = window.selectedItem.receipt_id || window.selectedItem.id || id;
-                if (receiptId) {
-                    window.currentReceiptId = receiptId;
-                }
-
-                let skladId = window.currentSkladId || '';
-                let postavhikId = window.currentPostavhikId || '';
-                let currentReceipt = window.currentReceiptId || '';
-
-                const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
-
-                if (detailContainer) detailContainer.style.display = 'flex';
-                if (typeof loadExpenseDetailTable === 'function') {
-                    loadExpenseDetailTable(fetchUrl);
-                }
+            if (detailContainer) detailContainer.style.display = 'flex';
+            if (typeof loadExpenseDetailTable === 'function') {
+                loadExpenseDetailTable(fetchUrl);
             }
         }
     });
 }
-
 
 
 
