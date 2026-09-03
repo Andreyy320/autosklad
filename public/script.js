@@ -6363,7 +6363,7 @@ if (tableBodyForReceipts) {
             // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
-            // Скрываем чужие панели табов на всякий случай
+            // Скрываем чужие панели табов
             const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
             ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
                 const el = document.getElementById(tabId);
@@ -6371,17 +6371,22 @@ if (tableBodyForReceipts) {
             });
             if (carTabsPanel) carTabsPanel.style.display = 'none';
 
-            // ПОКАЗЫВАЕМ БЛОК С ТАБАМИ ДЛЯ ПРИХОДОВ ДЕНЕГ
-            const moneyTabs = document.getElementById('tabs-for-money-receipts');
-            if (moneyTabs) {
-                moneyTabs.style.display = 'flex';
-            }
+            // Принудительно показываем все возможные элементы табов для приходов денег
+            const possibleTabIds = ['tabs-for-money-receipts', 'money-receipts-tabs', 'money-tabs', 'receipt-tabs'];
+            possibleTabIds.forEach(tabId => {
+                const el = document.getElementById(tabId);
+                if (el) el.style.display = 'flex';
+            });
+
+            document.querySelectorAll('.money-receipts-tabs, .money-tabs-container').forEach(el => {
+                el.style.display = 'flex';
+            });
 
             const detailContainer = document.getElementById('detail-container');
-            if (detailContainer) detailContainer.style.display = 'flex'; // заменили с block на flex для стабильности
+            if (detailContainer) detailContainer.style.display = 'flex';
 
             const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
+            const activeBtn = document.querySelector('#tabs-for-money-receipts .active, [data-tab*="money"] .active') || document.querySelector('#tabs-for-money-receipts button, [data-tab*="money"] button');
             
             if (typeof switchMoneyReceiptTab === 'function') {
                 switchMoneyReceiptTab(activeTab, activeBtn);
