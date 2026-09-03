@@ -4041,14 +4041,14 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Запчасти внутренних ремонтов (repair_items)
+                -- 3. Запчасти внутренних ремонтов (repair_items) — исправлен выбор кода и наименования
                 SELECT 
                     rep_i.id,
                     'part' AS item_type,
                     CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
-                    COALESCE(rep_i.code, '')::text AS product_code,
-                    COALESCE(rep_i.name, '')::text AS item_name,
+                    COALESCE(rep_i.code, t.code, '')::text AS product_code,
+                    COALESCE(rep_i.name, t.name, '')::text AS item_name,
                     COALESCE(rep_i.quantity, 0)::numeric AS quantity,
                     COALESCE(rep_i.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
@@ -4060,6 +4060,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     rep.warehouse_id AS skl_id
                 FROM repair_items rep_i
                 JOIN repairs rep ON rep_i.repair_id = rep.id
+                LEFT JOIN items t ON rep_i.item_id = t.id -- Подставьте имя вашей таблицы товаров, если связь идет через ID
                 WHERE rep.is_posted = true
 
                 UNION ALL
