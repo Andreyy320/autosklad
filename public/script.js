@@ -1763,18 +1763,26 @@ money_receipts_by_sklad: {
 money_receipts: {
     title: 'Список продаж (реализаций)',
     columns: [
-        { field: 'doc_number', label: '№ Документа', width: '120px' },
-        { field: 'date', label: 'Дата', width: '110px' },
-        { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
-        { field: 'sklad_name', label: 'Склад', width: '120px' },
-        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'doc_number', label: '№ Документа', width: '100px' },
+        { field: 'date', label: 'Дата', width: '100px' },
+        { field: 'counterparty_name', label: 'Покупатель', width: '150px' },
+        { field: 'sklad_name', label: 'Склад', width: '110px' },
+        { field: 'total_qty', label: 'Всего кол.', width: '70px', align: 'right' },
+        { field: 'parts_qty', label: 'Кол. зап.', width: '70px', align: 'right' },
+        { field: 'works_qty', label: 'Кол. усл.', width: '70px', align: 'right' },
+        { field: 'parts_sum', label: 'Сумма зап.', width: '100px', align: 'right' },
+        { field: 'works_sum', label: 'Сумма усл.', width: '100px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '100px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '100px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
+        const partsQty = Number(item.parts_qty || 0).toFixed(2);
+        const worksQty = Number(item.works_qty || 0).toFixed(2);
+        const partsSum = Number(item.parts_sum || 0).toFixed(2);
+        const worksSum = Number(item.works_sum || 0).toFixed(2);
         const sum = Number(item.total_realization_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
@@ -1800,6 +1808,10 @@ money_receipts: {
             <td>${item.counterparty_name || 'Розничный покупатель'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${qty}</td>
+            <td style="text-align: right; color: #555;">${partsQty}</td>
+            <td style="text-align: right; color: #0284c7;">${worksQty}</td>
+            <td style="text-align: right;">${partsSum}</td>
+            <td style="text-align: right; color: #0284c7;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
@@ -1839,7 +1851,7 @@ money_receipts_detail: {
     title: 'Детализация: купленные товары и услуги',
     columns: [
         { field: 'doc_number', label: 'Документ', width: '100px' },
-        { field: 'product_code', label: 'Код', width: '90px' },
+        { field: 'product_code', label: 'Код / Тип', width: '90px' },
         { field: 'product_name', label: 'Наименование товара / услуги', width: '240px' },
         { field: 'quantity', label: 'Кол-во', width: '80px', align: 'center' },
         { field: 'purchase_price', label: 'Закупка (шт)', width: '110px', align: 'right' },
@@ -1854,10 +1866,14 @@ money_receipts_detail: {
         const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
         const total = Number(item.total_rub || 0).toFixed(2);
 
+        // Если это услуга, можно сделать красивую визуализацию кода или подкрасить строку
+        const isWork = item.item_type === 'work';
+        const codeDisplay = isWork ? '<span style="color: #0284c7; font-weight: 600;">Услуга</span>' : (item.product_code || '—');
+
         return `
             <td><b>${item.doc_number || ''}</b></td>
-            <td>${item.product_code || '—'}</td>
-            <td><b>${item.product_name || '—'}</b></td>
+            <td>${codeDisplay}</td>
+            <td><b>${item.item_name || item.product_name || '—'}</b></td>
             <td style="text-align: center;">${qty}</td>
             <td style="text-align: right; color: #666;">${purchase} </td>
             <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} </td>

@@ -3809,7 +3809,9 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                 sk.name::text AS sklad_name,
                 1 AS total_orders,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                (COALESCE(sub_i.parts_qty, 0) + COALESCE(sub_w.works_qty, 0))::numeric AS total_qty,
+                COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
+                COALESCE(sub_w.works_qty, 0)::numeric AS works_qty,
                 COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
                 COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
                 COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
@@ -3820,21 +3822,27 @@ router.get('/money_receipts', async (req, res) => {
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
+            -- Подзапрос для запчастей
             LEFT JOIN (
                 SELECT 
                     ri.realization_id, 
-                    SUM(ri.quantity) AS total_qty, 
+                    SUM(ri.quantity) AS parts_qty, 
                     SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
                     SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
                     SUM(ri.total_rub) AS parts_sum
                 FROM realization_items ri
                 GROUP BY ri.realization_id
             ) sub_i ON real.id = sub_i.realization_id
+            -- Подзапрос для услуг (работ)
             LEFT JOIN (
-                SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
+                SELECT 
+                    rw.realization_id, 
+                    SUM(rw.quantity) AS works_qty,
+                    SUM(rw.total_rub) AS works_sum
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
+            -- Подзапрос для оплат
             LEFT JOIN (
                 SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
                 FROM customer_payments cp
@@ -3855,7 +3863,6 @@ router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
         
-        // Превращаем пустые строки, строки 'null' или undefined в реальный null для корректной работы параметров SQL
         const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? realization_id : null;
         const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
         const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
@@ -3906,7 +3913,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     'work' AS item_type,
                     real.doc_number::text AS doc_number,
                     real.doc_date AS date,
-                    ''::text AS product_code,
+                    'Услуга'::text AS product_code,
                     COALESCE(rw.name, '')::text AS item_name,
                     rw.quantity::numeric AS quantity,
                     0::numeric AS purchase_price,
