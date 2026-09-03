@@ -1784,8 +1784,8 @@ money_receipts: {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        // Определяем, ремонт это или обычная продажа
-        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ:');
+        // ИСПРАВЛЕНО: корректное определение ремонта по префиксу 'РЕМ' (поддерживает 'РЕМ:', 'РЕМ-', и т.д.)
+        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
         
         let counterpartyHtml = '';
         if (isRepair) {
@@ -1849,7 +1849,6 @@ income_payments: {
         `;
     }
 },
-
 money_receipts_detail: {
     title: 'Детализация: купленные товары и услуги',
     columns: [
