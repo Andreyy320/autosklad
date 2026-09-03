@@ -1953,6 +1953,8 @@ money_receipts_works_detail: {
     }
 },
 
+
+
 expenses_by_sklad: {
     title: 'Аналитика расходов (закупок) по складам',
     columns: [
@@ -2104,11 +2106,11 @@ expense_payments: {
         const date = item.payment_date ? new Date(item.payment_date).toLocaleDateString() : '—';
 
         return `
-            <td><span style="color: #4b5563;">${date}</span></td>
-            <td><b>№ ${item.doc_number || item.parent_id}</b></td>
-            <td>${item.postavhik_name || '—'}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount}</td>
-            <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
+            <td><span style="color: #475569;">${date}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;">№ ${item.doc_number || item.parent_id}</span></td>
+            <td><span style="color: #0f172a;">${item.postavhik_name || '—'}</span></td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${amount}</td>
+            <td style="color: #64748b; font-size: 13px; font-style: italic;">${item.comment || '—'}</td>
         `;
     }
 }
