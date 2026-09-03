@@ -6163,7 +6163,6 @@ async function submitIncomePayment(event, docId, isRepair) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6330,9 +6329,25 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].totalPaid += paidSum;
                 groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
                 
-                const partProfitFull = Number(item.parts_profit || 0);
-                const workSumFull = Number(item.works_sum || 0);
-                const netProfitFull = Number(item.net_profit || 0);
+                // Проверяем, ремонт это или реализация
+                const docTitle = item.doc_number || item.id;
+                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
+
+                let partProfitFull = 0;
+                let workSumFull = 0;
+                let netProfitFull = 0;
+
+                if (isRepair) {
+                    // Для ремонта: всю чистую прибыль/сумму кидаем в запчасти, а услуги оставляем 0
+                    partProfitFull = Number(item.net_profit || item.parts_profit || 0);
+                    workSumFull = 0;
+                    netProfitFull = partProfitFull;
+                } else {
+                    // Для реализации: штатный расчет
+                    partProfitFull = Number(item.parts_profit || 0);
+                    workSumFull = Number(item.works_sum || 0);
+                    netProfitFull = Number(item.net_profit || 0);
+                }
 
                 groupedByMonth[m.key].totalPartsProfit += Number((partProfitFull * payRatio).toFixed(2));
                 groupedByMonth[m.key].totalWorksSum += Number((workSumFull * payRatio).toFixed(2));
@@ -6428,14 +6443,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         
                         let url = '';
                         if (isRepair) {
-                            // ИСПРАВЛЕНО: для ремонта передаем repair_id
                             if (detailEntity === 'money_receipts_works_detail') {
                                 url = `/api/money_receipts_works_detail?repair_id=${item.id}&sklad_id=${skladId}`;
                             } else {
                                 url = `/api/money_receipts_detail?repair_id=${item.id}&sklad_id=${skladId}`;
                             }
                         } else {
-                            // Для реализации передаем realization_id
                             let realizationId = item.id || '';
                             if (detailEntity === 'money_receipts_works_detail') {
                                 url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
