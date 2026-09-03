@@ -4903,7 +4903,9 @@ function editSelectedEntity() {
     } else if (currentEntity === 'moves' && typeof openMoveForm === 'function') {
         openMoveForm(selectedItem);
     } else if (currentEntity === 'realizations' && typeof openRealizationForm === 'function') {
-        openRealizationForm(currentEntity, selectedItem); // или просто openRealizationForm(selectedItem), в зависимости от того, сколько аргументов принимает ваша функция
+        openRealizationForm(currentEntity, selectedItem);
+    } else if (currentEntity === 'repairs' && typeof openRepairForm === 'function') {
+        openRepairForm(selectedItem);
     } else {
         openEntityForm(currentEntity, selectedItem);
     }
