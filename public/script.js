@@ -1725,17 +1725,18 @@ realization_works: {
         `;
     }
 },
+
 money_receipts_by_sklad: {
     title: 'Аналитика продаж по складам',
     columns: [
-        { field: 'sklad_name', label: 'Склад', width: '180px' },
-        { field: 'total_orders', label: 'Заказов', width: '60px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
-        { field: 'parts_sum', label: 'Запчасти', width: '95px', align: 'right' },
-        { field: 'works_sum', label: 'Услуги', width: '95px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Сумма', width: '100px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '100px', align: 'right' },
-        { field: 'total_debt', label: 'Долг', width: '100px', align: 'right' }
+        { field: 'sklad_name', label: 'Склад', width: '220px' },
+        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
+        { field: 'parts_sum', label: 'Запчасти', width: '110px', align: 'right' },
+        { field: 'works_sum', label: 'Услуги', width: '110px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Общая', width: '120px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
@@ -1743,8 +1744,8 @@ money_receipts_by_sklad: {
         const worksSum = Number(item.works_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
-        const totalDebt = Number(item.total_debt || item.debt_sum || 0).toFixed(2);
-        const debtNum = Number(totalDebt);
+        const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
+        const debtSum = debtSumNum.toFixed(2);
 
         return `
             <td><span style="color: #0284c7; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
@@ -1752,69 +1753,84 @@ money_receipts_by_sklad: {
             <td style="text-align: right;">${totalQty}</td>
             <td style="text-align: right; color: #4b5563;">${partsSum}</td>
             <td style="text-align: right; color: #0284c7;">${worksSum}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum}</td>
             <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid}</td>
-            <td style="text-align: right; font-weight: bold; color: ${debtNum > 0 ? '#dc2626' : '#6b7280'};">
-                ${totalDebt}
-            </td>
+            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">${debtSum}</td>
         `;
     }
 },
 
 money_receipts: {
-    title: 'Аналитика продаж по покупателям и складам',
+    title: 'Список продаж (реализаций)',
     columns: [
+        { field: 'doc_number', label: '№ Документа', width: '120px' },
+        { field: 'date', label: 'Дата', width: '110px' },
         { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
-        { field: 'sklad_name', label: 'Склад списания', width: '110px' },
-        { field: 'total_orders', label: 'Заказов', width: '60px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во', width: '65px', align: 'right' },
-        { field: 'total_purchase_sum', label: 'Закупка', width: '90px', align: 'right' },
-        { field: 'parts_sum', label: 'Запчасти', width: '90px', align: 'right' },
-        { field: 'works_sum', label: 'Услуги', width: '90px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Итого выручка', width: '100px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '95px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '95px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '90px', align: 'center' }
+        { field: 'sklad_name', label: 'Склад', width: '120px' },
+        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
-        const totalQty = Number(item.total_qty || 0).toFixed(2);
-        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
-        const partsSum = Number(item.parts_sum || 0).toFixed(2);
-        const worksSum = Number(item.works_sum || 0).toFixed(2);
-        const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
+        const qty = Number(item.total_qty || 0).toFixed(2);
+        const sum = Number(item.total_realization_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
         const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
         const debtSum = debtSumNum.toFixed(2);
-        const docTitle = item.counterparty_name || item.doc_number || item.id;
+        const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
+        const docTitle = item.doc_number || item.id;
 
         const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id || item.realization_id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
+            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
         const actionHtml = debtSumNum <= 0 
             ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
-            : `<button type="button" onclick="openIncomePaymentDrawer('${item.id || item.realization_id}', '${debtSum}', '${docTitle}')" 
+            : `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
                 style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Внести оплату
+                Оплатить
               </button>`;
 
         return `
-            <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
+            <td><b>№ ${docTitle}</b></td>
+            <td><span style="color: #4b5563;">${formattedDate}</span></td>
+            <td>${item.counterparty_name || 'Розничный покупатель'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-            <td style="text-align: center;">${item.total_orders || 0}</td>
-            <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; color: #666;">${purchaseSum}</td>
-            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
-            <td style="text-align: right; color: #0284c7; font-weight: 500;">${worksSum}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
+            <td style="text-align: right;">${qty}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
-                ${debtSum}
+                ${debtSum} 
             </td>
             <td style="text-align: center;">
                 ${actionHtml}
             </td>
+        `;
+    }
+},
+
+income_payments: {
+    title: 'История всех поступлений',
+    columns: [
+        { field: 'payment_date', label: 'Дата оплаты', width: '130px' },
+        { field: 'doc_number', label: '№ Документа', width: '120px' },
+        { field: 'counterparty_name', label: 'Покупатель', width: '180px' },
+        { field: 'amount', label: 'Сумма оплаты', width: '120px', align: 'right' },
+        { field: 'comment', label: 'Комментарий', width: '250px' }
+    ],
+    render: (item) => {
+        const amount = Number(item.amount || 0).toFixed(2);
+        const date = item.payment_date ? new Date(item.payment_date).toLocaleDateString() : '—';
+
+        return `
+            <td><span style="color: #4b5563;">${date}</span></td>
+            <td><b>№ ${item.doc_number || item.parent_id}</b></td>
+            <td>${item.counterparty_name || '—'}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount}</td>
+            <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
 },
@@ -1883,6 +1899,7 @@ money_receipts_works_detail: {
         `;
     }
 },
+
 
 
 expenses_by_sklad: {
