@@ -6182,7 +6182,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentSkladId = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
-        window.currentRepairId = null;
 
         fetchUrl = `/api/money_receipts_by_sklad`;
         if (detailContainer) detailContainer.style.display = 'none';
@@ -6200,7 +6199,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (skladId) window.currentSkladId = skladId;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
-        window.currentRepairId = null;
 
         fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         
@@ -6304,7 +6302,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             };
 
             const groupedByMonth = {};
-            currentItems.forEach(item => {
+            currentItems.forEach((item, index) => {
                 const m = getMonthData(item.date);
                 if (!groupedByMonth[m.key]) {
                     groupedByMonth[m.key] = {
@@ -6320,44 +6318,79 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 }
                 groupedByMonth[m.key].items.push(item);
                 
-                const realizationSum = Number(item.total_realization_sum || 0);
-                const paidSum = Number(item.total_paid || 0);
-                
-                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : 0;
-
-                groupedByMonth[m.key].totalSum += realizationSum;
-                groupedByMonth[m.key].totalPaid += paidSum;
-                groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
-                
-                // Проверяем, ремонт это или реализация
                 const docTitle = item.doc_number || item.id;
-                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
+                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(item.id).startsWith('рем');
 
+                let realizationSum = 0;
+                let paidSum = 0;
+                let debtSum = 0;
                 let partProfitFull = 0;
                 let workSumFull = 0;
                 let netProfitFull = 0;
 
                 if (isRepair) {
-                    // Для ремонта: всю чистую прибыль/сумму кидаем в запчасти, а услуги оставляем 0
-                    partProfitFull = Number(item.net_profit || item.parts_profit || 0);
+                    realizationSum = Number(item.total_realization_sum || item.total_sum || item.sum || 0);
+                    paidSum = Number(item.total_paid || item.paid || 0);
+                    debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
+                    
+                    netProfitFull = Number(item.net_profit || item.parts_profit || realizationSum || 0);
+                    partProfitFull = netProfitFull;
                     workSumFull = 0;
-                    netProfitFull = partProfitFull;
                 } else {
-                    // Для реализации: штатный расчет
+                    realizationSum = Number(item.total_realization_sum || 0);
+                    paidSum = Number(item.total_paid || 0);
+                    debtSum = Number(item.debt_sum || item.total_debt || 0);
+                    
                     partProfitFull = Number(item.parts_profit || 0);
                     workSumFull = Number(item.works_sum || 0);
                     netProfitFull = Number(item.net_profit || 0);
                 }
 
-                groupedByMonth[m.key].totalPartsProfit += Number((partProfitFull * payRatio).toFixed(2));
-                groupedByMonth[m.key].totalWorksSum += Number((workSumFull * payRatio).toFixed(2));
-                groupedByMonth[m.key].totalNetProfit += Number((netProfitFull * payRatio).toFixed(2));
+                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
+
+                const itemPartsProfit = Number((partProfitFull * payRatio).toFixed(2));
+                const itemWorksSum = Number((workSumFull * payRatio).toFixed(2));
+                const itemNetProfit = Number((netProfitFull * payRatio).toFixed(2));
+
+                // ЛОГИРОВАНИЕ ДЛЯ КАЖДОГО ДОКУМЕНТА
+                console.log(`🔍 [DEBUG DOC #${index + 1}] ID/Num: ${docTitle} | Type: ${isRepair ? 'Ремонт' : 'Реализация'}`, {
+                    rawItem: item,
+                    parsed: {
+                        realizationSum,
+                        paidSum,
+                        debtSum,
+                        partProfitFull,
+                        workSumFull,
+                        netProfitFull,
+                        payRatio,
+                        calculatedPartsProfit: itemPartsProfit,
+                        calculatedWorksSum: itemWorksSum,
+                        calculatedNetProfit: itemNetProfit
+                    }
+                });
+
+                groupedByMonth[m.key].totalSum += realizationSum;
+                groupedByMonth[m.key].totalPaid += paidSum;
+                groupedByMonth[m.key].totalDebt += debtSum;
+                
+                groupedByMonth[m.key].totalPartsProfit += itemPartsProfit;
+                groupedByMonth[m.key].totalWorksSum += itemWorksSum;
+                groupedByMonth[m.key].totalNetProfit += itemNetProfit;
             });
 
             const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
 
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
+
+                console.log(`📊 [DEBUG MONTH TOTAL: ${group.title}]`, {
+                    totalSum: group.totalSum,
+                    totalPaid: group.totalPaid,
+                    totalDebt: group.totalDebt,
+                    totalPartsProfit: group.totalPartsProfit,
+                    totalWorksSum: group.totalWorksSum,
+                    totalNetProfit: group.totalNetProfit
+                });
 
                 const headerTr = document.createElement('tr');
                 headerTr.style.background = '#f8fafc';
@@ -6404,16 +6437,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         selectedItem = item;
 
-                        const docTitle = item.doc_number || item.id;
-                        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
-
-                        if (isRepair) {
-                            window.currentRepairId = item.id;
-                            window.currentRealizationId = null;
-                        } else {
-                            window.currentRealizationId = item.id;
-                            window.currentRepairId = null;
-                        }
+                        window.currentRealizationId = item.realization_id || item.id;
 
                         const tabsBlock = document.getElementById('tabs-for-money-receipts');
                         if (tabsBlock) {
@@ -6438,23 +6462,15 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         currentMoneyReceiptSubTab = 'money_receipts_detail';
 
                         const detailEntity = getCurrentDetailEntity();
+                        let realizationId = item.realization_id || item.id || '';
                         let customerId = item.customer_id || '';
                         let skladId = item.sklad_id || window.currentSkladId || '';
                         
                         let url = '';
-                        if (isRepair) {
-                            if (detailEntity === 'money_receipts_works_detail') {
-                                url = `/api/money_receipts_works_detail?repair_id=${item.id}&sklad_id=${skladId}`;
-                            } else {
-                                url = `/api/money_receipts_detail?repair_id=${item.id}&sklad_id=${skladId}`;
-                            }
+                        if (detailEntity === 'money_receipts_works_detail') {
+                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
                         } else {
-                            let realizationId = item.id || '';
-                            if (detailEntity === 'money_receipts_works_detail') {
-                                url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                            } else {
-                                url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                            }
+                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
                         }
 
                         loadReceiptDetailTable(url, detailEntity);
@@ -6474,7 +6490,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.innerHTML = config.render(item);
 
                 tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку верхней таблицы]:', item);
+                    console.log('🖱️ [Клик на строку верхней таблицы]:', item, 'полный объект:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
