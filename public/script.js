@@ -5618,6 +5618,9 @@ async function submitPayment(event, receiptId) {
     }
 }
 
+// ==========================================
+// 2. ФУНКЦИЯ ЗАГРУЗКИ ГЛАВНЫХ ДАННЫХ РАСХОДОВ
+// ==========================================
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] entity="${entity}", parentId:`, parentId);
 
@@ -5764,7 +5767,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
             const groups = {};
             currentItems.forEach(item => {
-                // Подстраховка: проверяем разные варианты названий поля с датой
                 const rawDate = item.date || item.created_at || item.receipt_date;
                 const dateObj = rawDate ? new Date(rawDate) : new Date();
                 const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
@@ -5843,7 +5845,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             });
         }
 
-    } else {
+    } catch (err) {
         console.error('❌ [loadExpenseMainData ОШИБКА]:', err);
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
@@ -5895,9 +5897,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-// ==========================================
-// КЛИКЕР ДЛЯ РАСХОДОВ (ПО АНАЛОГИИ С ПРИХОДАМИ)
-// ==========================================
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
     const newTableBodyExpenses = tableBodyForExpenses.cloneNode(true);
@@ -5914,7 +5913,7 @@ if (tableBodyForExpenses) {
 
         const tr = e.target.closest('tr');
         if (!tr) return;
-
+        
         // Игнорируем клики по шапкам месяцев (у них нет data-id)
         const id = tr.getAttribute('data-id');
         if (!id) return; 
@@ -5955,10 +5954,13 @@ if (tableBodyForExpenses) {
 
         if (selectedItem) {
             if (currentEntity === 'expenses_by_sklad') {
+                // Кликнули по складу -> загружаем поставщиков для этого склада
                 loadExpenseMainData('expenses_by_suppliers', selectedItem);
             } else if (currentEntity === 'expenses_by_suppliers') {
+                // Кликнули по поставщику -> загружаем приходы/документы для этого поставщика
                 loadExpenseMainData('expenses_by_receipts', selectedItem);
             } else if (currentEntity === 'expenses_by_receipts') {
+                // Кликнули по конкретному документу -> открываем детальную таблицу (строки расходов снизу)
                 let receiptId = selectedItem.receipt_id || selectedItem.id || id;
                 if (receiptId) {
                     window.currentReceiptId = receiptId;
@@ -5976,6 +5978,8 @@ if (tableBodyForExpenses) {
         }
     });
 }
+
+
 
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
