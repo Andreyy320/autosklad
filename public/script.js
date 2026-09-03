@@ -1795,15 +1795,14 @@ money_receipts: {
         }
 
         const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
+            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
-        // Универсальная кнопка действия: если долга нет — «Оплачено», если есть — кнопка «Оплатить» (теперь и для продаж, и для ремонтов)
         let actionHtml = '';
         if (debtSumNum <= 0) {
             actionHtml = `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`;
         } else {
-            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
+            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
                 style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                 Оплатить
               </button>`;
@@ -6015,11 +6014,9 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
-async function openIncomePaymentHistory(docId, docNumber) {
+async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
     const drawer = getOrCreateDrawer();
     
-    // Определяем, ремонт это или реализация по контексту или префиксу (или можно передавать флаг)
-    // Либо делаем универсальный заголовок, раз уж эндпоинт общий:
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: № ${docNumber}</h3>
@@ -6083,7 +6080,7 @@ async function openIncomePaymentHistory(docId, docNumber) {
     }
 }
 
-function openIncomePaymentDrawer(docId, debtSum, docNumber) {
+function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
@@ -6092,7 +6089,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber) {
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
-        <form id="pay-form" onsubmit="submitIncomePayment(event, '${docId}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitIncomePayment(event, '${docId}', ${isRepair})" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
                 <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
@@ -6115,12 +6112,13 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber) {
     openDrawer();
 }
 
-async function submitIncomePayment(event, docId) {
+async function submitIncomePayment(event, docId, isRepair) {
     event.preventDefault();
     
     const payload = {
         amount: parseFloat(document.getElementById('payment-amount').value),
-        comment: document.getElementById('payment-comment').value
+        comment: document.getElementById('payment-comment').value,
+        type: isRepair ? 'repair' : 'realization' // Передаем точный тип на бэкенд
     };
 
     try {
