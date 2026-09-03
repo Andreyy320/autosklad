@@ -6281,7 +6281,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         totalSum: 0,
                         totalPaid: 0,
                         totalDebt: 0,
-                        totalNetProfit: 0
+                        totalPartsProfit: 0,  // Чистая прибыль по запчастям
+                        totalWorksSum: 0,     // Сумма/прибыль по работам
+                        totalNetProfit: 0     // Общий чистый плюс
                     };
                 }
                 groupedByMonth[m.key].items.push(item);
@@ -6289,6 +6291,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].totalSum += Number(item.total_realization_sum || 0);
                 groupedByMonth[m.key].totalPaid += Number(item.total_paid || 0);
                 groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
+                
+                // Суммируем новые поля для шапки месяца
+                groupedByMonth[m.key].totalPartsProfit += Number(item.parts_profit || 0);
+                groupedByMonth[m.key].totalWorksSum += Number(item.works_sum || 0);
                 groupedByMonth[m.key].totalNetProfit += Number(item.net_profit || 0);
             });
 
@@ -6303,13 +6309,16 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 headerTr.style.borderTop = '2px solid #e2e8f0';
                 headerTr.style.borderBottom = '1px solid #e2e8f0';
 
+                // Вывод итогов месяца (включая разделение запчастей и услуг)
                 headerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 12px; cursor: pointer;">
-                        <span style="color: #334155; margin-right: 15px;">[-] ${group.title}</span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Итого за месяц: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal;">Чистый плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
+                        <span style="color: #334155; margin-right: 12px;">[-] ${group.title}</span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Итого: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
                     </td>
                 `;
                 
@@ -6415,7 +6424,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
