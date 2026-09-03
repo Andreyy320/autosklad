@@ -6487,6 +6487,7 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -6586,7 +6587,7 @@ function getCurrentDetailEntity() {
             }
 
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            const match = onclickAttr.match(/(?:loadDetailData|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
+            const match = onclickAttr.match(/(?:loadReceiptDetailTable|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 console.log(`🔗 [getCurrentDetailEntity:money_receipts] Определено по onclick: ${match[1]}`);
                 if (match[1] === 'realization_works') return 'money_receipts_works_detail';
@@ -6727,7 +6728,6 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
 
 
 function openDetailForm(mode) {
