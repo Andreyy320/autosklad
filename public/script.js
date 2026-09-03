@@ -6182,78 +6182,70 @@ async function loadReceiptWorksDetailTable(fetchUrl) {
 }
 
 // ==========================================
-// ЕДИНЫЙ УНИВЕРСАЛЬНЫЙ КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
+// КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
-console.log('🚀 [init] Универсальный кликер таблиц загружается...');
-
-const tableBodyElement = document.getElementById('table-body');
-if (tableBodyElement) {
-    console.log('✅ [init] Элемент #table-body успешно найден.');
-    
-    const newTableBody = tableBodyElement.cloneNode(true);
-    tableBodyElement.parentNode.replaceChild(newTableBody, tableBodyElement);
+const tableBodyForReceipts = document.getElementById('table-body');
+if (tableBodyForReceipts) {
+    const newTableBody = tableBodyForReceipts.cloneNode(true);
+    tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
 
     newTableBody.addEventListener('click', async (e) => {
-        console.log('🖱️ Клик в таблице! Текущая сущность (currentEntity):', window.currentEntity);
+        // Проверяем, относится ли текущая сущность к приходам или расходам
+        const allowedEntities = [
+            'money_receipts_by_sklad', 
+            'money_receipts',
+            'expenses_by_sklad', 
+            'expenses_by_suppliers', 
+            'expenses_by_receipts'
+        ];
+
+        // Автоопределение, если currentEntity вдруг пустой или undefined, но открыт раздел расходов
+        let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
+        
+        if (!allowedEntities.includes(activeEntity)) {
+            return;
+        }
 
         const tr = e.target.closest('tr');
         if (!tr) return;
 
         const id = tr.getAttribute('data-id');
-        console.log('📌 Найден data-id строки:', id);
 
-        // Подсветка выбранной строки
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // 1. Ищем по индексу строки в DOM
         const rowsArray = Array.from(newTableBody.querySelectorAll('tr'));
         const rowIndex = rowsArray.indexOf(tr);
 
-        if (rowIndex >= 0 && window.currentItems && window.currentItems[rowIndex]) {
-            window.selectedItem = window.currentItems[rowIndex];
-        } 
+        let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
+
+        if (rowIndex >= 0 && itemsSource && itemsSource[rowIndex]) {
+            selectedItem = itemsSource[rowIndex];
+        } else if (itemsSource) {
+            selectedItem = itemsSource.find(i => String(i.id || i.sklad_id || i.realization_id || i.receipt_id || i.postavhik_id) === String(id));
+        }
         
-        // 2. Если по индексу не нашлось, ищем перебором по ID среди возможных полей
-        if (!window.selectedItem && window.currentItems && id) {
-            window.selectedItem = window.currentItems.find(i => 
-                String(i.id || i.sklad_id || i.postavhik_id || i.receipt_id || i.realization_id) === String(id)
-            );
+        if (typeof window !== 'undefined') {
+            window.selectedItem = selectedItem;
+            window.selectedDetailItem = null;
         }
 
-        // 3. Аварийный поиск по индексу
-        if (!window.selectedItem && window.currentItems && window.currentItems[rowIndex]) {
-            window.selectedItem = window.currentItems[rowIndex];
-        }
+        console.log(`📥 [КЛИК] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
 
-        // АВТООПРЕДЕЛЕНИЕ СУЩНОСТИ ДЛЯ РАСХОДОВ, ЕСЛИ currentEntity сбросился или undefined
-        if (!window.currentEntity || window.currentEntity === 'undefined') {
-            if (window.selectedItem && ('sklad_id' in window.selectedItem || window.selectedItem.sklad || tr.cells.length <= 6)) {
-                window.currentEntity = 'expenses_by_sklad';
-                console. 자동спектроскопия: '🔧 Автоматически определили currentEntity как expenses_by_sklad';
-            }
-        }
-
-        window.selectedDetailItem = null;
-        console.log(`📥 [КЛИК] Сущность: "${window.currentEntity}", ID: ${id}`, window.selectedItem);
-
-        if (!window.selectedItem) {
+        if (!selectedItem) {
             console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
             return;
         }
 
         // ==========================================
-        // ВЕТВЛЕНИЕ ПО РАЗДЕЛАМ (ДЕНЬГИ / ПРИХОДЫ И РАСХОДЫ)
+        // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
-
-        // РАЗДЕЛ 1: Денежные поступления / приходы
-        if (window.currentEntity === 'money_receipts_by_sklad') {
-            console.log('➡️ Переход от складов денег к списку документов...');
-            loadReceiptMainData('money_receipts', window.selectedItem);
-        } 
-        else if (window.currentEntity === 'money_receipts') {
-            console.log('➡️ Открытие деталей денежного документа...');
-            window.currentRealizationId = window.selectedItem.realization_id || window.selectedItem.id;
+        if (activeEntity === 'money_receipts_by_sklad') {
+            // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
+            loadReceiptMainData('money_receipts', selectedItem);
+        } else if (activeEntity === 'money_receipts') {
+            // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
+            window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
@@ -6266,13 +6258,14 @@ if (tableBodyElement) {
             }
         }
 
-        // РАЗДЕЛ 2: Расходы (Склады -> Поставщики -> Накладные -> Запчасти)
+        // ==========================================
+        // ЛОГИКА ДЛЯ РАСХОДОВ (expenses)
+        // ==========================================
         else if (
-            window.currentEntity === 'expenses_by_sklad' || 
-            window.currentEntity === 'expenses_by_suppliers' || 
-            window.currentEntity === 'expenses_by_receipts'
+            activeEntity === 'expenses_by_sklad' || 
+            activeEntity === 'expenses_by_suppliers' || 
+            activeEntity === 'expenses_by_receipts'
         ) {
-            // Скрываем лишние вкладки и панели автомобилей/ремонтов
             const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
             ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
                 const el = document.getElementById(tabId);
@@ -6283,17 +6276,16 @@ if (tableBodyElement) {
             const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
             if (actionButtonsBar) actionButtonsBar.style.display = 'none';
 
-            if (window.currentEntity === 'expenses_by_sklad') {
-                console.log('➡️ Расходы: Переход от складов к поставщикам...');
-                loadExpenseMainData('expenses_by_suppliers', window.selectedItem);
-            } 
-            else if (window.currentEntity === 'expenses_by_suppliers') {
-                console.log('➡️ Расходы: Переход от поставщиков к накладным...');
-                loadExpenseMainData('expenses_by_receipts', window.selectedItem);
-            } 
-            else if (window.currentEntity === 'expenses_by_receipts') {
-                console.log('➡️ Расходы: Открытие детальной таблицы позиций (запчастей)...');
-                let receiptId = window.selectedItem.receipt_id || window.selectedItem.id || id;
+            if (activeEntity === 'expenses_by_sklad') {
+                if (typeof loadExpenseMainData === 'function') {
+                    loadExpenseMainData('expenses_by_suppliers', selectedItem);
+                }
+            } else if (activeEntity === 'expenses_by_suppliers') {
+                if (typeof loadExpenseMainData === 'function') {
+                    loadExpenseMainData('expenses_by_receipts', selectedItem);
+                }
+            } else if (activeEntity === 'expenses_by_receipts') {
+                let receiptId = selectedItem.receipt_id || selectedItem.id || id;
                 if (receiptId) {
                     window.currentReceiptId = receiptId;
                 }
@@ -6303,11 +6295,10 @@ if (tableBodyElement) {
                 let currentReceipt = window.currentReceiptId || '';
 
                 const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
-                console.log('🌐 Запрос детальных данных расходов:', fetchUrl);
-
+                
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'flex';
-                
+
                 if (typeof loadExpenseDetailTable === 'function') {
                     loadExpenseDetailTable(fetchUrl);
                 } else {
@@ -6315,12 +6306,7 @@ if (tableBodyElement) {
                 }
             }
         }
-        else {
-            console.warn('⚠️ Клик в таблице не обработан, неизвестная сущность:', window.currentEntity);
-        }
     });
-} else {
-    console.error('❌ [CRITICAL] Элемент #table-body не найден на странице!');
 }
 
 // ==========================================
