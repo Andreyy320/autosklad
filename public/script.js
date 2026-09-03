@@ -1765,22 +1765,16 @@ money_receipts: {
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
-        { field: 'counterparty_name', label: 'Покупатель', width: '150px' },
-        { field: 'sklad_name', label: 'Склад', width: '110px' },
-        { field: 'total_qty', label: 'Всего кол.', width: '70px', align: 'right' },
-        { field: 'parts_qty', label: 'Кол. зап.', width: '70px', align: 'right' },
-        { field: 'works_qty', label: 'Кол. усл.', width: '70px', align: 'right' },
-        { field: 'parts_sum', label: 'Сумма зап.', width: '100px', align: 'right' },
-        { field: 'works_sum', label: 'Сумма усл.', width: '100px', align: 'right' },
+        { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
+        { field: 'sklad_name', label: 'Склад', width: '120px' },
+        { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
+        { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '100px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '100px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
-        const qty = Number(item.total_qty || 0).toFixed(2);
-        const partsQty = Number(item.parts_qty || 0).toFixed(2);
-        const worksQty = Number(item.works_qty || 0).toFixed(2);
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
         const worksSum = Number(item.works_sum || 0).toFixed(2);
         const sum = Number(item.total_realization_sum || 0).toFixed(2);
@@ -1807,9 +1801,6 @@ money_receipts: {
             <td><span style="color: #4b5563;">${formattedDate}</span></td>
             <td>${item.counterparty_name || 'Розничный покупатель'}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-            <td style="text-align: right;">${qty}</td>
-            <td style="text-align: right; color: #555;">${partsQty}</td>
-            <td style="text-align: right; color: #0284c7;">${worksQty}</td>
             <td style="text-align: right;">${partsSum}</td>
             <td style="text-align: right; color: #0284c7;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
