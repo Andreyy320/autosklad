@@ -6033,7 +6033,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         
-        // Показываем контейнер деталей, но блок с вкладками пока не включаем до клика на конкретную строку
         if (detailContainer) detailContainer.style.display = 'block';
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
@@ -6133,11 +6132,24 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     console.log('Выбрана конкретная реализация:', item);
                     window.currentRealizationId = item.realization_id || item.id;
 
-                    // ПРИНУДИТЕЛЬНО ВКЛЮЧАЕМ ОТОБРАЖЕНИЕ БЛОКА С ПЕРЕКЛЮЧАТЕЛЯМИ (ВКЛАДКАМИ)
+                    // 1. ПОКАЗЫВАЕМ ТАБЫ (ПЕРЕКЛЮЧАТЕЛИ) НАД НИЖНЕЙ ТАБЛИЦЕЙ
                     const tabsBlock = document.getElementById('tabs-for-money-receipts');
                     if (tabsBlock) tabsBlock.style.display = 'flex';
 
-                    // Сбрасываем вкладки на первую ("Запчасть")
+                    // 2. СКРЫВАЕМ КНОПКИ УПРАВЛЕНИЯ ВНИЗУ (Добавить, Изменить, Удалить)
+                    const detailAdd = document.getElementById('btn-add'); // либо специфичные селекторы если они другие
+                    const detailEdit = document.getElementById('btn-edit');
+                    const detailDelete = document.getElementById('btn-delete');
+                    
+                    // Также проверим тулбар целиком, если нужно скрыть только кнопки действий но оставить шапку:
+                    const detailToolbar = document.getElementById('detail-toolbar');
+                    if (detailToolbar) {
+                        // Скрываем именно кнопки добавления/изменения/удаления внутри тулбара деталей
+                        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button.btn-add, button.btn-edit, button.btn-delete');
+                        actionButtons.forEach(btn => btn.style.display = 'none');
+                    }
+
+                    // Сбрасываем табы на первый ("Запчасти")
                     document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
                         btn.classList.remove('active');
                         if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
@@ -6161,7 +6173,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 
 // Загрузка спецификации товаров (запчастей)
 async function loadReceiptDetailTable(fetchUrl) {
