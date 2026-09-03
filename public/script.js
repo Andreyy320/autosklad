@@ -6376,7 +6376,6 @@ if (tableBodyForReceipts) {
     tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
 
     newTableBody.addEventListener('click', async (e) => {
-        // Проверяем, относится ли текущая сущность к приходам или расходам
         const allowedEntities = [
             'money_receipts_by_sklad', 
             'money_receipts',
@@ -6385,7 +6384,6 @@ if (tableBodyForReceipts) {
             'expenses_by_receipts'
         ];
 
-        // Автоопределение, если currentEntity вдруг пустой или undefined, но открыт раздел расходов
         let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
         
         if (!allowedEntities.includes(activeEntity)) {
@@ -6427,15 +6425,24 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
-            // Скрываем табы приходов на верхнем уровне складов
+            // 1. Скрываем табы приходов на верхнем уровне складов
             const moneyTabs = document.getElementById('tabs-for-money-receipts');
             if (moneyTabs) moneyTabs.style.display = 'none';
 
-            // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
+            // 2. Запоминаем ID склада для дальнейших запросов
+            window.currentSkladId = selectedItem.sklad_id || selectedItem.id;
+
+            // 3. Кликнули по складу -> открываем список документов (money_receipts) для этого склада
             loadReceiptMainData('money_receipts', selectedItem);
+            
+            // ВАЖНО: Прерываем выполнение, чтобы на уровне складов не дергалась детализация нижних таблиц!
+            return; 
+
         } else if (activeEntity === 'money_receipts') {
-            // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
+            // Кликнули по конкретному документу в списке документов
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
+            window.currentCustomerId = selectedItem.customer_id || '';
+            window.currentSkladId = selectedItem.sklad_id || window.currentSkladId || '';
             
             // Скрываем чужие панели табов
             const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
@@ -6445,22 +6452,18 @@ if (tableBodyForReceipts) {
             });
             if (carTabsPanel) carTabsPanel.style.display = 'none';
 
-            // Принудительно показываем все возможные элементы табов для приходов денег
-            const possibleTabIds = ['tabs-for-money-receipts', 'money-receipts-tabs', 'money-tabs', 'receipt-tabs'];
-            possibleTabIds.forEach(tabId => {
-                const el = document.getElementById(tabId);
-                if (el) el.style.display = 'flex';
-            });
-
-            document.querySelectorAll('.money-receipts-tabs, .money-tabs-container').forEach(el => {
-                el.style.display = 'flex';
-            });
+            // Принудительно показываем панель табов для приходов денег
+            const moneyTabsContainer = document.getElementById('tabs-for-money-receipts');
+            if (moneyTabsContainer) {
+                moneyTabsContainer.style.setProperty('display', 'flex', 'important');
+            }
 
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'flex';
 
+            // Берем активный таб или дефолтный
             const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            const activeBtn = document.querySelector('#tabs-for-money-receipts .active, [data-tab*="money"] .active') || document.querySelector('#tabs-for-money-receipts button, [data-tab*="money"] button');
+            const activeBtn = document.querySelector('#tabs-for-money-receipts button.active') || document.querySelector('#tabs-for-money-receipts button');
             
             if (typeof switchMoneyReceiptTab === 'function') {
                 switchMoneyReceiptTab(activeTab, activeBtn);
@@ -6517,8 +6520,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
-
 
 
 
