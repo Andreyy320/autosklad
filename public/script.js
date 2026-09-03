@@ -1613,20 +1613,33 @@ realizations: {
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
-        { field: 'fact_date', label: 'Дата факт', width: '110px', type: 'datetime-local' },
-        { field: 'is_posted', label: 'Проведен', width: '90px' }
+        { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
+        { field: 'is_posted', label: 'Проведен', width: '120px' }
     ],
     render: (item) => {
-        const formatOnlyDate = (dateStr) => {
-            if (!dateStr) return '';
+        const formatDT = (dateStr) => {
+            if (!dateStr) return '—';
             const d = new Date(dateStr);
-            return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+            if (isNaN(d)) return '—';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
         };
 
         const sumPartsVal = item.sum_parts ? Number(item.sum_parts).toFixed(2) : '0.00';
         const sumWorkVal = item.sum_work ? Number(item.sum_work).toFixed(2) : '0.00';
         const sumTotalVal = item.sum_total ? Number(item.sum_total).toFixed(2) : '0.00';
-        const postedText = item.is_posted ? 'Да' : 'Нет';
+        
+        const isPosted = Boolean(item.is_posted);
+        const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
+        const isPostedColor = isPosted ? 'green' : 'gray';
+
+        const actionButton = !isPosted 
+            ? `<button onclick="event.stopPropagation(); postRealization(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
+            : '';
 
         // Достаем значения для раздельных ячеек таблицы
         const gosNumber = item.car_number || item.gos_number || (item.car && (item.car.gos_number || item.car.car_number)) || '—';
@@ -1634,7 +1647,7 @@ realizations: {
 
         return `
             <td><b>${item.doc_number || ''}</b></td>
-            <td>${formatOnlyDate(item.doc_date)}</td>
+            <td>${formatDT(item.doc_date)}</td>
             <td>${item.customer_name || item.customer_id || '—'}</td>
             <td>${item.sklad_name || item.sklad_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
@@ -1644,8 +1657,11 @@ realizations: {
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
             <td style="text-align: right; font-weight: bold;">${sumTotalVal}</td>
-            <td>${formatOnlyDate(item.fact_date)}</td>
-            <td>${postedText}</td>
+            <td>${formatDT(item.fact_date)}</td>
+            <td>
+                <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
+                ${actionButton}
+            </td>
         `;
     }
 },
@@ -7292,6 +7308,33 @@ async function postRepair(repairId) {
                 if (!response.ok) throw new Error('Ошибка при проведении документа');
 
                 showAppNotification('Документ ремонта успешно проведен', 'success');
+                refreshData();
+            } catch (err) {
+                console.error(err);
+                showAppNotification('Не удалось провести документ', 'error');
+            }
+        }
+    );
+}
+
+
+async function postRealization(realizationId) {
+    showPostConfirmModal(
+        'Проведение документа',
+        'Вы действительно хотите провести этот документ реализации?',
+        async () => {
+            try {
+                const response = await fetch(`/api/realizations/${realizationId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_posted: true })
+                });
+
+                if (!response.ok) throw new Error('Ошибка при проведении документа');
+
+                showAppNotification('Документ реализации успешно проведен', 'success');
                 refreshData();
             } catch (err) {
                 console.error(err);
