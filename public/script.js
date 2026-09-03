@@ -6163,8 +6163,10 @@ async function submitIncomePayment(event, docId, isRepair) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
+    console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -6254,6 +6256,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 
     try {
+        console.dg = console.log;
+        console.log(`🌐 [loadReceiptMainData] Отправка запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
@@ -6276,10 +6280,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (!mainTableBody) return;
 
         if (currentItems.length === 0) {
+            console.warn('⚠️ [loadReceiptMainData] Получен пустой массив данных.');
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
+        console.log(`📦 [loadReceiptMainData] Успешно получено записей: ${currentItems.length}`);
         mainTableBody.innerHTML = '';
 
         // Если это уровень документов (money_receipts), группируем по месяцам с итогами
@@ -6319,6 +6325,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].items.push(item);
                 
                 const docTitle = item.doc_number || item.id;
+                // Определение, является ли документ ремонтом (по отсутствию customer_id или префиксу)
                 const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(item.id).startsWith('рем');
 
                 let realizationSum = 0;
@@ -6333,7 +6340,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     paidSum = Number(item.total_paid || item.paid || 0);
                     debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
                     
-                    // Исправление: для ремонта берем parts_sum (или остальное), так как parts_profit возвращается нулем
+                    // Для ремонта задействуем parts_profit / parts_sum
                     partProfitFull = Number(item.parts_profit || item.parts_sum || 0);
                     workSumFull = Number(item.works_sum || 0);
                     netProfitFull = Number(item.net_profit || partProfitFull + workSumFull);
@@ -6347,26 +6354,30 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     netProfitFull = Number(item.net_profit || 0);
                 }
 
+                // Расчет коэффициента оплаты (payRatio): пропорция оплаченной суммы к общей сумме документа
                 const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
 
+                // Итоговые показатели по документу с учетом процента оплаты
                 const itemPartsProfit = Number((partProfitFull * payRatio).toFixed(2));
                 const itemWorksSum = Number((workSumFull * payRatio).toFixed(2));
                 const itemNetProfit = Number((netProfitFull * payRatio).toFixed(2));
 
-                // ЛОГИРОВАНИЕ ДЛЯ КАЖДОГО ДОКУМЕНТА
-                console.log(`🔍 [DEBUG DOC #${index + 1}] ID/Num: ${docTitle} | Type: ${isRepair ? 'Ремонт' : 'Реализация'}`, {
-                    rawItem: item,
-                    parsed: {
+                // ДЕТАЛЬНЫЕ ЛОГИ РАСЧЕТА ПО КАЖДОМУ ДОКУМЕНТУ
+                console.log(`🔍 [CALC DEBUG #${index + 1}] Документ №${docTitle} | Тип: ${isRepair ? '🔧 Ремонт' : '📦 Реализация'}`, {
+                    inputData: {
                         realizationSum,
                         paidSum,
                         debtSum,
                         partProfitFull,
                         workSumFull,
-                        netProfitFull,
-                        payRatio,
-                        calculatedPartsProfit: itemPartsProfit,
-                        calculatedWorksSum: itemWorksSum,
-                        calculatedNetProfit: itemNetProfit
+                        netProfitFull
+                    },
+                    computed: {
+                        payRatio: payRatio.toFixed(4),
+                        itemPartsProfit,
+                        itemWorksSum,
+                        itemNetProfit,
+                        formula: `(FullProfit * Paid / Total) => (${netProfitFull} * ${Math.min(paidSum, realizationSum)} / ${realizationSum})`
                     }
                 });
 
@@ -6384,13 +6395,13 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
 
-                console.log(`📊 [DEBUG MONTH TOTAL: ${group.title}]`, {
-                    totalSum: group.totalSum,
-                    totalPaid: group.totalPaid,
-                    totalDebt: group.totalDebt,
-                    totalPartsProfit: group.totalPartsProfit,
-                    totalWorksSum: group.totalWorksSum,
-                    totalNetProfit: group.totalNetProfit
+                console.log(`📊 [MONTH TOTAL SUMMARY: ${group.title}]`, {
+                    totalSum: group.totalSum.toFixed(2),
+                    totalPaid: group.totalPaid.toFixed(2),
+                    totalDebt: group.totalDebt.toFixed(2),
+                    totalPartsProfit: group.totalPartsProfit.toFixed(2),
+                    totalWorksSum: group.totalWorksSum.toFixed(2),
+                    totalNetProfit: group.totalNetProfit.toFixed(2)
                 });
 
                 const headerTr = document.createElement('tr');
@@ -6437,7 +6448,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         tr.classList.add('selected-row');
 
                         selectedItem = item;
-
                         window.currentRealizationId = item.realization_id || item.id;
 
                         const tabsBlock = document.getElementById('tabs-for-money-receipts');
@@ -6491,7 +6501,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.innerHTML = config.render(item);
 
                 tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку верхней таблицы]:', item, 'полный объект:', item);
+                    console.log('🖱️ [Клик на строку складов]:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
