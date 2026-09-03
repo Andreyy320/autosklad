@@ -5910,23 +5910,19 @@ if (tableBodyForExpenses) {
         const tr = e.target.closest('tr');
         if (!tr) return;
         
+        // Игнорируем клики по шапкам месяцев (у них нет data-id)
+        const id = tr.getAttribute('data-id');
+        if (!id) return; 
+
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        const rowsArray = Array.from(tableBodyForExpenses.querySelectorAll('tr'));
-        const rowIndex = rowsArray.indexOf(tr);
-
-        if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
-            selectedItem = currentItems[rowIndex];
-        } else {
-            const id = tr.getAttribute('data-id');
-            selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
-        }
+        // Ищем элемент строго по ID, без привязки к порядковому индексу DOM-дерева
+        selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
         
         selectedDetailItem = null;  
 
-        const id = tr.getAttribute('data-id');
-        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", Индекс: ${rowIndex}, ID строки: ${id}`, selectedItem);
+        console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
         const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
@@ -5969,8 +5965,6 @@ if (tableBodyForExpenses) {
         }
     });
 }
-
-
 
 
 
