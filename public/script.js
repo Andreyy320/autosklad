@@ -6555,7 +6555,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 
         if (!detailBody) return;
         if (items.length === 0) {
-            // ИСПРАВЛЕНИЕ: Универсальная заглушка для продаж и ремонтов
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
