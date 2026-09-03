@@ -123,26 +123,24 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
-  customers: {
-        title: 'Покупатели',
-        columns: [
-            { field: 'type_id', label: 'Тип', width: '130px', ref: 'counterparty_types' },
-            { field: 'name_full', label: 'Наименование', width: '220px' },
-            { field: 'name_short', label: 'Кратко', width: '150px' },
-            { field: 'discount_part_id', label: 'Скидка зап.', width: '110px', ref: 'part_discounts' },
-            { field: 'discount_service_id', label: 'Скидка усл.', width: '110px', ref: 'service_discounts' },
-            { field: 'description', label: 'Описание' }
-        ],
-        render: (item) => `
-            <td><b>${item.type_name || '—'}</b></td>
-            <td><b>${item.name_full || ''}</b></td>
-            <td>${item.name_short || ''}</td>
-            <td>${item.part_discount_name || '—'}</td>
-            <td>${item.service_discount_name || '—'}</td>
-            <td>${item.description || ''}</td>
-        `
-    },
-
+ customers: {
+    title: 'Покупатели',
+    columns: [
+        { field: 'type_id', label: 'Тип', width: '130px', ref: 'counterparty_types' },
+        { field: 'name_full', label: 'Наименование', width: '220px' },
+        { field: 'name_short', label: 'Кратко', width: '150px' },
+        { field: 'discount_part_id', label: 'Скидка зап.', width: '110px', ref: 'part_discounts' },
+        // Поле скидки на услуги скрыто из интерфейса, но логика сохранена
+        { field: 'description', label: 'Описание' }
+    ],
+    render: (item) => `
+        <td><span style="font-weight: 600; color: #0f172a;">${item.type_name || '—'}</span></td>
+        <td><span style="font-weight: 600; color: #0f172a;">${item.name_full || ''}</span></td>
+        <td><span style="color: #334155;">${item.name_short || ''}</span></td>
+        <td><span style="color: #334155;">${item.part_discount_name || '—'}</span></td>
+        <td><span style="color: #64748b; font-size: 13px;">${item.description || ''}</span></td>
+    `
+},
 customer_contacts: {
         title: 'Контакты покупателей',
         columns: [
