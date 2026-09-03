@@ -3843,10 +3843,8 @@ router.get('/money_receipts', async (req, res) => {
                     (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Полная потенциальная прибыль документа
                     ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
                     
-                    -- Раздельная прибыль: запчасти и работы
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
@@ -3896,18 +3894,18 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     
-                    -- Итоговая сумма ремонта = Запчасти + Работы
+                    -- Итоговая сумма ремонта = Запчасти (total) + Работы (price)
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    -- Полная прибыль (маржа запчастей + полная сумма работ)
+                    -- Полная прибыль (маржа запчастей + стоимость работ)
                     ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
                     
                     -- Прибыль по запчастям отдельно
                     (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     
-                    -- Прибыль по работам (услугам) отдельно
+                    -- Прибыль по работам отдельно
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
@@ -3916,7 +3914,9 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
+                        -- Закупочную стоимость запчасти в ремонте берем как (цена * кол-во) ИЛИ если у вас отдельный учет закупа, замените `ri.price` на нужную колонку
+                        SUM(COALESCE(ri.price, 0) * COALESCE(ri.quantity, 1)) AS total_purchase_sum,
+                        -- Розничную сумму запчастей берем из колонки total (или price * quantity если total пустой)
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
@@ -3924,8 +3924,8 @@ router.get('/money_receipts', async (req, res) => {
                 LEFT JOIN (
                     SELECT 
                         rw.repair_id,
-                        -- Учитываем количество работ, если оно есть (по умолчанию 1, если колонки quantity нет — замените на 1)
-                        SUM(COALESCE(rw.price, 0) * COALESCE(rw.quantity, 1)) AS works_sum
+                        -- У работ в repair_works нет колонки quantity, суммируем просто price
+                        SUM(COALESCE(rw.price, 0)) AS works_sum
                     FROM repair_works rw
                     GROUP BY rw.repair_id
                 ) rep_w ON rep.id = rep_w.repair_id
@@ -3957,7 +3957,6 @@ router.get('/money_receipts', async (req, res) => {
                 parts_profit,
                 works_profit,
                 
-                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
                 CASE 
                     WHEN total_realization_sum <= 0 THEN 0
                     ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
