@@ -4041,24 +4041,14 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Запчасти внутренних ремонтов (repair_items с безопасным выбором колонок)
+                -- 3. Запчасти внутренних ремонтов (repair_items)
                 SELECT 
                     rep_i.id,
                     'part' AS item_type,
                     CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
-                    COALESCE(
-                        NULLIF(rep_i.code, ''), 
-                        NULLIF(t.code, ''), 
-                        NULLIF(t.articul, ''), 
-                        ''
-                    )::text AS product_code,
-                    COALESCE(
-                        NULLIF(rep_i.name, ''), 
-                        NULLIF(t.name, ''), 
-                        NULLIF(t.title, ''), 
-                        'Запчасть'
-                    )::text AS item_name,
+                    COALESCE(rep_i.code, '')::text AS product_code,
+                    COALESCE(rep_i.name, '')::text AS item_name,
                     COALESCE(rep_i.quantity, 0)::numeric AS quantity,
                     COALESCE(rep_i.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
@@ -4070,13 +4060,6 @@ router.get('/money_receipts_detail', async (req, res) => {
                     rep.warehouse_id AS skl_id
                 FROM repair_items rep_i
                 JOIN repairs rep ON rep_i.repair_id = rep.id
-                LEFT JOIN items t ON (
-                    CASE 
-                        WHEN to_jsonb(rep_i) ? 'item_id' THEN rep_i.item_id 
-                        WHEN to_jsonb(rep_i) ? 'product_id' THEN rep_i.product_id 
-                        ELSE NULL 
-                    END
-                ) = t.id
                 WHERE rep.is_posted = true
 
                 UNION ALL
