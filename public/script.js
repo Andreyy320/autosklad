@@ -5939,6 +5939,7 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
+
 //==========================================
 // ОТЛАДКА И КЛИКЕР ДЛЯ РАСХОДОВ (ПОЛНЫЙ КОД С ЛОГАМИ)
 // ==========================================
@@ -5953,7 +5954,7 @@ if (tableBodyForExpenses) {
     tableBodyForExpenses.parentNode.replaceChild(newTableBodyExpenses, tableBodyForExpenses);
 
     newTableBodyExpenses.addEventListener('click', async (e) => {
-        console. произошел клик внутри таблицы! Целевой элемент:', e.target);
+        console.log('🖱️ Произошел клик внутри таблицы! Целевой элемент:', e.target);
         console.log('🔍 [DEBUG] Текущая сущность (currentEntity):', window.currentEntity);
 
         if (
