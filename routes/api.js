@@ -3984,7 +3984,6 @@ router.get('/money_receipts', async (req, res) => {
     }
 });
 
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, repair_id, customer_id, sklad_id } = req.query;
@@ -4070,7 +4069,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(rep_i.code, ''), NULLIF(z.code, ''), NULLIF(rep_i.article, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(rep_i.name, ''), NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     COALESCE(rep_i.quantity, 0)::numeric AS quantity,
-                    COALESCE(rep_i.price, 0)::numeric AS purchase_price,
+                    0::numeric AS purchase_price,
                     0::numeric AS retail_price,
                     COALESCE(rep_i.price, 0)::numeric AS final_unit_price,
                     COALESCE(rep_i.total, rep_i.price * rep_i.quantity, 0)::numeric AS total_rub,
@@ -4109,7 +4108,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
             ) sub
-            WHERE ($1::integer IS NULL OR sub.rel_id = $1)
+            WHERE ($1::integer IS NULL OR sub.rel_id = $1 OR sub.rep_id = $1)
               AND ($2::integer IS NULL OR sub.rep_id = $2)
               AND ($3::integer IS NULL OR sub.cust_id = $3)
               AND ($4::integer IS NULL OR sub.skl_id = $4)
@@ -4117,7 +4116,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         `;
 
         const result = await pool.query(cleanQuery, [
-            cleanRealizationId, 
+            cleanRealizationId || cleanRepairId, 
             cleanRepairId, 
             cleanCustomerId, 
             cleanSkladId
@@ -4129,7 +4128,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
@@ -4202,6 +4200,8 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // GET-эндпоинт для получения истории оплат (работает и для реализаций, и для ремонтов, подтягивая имя или машину)
 router.get('/money_receipts/:id/payments', async (req, res) => {
     try {
