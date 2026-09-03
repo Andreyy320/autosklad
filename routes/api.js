@@ -3912,8 +3912,8 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        -- ИСПРАВЛЕНИЕ: заменено ri.price на ri.purchase_price для корректного расчета себестоимости запчастей в ремонтах
-                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                        -- ИСПРАВЛЕНИЕ: в таблице repair_items нет колонки purchase_price, используем ri.price как закупочную цену
+                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
