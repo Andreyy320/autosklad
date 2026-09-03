@@ -5026,16 +5026,34 @@ async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
 
-    // Сохраняем ID текущего выбранного элемента и текущий вид (склады или документы)
+    // Сохраняем ID текущего выбранного элемента и текущий вид
     const savedSelectedItem = selectedItem;
-    const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.realization_id) : null;
+    const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
     const previousEntity = currentEntity;
 
-    // Специальная ветка для приходов денег (используют loadReceiptMainData вместо loadData)
+    // Специальная ветка для приходов денег
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
         const parentParam = (previousEntity === 'money_receipts') ? (window.currentSkladId || savedSelectedItem) : '';
         await loadReceiptMainData(previousEntity, parentParam);
-    } else {
+    } 
+    // Специальная ветка для расходов денег
+    else if (
+        previousEntity === 'expenses_by_sklad' || 
+        previousEntity === 'expenses_by_suppliers' || 
+        previousEntity === 'expenses_by_receipts' || 
+        previousEntity === 'expense_items'
+    ) {
+        let parentParam = '';
+        if (previousEntity === 'expenses_by_suppliers') {
+            parentParam = window.currentSkladId || savedSelectedItem;
+        } else if (previousEntity === 'expenses_by_receipts') {
+            parentParam = window.currentPostavhikId || savedSelectedItem;
+        } else if (previousEntity === 'expense_items') {
+            parentParam = window.currentReceiptId || savedSelectedItem;
+        }
+        await loadExpenseMainData(previousEntity, parentParam);
+    } 
+    else {
         const activeLink = document.querySelector('.nav-link.active');
         const title = activeLink ? activeLink.innerText : 'Данные';
         await loadData(currentEntity, title);
@@ -5056,7 +5074,7 @@ async function refreshData() {
             foundRow.classList.add('selected-row');
             selectedItem = savedSelectedItem;
 
-            // Если это второй уровень приходов (документы склада), обновляем спецификацию снизу без потери контекста
+            // Если это второй уровень приходов
             if (previousEntity === 'money_receipts') {
                 const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
                 let realizationId = window.currentRealizationId || savedSelectedItem.realization_id || savedSelectedItem.id || '';
@@ -5072,11 +5090,27 @@ async function refreshData() {
                 }
                 loadReceiptDetailTable(url, detailEntity);
             }
+
+            // Если это нижний уровень расходов (спецификация накладной)
+            if (previousEntity === 'expense_items') {
+                let skladId = window.currentSkladId || '';
+                let postavhikId = window.currentPostavhikId || '';
+                let currentReceipt = window.currentReceiptId || savedId || '';
+                let url = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                loadExpenseDetailTable(url);
+            }
         }
     }
 
     // Стандартная логика для остальных разделов (если элемент выбран)
-    if (selectedItem && previousEntity !== 'money_receipts' && previousEntity !== 'money_receipts_by_sklad') {
+    if (selectedItem && 
+        previousEntity !== 'money_receipts' && 
+        previousEntity !== 'money_receipts_by_sklad' &&
+        previousEntity !== 'expenses_by_sklad' &&
+        previousEntity !== 'expenses_by_suppliers' &&
+        previousEntity !== 'expenses_by_receipts' &&
+        previousEntity !== 'expense_items'
+    ) {
         console.log('📌 [refreshData] Есть выбранный элемент (selectedItem):', selectedItem);
 
         if (currentEntity === 'receipts' && selectedItem.id) {
