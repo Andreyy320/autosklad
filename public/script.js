@@ -6319,7 +6319,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].items.push(item);
                 
                 const docTitle = item.doc_number || item.id;
-                const isRepair = !item.customer_id || String(docTitle).toUpperCase().includes('РЕМ') || String(item.id).toLowerCase().includes('рем');
+                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(item.id).startsWith('рем');
 
                 let realizationSum = 0;
                 let paidSum = 0;
@@ -6333,10 +6333,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     paidSum = Number(item.total_paid || item.paid || 0);
                     debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
                     
-                    // Для ремонта запчасти и услуги раздельно (как передал бэкенд)
-                    partProfitFull = Number(item.parts_profit || 0);
+                    // Исправление: для ремонта берем parts_sum (или остальное), так как parts_profit возвращается нулем
+                    partProfitFull = Number(item.parts_profit || item.parts_sum || 0);
                     workSumFull = Number(item.works_sum || 0);
-                    netProfitFull = partProfitFull + workSumFull;
+                    netProfitFull = Number(item.net_profit || partProfitFull + workSumFull);
                 } else {
                     realizationSum = Number(item.total_realization_sum || 0);
                     paidSum = Number(item.total_paid || 0);
@@ -6344,7 +6344,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     
                     partProfitFull = Number(item.parts_profit || 0);
                     workSumFull = Number(item.works_sum || 0);
-                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
+                    netProfitFull = Number(item.net_profit || 0);
                 }
 
                 const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
