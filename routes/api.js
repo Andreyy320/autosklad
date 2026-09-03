@@ -3853,57 +3853,17 @@ router.get('/money_receipts', async (req, res) => {
 });
 router.get('/money_receipts_detail', async (req, res) => {
     try {
-        const { realization_id, customer_id, sklad_id } = req.query;
+        let { realization_id, customer_id, sklad_id } = req.query;
         
-        if (!realization_id && !customer_id && !sklad_id) {
+        // Превращаем пустые строки, строки 'null' или undefined в реальный null для корректной работы параметров SQL
+        const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? realization_id : null;
+        const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
+        const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
+
+        if (!cleanRealizationId && !cleanCustomerId && !cleanSkladId) {
             return res.json([]);
         }
 
-        const query = `
-            SELECT * FROM (
-                -- 1. Запчасти (Товары)
-                SELECT 
-                    ri.id,
-                    'part' AS item_type,
-                    real.doc_number::text AS doc_number,
-                    real.doc_date AS date,
-                    ri.code::text AS product_code,
-                    ri.name::text AS item_name,
-                    ri.quantity::numeric AS quantity,
-                    ri.purchase_price::numeric AS purchase_price,
-                    ri.retail_price::numeric AS retail_price,
-                    ri.price::numeric AS final_unit_price,
-                    ri.total_rub::numeric AS total_rub,
-                    NULL::text AS description
-                FROM realization_items ri
-                JOIN realizations real ON ri.realization_id = real.id
-                WHERE real.is_posted = true 
-
-                UNION ALL
-
-                -- 2. Услуги (Работы)
-                SELECT 
-                    rw.id,
-                    'work' AS item_type,
-                    real.doc_number::text AS doc_number,
-                    real.doc_date AS date,
-                    ''::text AS product_code,
-                    rw.name::text AS item_name,
-                    rw.quantity::numeric AS quantity,
-                    0::numeric AS purchase_price,
-                    rw.retail_price::numeric AS retail_price,
-                    rw.price::numeric AS final_unit_price,
-                    rw.total_rub::numeric AS total_rub,
-                    COALESCE(rw.description, '')::text AS description
-                FROM realization_works rw
-                JOIN realizations real ON rw.realization_id = real.id
-                WHERE real.is_posted = true
-            ) combined
-            WHERE ($1::integer IS NULL OR id = $1 OR true) -- заглушка для сохранения структуры параметров, если нужно фильтровать по реализации ниже
-              AND ($1::integer IS NULL OR doc_number IS NOT NULL) -- привязка по реализации ниже через реальный ID документа
-        `;
-
-        // Уточненный и безопасный вариант запроса с правильной фильтрацией по realization_id, customer_id, sklad_id для объединенной таблицы:
         const cleanQuery = `
             SELECT 
                 id,
@@ -3924,14 +3884,14 @@ router.get('/money_receipts_detail', async (req, res) => {
                     'part' AS item_type,
                     real.doc_number::text AS doc_number,
                     real.doc_date AS date,
-                    ri.code::text AS product_code,
-                    ri.name::text AS item_name,
+                    COALESCE(ri.code, '')::text AS product_code,
+                    COALESCE(ri.name, '')::text AS item_name,
                     ri.quantity::numeric AS quantity,
-                    ri.purchase_price::numeric AS purchase_price,
-                    ri.retail_price::numeric AS retail_price,
-                    ri.price::numeric AS final_unit_price,
-                    ri.total_rub::numeric AS total_rub,
-                    ''::text AS description,
+                    COALESCE(ri.purchase_price, 0)::numeric AS purchase_price,
+                    COALESCE(ri.retail_price, 0)::numeric AS retail_price,
+                    COALESCE(ri.price, 0)::numeric AS final_unit_price,
+                    COALESCE(ri.total_rub, 0)::numeric AS total_rub,
+                    COALESCE(ri.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
                     real.sklad_id AS skl_id
@@ -3947,12 +3907,12 @@ router.get('/money_receipts_detail', async (req, res) => {
                     real.doc_number::text AS doc_number,
                     real.doc_date AS date,
                     ''::text AS product_code,
-                    rw.name::text AS item_name,
+                    COALESCE(rw.name, '')::text AS item_name,
                     rw.quantity::numeric AS quantity,
                     0::numeric AS purchase_price,
-                    rw.retail_price::numeric AS retail_price,
-                    rw.price::numeric AS final_unit_price,
-                    rw.total_rub::numeric AS total_rub,
+                    COALESCE(rw.retail_price, 0)::numeric AS retail_price,
+                    COALESCE(rw.price, 0)::numeric AS final_unit_price,
+                    COALESCE(rw.total_rub, 0)::numeric AS total_rub,
                     COALESCE(rw.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
@@ -3968,9 +3928,9 @@ router.get('/money_receipts_detail', async (req, res) => {
         `;
 
         const result = await pool.query(cleanQuery, [
-            realization_id || null, 
-            customer_id || null, 
-            sklad_id || null
+            cleanRealizationId, 
+            cleanCustomerId, 
+            cleanSkladId
         ]);
         
         res.json(result.rows);
