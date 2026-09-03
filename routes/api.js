@@ -3843,10 +3843,10 @@ router.get('/money_receipts', async (req, res) => {
                     (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Полная потенциальная прибыль документа (если всё оплатят)
+                    -- Полная потенциальная прибыль документа
                     ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
                     
-                    -- Потенциальный плюс по запчастям и работам отдельно
+                    -- Раздельная прибыль: запчасти и работы
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
@@ -3880,7 +3880,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
+                -- 2. Внутренние ремонты автомобилей
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3901,10 +3901,14 @@ router.get('/money_receipts', async (req, res) => {
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    -- В ремонте вся прибыль идет в parts_profit (запчасти), чтобы суммировалась куда надо
-                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
-                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS parts_profit,
-                    0::numeric AS works_profit
+                    -- Полная прибыль (маржа запчастей + полная сумма работ)
+                    ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
+                    
+                    -- Прибыль по запчастям отдельно
+                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    
+                    -- Прибыль по работам (услугам) отдельно
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
                 LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
@@ -3912,7 +3916,6 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        -- ИСПРАВЛЕНИЕ: в таблице repair_items нет колонки purchase_price, используем ri.price как закупочную цену
                         SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
@@ -3921,7 +3924,8 @@ router.get('/money_receipts', async (req, res) => {
                 LEFT JOIN (
                     SELECT 
                         rw.repair_id,
-                        SUM(COALESCE(rw.price, 0)) AS works_sum
+                        -- Учитываем количество работ, если оно есть (по умолчанию 1, если колонки quantity нет — замените на 1)
+                        SUM(COALESCE(rw.price, 0) * COALESCE(rw.quantity, 1)) AS works_sum
                     FROM repair_works rw
                     GROUP BY rw.repair_id
                 ) rep_w ON rep.id = rep_w.repair_id
@@ -3970,8 +3974,6 @@ router.get('/money_receipts', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
-        console.error('📄 Текст ошибки (message):', err.message);
-        console.error('🧩 Стек ошибки (stack):', err.stack);
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
