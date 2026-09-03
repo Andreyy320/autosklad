@@ -7771,20 +7771,26 @@ document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
+        console.log('🧭 [NAV CLICK] Клик по пункту меню:', link.innerText);
+
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
 
         const text = link.innerText.trim();
-        let entity = navMap[text] || text.toLowerCase();
+        let entity = (window.navMap && window.navMap[text]) ? window.navMap[text] : text.toLowerCase();
+        console.log('🧭 [NAV CLICK] Определен текст и сущность:', { text, entity });
         
-        console.log(`🧭 [Меню] Клик по пункту: "${text}", вычислена сущность: "${entity}"`);
-
         // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
         if (entity === 'money_receipts' || text === 'Приходы') {
             entity = 'money_receipts_by_sklad';
+            console.log('🔄 [NAV CLICK] Сущность "money_receipts" или "Приходы" подменена на:', entity);
         }
         
-        updateFilterPanels(entity);
+        if (typeof updateFilterPanels === 'function') {
+            updateFilterPanels(entity);
+        } else {
+            console.warn('⚠️ Функция updateFilterPanels не найдена в глобальной области видимости.');
+        }
 
         const detailContainer = document.getElementById('detail-container');
         const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
@@ -7793,6 +7799,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
         const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
+
+        console.log('🔍 [NAV CLICK] Проверка ключевых DOM-элементов интерфейса:', {
+            detailContainer: !!detailContainer,
+            carTabsBar: !!carTabsBar,
+            tabsForMoneyReceipts: !!tabsForMoneyReceipts
+        });
 
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
@@ -7810,8 +7822,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
             
             if (readOnlyMainEntities.includes(entity) || entity === 'расходы' || entity === 'expenses') {
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
+                console.log('🎛️ Панель кнопок действий скрыта (read-only сущность)');
             } else {
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
+                console.log('🎛️ Панель кнопок действий показана');
             }
         }
 
@@ -7831,7 +7845,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity === 'counterparties' || 
             entity === 'customers'
         ) {
-            if (detailContainer) detailContainer.style.display = 'flex';
+            if (detailContainer) detailContainer.style.setProperty('display', 'flex', 'important');
             
             if (carTabsBar) {
                 if (
@@ -7881,9 +7895,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 // Жестко включаем панель табов приходов
                 if (tabsForMoneyReceipts) {
                     tabsForMoneyReceipts.style.setProperty('display', 'flex', 'important');
+                    console.log('🟢 Активирован блок #tabs-for-money-receipts через setProperty');
                     tabsForMoneyReceipts.querySelectorAll('button, .tab-btn, .money-receipt-tab-btn').forEach(btn => {
                         btn.style.setProperty('display', 'inline-block', 'important');
                     });
+                } else {
+                    console.error('❌ Элемент #tabs-for-money-receipts не найден в DOM при клике на Приходы!');
                 }
             } else {
                 if (tabsForCars) tabsForCars.style.display = 'none';
@@ -7899,24 +7916,37 @@ document.querySelectorAll('.nav-link').forEach(link => {
         
         // Если выбрали Расходы, запускаем изолированную функцию
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
-            loadExpenseMainData('expenses_by_sklad');
+            console.log('🚀 Запуск загрузки расходов: loadExpenseMainData');
+            if (typeof loadExpenseMainData === 'function') {
+                loadExpenseMainData('expenses_by_sklad');
+            } else {
+                console.error('❌ Функция loadExpenseMainData не найдена!');
+            }
             return;
         }
 
         // Если выбрали Приходы, запускаем функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
-            console.🚀 ? null : console.log('🚀 Запуск загрузки главных данных по приходам (money_receipts_by_sklad)');
-            loadReceiptMainData('money_receipts_by_sklad');
+            console.log('🚀 Запуск загрузки приходов: loadReceiptMainData("money_receipts_by_sklad")');
+            if (typeof loadReceiptMainData === 'function') {
+                loadReceiptMainData('money_receipts_by_sklad');
+            } else {
+                console.error('❌ Функция loadReceiptMainData не найдена!');
+            }
             return;
         }
 
         // Для остальных разделов
-        loadData(entity, text, () => {
-            const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
-            if ($firstRow.length) {
-                $firstRow.trigger('click');
-            }
-        });
+        if (typeof loadData === 'function') {
+            loadData(entity, text, () => {
+                const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
+                if ($firstRow.length) {
+                    $firstRow.trigger('click');
+                }
+            });
+        } else {
+            console.error('❌ Функция loadData не найдена!');
+        }
     });
 });
 
