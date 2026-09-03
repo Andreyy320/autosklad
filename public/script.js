@@ -3642,24 +3642,18 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 }
 
 async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) {
-    let item, parentId;
+    let entity, item, parentId;
 
-    if (entityOrItem && typeof entityOrItem === 'object' && (entityOrItem.id !== undefined || entityOrItem.doc_number || entityOrItem.repair_id)) {
+    if (typeof entityOrItem === 'object' && entityOrItem !== null) {
         item = entityOrItem;
+        entity = typeof currentEntity !== 'undefined' ? currentEntity : 'repairs';
         parentId = itemArg;
-    } else if (!itemArg || (typeof itemArg === 'object' && !itemArg.id && !itemArg.doc_number)) {
-        if (entityOrItem && typeof entityOrItem === 'object') {
-            item = entityOrItem;
-        } else {
-            item = itemArg;
-        }
-        parentId = parentIdArg;
     } else {
+        entity = entityOrItem || (typeof currentEntity !== 'undefined' ? currentEntity : 'repairs');
         item = itemArg;
         parentId = parentIdArg;
     }
 
-    const entity = 'repairs';
     console.log('[openRepairForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
     const config = getConfig(entity);
@@ -3678,7 +3672,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let prefix = 'РЕМ-';
 
         try {
-            console.log(`[openRepairForm] Запрос автонумерации для /api/${entity}`);
             const response = await fetch(`/api/${entity}`);
             if (response.ok) {
                 const records = await response.json();
@@ -3698,30 +3691,54 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             is_posted: false 
         };
 
+        if (entity === 'repair_items') {
+            if (parentId) {
+                item.repair_id = parentId;
+            }
+        }
+
         config.columns.forEach(col => {
             if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
             }
         });
+    } else {
+        if (entity === 'repair_items') {
+            if (parentId && !item.repair_id) {
+                item.repair_id = parentId;
+            }
+        }
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-item-id="${item && item.id ? item.id : ''}">
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    async function renderField(col) {
-        if (col.field === 'id') return '';
-        if (col.field === 'repair_id') return '';
+    if (entity === 'repair_items') {
+        const activeRepairId = parentId || (item ? item.repair_id : '');
+        html += `<input type="hidden" name="repair_id" value="${activeRepairId}">`;
+    }
 
-        if (col.insert === false) return '';
-        if ((col.update === false || col.edit === false) && item && item.id) return '';
-        
+    const columns = [...config.columns];
+    const carColIndex = columns.findIndex(c => c.field === 'car_id');
+    const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
+
+    if (carColIndex !== -1 && molColIndex !== -1 && carColIndex > molColIndex) {
+        const [carCol] = columns.splice(carColIndex, 1);
+        columns.splice(molColIndex, 0, carCol);
+    }
+
+    for (const col of columns) {
+        if (col.field === 'id' || col.field === 'repair_id') continue;
+        if (col.insert === false) continue;
+        if ((col.update === false || col.edit === false) && item && item.id) continue;
+
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -3746,7 +3763,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+        
+        if (isPosted) {
             fieldReadonly = true;
         }
 
@@ -3763,10 +3781,9 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const referenceName = col.ref;
-            console.log(`[openRepairForm] Загрузка справочника для поля ${col.field}:`, referenceName);
             let refItems = await fetchReferenceData(referenceName);
 
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -3790,7 +3807,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -3815,7 +3833,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        return `
+        html += `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
@@ -3823,24 +3841,11 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         `;
     }
 
-    const columns = [...config.columns];
-    const carColIndex = columns.findIndex(c => c.field === 'car_id');
-    const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
-
-    if (carColIndex !== -1 && molColIndex !== -1 && carColIndex > molColIndex) {
-        const [carCol] = columns.splice(carColIndex, 1);
-        columns.splice(molColIndex, 0, carCol);
-    }
-
-    for (const col of columns) {
-        html += await renderField(col);
-    }
-
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
+                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
                 </div>
             </form>
     `;
@@ -3865,8 +3870,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         });
     }
 
-    // Фильтрация МОЛ по складу для ремонта
-    if (formElement) {
+    if (formElement && !isPosted) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
             { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
@@ -3877,7 +3881,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         pairs.forEach(({ warehouse, mol }) => {
             if (!warehouse || !mol) return;
 
-            async function filterMols(isUserChange = false) {
+            async function filterMols() {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
 
@@ -3898,36 +3902,31 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
                     mol.innerHTML = '<option value="">-- Не выбрано --</option>';
 
-                    let isCurrentStillValid = false;
-
                     mols.forEach(m => {
                         if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
                             const option = document.createElement('option');
                             option.value = m.id;
-                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = userName;
 
                             if (String(m.id) === String(currentMolValue)) {
                                 option.selected = true;
-                                isCurrentStillValid = true;
                             }
                             mol.appendChild(option);
                         }
                     });
-
-                    if (isUserChange && !isCurrentStillValid) {
-                        mol.value = '';
-                    }
                 } catch (err) {
                     console.error('Ошибка при фильтрации МОЛ:', err);
                 }
             }
 
             warehouse.addEventListener('change', () => {
-                filterMols(true);
+                mol.value = '';
+                filterMols();
             });
 
             if (warehouse.value) {
-                filterMols(false);
+                filterMols();
             }
         });
     }
@@ -3953,7 +3952,12 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            refreshData();
+
+                            if (entity === 'repair_items' && parentId) {
+                                loadDetailData(entity, parentId);
+                            } else {
+                                refreshData();
+                            }
                         } else {
                             const errData = await response.json().catch(() => ({}));
                             showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
@@ -3980,35 +3984,25 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        // Сбор значений из заблокированных полей (disabled), которые не попадают в FormData напрямую
-        const disabledElements = formElement.querySelectorAll('select:disabled, input:disabled');
-        disabledElements.forEach(el => {
-            if (el.name) {
-                data[el.name] = el.value;
-            }
-        });
-
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        console.group('[Form Submit] Отправка данных на сервер');
-        console.log('Entity:', entity);
-        console.log('Item ID (if editing):', item && item.id ? item.id : 'NEW');
-        console.log('FormData entries:');
-        for (let pair of formData.entries()) {
-            console.log(`  %c${pair[0]}%c:`, 'color: #2563eb; font-weight: bold;', 'color: inherit;', pair[1]);
+        if (entity === 'repair_items') {
+            const currentParentId = parentId || formElement.getAttribute('data-parent-id');
+            if (currentParentId) {
+                data.repair_id = currentParentId;
+            }
+            if (data.zaphasti && !data.zaphasti_id) {
+                data.zaphasti_id = data.zaphasti;
+            }
         }
-        console.log('Итоговый объект data для JSON.stringify:', data);
-        console.groupEnd();
 
         try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
-
-            console.log(`[Form Submit] Выполняется ${method} запрос на ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -4019,24 +4013,22 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 body: JSON.stringify(data)
             });
 
-            console.log(`[Form Submit] Ответ сервера статус:`, response.status, response.statusText);
-
             if (response.ok) {
-                const responseBody = await response.json().catch(() => ({}));
-                console.log('[Form Submit] Успешный ответ сервера:', responseBody);
-
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                refreshData();
+
+                if (entity === 'repair_items' && parentId) {
+                    loadDetailData(entity, parentId);
+                } else {
+                    refreshData();
+                }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                console.error('[Form Submit] Ошибка от сервера (не OK):', response.status, errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error('[Form Submit] Исключение сети или кода во время fetch:', err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
