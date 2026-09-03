@@ -502,6 +502,7 @@ car_details: {
             <td>${item.description || ''}</td>
         `
     },
+
 receipts: {
     title: 'Документ прихода',
     columns: [
@@ -1279,23 +1280,36 @@ repairs: {
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
         { field: 'description', label: 'Описание' },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
-        { field: 'fact_date', label: 'Дата факт', width: '110px', type: 'datetime-local' },
-        { field: 'is_posted', label: 'Проведен', width: '90px' }
+        { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
+        { field: 'is_posted', label: 'Проведен', width: '120px' }
     ],
     render: (item) => {
-        const formatOnlyDate = (dateStr) => {
-            if (!dateStr) return '';
+        const formatDT = (dateStr) => {
+            if (!dateStr) return '—';
             const d = new Date(dateStr);
-            return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+            if (isNaN(d)) return '—';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
         };
 
         const mileageVal = item.mileage ? Number(item.mileage).toLocaleString('ru-RU') : '—';
         const sumVal = item.sum ? Number(item.sum).toFixed(2) : '0.00';
-        const postedText = item.is_posted ? 'Да' : 'Нет';
+        
+        const isPosted = Boolean(item.is_posted);
+        const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
+        const isPostedColor = isPosted ? 'green' : 'gray';
+
+        const actionButton = !isPosted 
+            ? `<button onclick="event.stopPropagation(); postRepair(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
+            : '';
 
         return `
             <td><b>${item.doc_number || ''}</b></td>
-            <td>${formatOnlyDate(item.doc_date)}</td>
+            <td>${formatDT(item.doc_date)}</td>
             <td>${item.doc_type_name || item.doc_type || '—'}</td>
             <td>${item.repair_type_name || item.repair_type || '—'}</td>
             <td>${item.car_number || item.car_id || '—'}</td>
@@ -1305,8 +1319,11 @@ repairs: {
             <td>${item.mol_name || item.mol_id || '—'}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumVal}</td>
-            <td>${formatOnlyDate(item.fact_date)}</td>
-            <td>${postedText}</td>
+            <td>${formatDT(item.fact_date)}</td>
+            <td>
+                <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
+                ${actionButton}
+            </td>
         `;
     }
 },
