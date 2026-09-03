@@ -5894,11 +5894,14 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 // ==========================================
-// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
+// КЛИКЕР ДЛЯ РАСХОДОВ (ПО АНАЛОГИИ С ПРИХОДАМИ)
 // ==========================================
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
-    tableBodyForExpenses.addEventListener('click', async (e) => {
+    const newTableBodyExpenses = tableBodyForExpenses.cloneNode(true);
+    tableBodyForExpenses.parentNode.replaceChild(newTableBodyExpenses, tableBodyForExpenses);
+
+    newTableBodyExpenses.addEventListener('click', async (e) => {
         if (
             currentEntity !== 'expenses_by_sklad' && 
             currentEntity !== 'expenses_by_suppliers' && 
@@ -5909,7 +5912,7 @@ if (tableBodyForExpenses) {
 
         const tr = e.target.closest('tr');
         if (!tr) return;
-        
+
         // Игнорируем клики по шапкам месяцев (у них нет data-id)
         const id = tr.getAttribute('data-id');
         if (!id) return; 
@@ -5917,8 +5920,14 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // Ищем элемент строго по ID, без привязки к порядковому индексу DOM-дерева
-        selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
+        const rowsArray = Array.from(newTableBodyExpenses.querySelectorAll('tr'));
+        const rowIndex = rowsArray.indexOf(tr);
+
+        if (rowIndex >= 0 && currentItems && currentItems[rowIndex]) {
+            selectedItem = currentItems[rowIndex];
+        } else {
+            selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
+        }
         
         selectedDetailItem = null;  
 
@@ -5965,7 +5974,6 @@ if (tableBodyForExpenses) {
         }
     });
 }
-
 
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
