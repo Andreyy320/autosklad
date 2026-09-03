@@ -1843,7 +1843,7 @@ money_receipts: {
         }
 
         return `
-            <td><span style="font-weight: 600; color: #0f172a;">№ ${docTitle}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
             <td>${counterpartyHtml}</td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
@@ -1876,7 +1876,7 @@ income_payments: {
 
         return `
             <td><span style="color: #4b5563;">${date}</span></td>
-            <td><b>№ ${item.doc_number || item.parent_id}</b></td>
+            <td><b>${item.doc_number || item.parent_id}</b></td>
             <td>${item.counterparty_name || '—'}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">${amount}</td>
             <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
@@ -2076,7 +2076,7 @@ expenses_by_receipts: {
               </button>`;
 
         return `
-            <td><span style="font-weight: 600; color: #0f172a;">№ ${docTitle}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
             <td><span style="color: #0f172a;">${item.postavhik_name || '—'}</span></td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
@@ -2107,7 +2107,7 @@ expense_payments: {
 
         return `
             <td><span style="color: #475569;">${date}</span></td>
-            <td><span style="font-weight: 600; color: #0f172a;">№ ${item.doc_number || item.parent_id}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;"> ${item.doc_number || item.parent_id}</span></td>
             <td><span style="color: #0f172a;">${item.postavhik_name || '—'}</span></td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${amount}</td>
             <td style="color: #64748b; font-size: 13px; font-style: italic;">${item.comment || '—'}</td>
@@ -5718,7 +5718,7 @@ async function openPaymentHistory(receiptId, docNumber) {
     // Показываем прелоадер в шторке пока грузим данные
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
         <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
@@ -5753,7 +5753,7 @@ async function openPaymentHistory(receiptId, docNumber) {
 
         drawer.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная № ${docNumber}</h3>
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: накладная ${docNumber}</h3>
                 <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
             </div>
             
@@ -5786,7 +5786,7 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата накладной № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата накладной ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
 
@@ -6173,7 +6173,7 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
         <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
@@ -6210,7 +6210,7 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
 
         drawer.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: № ${docNumber}</h3>
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: ${docNumber}</h3>
                 <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
             </div>
             
@@ -6245,7 +6245,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа № ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
