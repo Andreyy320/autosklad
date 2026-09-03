@@ -4908,7 +4908,6 @@ function logout() {
 }
 
 
-
 async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
@@ -4957,8 +4956,12 @@ async function refreshData() {
             loadDetailData('part_movement_details', selectedItem);
         } else if (currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
             const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active');
-            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
+            let detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
             
+            // Нормализуем имена сущностей табов приходов, чтобы они точно совпадали с обработчиком
+            if (detailEntity === 'realization_items') detailEntity = 'money_receipts_detail';
+            if (detailEntity === 'realization_works') detailEntity = 'money_receipts_works_detail';
+
             // Если выбран конкретный документ реализации, передаем его realization_id, чтобы не терять контекст
             if (selectedItem.realization_id || (currentEntity === 'money_receipts' && selectedItem.id)) {
                 loadDetailData(detailEntity, {
@@ -4975,12 +4978,10 @@ async function refreshData() {
                 loadDetailData(detailEntity, payload);
             }
         }
-        // Старые ветки expenses_* отсюда полностью удалены и готовы к замене на новую изолированную логику.
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
-
 
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
@@ -6587,7 +6588,7 @@ function getCurrentDetailEntity() {
             }
 
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            const match = onclickAttr.match(/(?:loadReceiptDetailTable|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
+            const match = onclickAttr.match(/(?:loadDetailData|switchMoneyReceiptTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 console.log(`🔗 [getCurrentDetailEntity:money_receipts] Определено по onclick: ${match[1]}`);
                 if (match[1] === 'realization_works') return 'money_receipts_works_detail';
