@@ -6131,6 +6131,8 @@ async function submitIncomePayment(event, realizationId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6278,7 +6280,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         items: [],
                         totalSum: 0,
                         totalPaid: 0,
-                        totalDebt: 0
+                        totalDebt: 0,
+                        totalNetProfit: 0
                     };
                 }
                 groupedByMonth[m.key].items.push(item);
@@ -6286,6 +6289,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].totalSum += Number(item.total_realization_sum || 0);
                 groupedByMonth[m.key].totalPaid += Number(item.total_paid || 0);
                 groupedByMonth[m.key].totalDebt += Number(item.debt_sum || item.total_debt || 0);
+                groupedByMonth[m.key].totalNetProfit += Number(item.net_profit || 0);
             });
 
             const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
@@ -6304,7 +6308,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         <span style="color: #334155; margin-right: 15px;">[-] ${group.title}</span>
                         <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Итого за месяц: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
                         <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 15px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal;">Чистый плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
                     </td>
                 `;
                 
@@ -6410,6 +6415,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
+
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
@@ -6595,9 +6602,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
-
-
 
 
 

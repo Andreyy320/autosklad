@@ -3794,7 +3794,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -3816,7 +3815,9 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                 (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                 COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
-                ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum
+                ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
+                -- Добавили расчет чистой прибыли: (Сумма продаж запчастей - Закупочная стоимость запчастей) + Сумма услуг (работ)
+                ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS net_profit
             FROM realizations real
             JOIN customers c ON real.customer_id = c.id
             LEFT JOIN skladi sk ON real.sklad_id = sk.id
