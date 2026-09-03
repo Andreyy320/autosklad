@@ -6131,7 +6131,6 @@ async function submitIncomePayment(event, realizationId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-// Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями и табами
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6173,7 +6172,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
         
-        // На уровне списка документов табы скрыты, пока пользователь не кликнет на конкретную строку
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
 
@@ -6259,28 +6257,34 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
-            // Добавляем колонку/кнопки действий (История и Оплата) для 2 уровня (money_receipts) — аналогично расходам
+            // Добавляем точно такую же логику кнопки «Оплатить / Оплачено» и истории, как в расходах (2 уровень)
             if (currentReceiptView === 'money_receipts') {
                 const realizationId = item.realization_id || item.id || '';
                 const docNumber = item.doc_number || item.number || '';
-                const debtSum = item.debt || item.remaining_debt || item.sum || 0;
+                const debtSum = Number(item.debt || item.remaining_debt || item.sum || 0);
 
-                // Проверяем, есть ли уже ячейка действий от render (если заложена в конфиге), 
-                // если нет — создаем или дописываем в последнюю ячейку, либо добавляем отдельную колонку. 
-                // Ниже реализован надежный вариант добавления кнопок прямо в строку (или в последнюю ячейку, если структура таблицы позволяет).
-                // Возьмем безопасный подход: если в последнем td нет кнопок действий, добавим их.
                 let actionTd = tr.querySelector('.row-actions-cell');
                 if (!actionTd) {
                     actionTd = document.createElement('td');
+                    actionTd.className = 'row-actions-cell';
                     actionTd.style.textAlign = 'center';
                     actionTd.style.whiteSpace = 'nowrap';
                     tr.appendChild(actionTd);
                 }
-                
-                actionTd.innerHTML = `
-                    <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; cursor: pointer; margin-right: 4px;">📋</button>
-                    <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer;">💵</button>
-                `;
+
+                if (debtSum <= 0) {
+                    actionTd.innerHTML = `
+                        <button type="button" title="Оплачено" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
+                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 4px;">📋</button>
+                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 2px;">💵</button>
+                    `;
+                } else {
+                    actionTd.innerHTML = `
+                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-weight: bold;">Оплатить</button>
+                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 4px;">📋</button>
+                        <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 2px;">💵</button>
+                    `;
+                }
             }
 
             // Настраиваем переходы по уровням по клику на строки
@@ -6297,14 +6301,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     console.log('✅ Выбрана конкретная реализация:', item);
                     window.currentRealizationId = item.realization_id || item.id;
 
-                    // 1. Показываем блок переключателей (табы)
                     const tabsBlock = document.getElementById('tabs-for-money-receipts');
                     if (tabsBlock) {
                         tabsBlock.style.display = 'flex';
                         console.log('🟢 Блок #tabs-for-money-receipts успешно показан');
                     }
 
-                    // 2. Скрываем ненужные кнопки в тулбаре детализации
                     const detailToolbar = document.getElementById('detail-toolbar');
                     if (detailToolbar) {
                         const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
@@ -6315,7 +6317,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         });
                     }
 
-                    // 3. Выставляем активный таб по умолчанию (первый - запчасти)
                     document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
                         btn.classList.remove('active');
                         if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
@@ -6323,7 +6324,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                     currentMoneyReceiptSubTab = 'money_receipts_detail';
 
-                    // 4. Загружаем данные через универсальную функцию определения сущности
                     const detailEntity = getCurrentDetailEntity();
                     let realizationId = item.realization_id || item.id || '';
                     let customerId = item.customer_id || '';
