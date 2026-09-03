@@ -3782,11 +3782,10 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Ремонты автомобилей из repairs (предполагаем наличие полей sklad_id, is_posted)
-                -- Укажите корректные имена таблиц для запчастей/услуг/оплат ремонта, если они отличаются (например, repair_items / repair_works)
+                -- 2. Ремонты автомобилей из repairs ( warehouse_id вместо sklad_id )
                 SELECT 
                     rep.id,
-                    rep.sklad_id,
+                    rep.warehouse_id AS sklad_id,
                     COALESCE(sub_rep_i.total_qty, 0) AS total_qty,
                     COALESCE(sub_rep_i.parts_sum, 0) AS parts_sum,
                     COALESCE(sub_rep_w.works_sum, 0) AS works_sum,
@@ -3795,17 +3794,17 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 FROM repairs rep
                 LEFT JOIN (
                     SELECT r_item.repair_id, SUM(r_item.quantity) AS total_qty, SUM(r_item.total_rub) AS parts_sum
-                    FROM repair_items r_item -- замените на актуальное имя таблицы запчастей ремонта, если нужно
+                    FROM repair_items r_item 
                     GROUP BY r_item.repair_id
                 ) sub_rep_i ON rep.id = sub_rep_i.repair_id
                 LEFT JOIN (
                     SELECT r_work.repair_id, SUM(r_work.total_rub) AS works_sum
-                    FROM repair_works r_work -- замените на актуальное имя таблицы услуг ремонта, если нужно
+                    FROM repair_works r_work 
                     GROUP BY r_work.repair_id
                 ) sub_rep_w ON rep.id = sub_rep_w.repair_id
                 LEFT JOIN (
                     SELECT r_pay.repair_id, SUM(r_pay.amount) AS paid_sum
-                    FROM customer_payments r_pay -- или отдельная таблица оплат по ремонтам, если применимо
+                    FROM customer_payments r_pay 
                     GROUP BY r_pay.repair_id
                 ) sub_rep_p ON rep.id = sub_rep_p.repair_id
                 WHERE rep.is_posted = true
