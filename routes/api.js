@@ -3830,9 +3830,10 @@ router.get('/money_receipts', async (req, res) => {
                 SELECT 
                     ri.realization_id, 
                     SUM(ri.quantity) AS parts_qty, 
-                    SUM(ri.purchase_price * ri.quantity) AS total_purchase_sum,
-                    SUM(ri.retail_price * ri.quantity) AS total_retail_sum,
-                    SUM(ri.total_rub) AS parts_sum
+                    SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                    SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
+                    -- Берем SUM(total_rub), но если он пустой/нулевой, страхуемся через price * quantity
+                    SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
                 FROM realization_items ri
                 GROUP BY ri.realization_id
             ) sub_i ON real.id = sub_i.realization_id
@@ -3841,7 +3842,7 @@ router.get('/money_receipts', async (req, res) => {
                 SELECT 
                     rw.realization_id, 
                     SUM(rw.quantity) AS works_qty,
-                    SUM(rw.total_rub) AS works_sum
+                    SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
                 FROM realization_works rw
                 GROUP BY rw.realization_id
             ) sub_w ON real.id = sub_w.realization_id
@@ -3862,10 +3863,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-
-
-
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
@@ -3905,7 +3902,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.purchase_price, 0)::numeric AS purchase_price,
                     COALESCE(ri.retail_price, 0)::numeric AS retail_price,
                     COALESCE(ri.price, 0)::numeric AS final_unit_price,
-                    COALESCE(ri.total_rub, 0)::numeric AS total_rub,
+                    COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)::numeric AS total_rub,
                     COALESCE(ri.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
@@ -3927,7 +3924,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     0::numeric AS purchase_price,
                     COALESCE(rw.retail_price, 0)::numeric AS retail_price,
                     COALESCE(rw.price, 0)::numeric AS final_unit_price,
-                    COALESCE(rw.total_rub, 0)::numeric AS total_rub,
+                    COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)::numeric AS total_rub,
                     COALESCE(rw.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
