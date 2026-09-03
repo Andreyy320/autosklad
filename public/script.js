@@ -3766,7 +3766,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
+        // ИЗМЕНЕНИЕ ЗДЕСЬ: Блокируем абсолютно все поля, если документ проведен
+        if (isPosted) {
             fieldReadonly = true;
         }
 
