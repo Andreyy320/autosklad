@@ -4806,6 +4806,7 @@ function deleteSelectedEntity() {
         }
     );
 }
+
 function editSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для изменения (кликните один раз на строку в таблице).', 'warning');
@@ -4843,7 +4844,8 @@ function openActiveEntityForm(action, item = null) {
         case 'Перемещение':
         case 'moves':
             if (typeof openMoveForm === 'function') {
-                openMoveForm(item);
+                // Прямой вызов вашей новой функции с правильным порядком аргументов: (entity, item, parentId)
+                openMoveForm('moves', action === 'add' ? null : item, null);
             } else {
                 openEntityForm(entity, item);
             }
@@ -4868,7 +4870,6 @@ function openActiveEntityForm(action, item = null) {
             break;
     }
 }
-
 
 
 
