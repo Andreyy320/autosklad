@@ -6163,7 +6163,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Документы (реализации) выбранного склада
+    // 2 уровень: Документы (реализации и ремонты) выбранного склада
     else if (currentReceiptView === 'money_receipts') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;

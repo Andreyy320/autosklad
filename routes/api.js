@@ -3802,6 +3802,7 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             WITH calc_data AS (
+                -- 1. Обычные реализации (покупатели)
                 SELECT 
                     real.id AS id,
                     real.id AS realization_id,
@@ -3853,6 +3854,51 @@ router.get('/money_receipts', async (req, res) => {
                 ) sub_p ON real.id = sub_p.realization_id
                 WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
+
+                UNION ALL
+
+                -- 2. Внутренние ремонты автомобилей
+                SELECT 
+                    rep.id AS id,
+                    rep.id AS realization_id,
+                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    rep.doc_date AS date,
+                    NULL::integer AS customer_id,
+                    CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_nomer, 'б/н'), ')')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(rep_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS total_retail_sum,
+                    COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
+                    COALESCE(rep.sum, 0)::numeric AS total_realization_sum,
+                    COALESCE(rep.sum, 0)::numeric AS total_paid, -- Внутренний ремонт считается закрытым по своей сумме
+                    
+                    0::numeric AS full_net_profit, -- Внутренний ремонт не генерирует коммерческую прибыль
+                    0::numeric AS parts_profit,
+                    COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
+                FROM repairs rep
+                LEFT JOIN cars car ON rep.car_id = car.id
+                LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.repair_id,
+                        SUM(ri.quantity) AS parts_qty,
+                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM repair_items ri
+                    GROUP BY ri.repair_id
+                ) rep_i ON rep.id = rep_i.repair_id
+                LEFT JOIN (
+                    SELECT 
+                        rw.repair_id,
+                        SUM(COALESCE(rw.price, 0)) AS works_sum
+                    FROM repair_works rw
+                    GROUP BY rw.repair_id
+                ) rep_w ON rep.id = rep_w.repair_id
+                WHERE rep.is_posted = true
+                  AND ($1::integer IS NULL OR rep.warehouse_id = $1)
             )
             SELECT 
                 id,
@@ -3875,9 +3921,6 @@ router.get('/money_receipts', async (req, res) => {
                 works_profit,
                 
                 -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
-                -- Если документ полностью оплачен (total_paid >= total_realization_sum), 
-                -- то в реальный плюс идет вся прибыль. Если оплачен частично — пропорционально. 
-                -- Если долг полный (0 оплачено) — реальный плюс равен 0.
                 CASE 
                     WHEN total_realization_sum <= 0 THEN 0
                     ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
@@ -3889,7 +3932,7 @@ router.get('/money_receipts', async (req, res) => {
 
         const result = await pool.query(query, [sklad_id || null]);
 
-        console.log(`📊 [DEBUG /api/money_receipts] Найдено документов: ${result.rows.length} для склада ID: ${sklad_id || 'ВСЕ'}`);
+        console.log(`📊 [DEBUG /api/money_receipts] Найдено документов (продажи + ремонты): ${result.rows.length} для склада ID: ${sklad_id || 'ВСЕ'}`);
         result.rows.forEach(row => {
             console.log(`   ➔ Док: ${row.doc_number} | Сумма: ${row.total_realization_sum} | Оплачено: ${row.total_paid} | Долг: ${row.debt_sum} | Реальный плюс: ${row.net_profit}`);
         });
@@ -3900,7 +3943,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
@@ -3928,6 +3970,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 total_rub,
                 description
             FROM (
+                -- 1. Запчасти обычных реализаций
                 SELECT 
                     ri.id,
                     'part' AS item_type,
@@ -3950,6 +3993,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
+                -- 2. Работы обычных реализаций
                 SELECT 
                     rw.id,
                     'work' AS item_type,
@@ -3969,6 +4013,53 @@ router.get('/money_receipts_detail', async (req, res) => {
                 FROM realization_works rw
                 JOIN realizations real ON rw.realization_id = real.id
                 WHERE real.is_posted = true
+
+                UNION ALL
+
+                -- 3. Запчасти внутренних ремонтов (repair_items)
+                SELECT 
+                    rep_i.id,
+                    'part' AS item_type,
+                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    rep.doc_date AS date,
+                    COALESCE(rep_i.code, '')::text AS product_code,
+                    COALESCE(rep_i.name, '')::text AS item_name,
+                    COALESCE(rep_i.quantity, 0)::numeric AS quantity,
+                    COALESCE(rep_i.price, 0)::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(rep_i.price, 0)::numeric AS final_unit_price,
+                    COALESCE(rep_i.total, rep_i.price * rep_i.quantity, 0)::numeric AS total_rub,
+                    COALESCE(rep_i.description, '')::text AS description,
+                    rep.id AS rel_id,
+                    NULL::integer AS cust_id,
+                    rep.warehouse_id AS skl_id
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep.is_posted = true
+
+                UNION ALL
+
+                -- 4. Работы внутренних ремонтов (repair_works)
+                SELECT 
+                    rep_w.id,
+                    'work' AS item_type,
+                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    rep.doc_date AS date,
+                    'Услуга'::text AS product_code,
+                    COALESCE(w.name, 'Работа')::text AS item_name,
+                    1::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(rep_w.price, 0)::numeric AS final_unit_price,
+                    COALESCE(rep_w.price, 0)::numeric AS total_rub,
+                    COALESCE(rep_w.description, '')::text AS description,
+                    rep.id AS rel_id,
+                    NULL::integer AS cust_id,
+                    rep.warehouse_id AS skl_id
+                FROM repair_works rep_w
+                JOIN repairs rep ON rep_w.repair_id = rep.id
+                LEFT JOIN works w ON rep_w.work_id = w.id
+                WHERE rep.is_posted = true
             ) sub
             WHERE ($1::integer IS NULL OR sub.rel_id = $1)
               AND ($2::integer IS NULL OR sub.cust_id = $2)
@@ -3984,7 +4075,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка при получении объединенной спецификации:', err);
+        console.error('❌ Ошибка при получении объединенной спецификации деталей:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
