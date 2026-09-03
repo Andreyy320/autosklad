@@ -3817,7 +3817,14 @@ router.get('/money_receipts', async (req, res) => {
                 (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                 COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                 ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
-                -- Чистая прибыль: (продажа запчастей - закупка запчастей по FIFO) + полная сумма работ
+                
+                -- Чистый плюс по запчастям (продажа - закупка)
+                COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0) AS parts_profit,
+                
+                -- Сумма по работам идет целиком в плюс
+                COALESCE(sub_w.works_sum, 0) AS works_profit,
+
+                -- Общий чистый плюс (запчасти маржа + работы)
                 (
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + 
                     COALESCE(sub_w.works_sum, 0)
@@ -3832,7 +3839,6 @@ router.get('/money_receipts', async (req, res) => {
                     SUM(ri.quantity) AS parts_qty, 
                     SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
                     SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
-                    -- Берем SUM(total_rub), но если он пустой/нулевой, страхуемся через price * quantity
                     SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
                 FROM realization_items ri
                 GROUP BY ri.realization_id
