@@ -1759,13 +1759,12 @@ money_receipts_by_sklad: {
         `;
     }
 },
-
 money_receipts: {
-    title: 'Список продаж (реализаций)',
+    title: 'Список документов (продажи и ремонты)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
-        { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
+        { field: 'counterparty_name', label: 'Покупатель / Авто', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
@@ -1785,29 +1784,40 @@ money_receipts: {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
+        // Определяем, ремонт это или обычная продажа
+        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ:');
+        
+        let counterpartyHtml = '';
+        if (isRepair) {
+            counterpartyHtml = `<span style="color: #d97706; font-weight: 500;" title="Внутренний ремонт автомобиля">🚗 ${item.counterparty_name || 'Ремонт а/м'}</span>`;
+        } else {
+            counterpartyHtml = `<span>${item.counterparty_name || 'Розничный покупатель'}</span>`;
+        }
+
         const paidHtml = totalPaidNum > 0 
             ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
-        // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить»
-        const actionHtml = debtSumNum <= 0 
-            ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
-            : `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
-                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
+        // Для внутренних ремонтов долг всегда закрыт (они закрываются своей суммой на бэке), либо можно скрыть кнопку действия
+        const actionHtml = isRepair 
+            ? `<span style="color: #d97706; font-size: 12px; font-weight: 500;">Ремонт</span>`
+            : (debtSumNum <= 0 
+                ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
+                : `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
+                    style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                    Оплатить
+                  </button>`);
 
         return `
             <td><b>№ ${docTitle}</b></td>
             <td><span style="color: #4b5563;">${formattedDate}</span></td>
-            <td>${item.counterparty_name || 'Розничный покупатель'}</td>
+            <td>${counterpartyHtml}</td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right;">${partsSum}</td>
             <td style="text-align: right; color: #0284c7;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
-            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
+            <td style="text-align: right; font-weight: bold; color: ${!isRepair && debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
                 ${debtSum} 
             </td>
             <td style="text-align: center;">
