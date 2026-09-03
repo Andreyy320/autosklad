@@ -1770,8 +1770,8 @@ money_receipts: {
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '100px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '100px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
@@ -1785,10 +1785,12 @@ money_receipts: {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
+        // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
         const paidHtml = totalPaidNum > 0 
             ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
+        // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить»
         const actionHtml = debtSumNum <= 0 
             ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
             : `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
@@ -1937,6 +1939,7 @@ expenses_by_sklad: {
         `;
     }
 },
+
 expenses_by_suppliers: {
     title: 'Аналитика закупленных товаров по поставщикам',
     columns: [
@@ -5677,9 +5680,7 @@ async function submitPayment(event, receiptId) {
     }
 }
 
-// ==========================================
-// 2. ФУНКЦИЯ ЗАГРУЗКИ ГЛАВНЫХ ДАННЫХ РАСХОДОВ (С ПОЛНЫМИ ЛОГАМИ)
-// ==========================================
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
 
@@ -6004,10 +6005,134 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
+async function openIncomePaymentHistory(realizationId, docNumber) {
+    const drawer = getOrCreateDrawer();
+    
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: реализация № ${docNumber}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
+    `;
+    openDrawer();
 
-// Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями и табами
+    try {
+        let response = await fetch(`/api/money_receipts/${realizationId}/payments`);
+        if (!response.ok) throw new Error('Не удалось загрузить историю');
+        
+        let payments = await response.json();
+
+        if (!payments || payments.length === 0) {
+            drawer.querySelector('div:last-child').innerHTML = 'По этой реализации еще не было поступлений.';
+            return;
+        }
+
+        let rowsHtml = payments.map(p => {
+            const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
+            const pAmount = Number(p.amount || 0).toFixed(2);
+            const pComment = p.comment || '—';
+            return `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; color: #4b5563;">${pDate}</td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">+${pAmount} </td>
+                    <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
+                </tr>
+            `;
+        }).join('');
+
+        drawer.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История поступлений: реализация № ${docNumber}</h3>
+                <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                    <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb; text-align: left;">
+                        <th style="padding: 8px; color: #374151;">Дата</th>
+                        <th style="padding: 8px; color: #374151; text-align: right;">Сумма</th>
+                        <th style="padding: 8px; color: #374151;">Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px;">
+                <button type="button" onclick="closeDrawer()" style="width: 100%; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Закрыть</button>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error(err);
+        drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории поступлений</span>';
+    }
+}
+
+function openIncomePaymentDrawer(realizationId, debtSum, docNumber) {
+    const drawer = getOrCreateDrawer();
+    
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата реализации № ${docNumber}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+
+        <form id="pay-form" onsubmit="submitIncomePayment(event, '${realizationId}')" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
+                <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
+                <textarea id="payment-comment" placeholder="Примечание к платежу..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
+            </div>
+        </form>
+    `;
+
+    openDrawer();
+}
+
+async function submitIncomePayment(event, realizationId) {
+    event.preventDefault();
+    
+    const payload = {
+        amount: parseFloat(document.getElementById('payment-amount').value),
+        comment: document.getElementById('payment-comment').value
+    };
+
+    try {
+        let response = await fetch(`/api/money_receipts/${realizationId}/pay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            closeDrawer();
+            showAppNotification('Платёж успешно сохранен', 'success');
+            if (typeof loadTableData === 'function') loadTableData();
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
+        }
+    } catch (err) {
+        console.error('Ошибка сети:', err);
+        showAppNotification('Не удалось отправить данные на сервер', 'error');
+    }
+}
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
+    console.log(`📥 [loadReceiptMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -6020,15 +6145,17 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
-    // 1 уровень: Склады (отображаем все)
-    if (currentReceiptView === 'money_receipts_by_sklad') {
+    if (currentReceiptView === 'money_receipts_by_sklad' || currentReceiptView === 'receipts') {
+        currentReceiptView = 'money_receipts_by_sklad';
         window.currentSkladId = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
 
         fetchUrl = `/api/money_receipts_by_sklad`;
+        console.log(`📂 [View: money_receipts_by_sklad] Установлен URL: ${fetchUrl}`);
+
         if (detailContainer) detailContainer.style.display = 'none';
-        
+
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
 
@@ -6036,29 +6163,86 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Документы (реализации) выбранного склада
-    else if (currentReceiptView === 'money_receipts') {
+    else if (currentReceiptView === 'money_receipts_by_customers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
 
-        fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
-        
-        if (detailContainer) detailContainer.style.display = 'block';
-        
-        // На уровне списка документов табы скрыты, пока пользователь не кликнет на конкретную строку
+        fetchUrl = `/api/money_receipts_by_customers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+        console.log(`📂 [View: money_receipts_by_customers] sklad_id=${window.currentSkladId}, URL: ${fetchUrl}`);
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+    } 
+    else if (currentReceiptView === 'money_receipts') {
+        let customerId = parentId && typeof parentId === 'object' ? (parentId.customer_id || parentId.id) : parentId;
+        if (customerId) window.currentCustomerId = customerId;
+        window.currentRealizationId = null;
+
+        let skladId = window.currentSkladId || '';
+        let currentCustomer = window.currentCustomerId || '';
+
+        fetchUrl = `/api/money_receipts?customer_id=${currentCustomer}${skladId ? '&sklad_id=' + skladId : ''}`;
+        console.log(`📂 [View: money_receipts] customer_id=${currentCustomer}, sklad_id=${skladId}, URL: ${fetchUrl}`);
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        const tabsBlock = document.getElementById('tabs-for-money-receipts');
+        if (tabsBlock) tabsBlock.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+    } 
+    else if (currentReceiptView === 'money_receipts_detail') {
+        let realizationId = parentId && typeof parentId === 'object' ? (parentId.realization_id || parentId.id || parentId.document_id) : parentId;
+        
+        if (realizationId !== undefined && realizationId !== null && realizationId !== '') {
+            window.currentRealizationId = realizationId;
+        }
+
+        let skladId = window.currentSkladId || '';
+        let customerId = window.currentCustomerId || '';
+        let currentRealization = window.currentRealizationId || '';
+
+        const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : currentReceiptView;
+        
+        if (detailEntity === 'money_receipts_works_detail') {
+            fetchUrl = `/api/money_receipts_works_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+        } else {
+            fetchUrl = `/api/money_receipts_detail?realization_id=${currentRealization}&customer_id=${customerId}&sklad_id=${skladId}`;
+        }
+        console.log(`📂 [View: money_receipts_detail] URL: ${fetchUrl}`);
+
+        currentEntity = currentReceiptView; 
+        if (detailContainer) detailContainer.style.display = 'flex';
+
+        const tabsBlock = document.getElementById('tabs-for-money-receipts');
+        if (tabsBlock) tabsBlock.style.display = 'flex';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        loadReceiptDetailTable(fetchUrl, detailEntity);
+        return; 
     }
 
     currentEntity = currentReceiptView;
+    console.log(`⚙️ [Config] Инициализация конфигурации для entity: "${currentEntity}"`);
 
     const config = getConfig(currentEntity);
+    if (!config) {
+        console.error(`❌ [getConfig] Не найдена конфигурация для сущности: "${currentEntity}"! Проверьте функцию getConfig.`);
+    }
+
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
@@ -6098,13 +6282,15 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 
     try {
+        console.log(`🌐 [Fetch] Отправка GET запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
 
         const responseText = await response.text();
-
+        console.log(`📥 [Fetch] Ответ получен. Статус: ${response.status} (${response.statusText})`);
+        
         if (!response.ok) {
             console.error(`❌ Сервер вернул ошибку [${response.status}]:`, responseText);
             throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
@@ -6114,90 +6300,192 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             currentItems = JSON.parse(responseText);
         } catch (e) {
             console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
-            throw new Error('Ответ сервера не является валидным JSON (возможно, роут не существует или ошибка 500)');
+            throw new Error('Ответ сервера не является валидным JSON');
         }
 
-        if (!mainTableBody) return;
+        console.log(`📦 [Data] Успешно получено элементов: ${Array.isArray(currentItems) ? currentItems.length : 'не массив'}`, currentItems);
 
-        if (currentItems.length === 0) {
+        if (!mainTableBody) {
+            console.error('❌ [DOM] Элемент #table-body не найден на странице!');
+            return;
+        }
+
+        if (!currentItems || currentItems.length === 0) {
+            console.warn('⚠️ [Data] Массив данных пуст. Выводим сообщение "Нет данных".');
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
         mainTableBody.innerHTML = '';
 
-        // Вывод данных для текущего уровня
-        currentItems.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
-            tr.style.cursor = 'pointer';
-            tr.innerHTML = config.render(item);
+        if (currentEntity === 'money_receipts') {
+            console.log('📑 [Group] Рендеринг сгруппированных данных по месяцам (money_receipts)...');
+            const monthNames = [
+                "января", "февраля", "марта", "апреля", "мая", "июня", 
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            ];
 
-            // Настраиваем переходы по уровням по клику на строки
-            tr.addEventListener('click', () => {
-                console.log('🖱️ [Клик на строку верхней таблицы]:', item);
-                document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
-                tr.classList.add('selected-row');
+            const groups = {};
+            currentItems.forEach(item => {
+                const rawDate = item.date || item.created_at || item.receipt_date;
+                const dateObj = rawDate ? new Date(rawDate) : new Date();
+                const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
+                const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
+                
+                const key = `${year}-${String(month).padStart(2, '0')}`;
+                const title = `${monthNames[month]} ${year} года`;
 
-                selectedItem = item; // Сохраняем глобально
-
-                if (currentEntity === 'money_receipts_by_sklad') {
-                    loadReceiptMainData('money_receipts', item);
-                } else if (currentEntity === 'money_receipts') {
-                    console.log('✅ Выбрана конкретная реализация:', item);
-                    window.currentRealizationId = item.realization_id || item.id;
-
-                    // 1. Показываем блок переключателей (табы)
-                    const tabsBlock = document.getElementById('tabs-for-money-receipts');
-                    if (tabsBlock) {
-                        tabsBlock.style.display = 'flex';
-                        console.log('🟢 Блок #tabs-for-money-receipts успешно показан');
-                    }
-
-                    // 2. Скрываем ненужные кнопки в тулбаре детализации
-                    const detailToolbar = document.getElementById('detail-toolbar');
-                    if (detailToolbar) {
-                        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
-                        actionButtons.forEach(btn => {
-                            if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
-                                btn.style.display = 'none';
-                            }
-                        });
-                    }
-
-                    // 3. Выставляем активный таб по умолчанию (первый - запчасти)
-                    document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
-                        btn.classList.remove('active');
-                        if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
-                    });
-
-                    currentMoneyReceiptSubTab = 'money_receipts_detail';
-
-                    // 4. Загружаем данные через универсальную функцию определения сущности
-                    const detailEntity = getCurrentDetailEntity();
-                    let realizationId = item.realization_id || item.id || '';
-                    let customerId = item.customer_id || '';
-                    let skladId = item.sklad_id || window.currentSkladId || '';
-                    
-                    let url = '';
-                    if (detailEntity === 'money_receipts_works_detail') {
-                        url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    } else {
-                        url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    }
-
-                    console.log('🚀 Авто-загрузка дефолтного таба через getCurrentDetailEntity:', url);
-                    loadReceiptDetailTable(url, detailEntity);
+                if (!groups[key]) {
+                    groups[key] = {
+                        title: title,
+                        totalSum: 0,
+                        totalPaid: 0,
+                        totalDebt: 0,
+                        items: []
+                    };
                 }
+
+                groups[key].items.push(item);
+                groups[key].totalSum += Number(item.total_receipt_sum || item.sum || 0);
+                groups[key].totalPaid += Number(item.total_paid || 0);
+                groups[key].totalDebt += Number(item.debt_sum || 0);
             });
 
-            mainTableBody.appendChild(tr);
-        });
+            let groupIndex = 0;
+            Object.keys(groups).sort().reverse().forEach(key => {
+                const group = groups[key];
+                const currentGIdx = groupIndex++;
+
+                const headerTr = document.createElement('tr');
+                headerTr.style.background = '#f1f5f9';
+                headerTr.style.cursor = 'pointer';
+                headerTr.style.fontWeight = 'bold';
+                headerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+                        <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
+                        ${group.title} &nbsp;|&nbsp; 
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)} </span> &nbsp;|&nbsp; 
+                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)} </span>
+                    </td>
+                `;
+                mainTableBody.appendChild(headerTr);
+
+                const childRows = [];
+                group.items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const rowId = item.id || item.realization_id || '';
+                    tr.dataset.id = rowId;
+                    tr.style.cursor = 'pointer';
+                    tr.className = `group-row-${currentGIdx}`;
+                    
+                    if (config && typeof config.render === 'function') {
+                        tr.innerHTML = config.render(item);
+                    } else {
+                        console.error('❌ [Config] Функция render не найдена в конфиге для:', currentEntity);
+                    }
+                    
+                    tr.addEventListener('click', () => {
+                        console.log('🖱️ [Клик на строку реализации]:', item);
+                        document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+                        tr.classList.add('selected-row');
+
+                        selectedItem = item;
+                        window.currentRealizationId = item.realization_id || item.id;
+
+                        const tabsBlock = document.getElementById('tabs-for-money-receipts');
+                        if (tabsBlock) {
+                            tabsBlock.style.display = 'flex';
+                            console.log('🟢 Блок #tabs-for-money-receipts успешно показан');
+                        }
+
+                        const detailToolbar = document.getElementById('detail-toolbar');
+                        if (detailToolbar) {
+                            const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
+                            actionButtons.forEach(btn => {
+                                if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
+                                    btn.style.display = 'none';
+                                }
+                            });
+                        }
+
+                        document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
+                            btn.classList.remove('active');
+                            if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
+                        });
+
+                        currentMoneyReceiptSubTab = 'money_receipts_detail';
+
+                        const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
+                        let realizationId = item.realization_id || item.id || '';
+                        let customerId = item.customer_id || '';
+                        let skladId = item.sklad_id || window.currentSkladId || '';
+                        
+                        let url = '';
+                        if (detailEntity === 'money_receipts_works_detail') {
+                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                        } else {
+                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                        }
+
+                        console.log('🚀 Авто-загрузка дефолтного таба:', url);
+                        loadReceiptDetailTable(url, detailEntity);
+                    });
+
+                    mainTableBody.appendChild(tr);
+                    childRows.push(tr);
+                });
+
+                headerTr.addEventListener('click', () => {
+                    const icon = document.getElementById(`icon-${currentGIdx}`);
+                    const isHidden = childRows[0].style.display === 'none';
+                    
+                    childRows.forEach(tr => {
+                        tr.style.display = isHidden ? '' : 'none';
+                    });
+                    
+                    icon.innerText = isHidden ? '[-]' : '[+]';
+                });
+            });
+
+        } else {
+            console.log(`📋 [Render] Обычный рендеринг элементов для сущности: "${currentEntity}"`);
+            currentItems.forEach((item) => {
+                const tr = document.createElement('tr');
+                const rowId = item.id || item.realization_id || item.sklad_id || item.customer_id || '';
+                
+                tr.dataset.id = rowId;
+                tr.style.cursor = 'pointer';
+                
+                if (config && typeof config.render === 'function') {
+                    tr.innerHTML = config.render(item);
+                } else {
+                    console.error(`❌ [Config] У конфигурации сущности "${currentEntity}" отсутствует функция render!`, config);
+                }
+
+                tr.addEventListener('click', () => {
+                    console.log('🖱️ [Клик на строку верхней таблицы]:', item);
+                    document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+                    tr.classList.add('selected-row');
+
+                    selectedItem = item;
+
+                    if (currentEntity === 'money_receipts_by_sklad') {
+                        loadReceiptMainData('money_receipts_by_customers', item);
+                    } else if (currentEntity === 'money_receipts_by_customers') {
+                        loadReceiptMainData('money_receipts', item);
+                    }
+                });
+
+                mainTableBody.appendChild(tr);
+            });
+        }
+        console.log('✅ [loadReceiptMainData] Рендеринг таблицы успешно завершен.');
 
     } catch (err) {
         console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
         if (mainTableBody) {
-            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных: ${err.message}</td></tr>`;
         }
     }
 }
@@ -6210,7 +6498,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
     const config = getConfig('money_receipts_detail');
-    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
+    if (detailTitle && config) detailTitle.innerText = config.title || "Спецификация (Запчасти и Услуги)";
 
     if (detailHeaderTr && config && config.columns) {
         detailHeaderTr.innerHTML = config.columns.map(col => {
@@ -6230,7 +6518,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const data = JSON.parse(responseText);
 
-        // Универсальное определение массива данных (поддерживает как прямой массив, так и объект с полем items)
         const items = Array.isArray(data) ? data : (data.items || []);
 
         if (!detailBody) return;
@@ -6243,12 +6530,13 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         items.forEach(item => {
             const tr = document.createElement('tr');
             
-            // Если это услуга (item_type === 'work' или есть признаки работы)
             if (item.item_type === 'work' || item.is_work) {
-                tr.style.backgroundColor = '#f8fafc'; // легкая подсветка для услуг
+                tr.style.backgroundColor = '#f8fafc';
             }
             
-            tr.innerHTML = config.render(item);
+            if (config && typeof config.render === 'function') {
+                tr.innerHTML = config.render(item);
+            }
             detailBody.appendChild(tr);
         });
     } catch (err) {
@@ -6258,10 +6546,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
     }
 }
-
-// ==========================================
-// КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
-// ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
     const newTableBody = tableBodyForReceipts.cloneNode(true);
