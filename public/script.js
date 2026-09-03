@@ -5786,26 +5786,26 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата накладной № ${docNumber}</h3>
-            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата накладной № ${docNumber}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
 
         <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма (Долг: <span style="color: #16a34a; font-weight: 600;">${debtSum}</span>)</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
 
             <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Комментарий</label>
                 <textarea id="payment-comment" placeholder="Примечание к платежу..." 
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical; min-height: 60px; color: #0f172a;"></textarea>
             </div>
 
             <div style="margin-top: 10px; display: flex; gap: 10px;">
-                <button type="submit" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
-                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
+                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e2e8f0; color: #334151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
             </div>
         </form>
     `;
