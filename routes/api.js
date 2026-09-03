@@ -3884,7 +3884,7 @@ router.get('/money_receipts', async (req, res) => {
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
-                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    CONCAT('', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
                     NULL::integer AS customer_id,
                     CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
@@ -4045,7 +4045,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 SELECT 
                     rep_i.id,
                     'part' AS item_type,
-                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    CONCAT('', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
                     COALESCE(NULLIF(rep_i.code, ''), NULLIF(z.code, ''), NULLIF(rep_i.article, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(rep_i.name, ''), NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
@@ -4069,7 +4069,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 SELECT 
                     rep_w.id,
                     'work' AS item_type,
-                    CONCAT('РЕМ: ', rep.doc_number)::text AS doc_number,
+                    CONCAT('', rep.doc_number)::text AS doc_number,
                     rep.doc_date AS date,
                     'Услуга'::text AS product_code,
                     COALESCE(w.name, 'Работа')::text AS item_name,
