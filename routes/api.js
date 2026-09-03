@@ -3896,7 +3896,9 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     COALESCE(rep.sum, 0)::numeric AS total_realization_sum,
-                    COALESCE(rep.sum, 0)::numeric AS total_paid, -- Внутренний ремонт считается закрытым по своей сумме
+                    
+                    -- ИСПРАВЛЕНИЕ: теперь берем только реальные платежи из customer_payments. Если их нет — 0.
+                    COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
                     0::numeric AS full_net_profit, -- Внутренний ремонт не генерирует коммерческую прибыль
                     0::numeric AS parts_profit,
@@ -3920,6 +3922,11 @@ router.get('/money_receipts', async (req, res) => {
                     FROM repair_works rw
                     GROUP BY rw.repair_id
                 ) rep_w ON rep.id = rep_w.repair_id
+                LEFT JOIN (
+                    SELECT cp.repair_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.repair_id
+                ) rep_p ON rep.id = rep_p.repair_id
                 WHERE rep.is_posted = true
                   AND ($1::integer IS NULL OR rep.warehouse_id = $1)
             )
@@ -3954,19 +3961,12 @@ router.get('/money_receipts', async (req, res) => {
         `;
 
         const result = await pool.query(query, [sklad_id || null]);
-
-        console.log(`📊 [DEBUG /api/money_receipts] Найдено документов (продажи + ремонты): ${result.rows.length} для склада ID: ${sklad_id || 'ВСЕ'}`);
-        result.rows.forEach(row => {
-            console.log(`   ➔ Док: ${row.doc_number} | Сумма: ${row.total_realization_sum} | Оплачено: ${row.total_paid} | Долг: ${row.debt_sum} | Реальный плюс: ${row.net_profit}`);
-        });
-
         res.json(result.rows);
     } catch (err) {
         console.error('❌ Ошибка:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
