@@ -1953,7 +1953,6 @@ money_receipts_works_detail: {
     }
 },
 
-
 expenses_by_sklad: {
     title: 'Аналитика расходов (закупок) по складам',
     columns: [
@@ -1968,21 +1967,21 @@ expenses_by_sklad: {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
-        const totalDebt = Number(item.total_debt || 0).toFixed(2);
+        const debtNum = Number(item.total_debt || 0);
+        const totalDebt = debtNum.toFixed(2);
 
         return `
-            <td><span style="color: #d97706; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
-            <td style="text-align: center;">${item.total_receipts || 0}</td>
-            <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} </td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
-            <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
-                ${totalDebt} 
+            <td><span style="color: #0f172a; font-weight: 500;">${item.sklad_name || 'Основной склад'}</span></td>
+            <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
+            <td style="text-align: right; color: #334155;">${totalQty}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
+            <td style="text-align: right; color: #334155;">${totalPaid}</td>
+            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
+                ${totalDebt}
             </td>
         `;
     }
 },
-
 expenses_by_suppliers: {
     title: 'Аналитика закупленных товаров по поставщикам',
     columns: [
@@ -1998,17 +1997,18 @@ expenses_by_suppliers: {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
-        const totalDebt = Number(item.total_debt || 0).toFixed(2);
+        const debtNum = Number(item.total_debt || 0);
+        const totalDebt = debtNum.toFixed(2);
 
         return `
-            <td><b>${item.postavhik_name || 'Основной поставщик'}</b></td>
-            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-            <td style="text-align: center;">${item.total_receipts || 0}</td>
-            <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${expenseSum} </td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid} </td>
-            <td style="text-align: right; font-weight: bold; color: ${Number(totalDebt) > 0 ? '#dc2626' : '#6b7280'};">
-                ${totalDebt} 
+            <td><span style="font-weight: 600; color: #0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
+            <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
+            <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
+            <td style="text-align: right; color: #334155;">${totalQty}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
+            <td style="text-align: right; color: #334155;">${totalPaid}</td>
+            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
+                ${totalDebt}
             </td>
         `;
     }
@@ -2062,27 +2062,27 @@ expenses_by_receipts: {
 
         // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
         const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid} </span>`
-            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
+            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid}</span>`
+            : `<span style="color: #334155;">${formattedPaid}</span>`;
 
-        // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить»
+        // Если долг погашен (меньше или равен 0), выводим текст «Оплачено», иначе кнопку «Оплатить» (с сохранением фирменного зеленого цвета кнопки)
         const actionHtml = debtSumNum <= 0 
-            ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
+            ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
             : `<button type="button" onclick="openPaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
-                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                 Оплатить
-            </button>`;
+              </button>`;
 
         return `
-            <td><b>№ ${docTitle}</b></td>
-            <td><span style="color: #4b5563;">${formattedDate}</span></td>
-            <td>${item.postavhik_name || '—'}</td>
-            <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
-            <td style="text-align: right;">${qty}</td>
-            <td style="text-align: right; font-weight: bold; color: #dc2626;">-${sum} </td>
+            <td><span style="font-weight: 600; color: #0f172a;">№ ${docTitle}</span></td>
+            <td><span style="color: #475569;">${formattedDate}</span></td>
+            <td><span style="color: #0f172a;">${item.postavhik_name || '—'}</span></td>
+            <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
+            <td style="text-align: right; color: #334155;">${qty}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
             <td style="text-align: right;">${paidHtml}</td>
-            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
-                ${debtSum} 
+            <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
+                ${debtSum}
             </td>
             <td style="text-align: center;">
                 ${actionHtml}
@@ -2090,7 +2090,6 @@ expenses_by_receipts: {
         `;
     }
 },
-
 expense_payments: {
     title: 'История всех оплат',
     columns: [
