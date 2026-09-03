@@ -3609,10 +3609,28 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
     });
 }
-async function openRepairForm(item = null, parentId = null) {
-    console.log('[openRepairForm] СТАРТ. item:', item, 'parentId:', parentId);
 
-    const entity = 'repairs';
+async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) {
+    let item, parentId;
+
+    if (entityOrItem && typeof entityOrItem === 'object' && (entityOrItem.id !== undefined || entityOrItem.doc_number || entityOrItem.repair_id)) {
+        item = entityOrItem;
+        parentId = itemArg;
+    } else if (!itemArg || (typeof itemArg === 'object' && !itemArg.id && !itemArg.doc_number)) {
+        if (entityOrItem && typeof entityOrItem === 'object') {
+            item = entityOrItem;
+        } else {
+            item = itemArg;
+        }
+        parentId = parentIdArg;
+    } else {
+        item = itemArg;
+        parentId = parentIdArg;
+    }
+
+    const entity = 'repair_items';
+    console.log('[openRepairForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
+
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -3708,7 +3726,17 @@ async function openRepairForm(item = null, parentId = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        if (col.ref) {
+        if (col.field === 'is_posted') {
+            const statusItems = await fetchReferenceData('statuses');
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+
+            statusItems.forEach(st => {
+                const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
+                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+            });
+
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.ref) {
             const referenceName = col.ref;
             console.log(`[openRepairForm] Загрузка справочника для поля ${col.field}:`, referenceName);
             let refItems = await fetchReferenceData(referenceName);
@@ -3727,7 +3755,7 @@ async function openRepairForm(item = null, parentId = null) {
                     const brd = refItem.brand || refItem.car_brand || '';
                     displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
                 } else {
-                    displayName = refItem.name || refItem.title || (`Запись #${refItem.id}`);
+                    displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
@@ -3737,6 +3765,24 @@ async function openRepairForm(item = null, parentId = null) {
             const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
             const fieldNameForSelect = (col.field === 'zaphasti_id') ? 'zaphast_id' : col.field;
             inputHtml = `<select name="${fieldNameForSelect}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            let formattedVal = '';
+            if (col.field === 'fact_date' && !val && isPosted) {
+                val = currentDateTime;
+            }
+
+            if (val) {
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const minutes = String(d.getMinutes()).padStart(2, '0');
+                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else {
@@ -3751,7 +3797,6 @@ async function openRepairForm(item = null, parentId = null) {
         `;
     }
 
-    // Переставляем поля местами: находим поле автомобиля (car_id) и МОЛ, чтобы выстроить нужном порядке
     const columns = [...config.columns];
     const carColIndex = columns.findIndex(c => c.field === 'car_id');
     const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
@@ -3783,6 +3828,86 @@ async function openRepairForm(item = null, parentId = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
+    const factDateInput = formElement.querySelector('[name="fact_date"]');
+
+    if (isPostedSelect && factDateInput) {
+        isPostedSelect.addEventListener('change', () => {
+            if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
+                factDateInput.value = currentDateTime;
+            } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
+                factDateInput.value = '';
+            }
+        });
+    }
+
+    // Фильтрация МОЛ по складу для ремонта
+    if (formElement) {
+        const pairs = [
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+            { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        ];
+
+        pairs.forEach(({ warehouse, mol }) => {
+            if (!warehouse || !mol) return;
+
+            async function filterMols(isUserChange = false) {
+                const selectedWarehouseId = warehouse.value;
+                const currentMolValue = mol.value;
+
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+
+                    if (!molRes.ok) return;
+                    const mols = await molRes.json();
+                    const users = usersRes.ok ? await usersRes.json() : [];
+
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
+
+                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                    let isCurrentStillValid = false;
+
+                    mols.forEach(m => {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+
+                            if (String(m.id) === String(currentMolValue)) {
+                                option.selected = true;
+                                isCurrentStillValid = true;
+                            }
+                            mol.appendChild(option);
+                        }
+                    });
+
+                    if (isUserChange && !isCurrentStillValid) {
+                        mol.value = '';
+                    }
+                } catch (err) {
+                    console.error('Ошибка при фильтрации МОЛ:', err);
+                }
+            }
+
+            warehouse.addEventListener('change', () => {
+                filterMols(true);
+            });
+
+            if (warehouse.value) {
+                filterMols(false);
+            }
+        });
+    }
 
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const quantityInput = formElement.querySelector('[name="quantity"]');
@@ -3904,6 +4029,10 @@ async function openRepairForm(item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+
         if (parentId) {
             data.repair_id = parentId;
         }
@@ -3970,7 +4099,6 @@ async function openRepairForm(item = null, parentId = null) {
         }
     });
 }
-
 
 async function openRealizationForm(entity, item = null) {
     console.log("🚀 openRealizationForm вызвана. Аргументы:", {
