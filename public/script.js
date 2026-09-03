@@ -7274,6 +7274,33 @@ async function postReceipt(receiptId) {
 }
 
 
+
+async function postRepair(repairId) {
+    showPostConfirmModal(
+        'Проведение документа',
+        'Вы действительно хотите провести этот документ ремонта?',
+        async () => {
+            try {
+                const response = await fetch(`/api/repairs/${repairId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_posted: true })
+                });
+
+                if (!response.ok) throw new Error('Ошибка при проведении документа');
+
+                showAppNotification('Документ ремонта успешно проведен', 'success');
+                refreshData();
+            } catch (err) {
+                console.error(err);
+                showAppNotification('Не удалось провести документ', 'error');
+            }
+        }
+    );
+}
+
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
