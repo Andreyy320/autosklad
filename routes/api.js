@@ -3801,75 +3801,97 @@ router.get('/money_receipts', async (req, res) => {
         console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id из фильтра:`, sklad_id);
 
         const query = `
+            WITH calc_data AS (
+                SELECT 
+                    real.id AS id,
+                    real.id AS realization_id,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    c.id AS customer_id,
+                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
+                    COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    
+                    -- Полная потенциальная прибыль документа (если всё оплатят)
+                    ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    
+                    -- Потенциальный плюс по запчастям и работам отдельно
+                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
+                FROM realizations real
+                JOIN customers c ON real.customer_id = c.id
+                LEFT JOIN skladi sk ON real.sklad_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.realization_id, 
+                        SUM(ri.quantity) AS parts_qty, 
+                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
+                        SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM realization_items ri
+                    GROUP BY ri.realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT 
+                        rw.realization_id, 
+                        SUM(rw.quantity) AS works_qty,
+                        SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
+                    FROM realization_works rw
+                    GROUP BY rw.realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+                  AND ($1::integer IS NULL OR real.sklad_id = $1)
+            )
             SELECT 
-                real.id AS id,
-                real.id AS realization_id,
-                real.doc_number::text AS doc_number,
-                real.doc_date AS date,
-                c.id AS customer_id,
-                COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
-                sk.name::text AS sklad_name,
-                1 AS total_orders,
-                COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
-                COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
-                COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
-                COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
-                COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
-                COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
-                ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
+                id,
+                realization_id,
+                doc_number,
+                date,
+                customer_id,
+                counterparty_name,
+                sklad_name,
+                total_orders,
+                parts_qty,
+                total_purchase_sum,
+                total_retail_sum,
+                parts_sum,
+                works_sum,
+                total_realization_sum,
+                total_paid,
+                (total_realization_sum - total_paid)::numeric AS debt_sum,
+                parts_profit,
+                works_profit,
                 
-                -- Чистая прибыль по запчастям (продажа запчастей - закупка запчастей)
-                (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
-                
-                -- Сумма по работам идет целиком в плюс
-                COALESCE(sub_w.works_sum, 0)::numeric AS works_profit,
+                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
+                -- Если документ полностью оплачен (total_paid >= total_realization_sum), 
+                -- то в реальный плюс идет вся прибыль. Если оплачен частично — пропорционально. 
+                -- Если долг полный (0 оплачено) — реальный плюс равен 0.
+                CASE 
+                    WHEN total_realization_sum <= 0 THEN 0
+                    ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
+                END::numeric AS net_profit
 
-                -- Общий чистый плюс (запчасти маржа + работы)
-                (
-                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + 
-                    COALESCE(sub_w.works_sum, 0)
-                )::numeric AS net_profit
-            FROM realizations real
-            JOIN customers c ON real.customer_id = c.id
-            LEFT JOIN skladi sk ON real.sklad_id = sk.id
-            -- Подзапрос для запчастей
-            LEFT JOIN (
-                SELECT 
-                    ri.realization_id, 
-                    SUM(ri.quantity) AS parts_qty, 
-                    SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
-                    SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
-                    SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
-                FROM realization_items ri
-                GROUP BY ri.realization_id
-            ) sub_i ON real.id = sub_i.realization_id
-            -- Подзапрос для услуг (работ)
-            LEFT JOIN (
-                SELECT 
-                    rw.realization_id, 
-                    SUM(rw.quantity) AS works_qty,
-                    SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
-                FROM realization_works rw
-                GROUP BY rw.realization_id
-            ) sub_w ON real.id = sub_w.realization_id
-            -- Подзапрос для оплат
-            LEFT JOIN (
-                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
-                FROM customer_payments cp
-                GROUP BY cp.realization_id
-            ) sub_p ON real.id = sub_p.realization_id
-            WHERE real.is_posted = true
-              AND ($1::integer IS NULL OR real.sklad_id = $1)
-            ORDER BY real.doc_date DESC;
+            FROM calc_data
+            ORDER BY date DESC;
         `;
 
         const result = await pool.query(query, [sklad_id || null]);
 
-        // 🔎 ВЫВОДИМ ПОДРОБНЫЕ ЛОГИ В КОНСОЛЬ СЕРВЕРА
         console.log(`📊 [DEBUG /api/money_receipts] Найдено документов: ${result.rows.length} для склада ID: ${sklad_id || 'ВСЕ'}`);
         result.rows.forEach(row => {
-            console.log(`   ➔ Док: ${row.doc_number} | Склад: ${row.sklad_name} | Запчасти (прод): ${row.parts_sum}, Закупка: ${row.total_purchase_sum}, Плюс запчасти: ${row.parts_profit} | Услуги: ${row.works_sum} | Общий плюс: ${row.net_profit}`);
+            console.log(`   ➔ Док: ${row.doc_number} | Сумма: ${row.total_realization_sum} | Оплачено: ${row.total_paid} | Долг: ${row.debt_sum} | Реальный плюс: ${row.net_profit}`);
         });
 
         res.json(result.rows);
