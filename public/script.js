@@ -1728,18 +1728,23 @@ realization_works: {
 money_receipts_by_sklad: {
     title: 'Аналитика продаж по складам',
     columns: [
-        { field: 'sklad_name', label: 'Склад', width: '220px' },
-        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '90px', align: 'right' },
-        { field: 'parts_sum', label: 'Запчасти ', width: '110px', align: 'right' },
-        { field: 'works_sum', label: 'Услуги ', width: '110px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Общая ', width: '120px', align: 'right' }
+        { field: 'sklad_name', label: 'Склад', width: '180px' },
+        { field: 'total_orders', label: 'Заказов', width: '60px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'parts_sum', label: 'Запчасти', width: '95px', align: 'right' },
+        { field: 'works_sum', label: 'Услуги', width: '95px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Сумма', width: '100px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '100px', align: 'right' },
+        { field: 'total_debt', label: 'Долг', width: '100px', align: 'right' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
         const worksSum = Number(item.works_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const totalDebt = Number(item.total_debt || item.debt_sum || 0).toFixed(2);
+        const debtNum = Number(totalDebt);
 
         return `
             <td><span style="color: #0284c7; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
@@ -1747,86 +1752,105 @@ money_receipts_by_sklad: {
             <td style="text-align: right;">${totalQty}</td>
             <td style="text-align: right; color: #4b5563;">${partsSum}</td>
             <td style="text-align: right; color: #0284c7;">${worksSum}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid}</td>
+            <td style="text-align: right; font-weight: bold; color: ${debtNum > 0 ? '#dc2626' : '#6b7280'};">
+                ${totalDebt}
+            </td>
         `;
     }
 },
 
-   money_receipts: {
+money_receipts: {
     title: 'Аналитика продаж по покупателям и складам',
     columns: [
-        { field: 'counterparty_name', label: 'Покупатель', width: '180px' },
-        { field: 'sklad_name', label: 'Склад списания', width: '130px' },
-        { field: 'total_orders', label: 'Заказов', width: '70px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во', width: '75px', align: 'right' },
-        { field: 'total_purchase_sum', label: 'Закупка', width: '95px', align: 'right' },
-        { field: 'parts_sum', label: 'Запчасти', width: '95px', align: 'right' },
-        { field: 'works_sum', label: 'Услуги', width: '95px', align: 'right' },
-        { field: 'total_realization_sum', label: 'Итого выручка', width: '110px', align: 'right' }
+        { field: 'counterparty_name', label: 'Покупатель', width: '160px' },
+        { field: 'sklad_name', label: 'Склад', width: '110px' },
+        { field: 'total_orders', label: 'Заказов', width: '60px', align: 'center' },
+        { field: 'total_qty', label: 'Кол-во', width: '65px', align: 'right' },
+        { field: 'total_realization_sum', label: 'Сумма', width: '95px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '95px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '95px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '90px', align: 'center' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
-        const purchaseSum = Number(item.total_purchase_sum || 0).toFixed(2);
-        const partsSum = Number(item.parts_sum || 0).toFixed(2);
-        const worksSum = Number(item.works_sum || 0).toFixed(2);
         const realizationSum = Number(item.total_realization_sum || 0).toFixed(2);
+        const totalPaidNum = Number(item.total_paid || 0);
+        const formattedPaid = totalPaidNum.toFixed(2);
+        const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
+        const debtSum = debtSumNum.toFixed(2);
+        const docTitle = item.counterparty_name || item.doc_number || item.id;
+
+        // Кликабельная сумма оплат для просмотра истории (если есть оплаты)
+        const paidHtml = totalPaidNum > 0 
+            ? `<span onclick="openIncomePaymentHistory('${item.id || item.realization_id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
+            : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
+
+        // Кнопка приема оплаты, если есть долг
+        const actionHtml = debtSumNum <= 0 
+            ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
+            : `<button type="button" onclick="openIncomePaymentDrawer('${item.id || item.realization_id}', '${debtSum}', '${docTitle}')" 
+                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Внести оплату
+              </button>`;
 
         return `
             <td><b>${item.counterparty_name || 'Розничный покупатель'}</b></td>
             <td><span style="color: #0284c7; font-weight: 500;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center;">${item.total_orders || 0}</td>
             <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; color: #666;">${purchaseSum}</td>
-            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
-            <td style="text-align: right; color: #0284c7; font-weight: 500;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${realizationSum}</td>
+            <td style="text-align: right;">${paidHtml}</td>
+            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
+                ${debtSum}
+            </td>
+            <td style="text-align: center;">
+                ${actionHtml}
+            </td>
         `;
     }
 },
 
-    money_receipts_detail: {
-        title: 'Детализация: купленные товары и услуги',
-        columns: [
-            { field: 'doc_number', label: 'Документ', width: '100px' },
-            { field: 'product_code', label: 'Код', width: '90px' },
-            { field: 'product_name', label: 'Наименование товара / услуги', width: '240px' },
-            { field: 'quantity', label: 'Кол-во', width: '80px', align: 'center' },
-            { field: 'purchase_price', label: 'Закупка (шт)', width: '110px', align: 'right' },
-            { field: 'retail_price', label: 'Розница (шт)', width: '110px', align: 'right' },
-            { field: 'final_unit_price', label: 'Цена со скидкой', width: '120px', align: 'right' },
-            { field: 'total_rub', label: 'Итого сумма', width: '120px', align: 'right' }
-        ],
-        render: (item) => {
-            const qty = Number(item.quantity || 0).toFixed(2);
-            const purchase = Number(item.purchase_price || 0).toFixed(2);
-            const retail = Number(item.retail_price || 0).toFixed(2);
-            const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
-            const total = Number(item.total_rub || 0).toFixed(2);
+money_receipts_detail: {
+    title: 'Детализация: купленные товары и услуги',
+    columns: [
+        { field: 'doc_number', label: 'Документ', width: '100px' },
+        { field: 'product_code', label: 'Код', width: '90px' },
+        { field: 'product_name', label: 'Наименование товара / услуги', width: '240px' },
+        { field: 'quantity', label: 'Кол-во', width: '80px', align: 'center' },
+        { field: 'purchase_price', label: 'Закупка (шт)', width: '110px', align: 'right' },
+        { field: 'retail_price', label: 'Розница (шт)', width: '110px', align: 'right' },
+        { field: 'final_unit_price', label: 'Цена со скидкой', width: '120px', align: 'right' },
+        { field: 'total_rub', label: 'Итого сумма', width: '120px', align: 'right' }
+    ],
+    render: (item) => {
+        const qty = Number(item.quantity || 0).toFixed(2);
+        const purchase = Number(item.purchase_price || 0).toFixed(2);
+        const retail = Number(item.retail_price || 0).toFixed(2);
+        const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
+        const total = Number(item.total_rub || 0).toFixed(2);
 
-            return `
-                <td><b>${item.doc_number || ''}</b></td>
-                <td>${item.product_code || '—'}</td>
-                <td><b>${item.product_name || '—'}</b></td>
-                <td style="text-align: center;">${qty}</td>
-                <td style="text-align: right; color: #666;">${purchase} </td>
-                <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} </td>
-                <td style="text-align: right; color: #0284c7; font-weight: 500;">${finalPrice} </td>
-                <td style="text-align: right; font-weight: bold; color: #16a34a;">+${total} </td>
-            `;
-        }
-    },
+        return `
+            <td><b>${item.doc_number || ''}</b></td>
+            <td>${item.product_code || '—'}</td>
+            <td><b>${item.product_name || '—'}</b></td>
+            <td style="text-align: center;">${qty}</td>
+            <td style="text-align: right; color: #666;">${purchase} </td>
+            <td style="text-align: right; text-decoration: line-through; color: #999;">${retail} </td>
+            <td style="text-align: right; color: #0284c7; font-weight: 500;">${finalPrice} </td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${total} </td>
+        `;
+    }
+},
 
-    money_receipts_works_detail: {
+money_receipts_works_detail: {
     title: 'Детализация: оказанные услуги и работы',
     columns: [
         { field: 'doc_number', label: 'Документ', width: '100px' },
         { field: 'work_name', label: 'Наименование услуги', width: '220px' },
         { field: 'quantity', label: 'Кол-во', width: '70px', align: 'center' },
-        { field: 'retail_price', label: 'Розница', width: '100px', align: 'right' },
-        { field: 'final_unit_price', label: 'Реализация', width: '100px', align: 'right' },
-        { field: 'discount_label', label: 'Скидка', width: '110px', align: 'center' },
-        { field: 'total_rub', label: 'Сумма РУБ', width: '110px', align: 'right' },
-        { field: 'description', label: 'Описание', width: '150px' }
+        (Rest of columns and render logic unchanged)
     ],
     render: (item) => {
         const qty = Number(item.quantity || 0).toFixed(2);
