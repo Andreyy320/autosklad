@@ -1798,15 +1798,16 @@ money_receipts: {
             ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}')" style="color: #16a34a; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid} </span>`
             : `<span style="color: #16a34a; font-weight: bold;">${formattedPaid}</span>`;
 
-        // Для внутренних ремонтов долг всегда закрыт (они закрываются своей суммой на бэке), либо можно скрыть кнопку действия
-        const actionHtml = isRepair 
-            ? `<span style="color: #d97706; font-size: 12px; font-weight: 500;">Ремонт</span>`
-            : (debtSumNum <= 0 
-                ? `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`
-                : `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
-                    style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                    Оплатить
-                  </button>`);
+        // Универсальная кнопка действия: если долга нет — «Оплачено», если есть — кнопка «Оплатить» (теперь и для продаж, и для ремонтов)
+        let actionHtml = '';
+        if (debtSumNum <= 0) {
+            actionHtml = `<span style="color: #16a34a; font-weight: 600; font-size: 12px;">Оплачено</span>`;
+        } else {
+            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}')" 
+                style="background: #16a34a; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+              </button>`;
+        }
 
         return `
             <td><b>№ ${docTitle}</b></td>
@@ -1817,7 +1818,7 @@ money_receipts: {
             <td style="text-align: right; color: #0284c7;">${worksSum}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">+${sum} </td>
             <td style="text-align: right;">${paidHtml}</td>
-            <td style="text-align: right; font-weight: bold; color: ${!isRepair && debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
+            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">
                 ${debtSum} 
             </td>
             <td style="text-align: center;">

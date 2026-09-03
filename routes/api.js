@@ -3896,7 +3896,7 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     COALESCE(rep.sum, 0)::numeric AS total_realization_sum,
-                    COALESCE(rep.sum, 0)::numeric AS total_paid, -- Внутренний ремонт считается закрытым по своей сумме
+                    COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, -- Считаем реальные оплаты по ремонтам через табличку платежей, аналогично продажам
                     
                     0::numeric AS full_net_profit, -- Внутренний ремонт не генерирует коммерческую прибыль
                     0::numeric AS parts_profit,
@@ -3920,6 +3920,11 @@ router.get('/money_receipts', async (req, res) => {
                     FROM repair_works rw
                     GROUP BY rw.repair_id
                 ) rep_w ON rep.id = rep_w.repair_id
+                LEFT JOIN (
+                    SELECT cp.repair_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.repair_id
+                ) rep_p ON rep.id = rep_p.repair_id -- Подключаем реальные платежи для ремонтов
                 WHERE rep.is_posted = true
                   AND ($1::integer IS NULL OR rep.warehouse_id = $1)
             )
@@ -3966,7 +3971,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
