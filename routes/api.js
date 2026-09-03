@@ -4108,15 +4108,19 @@ router.get('/money_receipts_detail', async (req, res) => {
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
             ) sub
-            WHERE ($1::integer IS NULL OR sub.rel_id = $1 OR sub.rep_id = $1)
-              AND ($2::integer IS NULL OR sub.rep_id = $2)
-              AND ($3::integer IS NULL OR sub.cust_id = $3)
-              AND ($4::integer IS NULL OR sub.skl_id = $4)
+            WHERE 
+                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
+                ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
+                -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
+                AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
+                -- Фильтры по клиенту и складу работают для общих выборок
+                AND ($3::integer IS NULL OR sub.cust_id = $3)
+                AND ($4::integer IS NULL OR sub.skl_id = $4)
             ORDER BY date DESC, id ASC;
         `;
 
         const result = await pool.query(cleanQuery, [
-            cleanRealizationId || cleanRepairId, 
+            cleanRealizationId, 
             cleanRepairId, 
             cleanCustomerId, 
             cleanSkladId
