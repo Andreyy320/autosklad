@@ -3819,7 +3819,7 @@ router.get('/money_receipts', async (req, res) => {
                 COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                 ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(sub_p.paid_sum, 0))::numeric AS debt_sum,
                 
-                -- Чистый плюс по запчастям (продажа запчастей - закупка запчастей)
+                -- Чистая прибыль по запчастям (продажа запчастей - закупка запчастей)
                 (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                 
                 -- Сумма по работам идет целиком в плюс
@@ -3855,8 +3855,9 @@ router.get('/money_receipts', async (req, res) => {
             ) sub_w ON real.id = sub_w.realization_id
             -- Подзапрос для оплат
             LEFT JOIN (
-                SELECT cp.realization_id, cp.amount AS paid_sum
+                SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
                 FROM customer_payments cp
+                GROUP BY cp.realization_id
             ) sub_p ON real.id = sub_p.realization_id
             WHERE real.is_posted = true
               AND ($1::integer IS NULL OR real.sklad_id = $1)
@@ -3873,7 +3874,7 @@ router.get('/money_receipts', async (req, res) => {
 
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка в /api/money_receipts:', err);
+        console.error('❌ Ошибка:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
