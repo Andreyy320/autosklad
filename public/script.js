@@ -6164,7 +6164,6 @@ async function submitIncomePayment(event, docId, isRepair) {
     }
 }
 
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6326,7 +6325,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 
                 const docTitle = item.doc_number || item.id;
                 // Определение, является ли документ ремонтом (по отсутствию customer_id или префиксу)
-                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(item.id).startsWith('рем');
+                const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(docTitle).startsWith('Р-') || String(item.id).startsWith('рем');
 
                 let realizationSum = 0;
                 let paidSum = 0;
@@ -6340,18 +6339,18 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     paidSum = Number(item.total_paid || item.paid || 0);
                     debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
                     
-                    // Для ремонта задействуем parts_profit / parts_sum
-                    partProfitFull = Number(item.parts_profit || item.parts_sum || 0);
-                    workSumFull = Number(item.works_sum || 0);
-                    netProfitFull = Number(item.net_profit || partProfitFull + workSumFull);
+                    // Расширенная проверка всех возможных ключей для прибыли по запчастям и услугам
+                    partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
+                    workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
+                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
                 } else {
                     realizationSum = Number(item.total_realization_sum || 0);
                     paidSum = Number(item.total_paid || 0);
                     debtSum = Number(item.debt_sum || item.total_debt || 0);
                     
-                    partProfitFull = Number(item.parts_profit || 0);
-                    workSumFull = Number(item.works_sum || 0);
-                    netProfitFull = Number(item.net_profit || 0);
+                    partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
+                    workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
+                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
                 }
 
                 // Расчет коэффициента оплаты (payRatio): пропорция оплаченной суммы к общей сумме документа
