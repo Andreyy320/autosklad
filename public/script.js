@@ -1792,7 +1792,6 @@ money_receipts_by_sklad: {
         `;
     }
 },
-
 money_receipts: {
     title: 'Список документов (продажи и ремонты)',
     columns: [
@@ -1822,7 +1821,8 @@ money_receipts: {
         
         let counterpartyHtml = '';
         if (isRepair) {
-            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">🚗 ${item.counterparty_name || 'Ремонт а/м'}</span>`;
+            // Значок машинки убран, остался аккуратный текст
+            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">${item.counterparty_name || 'Ремонт а/м'}</span>`;
         } else {
             counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
         }
@@ -1835,8 +1835,9 @@ money_receipts: {
         if (debtSumNum <= 0) {
             actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
         } else {
+            // Возвращен прежний зеленый цвет кнопки (#16a34a)
             actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
-                style="background: #334155; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                 Оплатить
               </button>`;
         }
