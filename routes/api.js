@@ -3901,9 +3901,10 @@ router.get('/money_receipts', async (req, res) => {
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
-                    0::numeric AS parts_profit,
-                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum_profit
+                    -- В ремонте вся прибыль идет в parts_profit (запчасти), чтобы суммировалась куда надо
+                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
+                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS parts_profit,
+                    0::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
                 LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
@@ -3968,7 +3969,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, repair_id, customer_id, sklad_id } = req.query;
