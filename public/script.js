@@ -6257,7 +6257,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
-            // Добавляем точно такую же логику кнопки «Оплатить / Оплачено» и истории, как в расходах (2 уровень)
+            // Настройка кнопок действий только для документов (реализаций)
             if (currentReceiptView === 'money_receipts') {
                 const realizationId = item.realization_id || item.id || '';
                 const docNumber = item.doc_number || item.number || '';
@@ -6274,7 +6274,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                 if (debtSum <= 0) {
                     actionTd.innerHTML = `
-                        <button type="button" title="Оплачено" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
+                        <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: none; border: none; color: #16a34a; font-weight: bold; cursor: pointer; padding: 4px 8px;">Оплачено</button>
                         <button type="button" title="История поступлений" onclick="event.stopPropagation(); openIncomePaymentHistory('${realizationId}', '${docNumber}')" style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 4px;">📋</button>
                         <button type="button" title="Внести платеж" onclick="event.stopPropagation(); openIncomePaymentDrawer('${realizationId}', ${debtSum}, '${docNumber}')" style="background: #16a34a; color: white; border: none; border-radius: 4px; padding: 4px 6px; cursor: pointer; margin-left: 2px;">💵</button>
                     `;
