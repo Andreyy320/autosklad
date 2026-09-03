@@ -3193,8 +3193,22 @@ async function openReceiptForm(entity, item = null) {
     });
 }
 
+async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
+    // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
+    let entity, item, parentId;
 
-async function openMoveForm(entity, item = null, parentId = null) {
+    if (typeof entityOrItem === 'object' && entityOrItem !== null) {
+        // Если первым аргументом передали объект (например, item из editSelectedEntity)
+        item = entityOrItem;
+        entity = typeof currentEntity !== 'undefined' ? currentEntity : 'moves';
+        parentId = itemArg; // Второй аргумент в таком случае может быть parentId
+    } else {
+        // Стандартный вызов: (entity, item, parentId)
+        entity = entityOrItem || (typeof currentEntity !== 'undefined' ? currentEntity : 'moves');
+        item = itemArg;
+        parentId = parentIdArg;
+    }
+
     console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
     const config = getConfig(entity);
@@ -3594,7 +3608,6 @@ async function openMoveForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 async function openRepairForm(item = null, parentId = null) {
     console.log('[openRepairForm] СТАРТ. item:', item, 'parentId:', parentId);
 
