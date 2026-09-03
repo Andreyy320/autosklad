@@ -3842,7 +3842,11 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                     (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    
+                    -- Полная потенциальная прибыль документа (если всё оплатят)
                     ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    
+                    -- Потенциальный плюс по запчастям и работам отдельно
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
@@ -3876,7 +3880,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей
+                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3891,14 +3895,19 @@ router.get('/money_receipts', async (req, res) => {
                     0::numeric AS total_retail_sum,
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
+                    
+                    -- Итоговая сумма ремонта = Запчасти + Работы
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
+                    
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
+                    
+                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
                     ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
                     
-                    -- Плюс запчасти в ремонте = Продажа запчастей минус их закупка
+                    -- Плюс запчасти = Продажа запчастей минус их закупка
                     (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     
-                    -- Услуги (работы) в ремонте = Сумма всех работ
+                    -- Услуги = Сумма работ по ремонту
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
@@ -3907,7 +3916,12 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
+                        -- Закупочная стоимость: если в repair_items нет отдельной закупки, 
+                        -- берем себестоимость/партию из поступления через zaphast_id или считаем нулем. 
+                        -- Сейчас для теста ставим 0, чтобы вся сумма продажи уходила в прибыль запчастей, 
+                        -- либо можно заменить на расчет по вашей логике прихода.
+                        0 AS total_purchase_sum,
+                        -- Сумма продажи запчастей в ремонте (total, либо price * quantity)
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
@@ -3946,10 +3960,13 @@ router.get('/money_receipts', async (req, res) => {
                 (total_realization_sum - total_paid)::numeric AS debt_sum,
                 parts_profit,
                 works_profit,
+                
+                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
                 CASE 
                     WHEN total_realization_sum <= 0 THEN 0
                     ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
                 END::numeric AS net_profit
+
             FROM calc_data
             ORDER BY date DESC;
         `;
@@ -3961,6 +3978,8 @@ router.get('/money_receipts', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
+        console.error('📄 Текст ошибки (message):', err.message);
+        console.error('🧩 Стек ошибки (stack):', err.stack);
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
