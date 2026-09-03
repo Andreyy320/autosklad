@@ -4870,6 +4870,15 @@ function openActiveEntityForm(action, item = null) {
                 openEntityForm(entity, actualItem);
             }
             break;
+
+        case 'Ремонт':
+        case 'repairs':
+            if (typeof openRepairForm === 'function') {
+                openRepairForm('repairs', actualItem, null);
+            } else {
+                openEntityForm(entity, actualItem);
+            }
+            break;
             
         default:
             if (typeof openEntityForm === 'function') {
@@ -4880,7 +4889,6 @@ function openActiveEntityForm(action, item = null) {
             break;
     }
 }
-
 
 
 document.getElementById('login-form').addEventListener('submit', async function(e) {
