@@ -5995,8 +5995,6 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
-
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6019,6 +6017,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         fetchUrl = `/api/money_receipts_by_sklad`;
         if (detailContainer) detailContainer.style.display = 'none';
+        
+        const tabsBlock = document.getElementById('tabs-for-money-receipts');
+        if (tabsBlock) tabsBlock.style.display = 'none';
 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
@@ -6032,7 +6033,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRealizationId = null;
 
         fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
-        if (detailContainer) detailContainer.style.display = 'none';
+        
+        // Показываем контейнер деталей и блок с вкладками
+        if (detailContainer) detailContainer.style.display = 'block';
+        const tabsBlock = document.getElementById('tabs-for-money-receipts');
+        if (tabsBlock) tabsBlock.style.display = 'flex';
 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
@@ -6127,6 +6132,16 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     loadReceiptMainData('money_receipts', item);
                 } else if (currentEntity === 'money_receipts') {
                     console.log('Выбрана конкретная реализация:', item);
+                    window.currentRealizationId = item.realization_id || item.id;
+
+                    // Сбрасываем вкладки на первую ("Запчасть")
+                    document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
+                    });
+
+                    // Автоматически загружаем запчасти для выбранной реализации в нижнюю таблицу
+                    loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${window.currentRealizationId}`);
                 }
             });
 
@@ -6138,6 +6153,27 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
         }
+    }
+}
+
+// Переключение между вкладками "Запчасть" и "Услуга" внизу
+function switchMoneyReceiptTab(tabName, btnElement) {
+    document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    if (btnElement) {
+        btnElement.classList.add('active');
+    }
+
+    if (!window.currentRealizationId) {
+        console.warn('⚠️ Реализация не выбрана');
+        return;
+    }
+
+    if (tabName === 'money_receipts_detail') {
+        loadReceiptDetailTable(`/api/money_receipts_detail?realization_id=${window.currentRealizationId}`);
+    } else if (tabName === 'money_receipts_works_detail') {
+        loadReceiptWorksDetailTable(`/api/money_receipts_works_detail?realization_id=${window.currentRealizationId}`);
     }
 }
 
@@ -6183,6 +6219,52 @@ async function loadReceiptDetailTable(fetchUrl) {
         console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
+        }
+    }
+}
+
+// Загрузка спецификации услуг
+async function loadReceiptWorksDetailTable(fetchUrl) {
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const config = getConfig('money_receipts_works_detail');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    const colCount = config && config.columns ? config.columns.length : 8;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка услуг...</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        const responseText = await response.text();
+        if (!response.ok) throw new Error('Ошибка загрузки услуг');
+        const items = JSON.parse(responseText);
+
+        if (!detailBody) return;
+        if (items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет услуг в этой реализации</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = config.render(item);
+            detailBody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки услуг</td></tr>`;
         }
     }
 }
