@@ -5894,11 +5894,12 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 // ==========================================
-// ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
+// 1. ОТДЕЛЬНЫЙ КЛИКЕР ДЛЯ УРОВНЕЙ РАСХОДОВ
 // ==========================================
 const tableBodyForExpenses = document.getElementById('table-body');
 if (tableBodyForExpenses) {
     tableBodyForExpenses.addEventListener('click', async (e) => {
+        // Если это не расходы — сразу уходим и отдаем событие дальше
         if (
             currentEntity !== 'expenses_by_sklad' && 
             currentEntity !== 'expenses_by_suppliers' && 
@@ -5917,9 +5918,7 @@ if (tableBodyForExpenses) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        // Ищем элемент строго по ID, без привязки к порядковому индексу DOM-дерева
         selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id) === String(id));
-        
         selectedDetailItem = null;  
 
         console.log(`💰 [КЛИК В РАСХОДАХ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
@@ -5965,6 +5964,8 @@ if (tableBodyForExpenses) {
         }
     });
 }
+
+
 
 
 
@@ -6822,9 +6823,21 @@ async function postReceipt(receiptId) {
 }
 
 
+// ==========================================
+// 2. ОБЩИЙ КЛИКЕР ДЛЯ ВСЕХ ОСТАЛЬНЫХ СУЩНОСТЕЙ
+// ==========================================
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
+        // Если это сейчас расходы — общий кликер вообще не должен вмешиваться
+        if (
+            currentEntity === 'expenses_by_sklad' || 
+            currentEntity === 'expenses_by_suppliers' || 
+            currentEntity === 'expenses_by_receipts'
+        ) {
+            return;
+        }
+
         const tr = e.target.closest('tr');
         if (!tr) return;
         
@@ -6976,6 +6989,7 @@ if (tableBody) {
         }
     });
 }
+
 
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
