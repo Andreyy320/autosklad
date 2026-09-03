@@ -1878,7 +1878,7 @@ income_payments: {
             <td><span style="color: #4b5563;">${date}</span></td>
             <td><b>№ ${item.doc_number || item.parent_id}</b></td>
             <td>${item.counterparty_name || '—'}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a;">+${amount}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">${amount}</td>
             <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
