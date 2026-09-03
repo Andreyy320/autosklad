@@ -3628,7 +3628,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         parentId = parentIdArg;
     }
 
-    const entity = 'repair_items';
+    const entity = 'repairs';
     console.log('[openRepairForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
     const config = getConfig(entity);
