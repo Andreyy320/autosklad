@@ -4874,7 +4874,7 @@ function openActiveEntityForm(action, item = null) {
         case 'Ремонт':
         case 'repairs':
             if (typeof openRepairForm === 'function') {
-                openRepairForm('repairs', actualItem, null);
+                openRepairForm('repairs', actualItem);
             } else {
                 openEntityForm(entity, actualItem);
             }
