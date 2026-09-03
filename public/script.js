@@ -1758,7 +1758,6 @@ realization_works: {
         `;
     }
 },
-
 money_receipts_by_sklad: {
     title: 'Аналитика продаж по складам',
     columns: [
@@ -1780,18 +1779,20 @@ money_receipts_by_sklad: {
         const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
         const debtSum = debtSumNum.toFixed(2);
 
+        // Строгий корпоративный стиль без ярких детских цветов и лишних плюсов
         return `
-            <td><span style="color: #0284c7; font-weight: bold; font-size: 14px;">${item.sklad_name || 'Основной склад'}</span></td>
-            <td style="text-align: center;">${item.total_orders || 0}</td>
-            <td style="text-align: right;">${totalQty}</td>
-            <td style="text-align: right; color: #4b5563;">${partsSum}</td>
-            <td style="text-align: right; color: #0284c7;">${worksSum}</td>
-            <td style="text-align: right; font-weight: bold; color: #16a34a; font-size: 14px;">+${realizationSum}</td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">${totalPaid}</td>
-            <td style="text-align: right; font-weight: bold; color: ${debtSumNum > 0 ? '#dc2626' : '#6b7280'};">${debtSum}</td>
+            <td><span style="color: #0f172a; font-weight: 500;">${item.sklad_name || 'Основной склад'}</span></td>
+            <td style="text-align: center; color: #334155;">${item.total_orders || 0}</td>
+            <td style="text-align: right; color: #334155;">${totalQty}</td>
+            <td style="text-align: right; color: #334155;">${partsSum}</td>
+            <td style="text-align: right; color: #334155;">${worksSum}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${realizationSum}</td>
+            <td style="text-align: right; color: #334155;">${totalPaid}</td>
+            <td style="text-align: right; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">${debtSum}</td>
         `;
     }
 },
+
 money_receipts: {
     title: 'Список документов (продажи и ремонты)',
     columns: [
