@@ -6174,13 +6174,18 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Загрузка спецификации товаров (запчастей)
-async function loadReceiptDetailTable(fetchUrl) {
+// Единая функция загрузки детализации (запчасти или услуги) с использованием конфига по типу таба
+async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    const config = getConfig('money_receipts_detail');
+    // Определяем конфигурацию в зависимости от выбранного таба
+    const configKey = (subTabName === 'money_receipts_works_detail' || subTabName === 'realization_works') 
+        ? 'money_receipts_works_detail' 
+        : 'money_receipts_detail';
+
+    const config = getConfig(configKey);
     if (detailTitle && config) detailTitle.innerText = config.title;
 
     if (detailHeaderTr && config && config.columns) {
@@ -6192,17 +6197,19 @@ async function loadReceiptDetailTable(fetchUrl) {
     }
 
     const colCount = config && config.columns ? config.columns.length : 8;
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
+    const loadingText = configKey === 'money_receipts_works_detail' ? 'Загрузка услуг...' : 'Загрузка позиций...';
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${loadingText}</td></tr>`;
 
     try {
         const response = await fetch(fetchUrl);
         const responseText = await response.text();
-        if (!response.ok) throw new Error('Ошибка загрузки позиций');
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
         const items = JSON.parse(responseText);
 
         if (!detailBody) return;
         if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой реализации</td></tr>`;
+            const emptyText = configKey === 'money_receipts_works_detail' ? 'Нет услуг в этой реализации' : 'Нет запчастей в этой реализации';
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${emptyText}</td></tr>`;
             return;
         }
 
@@ -6216,52 +6223,6 @@ async function loadReceiptDetailTable(fetchUrl) {
         console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
-        }
-    }
-}
-
-// Загрузка спецификации услуг (работ)
-async function loadReceiptWorksDetailTable(fetchUrl) {
-    const detailBody = document.getElementById('detail-body');
-    const detailTitle = document.getElementById('detail-title');
-    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
-
-    const config = getConfig('money_receipts_works_detail');
-    if (detailTitle && config) detailTitle.innerText = config.title;
-
-    if (detailHeaderTr && config && config.columns) {
-        detailHeaderTr.innerHTML = config.columns.map(col => {
-            let widthStyle = col.width ? `width: ${col.width};` : '';
-            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-    }
-
-    const colCount = config && config.columns ? config.columns.length : 8;
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка услуг...</td></tr>`;
-
-    try {
-        const response = await fetch(fetchUrl);
-        const responseText = await response.text();
-        if (!response.ok) throw new Error('Ошибка загрузки услуг');
-        const items = JSON.parse(responseText);
-
-        if (!detailBody) return;
-        if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет услуг в этой реализации</td></tr>`;
-            return;
-        }
-
-        detailBody.innerHTML = '';
-        items.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = config.render(item);
-            detailBody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error('❌ [loadReceiptWorksDetailTable ОШИБКА]:', err);
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки услуг</td></tr>`;
         }
     }
 }
@@ -6297,11 +6258,12 @@ function switchMoneyReceiptTab(tabName, btnElement) {
         let url = '';
         if (tabName === 'money_receipts_detail' || tabName === 'realization_items') {
             url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-            loadReceiptDetailTable(url);
         } else if (tabName === 'money_receipts_works_detail' || tabName === 'realization_works') {
             url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-            loadReceiptWorksDetailTable(url);
         }
+
+        // Вызываем объединенную функцию, передавая URL и текущий таб
+        loadReceiptDetailTable(url, tabName);
 
         console.log(`🚀 [switchMoneyReceiptTab] Загрузка данных для нижнего таба "${tabName}" с URL:`, url);
     } else {
