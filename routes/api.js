@@ -3855,32 +3855,119 @@ router.get('/money_receipts_detail', async (req, res) => {
     try {
         const { realization_id, customer_id, sklad_id } = req.query;
         
-        if (!realization_id && !customer_id) {
+        if (!realization_id && !customer_id && !sklad_id) {
             return res.json([]);
         }
 
         const query = `
-            SELECT 
-                ri.id,
-                real.doc_number::text AS doc_number,
-                real.doc_date AS date,
-                ri.code::text AS product_code,
-                ri.name::text AS product_name,
-                ri.quantity::numeric AS quantity,
-                ri.purchase_price::numeric AS purchase_price,
-                ri.retail_price::numeric AS retail_price,
-                ri.price::numeric AS final_unit_price,
-                ri.total_rub::numeric AS total_rub
-            FROM realization_items ri
-            JOIN realizations real ON ri.realization_id = real.id
-            WHERE real.is_posted = true 
-              AND ($1::integer IS NULL OR real.id = $1)
-              AND ($2::integer IS NULL OR real.customer_id = $2)
-              AND ($3::integer IS NULL OR real.sklad_id = $3)
-            ORDER BY real.doc_date DESC, ri.id ASC;
+            SELECT * FROM (
+                -- 1. Запчасти (Товары)
+                SELECT 
+                    ri.id,
+                    'part' AS item_type,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    ri.code::text AS product_code,
+                    ri.name::text AS item_name,
+                    ri.quantity::numeric AS quantity,
+                    ri.purchase_price::numeric AS purchase_price,
+                    ri.retail_price::numeric AS retail_price,
+                    ri.price::numeric AS final_unit_price,
+                    ri.total_rub::numeric AS total_rub,
+                    NULL::text AS description
+                FROM realization_items ri
+                JOIN realizations real ON ri.realization_id = real.id
+                WHERE real.is_posted = true 
+
+                UNION ALL
+
+                -- 2. Услуги (Работы)
+                SELECT 
+                    rw.id,
+                    'work' AS item_type,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    ''::text AS product_code,
+                    rw.name::text AS item_name,
+                    rw.quantity::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    rw.retail_price::numeric AS retail_price,
+                    rw.price::numeric AS final_unit_price,
+                    rw.total_rub::numeric AS total_rub,
+                    COALESCE(rw.description, '')::text AS description
+                FROM realization_works rw
+                JOIN realizations real ON rw.realization_id = real.id
+                WHERE real.is_posted = true
+            ) combined
+            WHERE ($1::integer IS NULL OR id = $1 OR true) -- заглушка для сохранения структуры параметров, если нужно фильтровать по реализации ниже
+              AND ($1::integer IS NULL OR doc_number IS NOT NULL) -- привязка по реализации ниже через реальный ID документа
         `;
-        
-        const result = await pool.query(query, [
+
+        // Уточненный и безопасный вариант запроса с правильной фильтрацией по realization_id, customer_id, sklad_id для объединенной таблицы:
+        const cleanQuery = `
+            SELECT 
+                id,
+                item_type,
+                doc_number,
+                date,
+                product_code,
+                item_name,
+                quantity,
+                purchase_price,
+                retail_price,
+                final_unit_price,
+                total_rub,
+                description
+            FROM (
+                SELECT 
+                    ri.id,
+                    'part' AS item_type,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    ri.code::text AS product_code,
+                    ri.name::text AS item_name,
+                    ri.quantity::numeric AS quantity,
+                    ri.purchase_price::numeric AS purchase_price,
+                    ri.retail_price::numeric AS retail_price,
+                    ri.price::numeric AS final_unit_price,
+                    ri.total_rub::numeric AS total_rub,
+                    ''::text AS description,
+                    real.id AS rel_id,
+                    real.customer_id AS cust_id,
+                    real.sklad_id AS skl_id
+                FROM realization_items ri
+                JOIN realizations real ON ri.realization_id = real.id
+                WHERE real.is_posted = true
+
+                UNION ALL
+
+                SELECT 
+                    rw.id,
+                    'work' AS item_type,
+                    real.doc_number::text AS doc_number,
+                    real.doc_date AS date,
+                    ''::text AS product_code,
+                    rw.name::text AS item_name,
+                    rw.quantity::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    rw.retail_price::numeric AS retail_price,
+                    rw.price::numeric AS final_unit_price,
+                    rw.total_rub::numeric AS total_rub,
+                    COALESCE(rw.description, '')::text AS description,
+                    real.id AS rel_id,
+                    real.customer_id AS cust_id,
+                    real.sklad_id AS skl_id
+                FROM realization_works rw
+                JOIN realizations real ON rw.realization_id = real.id
+                WHERE real.is_posted = true
+            ) sub
+            WHERE ($1::integer IS NULL OR sub.rel_id = $1)
+              AND ($2::integer IS NULL OR sub.cust_id = $2)
+              AND ($3::integer IS NULL OR sub.skl_id = $3)
+            ORDER BY date DESC, id ASC;
+        `;
+
+        const result = await pool.query(cleanQuery, [
             realization_id || null, 
             customer_id || null, 
             sklad_id || null
@@ -3888,44 +3975,8 @@ router.get('/money_receipts_detail', async (req, res) => {
         
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка при получении детальных позиций:', err);
+        console.error('Ошибка при получении объединенной спецификации:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-router.get('/money_receipts_works_detail', async (req, res) => {
-    try {
-        const { customer_id, sklad_id, realization_id } = req.query;
-        
-        const query = `
-            SELECT 
-                rw.id,
-                real.doc_number::text AS doc_number,
-                real.doc_date AS date,
-                rw.name::text AS work_name,
-                rw.quantity::numeric AS quantity,
-                rw.retail_price::numeric AS retail_price,
-                rw.price::numeric AS final_unit_price,
-                COALESCE(rw.discount, 'Розница (0%)')::text AS discount_label,
-                rw.total_rub::numeric AS total_rub,
-                COALESCE(rw.description, '')::text AS description
-            FROM realization_works rw
-            JOIN realizations real ON rw.realization_id = real.id
-            WHERE real.is_posted = true 
-              AND ($1::integer IS NULL OR real.customer_id = $1)
-              AND ($2::integer IS NULL OR real.sklad_id = $2)
-              AND ($3::integer IS NULL OR rw.realization_id = $3)
-            ORDER BY real.doc_date DESC;
-        `;
-        
-        const result = await pool.query(query, [
-            customer_id || null, 
-            sklad_id || null, 
-            realization_id || null
-        ]);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Ошибка при получении детальных услуг:', err.message);
-        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
 // POST-эндпоинт для проведения оплаты по реализации

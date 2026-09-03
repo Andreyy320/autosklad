@@ -4908,6 +4908,7 @@ function logout() {
 }
 
 
+
 async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
@@ -4956,12 +4957,8 @@ async function refreshData() {
             loadDetailData('part_movement_details', selectedItem);
         } else if (currentEntity === 'money_receipts' || currentEntity === 'money_receipts_by_sklad') {
             const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active');
-            let detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
             
-            // Нормализуем имена сущностей табов приходов, чтобы они точно совпадали с обработчиком
-            if (detailEntity === 'realization_items') detailEntity = 'money_receipts_detail';
-            if (detailEntity === 'realization_works') detailEntity = 'money_receipts_works_detail';
-
             // Если выбран конкретный документ реализации, передаем его realization_id, чтобы не терять контекст
             if (selectedItem.realization_id || (currentEntity === 'money_receipts' && selectedItem.id)) {
                 loadDetailData(detailEntity, {
@@ -4978,10 +4975,12 @@ async function refreshData() {
                 loadDetailData(detailEntity, payload);
             }
         }
+        // Старые ветки expenses_* отсюда полностью удалены и готовы к замене на новую изолированную логику.
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
 }
+
 
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
@@ -5994,7 +5993,12 @@ async function loadExpenseDetailTable(fetchUrl) {
 }
 
 
-// Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями и табами
+
+
+
+
+
+// Исправленная и чистая функция loadReceiptMainData с корректным управлением уровнями без табов
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] entity="${entity}", parentId:`, parentId);
 
@@ -6036,7 +6040,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
         
-        // На уровне списка документов табы скрыты, пока пользователь не кликнет на конкретную строку
+        // Табы полностью скрыты
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
 
@@ -6136,47 +6140,30 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     console.log('✅ Выбрана конкретная реализация:', item);
                     window.currentRealizationId = item.realization_id || item.id;
 
-                    // 1. Показываем блок переключателей (табы)
+                    // Блок табов гарантированно скрыт
                     const tabsBlock = document.getElementById('tabs-for-money-receipts');
                     if (tabsBlock) {
-                        tabsBlock.style.display = 'flex';
-                        console.log('🟢 Блок #tabs-for-money-receipts успешно показан');
+                        tabsBlock.style.display = 'none';
                     }
 
-                    // 2. Скрываем ненужные кнопки в тулбаре детализации
+                    // Скрываем ненужные кнопки в тулбаре детализации
                     const detailToolbar = document.getElementById('detail-toolbar');
                     if (detailToolbar) {
                         const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
                         actionButtons.forEach(btn => {
-                            if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
-                                btn.style.display = 'none';
-                            }
+                            btn.style.display = 'none';
                         });
                     }
 
-                    // 3. Выставляем активный таб по умолчанию (первый - запчасти)
-                    document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
-                        btn.classList.remove('active');
-                        if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
-                    });
-
-                    currentMoneyReceiptSubTab = 'money_receipts_detail';
-
-                    // 4. Загружаем данные через универсальную функцию определения сущности
-                    const detailEntity = getCurrentDetailEntity();
+                    // Загружаем объединенные данные через единый роутер
                     let realizationId = item.realization_id || item.id || '';
                     let customerId = item.customer_id || '';
                     let skladId = item.sklad_id || window.currentSkladId || '';
                     
-                    let url = '';
-                    if (detailEntity === 'money_receipts_works_detail') {
-                        url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    } else {
-                        url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                    }
+                    let url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
 
-                    console.log('🚀 Авто-загрузка дефолтного таба через getCurrentDetailEntity:', url);
-                    loadReceiptDetailTable(url, detailEntity);
+                    console.log('🚀 Загрузка объединенной спецификации:', url);
+                    loadReceiptDetailTable(url, 'money_receipts_detail');
                 }
             });
 
@@ -6191,20 +6178,16 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Единая функция загрузки детализации (запчасти или услуги)
+// Единая функция загрузки детализации для общей таблицы
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
-    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}, Сущность/Таб: ${subTabName}`);
+    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
     
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    const configKey = (subTabName === 'money_receipts_works_detail' || subTabName === 'realization_works') 
-        ? 'money_receipts_works_detail' 
-        : 'money_receipts_detail';
-
-    const config = getConfig(configKey);
-    if (detailTitle && config) detailTitle.innerText = config.title;
+    const config = getConfig('money_receipts_detail');
+    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
 
     if (detailHeaderTr && config && config.columns) {
         detailHeaderTr.innerHTML = config.columns.map(col => {
@@ -6215,8 +6198,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 
     const colCount = config && config.columns ? config.columns.length : 8;
-    const loadingText = configKey === 'money_receipts_works_detail' ? 'Загрузка услуг...' : 'Загрузка позиций...';
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${loadingText}</td></tr>`;
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
 
     try {
         const response = await fetch(fetchUrl);
@@ -6227,14 +6209,16 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 
         if (!detailBody) return;
         if (items.length === 0) {
-            const emptyText = configKey === 'money_receipts_works_detail' ? 'Нет услуг в этой реализации' : 'Нет запчастей в этой реализации';
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${emptyText}</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в этой реализации</td></tr>`;
             return;
         }
 
         detailBody.innerHTML = '';
         items.forEach(item => {
             const tr = document.createElement('tr');
+            if (item.item_type === 'work') {
+                tr.style.backgroundColor = '#f8fafc';
+            }
             tr.innerHTML = config.render(item);
             detailBody.appendChild(tr);
         });
@@ -6242,54 +6226,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
-        }
-    }
-}
-
-// Единый переключатель табов внизу с интеграцией getCurrentDetailEntity
-function switchMoneyReceiptTab(tabName, btnElement) {
-    console.log('🔄 [switchMoneyReceiptTab] Клик по табу:', { tabName, selectedItem });
-    
-    currentMoneyReceiptSubTab = tabName; 
-
-    const container = document.getElementById('tabs-for-money-receipts');
-    if (container) {
-        container.querySelectorAll('button, .money-receipt-tab-btn').forEach(b => b.classList.remove('active'));
-    }
-    if (btnElement) {
-        btnElement.classList.add('active');
-        btnElement.setAttribute('data-tab', tabName);
-    }
-
-    const detailToolbar = document.getElementById('detail-toolbar');
-    if (detailToolbar) {
-        detailToolbar.style.display = 'flex';
-        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
-        actionButtons.forEach(btn => btn.style.display = 'none');
-    }
-
-    if (selectedItem) {
-        let realizationId = selectedItem.realization_id || selectedItem.id || window.currentRealizationId || '';
-        let customerId = selectedItem.customer_id || window.currentCustomerId || '';
-        let skladId = selectedItem.sklad_id || window.currentSkladId || '';
-
-        // Динамически вычисляем ключ сущности через ваш новый свитч (getCurrentDetailEntity)
-        const detailEntity = getCurrentDetailEntity();
-
-        let url = '';
-        if (detailEntity === 'money_receipts_works_detail') {
-            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-        } else {
-            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-        }
-
-        loadReceiptDetailTable(url, detailEntity);
-        console.log(`🚀 [switchMoneyReceiptTab] Загрузка для таба "${tabName}" (сущность: ${detailEntity}) с URL:`, url);
-    } else {
-        console.warn('⚠️ [switchMoneyReceiptTab] Строка в верхней таблице не выбрана!');
-        const detailBody = document.getElementById('detail-body');
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #888; padding: 20px;">Выберите документ в верхней таблице</td></tr>`;
         }
     }
 }
@@ -6303,7 +6239,6 @@ if (tableBodyForReceipts) {
     tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
 
     newTableBody.addEventListener('click', async (e) => {
-        // Проверяем, относится ли текущая сущность к приходам или расходам
         const allowedEntities = [
             'money_receipts_by_sklad', 
             'money_receipts',
@@ -6312,7 +6247,6 @@ if (tableBodyForReceipts) {
             'expenses_by_receipts'
         ];
 
-        // Автоопределение, если currentEntity вдруг пустой или undefined, но открыт раздел расходов
         let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
         
         if (!allowedEntities.includes(activeEntity)) {
@@ -6354,21 +6288,19 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
-            // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
-            // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
 
-            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
-            
-            if (typeof switchMoneyReceiptTab === 'function') {
-                switchMoneyReceiptTab(activeTab, activeBtn);
-            }
+            let realizationId = selectedItem.realization_id || selectedItem.id || '';
+            let customerId = selectedItem.customer_id || '';
+            let skladId = selectedItem.sklad_id || window.currentSkladId || '';
+
+            let url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+            loadReceiptDetailTable(url, 'money_receipts_detail');
         }
 
         // ==========================================
@@ -6421,7 +6353,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
 
 
 
