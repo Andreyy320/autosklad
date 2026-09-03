@@ -4861,6 +4861,19 @@ async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
 
+    // 1. ИЗОЛИРОВАННАЯ ОБРАБОТКА ДЛЯ РАСХОДОВ (чтобы не ломать логику и не сбрасывать склады)
+    if (currentEntity && currentEntity.startsWith('expenses_')) {
+        console.log('💰 [refreshData] Обнаружены расходы, вызываем loadExpenseMainData для уровня:', currentEntity);
+        if (typeof loadExpenseMainData === 'function') {
+            // Передаем текущую сущность и сохраненный родительский объект/ID
+            loadExpenseMainData(currentEntity, window.currentParentId || '');
+        } else {
+            console.error('❌ Функция loadExpenseMainData не найдена!');
+        }
+        return;
+    }
+
+    // 2. СТАНДАРТНАЯ ЛОГИКА ДЛЯ ВСЕХ ОСТАЛЬНЫХ РАЗДЕЛОВ
     const activeLink = document.querySelector('.nav-link.active');
     const title = activeLink ? activeLink.innerText : 'Данные';
     
@@ -4907,7 +4920,6 @@ async function refreshData() {
             const activeTabBtn = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .money-receipt-tab-btn.active');
             const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'money_receipts_detail';
             
-            // Если выбран конкретный документ реализации, передаем его realization_id, чтобы не терять контекст
             if (selectedItem.realization_id || (currentEntity === 'money_receipts' && selectedItem.id)) {
                 loadDetailData(detailEntity, {
                     customer_id: selectedItem.customer_id,
@@ -4923,7 +4935,6 @@ async function refreshData() {
                 loadDetailData(detailEntity, payload);
             }
         }
-        // Старые ветки expenses_* отсюда полностью удалены и готовы к замене на новую изолированную логику.
     } else {
         console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
     }
