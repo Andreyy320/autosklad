@@ -3681,11 +3681,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-item-id="${item && item.id ? item.id : ''}">
     `;
-
-    const currentRepairId = parentId || (item ? item.repair_id : '') || '';
-    html += `<input type="hidden" name="repair_id" value="${currentRepairId}">`;
 
     async function renderField(col) {
         if (col.field === 'id') return '';
@@ -3762,9 +3759,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'zaphast_id' || col.field === 'zaphasti_id') ? 'id="zaphasti-select"' : '';
-            const fieldNameForSelect = (col.field === 'zaphasti_id') ? 'zaphast_id' : col.field;
-            inputHtml = `<select name="${fieldNameForSelect}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -3809,9 +3804,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     for (const col of columns) {
         html += await renderField(col);
     }
-
-    let currentPriceVal = item && item.price !== undefined ? item.price : '';
-    html += `<input type="hidden" name="price" id="hidden-price-input" value="${currentPriceVal}">`;
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
@@ -3909,73 +3901,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         });
     }
 
-    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
-    const quantityInput = formElement.querySelector('[name="quantity"]');
-    const hiddenPriceInput = formElement.querySelector('#hidden-price-input');
-
-    if (zaphastiSelect) {
-        zaphastiSelect.addEventListener('change', async () => {
-            const selectedZaphastiId = zaphastiSelect.value;
-            console.log('[zaphastiSelect change] Выбран ID запчасти:', selectedZaphastiId);
-            if (!selectedZaphastiId) return;
-
-            try {
-                let warehouseId = null;
-                if (parentId) {
-                    const repairRes = await fetch(`/api/repairs/${parentId}`);
-                    if (repairRes.ok) {
-                        const repairData = await repairRes.json();
-                        warehouseId = repairData.warehouse_id || repairData.sklads_id || repairData.warehouse || null;
-                    }
-                }
-
-                let queryUrl = `/api/warehouse_stock?zaphasti_id=${selectedZaphastiId}`;
-                if (warehouseId) {
-                    queryUrl += `&warehouse_id=${warehouseId}`;
-                }
-
-                const stockRes = await fetch(queryUrl);
-                if (stockRes.ok) {
-                    const stockData = await stockRes.json();
-                    let availableQty = 0;
-                    let autoPrice = 0;
-
-                    if (Array.isArray(stockData)) {
-                        availableQty = stockData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-                        if (stockData.length > 0) {
-                            autoPrice = stockData[0].price !== undefined ? stockData[0].price : 0;
-                        }
-                    } else if (stockData && typeof stockData === 'object') {
-                        availableQty = stockData.quantity !== undefined ? Number(stockData.quantity) : 0;
-                        autoPrice = stockData.price !== undefined ? stockData.price : 0;
-                    }
-
-                    if (quantityInput) {
-                        const currentEnteredQty = Number(quantityInput.value) || 1;
-                        if (currentEnteredQty > availableQty) {
-                            showAppNotification(`Внимание! На складе доступно всего ${availableQty} шт.`, 'warning');
-                        }
-                    }
-
-                    if (hiddenPriceInput) {
-                        hiddenPriceInput.value = autoPrice;
-                    }
-                } else {
-                    const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
-                    if (response.ok) {
-                        const itemData = await response.json();
-                        const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
-                        if (hiddenPriceInput && targetPrice !== undefined) {
-                            hiddenPriceInput.value = targetPrice;
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Ошибка при автозаполнении цены и проверки остатков запчасти:', err);
-            }
-        });
-    }
-
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -3997,12 +3922,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-
-                            if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
-                                refreshData();
-                            }
+                            refreshData();
                         } else {
                             const errData = await response.json().catch(() => ({}));
                             showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
@@ -4033,18 +3953,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
 
-        if (parentId) {
-            data.repair_id = parentId;
-        }
-
-        if (data.zaphasti_id !== undefined && data.zaphast_id === undefined) {
-            data.zaphast_id = data.zaphasti_id;
-            delete data.zaphasti_id;
-        }
-
         console.group('[Form Submit] Отправка данных на сервер');
         console.log('Entity:', entity);
-        console.log('Parent ID (argument):', parentId);
         console.log('Item ID (if editing):', item && item.id ? item.id : 'NEW');
         console.log('FormData entries:');
         for (let pair of formData.entries()) {
@@ -4078,12 +3988,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-
-                if (parentId) {
-                    loadDetailData(entity, parentId);
-                } else {
-                    refreshData();
-                }
+                refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
                 console.error('[Form Submit] Ошибка от сервера (не OK):', response.status, errData);
