@@ -6353,14 +6353,32 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
+            // Скрываем табы приходов на верхнем уровне складов
+            const moneyTabs = document.getElementById('tabs-for-money-receipts');
+            if (moneyTabs) moneyTabs.style.display = 'none';
+
             // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
             // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
+            // Скрываем чужие панели табов на всякий случай
+            const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
+            ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
+                const el = document.getElementById(tabId);
+                if (el) el.style.display = 'none';
+            });
+            if (carTabsPanel) carTabsPanel.style.display = 'none';
+
+            // ПОКАЗЫВАЕМ БЛОК С ТАБАМИ ДЛЯ ПРИХОДОВ ДЕНЕГ
+            const moneyTabs = document.getElementById('tabs-for-money-receipts');
+            if (moneyTabs) {
+                moneyTabs.style.display = 'flex';
+            }
+
             const detailContainer = document.getElementById('detail-container');
-            if (detailContainer) detailContainer.style.display = 'block';
+            if (detailContainer) detailContainer.style.display = 'flex'; // заменили с block на flex для стабильности
 
             const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
             const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
@@ -6727,6 +6745,8 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
+
+
 
 function openDetailForm(mode) {
     if (!selectedItem) {
