@@ -6287,7 +6287,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         console.log(`📦 [loadReceiptMainData] Успешно получено записей: ${currentItems.length}`);
         mainTableBody.innerHTML = '';
 
-        // Если это уровень документов (money_receipts), группируем по месяцам с итогами
+        // Если это уровень документов (money_receipts), группируем по месяцам
         if (currentReceiptView === 'money_receipts') {
             const getMonthData = (dateStr) => {
                 if (!dateStr) return { key: 'unknown', title: 'Без даты' };
@@ -6324,61 +6324,21 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].items.push(item);
                 
                 const docTitle = item.doc_number || item.id;
-                // Определение, является ли документ ремонтом (по отсутствию customer_id или префиксу)
                 const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ') || String(docTitle).startsWith('Р-') || String(item.id).startsWith('рем');
 
-                let realizationSum = 0;
-                let paidSum = 0;
-                let debtSum = 0;
-                let partProfitFull = 0;
-                let workSumFull = 0;
-                let netProfitFull = 0;
+                let realizationSum = Number(item.total_realization_sum || item.total_sum || item.sum || 0);
+                let paidSum = Number(item.total_paid || item.paid || 0);
+                let debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
+                
+                let partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
+                let workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
+                let netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
 
-                if (isRepair) {
-                    realizationSum = Number(item.total_realization_sum || item.total_sum || item.sum || 0);
-                    paidSum = Number(item.total_paid || item.paid || 0);
-                    debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
-                    
-                    // Расширенная проверка всех возможных ключей для прибыли по запчастям и услугам
-                    partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
-                    workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
-                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
-                } else {
-                    realizationSum = Number(item.total_realization_sum || 0);
-                    paidSum = Number(item.total_paid || 0);
-                    debtSum = Number(item.debt_sum || item.total_debt || 0);
-                    
-                    partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
-                    workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
-                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
-                }
-
-                // Расчет коэффициента оплаты (payRatio): пропорция оплаченной суммы к общей сумме документа
                 const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
 
-                // Итоговые показатели по документу с учетом процента оплаты
                 const itemPartsProfit = Number((partProfitFull * payRatio).toFixed(2));
                 const itemWorksSum = Number((workSumFull * payRatio).toFixed(2));
                 const itemNetProfit = Number((netProfitFull * payRatio).toFixed(2));
-
-                // ДЕТАЛЬНЫЕ ЛОГИ РАСЧЕТА ПО КАЖДОМУ ДОКУМЕНТУ
-                console.log(`🔍 [CALC DEBUG #${index + 1}] Документ №${docTitle} | Тип: ${isRepair ? '🔧 Ремонт' : '📦 Реализация'}`, {
-                    inputData: {
-                        realizationSum,
-                        paidSum,
-                        debtSum,
-                        partProfitFull,
-                        workSumFull,
-                        netProfitFull
-                    },
-                    computed: {
-                        payRatio: payRatio.toFixed(4),
-                        itemPartsProfit,
-                        itemWorksSum,
-                        itemNetProfit,
-                        formula: `(FullProfit * Paid / Total) => (${netProfitFull} * ${Math.min(paidSum, realizationSum)} / ${realizationSum})`
-                    }
-                });
 
                 groupedByMonth[m.key].totalSum += realizationSum;
                 groupedByMonth[m.key].totalPaid += paidSum;
@@ -6394,15 +6354,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
 
-                console.log(`📊 [MONTH TOTAL SUMMARY: ${group.title}]`, {
-                    totalSum: group.totalSum.toFixed(2),
-                    totalPaid: group.totalPaid.toFixed(2),
-                    totalDebt: group.totalDebt.toFixed(2),
-                    totalPartsProfit: group.totalPartsProfit.toFixed(2),
-                    totalWorksSum: group.totalWorksSum.toFixed(2),
-                    totalNetProfit: group.totalNetProfit.toFixed(2)
-                });
-
+                // 1. Создаем шапку МЕСЯЦА (выводится СВЕРХУ строк месяца)
                 const headerTr = document.createElement('tr');
                 headerTr.style.background = '#f8fafc';
                 headerTr.style.fontWeight = 'bold';
@@ -6412,29 +6364,15 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 headerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 12px; cursor: pointer;">
                         <span style="color: #334155; margin-right: 12px;">[-] ${group.title}</span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Итого: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
                     </td>
                 `;
                 
                 let isCollapsed = false;
                 const rowElements = [];
 
-                headerTr.addEventListener('click', () => {
-                    isCollapsed = !isCollapsed;
-                    rowElements.forEach(r => r.style.display = isCollapsed ? 'none' : '');
-                    const spanTitle = headerTr.querySelector('span');
-                    if (spanTitle) {
-                        spanTitle.textContent = spanTitle.textContent.replace(isCollapsed ? '[-]' : '[+]', isCollapsed ? '[+]' : '[-]');
-                    }
-                });
-
                 mainTableBody.appendChild(headerTr);
 
+                // 2. Добавляем строки документов текущего месяца
                 group.items.forEach(item => {
                     const tr = document.createElement('tr');
                     tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
@@ -6488,6 +6426,37 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                     rowElements.push(tr);
                     mainTableBody.appendChild(tr);
+                });
+
+                // 3. Создаем ИТОГОВУЮ строчку СНИЗУ для текущего месяца
+                const footerTr = document.createElement('tr');
+                footerTr.style.background = '#f1f5f9';
+                footerTr.style.fontWeight = 'bold';
+                footerTr.style.borderTop = '1px solid #cbd5e1';
+                footerTr.style.borderBottom = '2px solid #cbd5e1';
+
+                footerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 8px 12px; text-align: right;">
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Итого по месяцу:</span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Сумма: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
+                        <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
+                    </td>
+                `;
+                mainTableBody.appendChild(footerTr);
+                rowElements.push(footerTr);
+
+                // Клик по шапке месяца сворачивает/разворачивает строки и итог этого месяца
+                headerTr.addEventListener('click', () => {
+                    isCollapsed = !isCollapsed;
+                    rowElements.forEach(r => r.style.display = isCollapsed ? 'none' : '');
+                    const spanTitle = headerTr.querySelector('span');
+                    if (spanTitle) {
+                        spanTitle.textContent = `${isCollapsed ? '[+]' : '[-]'} ${group.title}`;
+                    }
                 });
             });
 
