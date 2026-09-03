@@ -6319,26 +6319,54 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].items.push(item);
                 
                 const docTitle = item.doc_number || item.id;
+                const isRepair = !item.customer_id || String(docTitle).toUpperCase().includes('РЕМ') || String(item.id).toLowerCase().includes('рем');
 
-                // Берутся готовые, посчитанные на бэкенде поля из SQL-запроса
-                let realizationSum = Number(item.total_realization_sum || 0);
-                let paidSum = Number(item.total_paid || 0);
-                let debtSum = Number(item.debt_sum || 0);
-                
-                let itemPartsProfit = Number(item.parts_profit || 0);
-                let itemWorksSum = Number(item.works_sum || 0);
-                let itemNetProfit = Number(item.net_profit || 0);
+                let realizationSum = 0;
+                let paidSum = 0;
+                let debtSum = 0;
+                let partProfitFull = 0;
+                let workSumFull = 0;
+                let netProfitFull = 0;
+
+                if (isRepair) {
+                    realizationSum = Number(item.total_realization_sum || item.total_sum || item.sum || 0);
+                    paidSum = Number(item.total_paid || item.paid || 0);
+                    debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
+                    
+                    // Для ремонта запчасти и услуги раздельно (как передал бэкенд)
+                    partProfitFull = Number(item.parts_profit || 0);
+                    workSumFull = Number(item.works_sum || 0);
+                    netProfitFull = partProfitFull + workSumFull;
+                } else {
+                    realizationSum = Number(item.total_realization_sum || 0);
+                    paidSum = Number(item.total_paid || 0);
+                    debtSum = Number(item.debt_sum || item.total_debt || 0);
+                    
+                    partProfitFull = Number(item.parts_profit || 0);
+                    workSumFull = Number(item.works_sum || 0);
+                    netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
+                }
+
+                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
+
+                const itemPartsProfit = Number((partProfitFull * payRatio).toFixed(2));
+                const itemWorksSum = Number((workSumFull * payRatio).toFixed(2));
+                const itemNetProfit = Number((netProfitFull * payRatio).toFixed(2));
 
                 // ЛОГИРОВАНИЕ ДЛЯ КАЖДОГО ДОКУМЕНТА
-                console.log(`🔍 [DEBUG DOC #${index + 1}] ID/Num: ${docTitle}`, {
+                console.log(`🔍 [DEBUG DOC #${index + 1}] ID/Num: ${docTitle} | Type: ${isRepair ? 'Ремонт' : 'Реализация'}`, {
                     rawItem: item,
                     parsed: {
                         realizationSum,
                         paidSum,
                         debtSum,
-                        itemPartsProfit,
-                        itemWorksSum,
-                        itemNetProfit
+                        partProfitFull,
+                        workSumFull,
+                        netProfitFull,
+                        payRatio,
+                        calculatedPartsProfit: itemPartsProfit,
+                        calculatedWorksSum: itemWorksSum,
+                        calculatedNetProfit: itemNetProfit
                     }
                 });
 
