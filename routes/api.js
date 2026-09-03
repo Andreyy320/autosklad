@@ -3764,12 +3764,12 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     COALESCE(sub_p.paid_sum, 0) AS paid_sum
                 FROM realizations real
                 LEFT JOIN (
-                    SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS parts_sum
+                    SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
                     FROM realization_items ri
                     GROUP BY ri.realization_id
                 ) sub_i ON real.id = sub_i.realization_id
                 LEFT JOIN (
-                    SELECT rw.realization_id, SUM(rw.total_rub) AS works_sum
+                    SELECT rw.realization_id, SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
                     FROM realization_works rw
                     GROUP BY rw.realization_id
                 ) sub_w ON real.id = sub_w.realization_id
@@ -3782,16 +3782,31 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Ремонты автомобилей из repairs
+                -- 2. Ремонты автомобилей из repairs (раздельно запчасти и работы)
                 SELECT 
                     rep.id,
                     rep.warehouse_id AS sklad_id,
-                    0 AS total_qty,
-                    COALESCE(rep.sum, 0) AS parts_sum,
-                    0 AS works_sum,
-                    COALESCE(rep.sum, 0) AS total_sum,
-                    COALESCE(rep.sum, 0) AS paid_sum
+                    COALESCE(rep_i.parts_qty, 0) AS total_qty,
+                    COALESCE(rep_i.parts_sum, 0) AS parts_sum,
+                    COALESCE(rep_w.works_sum, 0) AS works_sum,
+                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0)) AS total_sum,
+                    COALESCE(rep_p.paid_sum, 0) AS paid_sum
                 FROM repairs rep
+                LEFT JOIN (
+                    SELECT ri.repair_id, SUM(ri.quantity) AS parts_qty, SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM repair_items ri
+                    GROUP BY ri.repair_id
+                ) rep_i ON rep.id = rep_i.repair_id
+                LEFT JOIN (
+                    SELECT rw.repair_id, SUM(COALESCE(rw.price, 0)) AS works_sum
+                    FROM repair_works rw
+                    GROUP BY rw.repair_id
+                ) rep_w ON rep.id = rep_w.repair_id
+                LEFT JOIN (
+                    SELECT cp.repair_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.repair_id
+                ) rep_p ON rep.id = rep_p.repair_id
                 WHERE rep.is_posted = true
             )
             SELECT 
@@ -4132,6 +4147,10 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+
+
+
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
