@@ -1705,159 +1705,138 @@ router.get('/stock_balances', async (req, res) => {
     }
 });
 
-
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
-        let { zaphasti_id, warehouse_id } = req.query;
+        let { zaphasti_id, warehouse_id, date } = req.query;
 
-        console.log("📡 [Server] Запрос истории движений /stock_batches получен:", { zaphasti_id, warehouse_id });
+        console.log("📡 [Server] Запрос истории движений /stock_batches получен:", { zaphasti_id, warehouse_id, date });
 
         if (!zaphasti_id) {
             return res.status(400).json({ error: 'Не указан zaphasti_id' });
         }
 
         const hasWarehouse = warehouse_id && warehouse_id !== 'undefined' && warehouse_id !== 'null' && warehouse_id !== '';
+        const hasDate = date && date.trim() !== '' && date !== 'undefined' && date !== 'null';
 
-        let query = '';
-        let queryParams = [];
+        let queryParams = [zaphasti_id];
+        let paramIndex = 2;
 
-        // Если выбран склад, показываем историю операций ТОЛЬКО для него
+        let warehouseCondition = '';
+        let dateCondition = '';
+
         if (hasWarehouse) {
-            query = `
-                SELECT 
-                    z.article AS artikul,
-                    z.code,
-                    z.name,
-                    docs.document_name,
-                    docs.doc_date,
-                    docs.description,
-                    docs.qty,
-                    COALESCE(z.unit, 'шт') AS unit,
-                    docs.price AS purchase_price,
-                    ROUND(docs.price * 1.3, 2) AS retail_price, 
-                    COALESCE(docs.currency, 'Рубль ПМР') AS currency
-                FROM (
-                    -- Приходы на этот склад
-                    SELECT 
-                        ri.zaphasti_id,
-                        CONCAT('Приход ', r.doc_number) AS document_name,
-                        r.date AS doc_date,
-                        ri.description,
-                        ri.quantity AS qty,
-                        ri.price,
-                        ri.currency
-                    FROM receipt_items ri
-                    JOIN receipts r ON ri.receipt_id = r.id
-                    WHERE ri.zaphasti_id = $1 AND r.warehouse_id = $2
-
-                    UNION ALL
-
-                    -- Входящие перемещения на этот склад
-                    SELECT 
-                        mi.zaphasti_id,
-                        CONCAT('Входящее перемещение №', m.id) AS document_name,
-                        m.date AS doc_date,
-                        mi.description,
-                        mi.quantity AS qty,
-                        mi.price,
-                        mi.currency
-                    FROM move_items mi
-                    JOIN moves m ON mi.move_id = m.id
-                    WHERE mi.zaphasti_id = $1 AND m.warehouse_to_id = $2
-
-                    UNION ALL
-
-                    -- Исходящие перемещения с этого склада (отрицательное кол-во)
-                    SELECT 
-                        mi.zaphasti_id,
-                        CONCAT('Исходящее перемещение №', m.id) AS document_name,
-                        m.date AS doc_date,
-                        mi.description,
-                        (-1 * mi.quantity) AS qty,
-                        mi.price,
-                        mi.currency
-                    FROM move_items mi
-                    JOIN moves m ON mi.move_id = m.id
-                    WHERE mi.zaphasti_id = $1 AND m.warehouse_from_id = $2
-
-                    UNION ALL
-
-                    -- Списания в ремонт с этого склада (отрицательное кол-во)
-                    SELECT 
-                        rep_i.zaphast_id AS zaphasti_id,
-                        CONCAT('Списание в ремонт №', rep.id) AS document_name,
-                        COALESCE(rep.doc_date, NOW()) AS doc_date,
-                        rep_i.description,
-                        (-1 * rep_i.quantity) AS qty,
-                        rep_i.price,
-                        'Рубль ПМР' AS currency
-                    FROM repair_items rep_i
-                    JOIN repairs rep ON rep_i.repair_id = rep.id
-                    WHERE rep_i.zaphast_id = $1 AND rep.warehouse_id = $2
-
-                    UNION ALL
-
-                    -- Реализации (продажи) с этого склада с указанием покупателя (отрицательное кол-во)
-                    SELECT 
-                        ri_rel.zaphasti_id,
-                        CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name_full, ')'), '')) AS document_name,
-                        COALESCE(r_rel.doc_date, NOW()) AS doc_date,
-                        ri_rel.description,
-                        (-1 * ri_rel.quantity) AS qty,
-                        ri_rel.purchase_price AS price,
-                        'Рубль ПМР' AS currency
-                    FROM realization_items ri_rel
-                    JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                    LEFT JOIN customers cust ON r_rel.customer_id = cust.id
-                    WHERE ri_rel.zaphasti_id = $1 AND r_rel.sklad_id = $2
-                ) docs
-                JOIN zaphasti z ON docs.zaphasti_id = z.id
-                ORDER BY docs.doc_date DESC;
-            `;
-            queryParams = [zaphasti_id, warehouse_id];
-        } else {
-            // Если склад не выбран, общая история товара по всем складам
-            query = `
-                SELECT 
-                    z.article AS artikul,
-                    z.code,
-                    z.name,
-                    all_docs.document_name,
-                    all_docs.doc_date,
-                    all_docs.description,
-                    all_docs.qty,
-                    COALESCE(z.unit, 'шт') AS unit,
-                    all_docs.price AS purchase_price,
-                    ROUND(all_docs.price * 1.3, 2) AS retail_price, 
-                    COALESCE(all_docs.currency, 'Рубль ПМР') AS currency
-                FROM (
-                    SELECT ri.zaphasti_id, CONCAT('Приход ПР', r.doc_number) AS document_name, r.date AS doc_date, ri.description, ri.quantity AS qty, ri.price, ri.currency
-                    FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE ri.zaphasti_id = $1
-                    
-                    UNION ALL
-                    
-                    SELECT mi.zaphasti_id, CONCAT('Перемещение №', m.id) AS document_name, m.date AS doc_date, mi.description, mi.quantity AS qty, mi.price, mi.currency
-                    FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE mi.zaphasti_id = $1
-                    
-                    UNION ALL
-                    
-                    SELECT rep_i.zaphast_id AS zaphasti_id, CONCAT('Списание в ремонт №', rep.id) AS document_name, COALESCE(rep.doc_date, NOW()) AS doc_date, rep_i.description, (-1 * rep_i.quantity) AS qty, rep_i.price, 'Рубль ПМР' AS currency
-                    FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep_i.zaphast_id = $1
-
-                    UNION ALL
-
-                    SELECT ri_rel.zaphasti_id, CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name_full, ')'), '')) AS document_name, COALESCE(r_rel.doc_date, NOW()) AS doc_date, ri_rel.description, (-1 * ri_rel.quantity) AS qty, ri_rel.purchase_price AS price, 'Рубль ПМР' AS currency
-                    FROM realization_items ri_rel 
-                    JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
-                    LEFT JOIN customers cust ON r_rel.customer_id = cust.id 
-                    WHERE ri_rel.zaphasti_id = $1
-                ) all_docs
-                JOIN zaphasti z ON all_docs.zaphasti_id = z.id
-                ORDER BY all_docs.doc_date DESC;
-            `;
-            queryParams = [zaphasti_id];
+            warehouseCondition = ` AND warehouse_filter_id = $${paramIndex}`;
+            queryParams.push(warehouse_id);
+            paramIndex++;
         }
+
+        if (hasDate) {
+            dateCondition = ` AND doc_date <= $${paramIndex}::timestamp`;
+            queryParams.push(date);
+            paramIndex++;
+        }
+
+        const query = `
+            WITH all_movements AS (
+                -- 1. Приходы
+                SELECT 
+                    ri.zaphasti_id,
+                    r.warehouse_id AS warehouse_filter_id,
+                    CONCAT('Приход ', r.doc_number) AS document_name,
+                    r.date AS doc_date,
+                    ri.description,
+                    ri.quantity AS qty,
+                    ri.price,
+                    ri.currency
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                WHERE ri.zaphasti_id = $1
+
+                UNION ALL
+
+                -- 2. Входящие перемещения
+                SELECT 
+                    mi.zaphasti_id,
+                    m.warehouse_to_id AS warehouse_filter_id,
+                    CONCAT('Входящее перемещение №', m.id) AS document_name,
+                    m.date AS doc_date,
+                    mi.description,
+                    mi.quantity AS qty,
+                    mi.price,
+                    mi.currency
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE mi.zaphasti_id = $1
+
+                UNION ALL
+
+                -- 3. Исходящие перемещения
+                SELECT 
+                    mi.zaphasti_id,
+                    m.warehouse_from_id AS warehouse_filter_id,
+                    CONCAT('Исходящее перемещение №', m.id) AS document_name,
+                    m.date AS doc_date,
+                    mi.description,
+                    (-1 * mi.quantity) AS qty,
+                    mi.price,
+                    mi.currency
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE mi.zaphasti_id = $1
+
+                UNION ALL
+
+                -- 4. Списания в ремонт
+                SELECT 
+                    rep_i.zaphast_id AS zaphasti_id,
+                    rep.warehouse_id AS warehouse_filter_id,
+                    CONCAT('Списание в ремонт №', rep.id) AS document_name,
+                    COALESCE(rep.doc_date, NOW()) AS doc_date,
+                    rep_i.description,
+                    (-1 * rep_i.quantity) AS qty,
+                    rep_i.price,
+                    'Рубль ПМР' AS currency
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                WHERE rep_i.zaphast_id = $1
+
+                UNION ALL
+
+                -- 5. Реализации
+                SELECT 
+                    ri_rel.zaphasti_id,
+                    r_rel.sklad_id AS warehouse_filter_id,
+                    CONCAT('Реализация №', r_rel.id, COALESCE(CONCAT(' (Покупатель: ', cust.name_full, ')'), '')) AS document_name,
+                    COALESCE(r_rel.doc_date, NOW()) AS doc_date,
+                    ri_rel.description,
+                    (-1 * ri_rel.quantity) AS qty,
+                    ri_rel.purchase_price AS price,
+                    'Рубль ПМР' AS currency
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                LEFT JOIN customers cust ON r_rel.customer_id = cust.id
+                WHERE ri_rel.zaphasti_id = $1
+            )
+            SELECT 
+                z.article AS artikul,
+                z.code,
+                z.name,
+                m.document_name,
+                m.doc_date,
+                m.description,
+                m.qty,
+                COALESCE(z.unit, 'шт') AS unit,
+                m.price AS purchase_price,
+                ROUND(m.price * 1.3, 2) AS retail_price, 
+                COALESCE(m.currency, 'Рубль ПМР') AS currency
+            FROM all_movements m
+            JOIN zaphasti z ON m.zaphasti_id = z.id
+            WHERE 1=1
+            ${warehouseCondition}
+            ${dateCondition}
+            ORDER BY m.doc_date DESC;
+        `;
 
         const result = await pool.query(query, queryParams);
         
