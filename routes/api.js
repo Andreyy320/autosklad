@@ -1613,14 +1613,23 @@ router.get('/repair_history', async (req, res) => {
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
-        const { date, warehouse_id } = req.query;
+        const { date, warehouse_id, mol_id } = req.query;
 
-        console.log(`[DEBUG] /stock_balances запрошен с параметрами:`, { date, warehouse_id });
+        console.log(`[DEBUG] /stock_balances запрошен с параметрами:`, { date, warehouse_id, mol_id });
 
         const queryParams = [];
         let paramIndex = 1;
 
         let warehouseFilterClause = '';
+        let molFilterClause = '';
+        let dateFilterClause = '';
+
+        // Фильтр по дате (если передана, берем документы до этой даты включительно)
+        if (date && date.trim() !== '' && date !== 'undefined') {
+            queryParams.push(date);
+            dateFilterClause = ` AND wb.created_at <= $${paramIndex}`; // Или поле с датой документа/партии, зависящее от твоей структуры
+            paramIndex++;
+        }
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
@@ -1629,14 +1638,28 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
+        // Фильтр по МОЛ: оставляем только те склады, которые закреплены за этим пользователем в таблице mol
+        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
+            queryParams.push(mol_id);
+            molFilterClause += ` AND s.id IN (
+                SELECT warehouse_id FROM (
+                    SELECT DISTINCT ON (warehouse_id) warehouse_id, user_id 
+                    FROM mol 
+                    ORDER BY warehouse_id, id DESC
+                ) latest_sub WHERE latest_sub.user_id = $${paramIndex}
+            )`;
+            paramIndex++;
+        }
+
         const query = `
             WITH aggregated_stocks AS (
-                -- Группируем остатки партий по складам и запчастям из warehouse_batches
+                -- Группируем остатки партий по складам и запчастям с учетом даты, если она задана
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
+                WHERE 1=1 ${dateFilterClause}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
@@ -1668,6 +1691,7 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
             ${warehouseFilterClause}
+            ${molFilterClause}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
@@ -1685,7 +1709,6 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
