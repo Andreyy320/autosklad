@@ -1736,13 +1736,14 @@ router.get('/stock_batches', async (req, res) => {
         let dateCondition = '';
 
         if (hasWarehouse) {
-            warehouseCondition = ` AND warehouse_filter_id = $${paramIndex}`;
+            warehouseCondition = ` AND m.warehouse_filter_id = $${paramIndex}`;
             queryParams.push(warehouse_id);
             paramIndex++;
         }
 
         if (hasDate) {
-            dateCondition = ` AND doc_date <= $${paramIndex}::timestamp`;
+            // Берем дату включительно до конца этого дня (чтобы учесть документы за 1 число)
+            dateCondition = ` AND m.doc_date <= ($${paramIndex}::timestamp + INTERVAL '1 day' - INTERVAL '1 second')`;
             queryParams.push(date);
             paramIndex++;
         }
@@ -1858,7 +1859,6 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
