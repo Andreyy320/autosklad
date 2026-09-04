@@ -1742,9 +1742,20 @@ router.get('/stock_batches', async (req, res) => {
         }
 
         if (hasDate) {
-            // Берем дату включительно до конца этого дня (чтобы учесть документы за 1 число)
+            // Превращаем переданную дату (например "01.09.2026 10:59") в нормальный формат YYYY-MM-DD
+            let cleanDate = date.trim();
+            if (cleanDate.includes('.')) {
+                const parts = cleanDate.split(' ')[0].split('.'); // Разбираем DD.MM.YYYY
+                if (parts.length === 3) {
+                    cleanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+            } else {
+                cleanDate = cleanDate.substring(0, 10);
+            }
+
+            // Фильтруем строго по конец выбранного дня, чтобы отсечь 2 и 3 число
             dateCondition = ` AND m.doc_date <= ($${paramIndex}::timestamp + INTERVAL '1 day' - INTERVAL '1 second')`;
-            queryParams.push(date);
+            queryParams.push(cleanDate);
             paramIndex++;
         }
 
