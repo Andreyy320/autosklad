@@ -1610,6 +1610,7 @@ router.get('/repair_history', async (req, res) => {
     }
 });
 
+
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
@@ -1622,14 +1623,6 @@ router.get('/stock_balances', async (req, res) => {
 
         let warehouseFilterClause = '';
         let molFilterClause = '';
-        let dateFilterClause = '';
-
-        // Фильтр по дате (если передана, берем документы до этой даты включительно)
-        if (date && date.trim() !== '' && date !== 'undefined') {
-            queryParams.push(date);
-            dateFilterClause = ` AND wb.created_at <= $${paramIndex}`; // Или поле с датой документа/партии, зависящее от твоей структуры
-            paramIndex++;
-        }
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
@@ -1653,13 +1646,12 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Группируем остатки партий по складам и запчастям с учетом даты, если она задана
+                -- Группируем остатки партий по складам и запчастям из warehouse_batches
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                WHERE 1=1 ${dateFilterClause}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
@@ -1709,6 +1701,7 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
@@ -1873,6 +1866,7 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
