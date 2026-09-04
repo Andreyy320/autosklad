@@ -3838,7 +3838,6 @@ router.get('/money_receipts', async (req, res) => {
         const { sklad_id, start_date, end_date } = req.query;
         console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
 
-        // 1. Запрос для получения списка документов за период (вся ваша основная логика)
         const query = `
             WITH calc_data AS (
                 -- 1. Обычные реализации (покупатели)
@@ -3874,7 +3873,7 @@ router.get('/money_receipts', async (req, res) => {
                         SUM(ri.quantity) AS parts_qty, 
                         SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
                         SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
-                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                        SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
                     FROM realization_items ri
                     GROUP BY ri.realization_id
                 ) sub_i ON real.id = sub_i.realization_id
@@ -3882,7 +3881,7 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         rw.realization_id, 
                         SUM(rw.quantity) AS works_qty,
-                        SUM(COALESCE(rw.total, rw.price * rw.quantity, 0)) AS works_sum
+                        SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
                     FROM realization_works rw
                     GROUP BY rw.realization_id
                 ) sub_w ON real.id = sub_w.realization_id
@@ -3898,7 +3897,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей
+                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3914,12 +3913,18 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     
+                    -- Итоговая сумма ремонта = Запчасти + Работы
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
+                    
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
+                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
                     ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
                     
+                    -- Плюс запчасти = Продажа запчастей минус их закупка
                     (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    
+                    -- Услуги = Сумма работ по ремонту
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
@@ -3969,32 +3974,21 @@ router.get('/money_receipts', async (req, res) => {
                 (total_realization_sum - total_paid)::numeric AS debt_sum,
                 parts_profit,
                 works_profit,
+                
+                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
                 CASE 
                     WHEN total_realization_sum <= 0 THEN 0
                     ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
                 END::numeric AS net_profit
+
             FROM calc_data
             ORDER BY date DESC;
         `;
 
-        console.log(`⚡ [/api/money_receipts] Выполнение основного SQL-запроса...`);
+        console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
         const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
 
-        // 2. Дополнительный расчет денег на начало периода (до start_date) и оборота/заработка за период
-        let openingBalance = 0;
-        let periodEarnings = 0;
-
-        if (start_date) {
-            const balanceQuery = `
-                SELECT COALESCE(SUM(amount), 0) AS initial_paid
-                FROM customer_payments cp
-                WHERE ($1::integer IS NULL OR cp.warehouse_id = $1) -- если есть склад в платежах, либо убрать если привязано через документы
-                  AND cp.payment_date < $2::date
-            `;
-            // Плюс считаем сумму чистой прибыли/оплат именно внутри выбранного диапазона дат для красивого отображения
-        }
-
-        // Вычисляем суммарные показатели по полученным строкам для удобства фронтенда
+        // Считаем общие итоги за выбранный период для фронтенда
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -4004,7 +3998,7 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        // Возвращаем клиенту данные вместе с общими итогами по периоду
+        // Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
