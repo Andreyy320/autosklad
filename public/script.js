@@ -5300,7 +5300,8 @@ async function applyFilters() {
                 selectedItem = item;
                 const zId = item.zaphasti_id || item.id;
                 const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
-                loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId });
+                // Передаем дату вместе с ID и складом
+                loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId, date: dateVal });
             };
             tbody.appendChild(tr);
         });
@@ -5315,9 +5316,11 @@ async function applyFilters() {
             const zId = currentItems[0].zaphasti_id || currentItems[0].id;
             const wId = currentItems[0].warehouse_id || currentItems[0].sklad_id || currentItems[0].id_sklad || currentItems[0].warehouseId;
 
+            // И здесь тоже передаем дату
             loadDetailData('stock_batches', { 
                 zaphasti_id: zId, 
-                warehouse_id: wId 
+                warehouse_id: wId,
+                date: dateVal 
             });
         } else {
             selectedItem = null;
@@ -5328,7 +5331,6 @@ async function applyFilters() {
         console.error('Ошибка применения фильтров:', err);
     }
 }
-
 async function loadWarehousesForMovement() {
     try {
         const select = document.getElementById('movement-warehouse');
