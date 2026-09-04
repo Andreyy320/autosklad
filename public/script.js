@@ -6467,16 +6467,23 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Если это уровень документов (money_receipts) и у нас есть блок сальдо, выводим шапку сальдо перед таблицей
         let saldoHeaderHtml = '';
         if (currentReceiptView === 'money_receipts' && saldoData) {
-            const sStart = Number(saldoData.saldo_start || 0).toFixed(2);
+            const sStart = Number(saldoData.saldo_start || 0);
+            const sEnd = Number(saldoData.saldo_end || 0);
+            const diff = sEnd - sStart;
+            const diffFormatted = Math.abs(diff).toFixed(2);
+            const isPlus = diff >= 0;
+
+            const sStartStr = sStart.toFixed(2);
             const turnover = Number(saldoData.turnover_period || 0).toFixed(2);
-            const sEnd = Number(saldoData.saldo_end || 0).toFixed(2);
+            const sEndStr = sEnd.toFixed(2);
 
             saldoHeaderHtml = `
                 <tr style="background: #e2e8f0; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
                     <td colspan="${colCount}" style="padding: 10px 12px; font-size: 14px;">
-                        <span style="color: #334155; margin-right: 20px;">Сальдо на начало: <b style="color: #0f172a;">${sStart}</b></span>
+                        <span style="color: #334155; margin-right: 20px;">Сальдо на начало: <b style="color: #0f172a;">${sStartStr}</b></span>
+                        <span style="color: #334155; margin-right: 20px;">Сальдо на конец: <b style="color: #0f172a;">${sEndStr}</b></span>
                         <span style="color: #334155; margin-right: 20px;">Обороты за период: <b style="color: #0284c7;">${turnover}</b></span>
-                        <span style="color: #334155;">Сальдо на конец: <b style="color: #16a34a;">${sEnd}</b></span>
+                        <span style="color: #334155;">Значит в плюсе на: <b style="color: ${isPlus ? '#16a34a' : '#dc2626'};">${isPlus ? '+' : '-'}${diffFormatted}</b></span>
                     </td>
                 </tr>
             `;
