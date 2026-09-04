@@ -3838,7 +3838,8 @@ router.get('/money_receipts', async (req, res) => {
         const { sklad_id, start_date, end_date } = req.query;
         console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
 
-        const query = `
+        // 1. Запрос для получения списка документов (реализаций и ремонтов) с фильтрацией по датам
+        const queryDocuments = `
             WITH calc_data AS (
                 -- 1. Обычные реализации (покупатели)
                 SELECT 
@@ -3858,10 +3859,7 @@ router.get('/money_receipts', async (req, res) => {
                     (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Полная потенциальная прибыль документа (если всё оплатят)
                     ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
-                    
-                    -- Потенциальный плюс по запчастям и работам отдельно
                     (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
@@ -3897,7 +3895,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
+                -- 2. Внутренние ремонты автомобилей
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3912,19 +3910,10 @@ router.get('/money_receipts', async (req, res) => {
                     0::numeric AS total_retail_sum,
                     COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
-                    
-                    -- Итоговая сумма ремонта = Запчасти + Работы
                     (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
-                    
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
-                    
-                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
                     ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
-                    
-                    -- Плюс запчасти = Продажа запчастей минус их закупка
                     (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
-                    
-                    -- Услуги = Сумма работ по ремонту
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
@@ -3934,14 +3923,19 @@ router.get('/money_receipts', async (req, res) => {
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
                         0 AS total_purchase_sum,
-                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                    --------------------------------------------------------------------------------
+                    -- ИЗМЕНЕНИЕ: исправление названия столбца на ri.total_rub (если у вас total_rub, 
+                    -- либо верните обратно ri.total, если у вас в repair_items именно поле total).
+                    -- Оставим безопасный вариант с COALESCE(NULLIF(ri.total_rub, 0), ri.total, ri.price * ri.quantity, 0)
+                    --------------------------------------------------------------------------------
+                        SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
                 ) rep_i ON rep.id = rep_i.repair_id
                 LEFT JOIN (
                     SELECT 
                         rw.repair_id,
-                        SUM(COALESCE(rw.price, 0)) AS works_sum
+                        SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price, 0)) AS works_sum
                     FROM repair_works rw
                     GROUP BY rw.repair_id
                 ) rep_w ON rep.id = rep_w.repair_id
@@ -3974,22 +3968,57 @@ router.get('/money_receipts', async (req, res) => {
                 (total_realization_sum - total_paid)::numeric AS debt_sum,
                 parts_profit,
                 works_profit,
-                
-                -- РЕАЛЬНЫЙ ПЛЮС С УЧЕТОМ ОПЛАТЫ:
                 CASE 
                     WHEN total_realization_sum <= 0 THEN 0
                     ELSE ROUND((full_net_profit * LEAST(total_paid, total_realization_sum) / total_realization_sum), 2)
                 END::numeric AS net_profit
-
             FROM calc_data
             ORDER BY date DESC;
         `;
 
-        console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
-        const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
-        console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
-        
-        res.json(result.rows);
+        // 2. Запрос для расчета остатков / сальдо (Сальдо на начало, Обороты за период, Сальдо на конец)
+        // Считаем общую сумму по кассовым/банковским приходным ордерам или платежам (customer_payments),
+        // либо по самим реализациям/документам, в зависимости от того, что именно вы хотите выводить в шапку (деньги или товары).
+        // Ниже универсальный расчет оборотов и сальдо по поступлениям денег (customer_payments), привязанных к датам:
+        const querySaldo = `
+            WITH payments_aggregated AS (
+                SELECT 
+                    COALESCE(cp.amount, 0) AS amount,
+                    cp.payment_date AS p_date
+                FROM customer_payments cp
+                -- Если нужно фильтровать по складу через документ (реализацию или ремонт):
+                LEFT JOIN realizations r ON cp.realization_id = r.id
+                LEFT JOIN repairs rep ON cp.repair_id = rep.id
+                WHERE ($1::integer IS NULL OR COALESCE(r.sklad_id, rep.warehouse_id) = $1)
+            )
+            SELECT 
+                -- Сальдо на начало (всё, что было до start_date)
+                COALESCE(SUM(CASE WHEN $2::date IS NOT NULL AND p_date::date < $2::date THEN amount ELSE 0 END), 0)::numeric AS saldo_start,
+                
+                -- Обороты за период (между start_date и end_date)
+                COALESCE(SUM(CASE WHEN ($2::date IS NULL OR p_date::date >= $2::date) AND ($3::date IS NULL OR p_date::date <= $3::date) THEN amount ELSE 0 END), 0)::numeric AS turnover_period,
+                
+                -- Сальдо на конец (всё до end_date включительно)
+                COALESCE(SUM(CASE WHEN $3::date IS NULL OR p_date::date <= $3::date THEN amount ELSE 0 END), 0)::numeric AS saldo_end
+            FROM payments_aggregated;
+        `;
+
+        console.log(`⚡ Выполнение запросов с параметрами: sklad =`, sklad_id || null, `, start =`, start_date || null, `, end =`, end_date || null);
+
+        // Выполняем оба запроса параллельно
+        const [docsResult, saldoResult] = await Promise.all([
+            pool.query(queryDocuments, [sklad_id || null, start_date || null, end_date || null]),
+            pool.query(querySaldo, [sklad_id || null, start_date || null, end_date || null])
+        ]);
+
+        console.log(`✅ Запросы успешно выполнены. Строк документов:`, docsResult.rowCount);
+
+        // Отдаем клиенту объект, содержащий и сальдо для шапки, и массив строк для таблицы
+        res.json({
+            saldo: saldoResult.rows[0] || { saldo_start: 0, turnover_period: 0, saldo_end: 0 },
+            rows: docsResult.rows
+        });
+
     } catch (err) {
         console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
         console.error('📄 Текст ошибки (message):', err.message);
