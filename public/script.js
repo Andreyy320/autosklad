@@ -6443,23 +6443,53 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
         }
 
+        let parsedData;
         try {
-            currentItems = JSON.parse(responseText);
+            parsedData = JSON.parse(responseText);
         } catch (e) {
             console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
             throw new Error('Ответ сервера не является валидным JSON');
         }
 
+        // Поддерживаем как старый формат (простой массив), так и новый формат с блоком сальдо: { saldo: {...}, rows: [...] }
+        let currentItems = [];
+        let saldoData = null;
+
+        if (Array.isArray(parsedData)) {
+            currentItems = parsedData;
+        } else if (parsedData && typeof parsedData === 'object') {
+            currentItems = Array.isArray(parsedData.rows) ? parsedData.rows : [];
+            saldoData = parsedData.saldo || null;
+        }
+
         if (!mainTableBody) return;
+
+        // Если это уровень документов (money_receipts) и у нас есть блок сальдо, выводим шапку сальдо перед таблицей
+        let saldoHeaderHtml = '';
+        if (currentReceiptView === 'money_receipts' && saldoData) {
+            const sStart = Number(saldoData.saldo_start || 0).toFixed(2);
+            const turnover = Number(saldoData.turnover_period || 0).toFixed(2);
+            const sEnd = Number(saldoData.saldo_end || 0).toFixed(2);
+
+            saldoHeaderHtml = `
+                <tr style="background: #e2e8f0; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+                    <td colspan="${colCount}" style="padding: 10px 12px; font-size: 14px;">
+                        <span style="color: #334155; margin-right: 20px;">Сальдо на начало: <b style="color: #0f172a;">${sStart}</b></span>
+                        <span style="color: #334155; margin-right: 20px;">Обороты за период: <b style="color: #0284c7;">${turnover}</b></span>
+                        <span style="color: #334155;">Сальдо на конец: <b style="color: #16a34a;">${sEnd}</b></span>
+                    </td>
+                </tr>
+            `;
+        }
 
         if (currentItems.length === 0) {
             console.warn('⚠️ [loadReceiptMainData] Получен пустой массив данных.');
-            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            mainTableBody.innerHTML = saldoHeaderHtml + `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
         console.log(`📦 [loadReceiptMainData] Успешно получено записей: ${currentItems.length}`);
-        mainTableBody.innerHTML = '';
+        mainTableBody.innerHTML = saldoHeaderHtml;
 
         // Если это уровень документов (money_receipts), группируем по месяцам
         if (currentReceiptView === 'money_receipts') {
@@ -6610,7 +6640,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     });
 
                     rowElements.push(tr);
-                    mainTableButton = mainTableBody.appendChild(tr);
+                    mainTableBody.appendChild(tr);
                 });
 
                 const footerTr = document.createElement('tr');
