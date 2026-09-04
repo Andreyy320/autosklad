@@ -151,6 +151,20 @@
                 </button>
             </div>
 
+            <div id="receipts-filter-panel" style="display: none; align-items: center; padding: 6px 10px; background: #f8f9fa; border-bottom: 1px solid #ccc; gap: 15px; flex-shrink: 0; font-size: 12px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="font-weight: bold; color: #333;">Дата с :</span>
+                    <input type="datetime-local" id="receipts-start-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 160px;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="font-weight: bold; color: #333;">Дата по :</span>
+                    <input type="datetime-local" id="receipts-end-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 160px;">
+                </div>
+                <button type="button" onclick="applyReceiptsFilters()" style="padding: 3px 12px; background: #eef2f5; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold;">
+                    <i class="fas fa-search" style="color: #0078d7;"></i> Найти
+                </button>
+            </div>
+
             <div style="flex: 1; overflow-y: auto; min-height: 150px;">
                 <table id="data-table" style="width: 100%; border-collapse: collapse;">
                     <thead>
@@ -253,7 +267,6 @@
 </div>
 
 <script src="/script.js"></script>
-<!-- Подключаем логику изменения размеров колонок в отдельном файле -->
 <script src="/resizable-columns.js"></script>
 </body>
 </html>

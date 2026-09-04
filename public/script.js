@@ -2183,9 +2183,6 @@ function getOrCreateDrawer() {
 
 
 
-
-
-
 function openDrawer() {
     const drawer = getOrCreateDrawer();
     const backdrop = document.getElementById('entity-drawer-backdrop');
@@ -6315,7 +6312,6 @@ async function submitIncomePayment(event, docId, isRepair) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6330,6 +6326,17 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
+    // Получаем значения из панели фильтров дат приходов, если она активна/существует
+    const startDateInput = document.getElementById('receipts-start-date');
+    const endDateInput = document.getElementById('receipts-end-date');
+    let dateParams = '';
+    if (startDateInput && startDateInput.value) {
+        dateParams += `&start_date=${encodeURIComponent(startDateInput.value)}`;
+    }
+    if (endDateInput && endDateInput.value) {
+        dateParams += `&end_date=${encodeURIComponent(endDateInput.value)}`;
+    }
+
     // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
@@ -6338,6 +6345,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRepairId = null;
 
         fetchUrl = `/api/money_receipts_by_sklad`;
+        if (dateParams) {
+            fetchUrl += `?${dateParams.substring(1)}`;
+        }
         if (detailContainer) detailContainer.style.display = 'none';
         
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
@@ -6355,7 +6365,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
-        fetchUrl = `/api/money_receipts${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+        let queryParts = [];
+        if (window.currentSkladId) queryParts.push(`sklad_id=${window.currentSkladId}`);
+        if (startDateInput && startDateInput.value) queryParts.push(`start_date=${encodeURIComponent(startDateInput.value)}`);
+        if (endDateInput && endDateInput.value) queryParts.push(`end_date=${encodeURIComponent(endDateInput.value)}`);
+
+        fetchUrl = `/api/money_receipts${queryParts.length > 0 ? '?' + queryParts.join('&') : ''}`;
         
         if (detailContainer) detailContainer.style.display = 'block';
         
@@ -6715,6 +6730,15 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
+// Функция для применения фильтров по датам из панели `#receipts-filter-panel`
+function applyReceiptsFilters() {
+    console.log("🔍 [applyReceiptsFilters] Применение фильтра дат для приходов");
+    if (window.currentSkladId) {
+        loadReceiptMainData('money_receipts', window.currentSkladId);
+    } else {
+        loadReceiptMainData('money_receipts_by_sklad');
+    }
+}
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
