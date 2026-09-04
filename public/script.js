@@ -6110,6 +6110,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
+
 // Функция для нижней таблицы (спецификация запчастей)
 async function loadExpenseDetailTable(fetchUrl) {
     console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
@@ -7665,7 +7666,11 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'repair_history' ||
         currentEntity === 'money_receipts' ||
         currentEntity === 'money_receipts_by_sklad' ||
-        currentEntity === 'money_receipts_detail'
+        currentEntity === 'money_receipts_detail' ||
+        // Добавили блокировку двойного клика для всех разделов расходов:
+        currentEntity === 'expenses_by_sklad' || 
+        currentEntity === 'expenses_by_suppliers' || 
+        currentEntity === 'expenses_by_receipts'
     ) {
         return; 
     }
@@ -7681,6 +7686,7 @@ tableBody.addEventListener('dblclick', (e) => {
         }
     }
 });
+
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
