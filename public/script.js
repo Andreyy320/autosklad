@@ -6312,6 +6312,7 @@ async function submitIncomePayment(event, docId, isRepair) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6325,17 +6326,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
-
-    // Получаем значения из панели фильтров дат приходов, если она активна/существует
+    
+    // Элементы панели фильтров по датам
+    const receiptsFilterPanel = document.getElementById('receipts-filter-panel');
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
-    let dateParams = '';
-    if (startDateInput && startDateInput.value) {
-        dateParams += `&start_date=${encodeURIComponent(startDateInput.value)}`;
-    }
-    if (endDateInput && endDateInput.value) {
-        dateParams += `&end_date=${encodeURIComponent(endDateInput.value)}`;
-    }
 
     // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
@@ -6345,10 +6340,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRepairId = null;
 
         fetchUrl = `/api/money_receipts_by_sklad`;
-        if (dateParams) {
-            fetchUrl += `?${dateParams.substring(1)}`;
-        }
         if (detailContainer) detailContainer.style.display = 'none';
+        
+        // Скрываем панель дат на уровне складов
+        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
         
         const tabsBlock = document.getElementById('tabs-for-money-receipts');
         if (tabsBlock) tabsBlock.style.display = 'none';
@@ -6357,7 +6352,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Документы (реализации и ремонты) выбранного склада
+    // 2 уровень: Документы (реализации и ремонты) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
@@ -6365,12 +6360,22 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
-        let queryParts = [];
-        if (window.currentSkladId) queryParts.push(`sklad_id=${window.currentSkladId}`);
-        if (startDateInput && startDateInput.value) queryParts.push(`start_date=${encodeURIComponent(startDateInput.value)}`);
-        if (endDateInput && endDateInput.value) queryParts.push(`end_date=${encodeURIComponent(endDateInput.value)}`);
+        // Показываем панель дат для документов
+        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'flex';
 
-        fetchUrl = `/api/money_receipts${queryParts.length > 0 ? '?' + queryParts.join('&') : ''}`;
+        // Собираем параметры фильтрации дат, если они заданы
+        let queryParams = [];
+        if (window.currentSkladId) {
+            queryParams.push(`sklad_id=${window.currentSkladId}`);
+        }
+        if (startDateInput && startDateInput.value) {
+            queryParams.push(`start_date=${startDateInput.value}`);
+        }
+        if (endDateInput && endDateInput.value) {
+            queryParams.push(`end_date=${endDateInput.value}`);
+        }
+
+        fetchUrl = `/api/money_receipts` + (queryParams.length > 0 ? `?${queryParams.join('&')}` : '');
         
         if (detailContainer) detailContainer.style.display = 'block';
         
@@ -6523,7 +6528,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
 
-                // 1. Создаем шапку МЕСЯЦА (выводится СВЕРХУ строк месяца)
                 const headerTr = document.createElement('tr');
                 headerTr.style.background = '#f8fafc';
                 headerTr.style.fontWeight = 'bold';
@@ -6541,7 +6545,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                 mainTableBody.appendChild(headerTr);
 
-                // 2. Добавляем строки документов текущего месяца
                 group.items.forEach(item => {
                     const tr = document.createElement('tr');
                     tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
@@ -6555,7 +6558,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         selectedItem = item;
 
-                        // Корректно определяем, ремонт это или реализация для ЛЮБОГО месяца
                         const docTitle = String(item.doc_number || item.id || '');
                         const isRepair = !item.customer_id || docTitle.includes('РЕМ') || docTitle.includes('Р-') || item.repair_id || String(item.id).startsWith('рем');
 
@@ -6608,10 +6610,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     });
 
                     rowElements.push(tr);
-                    mainTableBody.appendChild(tr);
+                    mainTableButton = mainTableBody.appendChild(tr);
                 });
 
-                // 3. Создаем ИТОГОВУЮ строчку СНИЗУ для текущего месяца
                 const footerTr = document.createElement('tr');
                 footerTr.style.background = '#f1f5f9';
                 footerTr.style.fontWeight = 'bold';
@@ -6632,7 +6633,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 mainTableBody.appendChild(footerTr);
                 rowElements.push(footerTr);
 
-                // Клик по шапке месяца сворачивает/разворачивает строки и итог этого месяца
                 headerTr.addEventListener('click', () => {
                     isCollapsed = !isCollapsed;
                     rowElements.forEach(r => r.style.display = isCollapsed ? 'none' : '');
@@ -6644,7 +6644,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             });
 
         } else {
-            // Обычный вывод для 1 уровня (склады) без группировки по месяцам
             currentItems.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
@@ -6672,6 +6671,13 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
         }
+    }
+}
+
+// Вспомогательная функция для кнопки «Применить» на панели фильтров
+function applyReceiptsFilters() {
+    if (window.currentSkladId) {
+        loadReceiptMainData('money_receipts', window.currentSkladId);
     }
 }
 
@@ -6730,15 +6736,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
-// Функция для применения фильтров по датам из панели `#receipts-filter-panel`
-function applyReceiptsFilters() {
-    console.log("🔍 [applyReceiptsFilters] Применение фильтра дат для приходов");
-    if (window.currentSkladId) {
-        loadReceiptMainData('money_receipts', window.currentSkladId);
-    } else {
-        loadReceiptMainData('money_receipts_by_sklad');
-    }
-}
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
