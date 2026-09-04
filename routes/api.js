@@ -1870,12 +1870,13 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
-        const { start_date, end_date, warehouse_id, mol_id } = req.query;
+        const { start_date, end_date, warehouse_id } = req.query;
 
-        console.log(`[DEBUG] /stock_movement запрошен с параметрами:`, { start_date, end_date, warehouse_id, mol_id });
+        console.log(`[DEBUG] /stock_movement запрошен с параметрами:`, { start_date, end_date, warehouse_id });
 
         const queryParams = [];
         let paramIndex = 1;
@@ -1898,25 +1899,11 @@ router.get('/stock_movement', async (req, res) => {
         }
 
         let warehouseFilterClause = '';
-        let molFilterClause = '';
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
             warehouseFilterClause += ` AND warehouse_id = $${paramIndex}`;
-            paramIndex++;
-        }
-
-        // Фильтр по МОЛ (используем ту же надежную логику поиска актуального МОЛа для склада)
-        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
-            queryParams.push(mol_id);
-            molFilterClause += ` AND warehouse_id IN (
-                SELECT warehouse_id FROM (
-                    SELECT DISTINCT ON (warehouse_id) warehouse_id, user_id 
-                    FROM mol 
-                    ORDER BY warehouse_id, id DESC
-                ) latest_sub WHERE latest_sub.user_id = $${paramIndex}
-            )`;
             paramIndex++;
         }
 
@@ -1999,7 +1986,6 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT * FROM all_operations d
                 WHERE 1=1 
                 ${warehouseFilterClause}
-                ${molFilterClause}
                 ${dateCondition}
             ),
             calculated_turnover AS (
