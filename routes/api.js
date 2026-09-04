@@ -1611,7 +1611,7 @@ router.get('/repair_history', async (req, res) => {
 });
 
 
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
+// Эндпоинт для получения остатков запчастей из таблицы warehouse_batches
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1623,6 +1623,14 @@ router.get('/stock_balances', async (req, res) => {
 
         let warehouseFilterClause = '';
         let molFilterClause = '';
+        let dateFilterClause = '';
+
+        // Фильтр по дате: берем партии, созданные до указанной даты включительно
+        if (date && date.trim() !== '' && date !== 'undefined') {
+            queryParams.push(date);
+            dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
+            paramIndex++;
+        }
 
         // Фильтр по складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
@@ -1631,7 +1639,7 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // Фильтр по МОЛ: оставляем только те склады, которые закреплены за этим пользователем в таблице mol
+        // Фильтр по МОЛ (материально ответственному лицу)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
             queryParams.push(mol_id);
             molFilterClause += ` AND s.id IN (
@@ -1646,16 +1654,17 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Группируем остатки партий по складам и запчастям из warehouse_batches
+                -- Суммируем остатки из warehouse_batches с учетом даты
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
+                WHERE 1=1 ${dateFilterClause}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
-                -- Берем самую свежую привязку МОЛ для каждого склада из таблицы mol
+                -- Берем последнюю привязку МОЛ к складу
                 SELECT DISTINCT ON (warehouse_id)
                     warehouse_id,
                     user_id
@@ -1687,17 +1696,11 @@ router.get('/stock_balances', async (req, res) => {
             ORDER BY z.name ASC, s.name ASC;
         `;
 
-        console.log(`[DEBUG] SQL Query:\n${query}`);
-        console.log(`[DEBUG] Query Params:`, queryParams);
-
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
-        console.log(`[SUCCESS] Получены остатки по складам. Записей: ${result.rows.length}`);
-
     } catch (err) {
         console.error("❌ [ERROR] Ошибка в /stock_balances:", err.message);
-        console.error(err.stack);
         res.status(500).json({ error: err.message });
     }
 });
