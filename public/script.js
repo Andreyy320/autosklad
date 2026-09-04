@@ -6360,7 +6360,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
-        // Показываем панель дат для документов
+        // Показываем панель дат для документов ТОЛЬКО здесь
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'flex';
 
         // Собираем параметры фильтрации дат, если они заданы
@@ -6451,7 +6451,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             throw new Error('Ответ сервера не является валидным JSON');
         }
 
-        // Поддерживаем как старый формат (простой массив), так и новый формат с блоком сальдо: { saldo: {...}, rows: [...] }
         let currentItems = [];
         let saldoData = null;
 
@@ -6464,7 +6463,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         if (!mainTableBody) return;
 
-        // Если это уровень документов (money_receipts) и у нас есть блок сальдо, выводим шапку сальдо перед таблицей
         let saldoHeaderHtml = '';
         if (currentReceiptView === 'money_receipts' && saldoData) {
             const sStart = Number(saldoData.saldo_start || 0);
@@ -6498,7 +6496,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         console.log(`📦 [loadReceiptMainData] Успешно получено записей: ${currentItems.length}`);
         mainTableBody.innerHTML = saldoHeaderHtml;
 
-        // Если это уровень документов (money_receipts), группируем по месяцам
         if (currentReceiptView === 'money_receipts') {
             const getMonthData = (dateStr) => {
                 if (!dateStr) return { key: 'unknown', title: 'Без даты' };
