@@ -671,7 +671,7 @@ router.get('/zaphasti', async (req, res) => {
         const query = `
             SELECT z.*, 
                    p.name AS proizvoditel_name, 
-                   e.name AS ed_izmereniya_name, 
+                   e.short_name AS ed_izmereniya_name, -- Замени short_name на реальное имя колонки с сокращением в БД (например, symbol или short)
                    gt.name AS gruppa_tsen_name, 
                    gz.name AS gryppa_zamehenia_name 
             FROM zaphasti z
@@ -688,7 +688,6 @@ router.get('/zaphasti', async (req, res) => {
         res.status(500).send('Ошибка при получении списка запчастей');
     }
 });
-
 
 // ==================== ПОЛУЧЕНИЕ ОДНОЙ ЗАПЧАСТИ ПО ID (Устраняет ошибку 404) ====================
 router.get('/zaphasti/:id', async (req, res) => {
