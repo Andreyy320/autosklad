@@ -1611,7 +1611,7 @@ router.get('/repair_history', async (req, res) => {
 });
 
 
-// Эндпоинт для получения остатков запчастей из таблицы warehouse_batches
+// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1621,28 +1621,30 @@ router.get('/stock_balances', async (req, res) => {
         const queryParams = [];
         let paramIndex = 1;
 
-        let warehouseFilterClause = '';
+        let warehouseFilterForBatches = '';
+        let warehouseFilterForSkladi = '';
         let molFilterClause = '';
         let dateFilterClause = '';
 
-        // Фильтр по дате: берем партии, созданные до указанной даты включительно
-        if (date && date.trim() !== '' && date !== 'undefined') {
+        // 1. Фильтр по дате: берем партии, созданные до указанной даты включительно
+        if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
             queryParams.push(date);
             dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
             paramIndex++;
         }
 
-        // Фильтр по складу
-        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
+        // 2. Фильтр по конкретному складу
+        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
             queryParams.push(warehouse_id);
-            warehouseFilterClause += ` AND s.id = $${paramIndex}`;
+            warehouseFilterForBatches = ` AND wb.warehouse_id = $${paramIndex}`;
+            warehouseFilterForSkladi = ` AND s.id = $${paramIndex}`;
             paramIndex++;
         }
 
-        // Фильтр по МОЛ (материально ответственному лицу)
-        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined') {
+        // 3. Фильтр по МОЛ (материально ответственному лицу)
+        if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' && mol_id !== 'null') {
             queryParams.push(mol_id);
-            molFilterClause += ` AND s.id IN (
+            molFilterClause = ` AND s.id IN (
                 SELECT warehouse_id FROM (
                     SELECT DISTINCT ON (warehouse_id) warehouse_id, user_id 
                     FROM mol 
@@ -1654,13 +1656,15 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Суммируем остатки из warehouse_batches с учетом даты
+                -- Суммируем остатки из warehouse_batches с учетом даты и склада
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-                WHERE 1=1 ${dateFilterClause}
+                WHERE 1=1 
+                ${dateFilterClause}
+                ${warehouseFilterForBatches}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
@@ -1691,20 +1695,25 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
             WHERE 1=1
-            ${warehouseFilterClause}
+            ${warehouseFilterForSkladi}
             ${molFilterClause}
             ORDER BY z.name ASC, s.name ASC;
         `;
 
+        console.log(`[DEBUG] SQL Query:\n${query}`);
+        console.log(`[DEBUG] Query Params:`, queryParams);
+
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
+        console.log(`[SUCCESS] Получены остатки по складам. Записей: ${result.rows.length}`);
+
     } catch (err) {
         console.error("❌ [ERROR] Ошибка в /stock_balances:", err.message);
+        console.error(err.stack);
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
