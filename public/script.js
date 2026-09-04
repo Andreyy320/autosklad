@@ -5385,13 +5385,11 @@ async function applyMovementFilters() {
     const startDateVal = document.getElementById('movement-start-date')?.value || '';
     const endDateVal = document.getElementById('movement-end-date')?.value || '';
     const warehouseId = document.getElementById('movement-warehouse')?.value || '';
-    const molId = document.getElementById('movement-mol')?.value || '';
 
     const params = new URLSearchParams();
     if (startDateVal) params.append('start_date', startDateVal);
     if (endDateVal) params.append('end_date', endDateVal);
     if (warehouseId) params.append('warehouse_id', warehouseId);
-    if (molId) params.append('mol_id', molId);
 
     try {
         let url = `/api/stock_movement`;
