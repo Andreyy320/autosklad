@@ -6548,6 +6548,36 @@ router.post('/:entity', async (req, res) => {
             req.body.user_id = currentUserId;
         }
 
+        // Проверка уникальности для запчастей при добавлении (код и связка артикул+производитель)
+        if (entity === 'zaphasti') {
+            const { code, article, proizvoditel_id } = req.body;
+
+            if (code) {
+                const codeCheck = await pool.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
+                if (codeCheck.rows.length > 0) {
+                    browserLog(`[ERROR] Запчасть с кодом ${code} уже существует`);
+                    return res.status(400).json({ 
+                        error: 'Запчасть с таким кодом уже существует!', 
+                        serverLogs: logsBuffer 
+                    });
+                }
+            }
+
+            if (article && proizvoditel_id) {
+                const artProvCheck = await pool.query(
+                    'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2', 
+                    [article, proizvoditel_id]
+                );
+                if (artProvCheck.rows.length > 0) {
+                    browserLog(`[ERROR] Запчасть с таким артикулом и производителем уже существует`);
+                    return res.status(400).json({ 
+                        error: 'Запчасть с таким артикулом для этого производителя уже существует!', 
+                        serverLogs: logsBuffer 
+                    });
+                }
+            }
+        }
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -6611,8 +6641,6 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
-
-
 
 
 // ==========================================
@@ -6709,6 +6737,34 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
+        // Проверка уникальности при обновлении запчастей (код и связка артикул+производитель исключая текущий ID)
+        if (entity === 'zaphasti') {
+            const { code, article, proizvoditel_id } = req.body;
+
+            if (code !== undefined && code !== null && code !== '') {
+                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1 AND id <> $2', [code, id]);
+                if (codeCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Запчасть с таким кодом уже существует!' });
+                }
+            }
+
+            // Если артикул или производитель меняются, проверяем связку
+            const targetArticle = article !== undefined ? article : oldDoc.article;
+            const targetProvId = proizvoditel_id !== undefined ? proizvoditel_id : oldDoc.proizvoditel_id;
+
+            if (targetArticle && targetProvId) {
+                const artProvCheck = await client.query(
+                    'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2 AND id <> $3', 
+                    [targetArticle, targetProvId, id]
+                );
+                if (artProvCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Запчасть с таким артикулом для этого производителя уже существует!' });
+                }
+            }
+        }
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -6794,7 +6850,6 @@ router.put('/:entity/:id', async (req, res) => {
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
-
 router.delete('/:entity/:id', async (req, res) => {
     const client = await pool.connect();
     try {
