@@ -5838,9 +5838,6 @@ async function submitPayment(event, receiptId) {
     }
 }
 
-// ==========================================
-// 2. ФУНКЦИЯ ЗАГРУЗКИ ГЛАВНЫХ ДАННЫХ РАСХОДОВ (С ПОЛНЫМИ ЛОГАМИ)
-// ==========================================
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
 
@@ -5854,6 +5851,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
+    
+    // Элементы панели фильтров по датам (принудительно скрываем на всех уровнях расходов)
+    const receiptsFilterPanel = document.getElementById('receipts-filter-panel');
+    if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
 
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
@@ -6109,7 +6110,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 // Функция для нижней таблицы (спецификация запчастей)
 async function loadExpenseDetailTable(fetchUrl) {
     console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
