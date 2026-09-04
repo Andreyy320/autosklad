@@ -3835,8 +3835,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
 router.get('/money_receipts', async (req, res) => {
     try {
-        const { sklad_id } = req.query;
-        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id из фильтра:`, sklad_id);
+        const { sklad_id, start_date, end_date } = req.query;
+        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
 
         const query = `
             WITH calc_data AS (
@@ -3892,6 +3892,8 @@ router.get('/money_receipts', async (req, res) => {
                 ) sub_p ON real.id = sub_p.realization_id
                 WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
+                  AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
+                  AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
 
                 UNION ALL
 
@@ -3931,12 +3933,7 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.repair_id,
                         SUM(ri.quantity) AS parts_qty,
-                        -- Закупочная стоимость: если в repair_items нет отдельной закупки, 
-                        -- берем себестоимость/партию из поступления через zaphast_id или считаем нулем. 
-                        -- Сейчас для теста ставим 0, чтобы вся сумма продажи уходила в прибыль запчастей, 
-                        -- либо можно заменить на расчет по вашей логике прихода.
                         0 AS total_purchase_sum,
-                        -- Сумма продажи запчастей в ремонте (total, либо price * quantity)
                         SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
                     FROM repair_items ri
                     GROUP BY ri.repair_id
@@ -3955,6 +3952,8 @@ router.get('/money_receipts', async (req, res) => {
                 ) rep_p ON rep.id = rep_p.repair_id
                 WHERE rep.is_posted = true
                   AND ($1::integer IS NULL OR rep.warehouse_id = $1)
+                  AND ($2::date IS NULL OR rep.doc_date::date >= $2::date)
+                  AND ($3::date IS NULL OR rep.doc_date::date <= $3::date)
             )
             SELECT 
                 id,
@@ -3986,8 +3985,8 @@ router.get('/money_receipts', async (req, res) => {
             ORDER BY date DESC;
         `;
 
-        console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметром склад:`, sklad_id || null);
-        const result = await pool.query(query, [sklad_id || null]);
+        console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
+        const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
         res.json(result.rows);
