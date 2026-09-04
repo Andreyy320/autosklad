@@ -5274,12 +5274,10 @@ async function applyFilters() {
 
     const dateVal = document.getElementById('filter-date')?.value || '';
     const warehouseId = document.getElementById('filter-warehouse')?.value || '';
-    const molId = document.getElementById('filter-mol')?.value || '';
 
     const params = new URLSearchParams();
     if (dateVal) params.append('date', dateVal);
     if (warehouseId) params.append('warehouse_id', warehouseId);
-    if (molId) params.append('mol_id', molId);
 
     try {
         const response = await fetch(`/api/stock_balances?${params.toString()}`);
@@ -5323,7 +5321,6 @@ async function applyFilters() {
             });
         } else {
             selectedItem = null;
-            // Передаем 'stock_batches', чтобы emptyDetailBody знала, для какой сущности очищать детальную панель
             emptyDetailBody('stock_batches'); 
         }
 
