@@ -1384,7 +1384,6 @@ router.get('/repair_works', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
-
 // ==================== РЕМОНТЫ КОНКРЕТНОЙ МАШИНЫ (запчасти + работы) ====================
 router.get('/repair_history', async (req, res) => {
     try {
@@ -1407,7 +1406,7 @@ router.get('/repair_history', async (req, res) => {
 
         const repairIds = repairs.map(r => r.id);
 
-        // 2. Получаем запчасти из repair_items с правильной подтяжкой из receipts
+        // 2. Получаем запчасти из repair_items с правильной подтяжкой из receipts и zaphasti (zaphasti_id)
         const itemsQuery = `
             SELECT 
                 ri.id,
@@ -1427,7 +1426,7 @@ router.get('/repair_history', async (req, res) => {
                 ) AS doc_source,
                 'item' AS row_type
             FROM repair_items ri
-            LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
             LEFT JOIN receipts rc ON ri.receipt_id = rc.id
             WHERE ri.repair_id = ANY($1::int[])
         `;
