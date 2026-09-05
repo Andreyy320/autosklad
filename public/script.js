@@ -7453,16 +7453,20 @@ tableBody.addEventListener('dblclick', (e) => {
         }
 
         selectedItem = item;
+        
         if (currentEntity === 'realizations') {
             openRealizationForm(currentEntity, item);
         } else if (currentEntity === 'repairs' || currentEntity === 'repair_items') {
             openRepairForm(currentEntity, item);
+        } else if (currentEntity === 'receipts') {
+            openReceiptForm(currentEntity, item);
+        } else if (currentEntity === 'stock_movement') {
+            openMoveForm(currentEntity, item);
         } else {
             openEntityForm(currentEntity, item);
         }
     }
 });
-
 
 let currentCustomerSubTab = 'customer_contacts';
 
