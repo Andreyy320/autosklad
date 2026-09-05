@@ -3532,7 +3532,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        // Блокируем ВСЕ поля, если документ проведен (включая fact_date и ис_posted / статус)
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -3595,8 +3594,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
             }
-            // Используем readonly и disabled для нативных инпутов дата/время, чтобы они точно не открывали выбор и были заблокированы
-            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly disabled' : ''} style="${controlStyle}">`;
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else {
@@ -3805,7 +3803,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                             showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
                         }
                     } catch (err) {
-                        showAppNotification('Ошибка соединения с сером', 'error');
+                        showAppNotification('Ошибка соединения с сервером', 'error');
                     }
                 }
             );
@@ -3816,8 +3814,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
-
-        if (isPosted) return; // Защита от сохранения проведенного документа
 
         if (isSubmitting) return; 
         isSubmitting = true;
@@ -7440,7 +7436,6 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'money_receipts' ||
         currentEntity === 'money_receipts_by_sklad' ||
         currentEntity === 'money_receipts_detail' ||
-        // Добавили блокировку двойного клика для всех разделов расходов:
         currentEntity === 'expenses_by_sklad' || 
         currentEntity === 'expenses_by_suppliers' || 
         currentEntity === 'expenses_by_receipts'
@@ -7450,15 +7445,24 @@ tableBody.addEventListener('dblclick', (e) => {
 
     const id = tr.getAttribute('data-id');
     const item = currentItems.find(i => i.id == id);
+    
     if (item) {
+        // Приводим is_posted к железному булеву значению, чтобы формы всегда видели, что документ проведен
+        if (item.is_posted !== undefined) {
+            item.is_posted = (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
+        }
+
         selectedItem = item;
         if (currentEntity === 'realizations') {
             openRealizationForm(currentEntity, item);
+        } else if (currentEntity === 'repairs' || currentEntity === 'repair_items') {
+            openRepairForm(currentEntity, item);
         } else {
             openEntityForm(currentEntity, item);
         }
     }
 });
+
 
 let currentCustomerSubTab = 'customer_contacts';
 
