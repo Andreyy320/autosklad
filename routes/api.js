@@ -1319,24 +1319,21 @@ router.get('/repair_items', async (req, res) => {
     }
 });
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
-// ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА (С ДЕБАГ-ЛОГАМИ) ====================
+// ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
     try {
         const { repair_id } = req.query;
-        console.log('DEBUG /repair_works: Получен запрос с repair_id:', repair_id);
         
         let query = `
             SELECT 
                 rw.*,
-                COALESCE(vr.name, w.name, tr.name, '—') AS vidy_rabot_name,
-                COALESCE(vr.name, w.name, tr.name, '—') AS name,
+                COALESCE(vr.name, '—') AS vidy_rabot_name,
+                COALESCE(vr.name, '—') AS name,
                 COALESCE(i.name, '—') AS ispolnitel_name,
-                COALESCE(rw.price, vr.price, w.price, tr.price, 0) AS price
+                COALESCE(rw.price, vr.price, 0) AS price
             FROM repair_works rw
             LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
-            LEFT JOIN works w ON rw.work_id = w.id OR rw.vidy_rabot_id = w.id
-            LEFT JOIN type_rabot tr ON rw.type_rabot_id = tr.id
             LEFT JOIN ispolnitel i ON rw.ispolnitel_id = i.id
         `;
         let params = [];
@@ -1348,13 +1345,8 @@ router.get('/repair_works', async (req, res) => {
 
         query += ' ORDER BY rw.id ASC';
 
-        console.log('DEBUG /repair_works: Итоговый SQL запрос:', query);
-        console.log('DEBUG /repair_works: Параметры запроса:', params);
-
         const result = await pool.query(query, params);
         
-        console.log('DEBUG /repair_works: Сырые данные из БД (rows):', JSON.stringify(result.rows, null, 2));
-
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении работ для ремонта:', err);
