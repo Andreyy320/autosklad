@@ -7857,7 +7857,23 @@ async function loadDetailData(entity, parentId) {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || '';
                 tr.style.cursor = 'pointer';
-                tr.innerHTML = config.render(item);
+                
+                // Если у конфигурации есть собственный метод render, вызываем его. 
+                // Но если это repair_works, а конфиг использует старый захардкоженный render без конфигурационного метода, 
+                // можно предусмотреть мягкий фолбэк для вывода названия вида работ.
+                if (typeof config.render === 'function') {
+                    tr.innerHTML = config.render(item);
+                } else {
+                    // Универсальный рендер на случай отсутствия config.render
+                    const priceVal = item.price ? Number(item.price).toFixed(2) : '0.00';
+                    const workNameText = item.vidy_rabot_name || item.work_name || item.vidy_rabot_id || item.work_id || '—';
+                    tr.innerHTML = `
+                        <td>${item.ispolnitel_name || item.ispolnitel_id || '—'}</td>
+                        <td><b>${workNameText}</b></td>
+                        <td style="text-align: right;">${priceVal}</td>
+                        <td>${item.description || ''}</td>
+                    `;
+                }
 
                 tr.onclick = () => {
                     selectedDetailItem = item;
