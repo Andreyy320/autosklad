@@ -3661,6 +3661,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
+                console.log('[filterMols] Запуск фильтрации МОЛ. Выбран склад ID:', selectedWarehouseId, 'Текущий МОЛ:', currentMolValue);
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -3668,9 +3669,13 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                         fetch('/api/mol_users')
                     ]);
 
-                    if (!molRes.ok) return;
+                    if (!molRes.ok) {
+                        console.warn('[filterMols] Ошибка загрузки /api/mol:', molRes.status);
+                        return;
+                    }
                     const mols = await molRes.json();
                     const users = usersRes.ok ? await usersRes.json() : [];
+                    console.log('[filterMols] Получено МОЛ с сервера:', mols.length, 'Пользователей:', users.length);
 
                     const usersMap = {};
                     users.forEach(u => {
@@ -3682,7 +3687,10 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     let isCurrentStillValid = false;
 
                     mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                        const match = !selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId);
+                        console.log(`[filterMols] МОЛ #${m.id} (warehouse_id: ${m.warehouse_id}) подходит под склад ${selectedWarehouseId}?`, match);
+
+                        if (match) {
                             const option = document.createElement('option');
                             option.value = m.id;
                             option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
@@ -3696,6 +3704,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     });
 
                     if (isUserChange && !isCurrentStillValid) {
+                        console.log('[filterMols] Текущий МОЛ недействителен для выбранного склада, сбрасываем в ""');
                         mol.value = '';
                     }
                 } catch (err) {
@@ -3704,6 +3713,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
 
             warehouse.addEventListener('change', () => {
+                console.log('[warehouse change] Склад изменен пользователем');
                 filterMols(true);
             });
 
@@ -3723,11 +3733,16 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterCars(isUserChange = false) {
                 const selectedMolId = mol.value;
                 const currentCarValue = car.value;
+                console.log('[filterCars] Запуск фильтрации авто по МОЛ. Выбран МОЛ ID:', selectedMolId, 'Текущее авто:', currentCarValue);
 
                 try {
                     const carRes = await fetch('/api/customer_cars');
-                    if (!carRes.ok) return;
+                    if (!carRes.ok) {
+                        console.warn('[filterCars] Ошибка загрузки /api/customer_cars:', carRes.status);
+                        return;
+                    }
                     const cars = await carRes.json();
+                    console.log('[filterCars] Всего автомобилей получено с сервера:', cars.length, cars);
 
                     car.innerHTML = '<option value="">-- Не выбрано --</option>';
 
@@ -3735,7 +3750,10 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
                     cars.forEach(c => {
                         const cMolId = c.mol_id || c.user_id || c.owner_id;
-                        if (!selectedMolId || String(cMolId) === String(selectedMolId)) {
+                        const match = !selectedMolId || String(cMolId) === String(selectedMolId);
+                        console.log(`[filterCars] Авто #${c.id} (cMolId: ${cMolId}) подходит под МОЛ ${selectedMolId}?`, match);
+
+                        if (match) {
                             const option = document.createElement('option');
                             option.value = c.id;
                             const gos = c.gos_number || c.car_number || '';
@@ -3752,6 +3770,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     });
 
                     if (isUserChange && !isCurrentCarStillValid) {
+                        console.log('[filterCars] Текущее авто недействительно для выбранного МОЛ, сбрасываем в ""');
                         car.value = '';
                     }
                 } catch (err) {
@@ -3760,6 +3779,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
 
             mol.addEventListener('change', () => {
+                console.log('[mol change] МОЛ изменен пользователем');
                 filterCars(true);
             });
 
@@ -3768,7 +3788,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        // ДОБАВЛЕНО: Фильтрация автомобилей по выбранному складу (sklad_id / warehouse_id)
+        // Фильтрация автомобилей по выбранному складу (sklad_id / warehouse_id)
         const skladCarPairs = [
             { sklad: formElement.querySelector('[name="sklad_id"]') || formElement.querySelector('[name="warehouse_id"]'), car: formElement.querySelector('[name="car_id"]') }
         ];
@@ -3779,18 +3799,26 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterCarsBySklad(isUserChange = false) {
                 const selectedSkladId = sklad.value;
                 const currentCarValue = car.value;
+                console.log('[filterCarsBySklad] Запуск фильтрации авто по складу. Выбран склад ID:', selectedSkladId, 'Текущее авто:', currentCarValue);
 
                 try {
                     const carRes = await fetch('/api/customer_cars');
-                    if (!carRes.ok) return;
+                    if (!carRes.ok) {
+                        console.warn('[filterCarsBySklad] Ошибка загрузки /api/customer_cars:', carRes.status);
+                        return;
+                    }
                     const cars = await carRes.json();
+                    console.log('[filterCarsBySklad] Всего машин с сервера:', cars.length, cars);
 
                     car.innerHTML = '<option value="">-- Не выбрано --</option>';
                     let isCurrentCarStillValid = false;
 
                     cars.forEach(c => {
                         const cSkladId = c.sklad_id;
-                        if (!selectedSkladId || String(cSkladId) === String(selectedSkladId)) {
+                        const match = !selectedSkladId || String(cSkladId) === String(selectedSkladId);
+                        console.log(`[filterCarsBySklad] Авто #${c.id} (sklad_id: ${cSkladId}) подходит под склад ${selectedSkladId}?`, match);
+
+                        if (match) {
                             const option = document.createElement('option');
                             option.value = c.id;
                             const gos = c.gos_number || c.car_number || '';
@@ -3807,6 +3835,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     });
 
                     if (isUserChange && !isCurrentCarStillValid) {
+                        console.log('[filterCarsBySklad] Текущее авто недействительно для выбранного склада, сбрасываем в ""');
                         car.value = '';
                     }
                 } catch (err) {
@@ -3815,6 +3844,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
 
             sklad.addEventListener('change', () => {
+                console.log('[sklad change] Склад изменен пользователем');
                 filterCarsBySklad(true);
             });
 
@@ -3923,7 +3953,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         } catch (err) {
             showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
+                isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
         }
     });
