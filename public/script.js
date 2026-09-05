@@ -3581,10 +3581,10 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                optionsHtml += `<option value="${refItem.id}" ${selected} ${refItem.warehouse_id ? `data-warehouse-id="${refItem.warehouse_id}"` : ''}>${displayName}</option>`;
+                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : (col.field === 'car_id' || col.field === 'customer_car_id' ? 'id="car-select"' : ''));
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -3712,59 +3712,63 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        // Фильтрация автомобилей по выбранному складу (warehouse_id / sklad_id)
-        const warehouseFieldForCars = formElement.querySelector('[name="warehouse_id"]') || formElement.querySelector('[name="sklad_id"]');
-        const carSelectField = formElement.querySelector('#car-select') || formElement.querySelector('[name="car_id"]') || formElement.querySelector('[name="customer_car_id"]');
+        // НОВАЯ ЛОГИКА: Автоматическая фильтрация автомобилей по выбранному МОЛ (аналогично складам и МОЛ)
+        const molCarPairs = [
+            { mol: formElement.querySelector('[name="mol_id"]'), car: formElement.querySelector('[name="car_id"]') },
+            { mol: formElement.querySelector('[name="mol_from_id"]'), car: formElement.querySelector('[name="car_id"]') }
+        ];
 
-        if (warehouseFieldForCars && carSelectField) {
+        molCarPairs.forEach(({ mol, car }) => {
+            if (!mol || !car) return;
+
             async function filterCars(isUserChange = false) {
-                const selectedWarehouseId = warehouseFieldForCars.value;
-                const currentCarValue = carSelectField.value;
+                const selectedMolId = mol.value;
+                const currentCarValue = car.value;
 
                 try {
-                    const carRefName = carSelectField.name === 'customer_car_id' ? 'customer_cars' : 'cars';
-                    const carsRes = await fetch(`/api/${carRefName}`);
-                    if (!carsRes.ok) return;
-                    const cars = await carsRes.json();
+                    const carRes = await fetch('/api/customer_cars'); // или /api/cars в зависимости от эндпоинта автомобилей
+                    if (!carRes.ok) return;
+                    const cars = await carRes.json();
 
-                    carSelectField.innerHTML = '<option value="">-- Не выбрано --</option>';
-                    let isCarStillValid = false;
+                    car.innerHTML = '<option value="">-- Не выбрано --</option>';
 
-                    cars.forEach(refItem => {
-                        if (!selectedWarehouseId || String(refItem.warehouse_id) === String(selectedWarehouseId)) {
-                            const gos = refItem.gos_number || refItem.car_number || '';
-                            const mdl = refItem.model || refItem.car_model || '';
-                            const brd = refItem.brand || refItem.car_brand || '';
-                            const displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+                    let isCurrentCarStillValid = false;
 
+                    cars.forEach(c => {
+                        // Проверяем привязку автомобиля к МОЛ (поддерживаем поля mol_id, owner_id или аналогичные)
+                        const cMolId = c.mol_id || c.user_id || c.owner_id;
+                        if (!selectedMolId || String(cMolId) === String(selectedMolId)) {
                             const option = document.createElement('option');
-                            option.value = refItem.id;
-                            option.textContent = displayName;
+                            option.value = c.id;
+                            const gos = c.gos_number || c.car_number || '';
+                            const mdl = c.model || c.car_model || '';
+                            const brd = c.brand || c.car_brand || '';
+                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${c.id}`;
 
-                            if (String(refItem.id) === String(currentCarValue)) {
+                            if (String(c.id) === String(currentCarValue)) {
                                 option.selected = true;
-                                isCarStillValid = true;
+                                isCurrentCarStillValid = true;
                             }
-                            carSelectField.appendChild(option);
+                            car.appendChild(option);
                         }
                     });
 
-                    if (isUserChange && !isCarStillValid) {
-                        carSelectField.value = '';
+                    if (isUserChange && !isCurrentCarStillValid) {
+                        car.value = '';
                     }
                 } catch (err) {
-                    console.error('Ошибка при фильтрации автомобилей по складу:', err);
+                    console.error('Ошибка при фильтрации автомобилей по МОЛ:', err);
                 }
             }
 
-            warehouseFieldForCars.addEventListener('change', () => {
+            mol.addEventListener('change', () => {
                 filterCars(true);
             });
 
-            if (warehouseFieldForCars.value) {
+            if (mol.value) {
                 filterCars(false);
             }
-        }
+        });
     }
 
     const deleteBtn = drawer.querySelector('#delete-btn');
