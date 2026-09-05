@@ -1298,6 +1298,7 @@ router.get('/repairs', async (req, res) => {
 router.get('/repair_items', async (req, res) => {
     try {
         const { repair_id } = req.query;
+        console.log(`[DEBUG] Запрос запчастей для repair_id:`, repair_id);
         
         let query = `
             SELECT 
@@ -1306,14 +1307,11 @@ router.get('/repair_items', async (req, res) => {
                 z.code AS zaphasti_code, 
                 z.name AS zaphasti_name, 
                 z.unit AS zaphasti_unit,
+                z.gruppa_tsen_id AS db_gruppa_tsen_id,
                 gt.name AS price_group_name,
-                -- Процент наценки из справочника gruppa_tsen (если не задан, то 0)
                 COALESCE(gt.markup_percent, 0) AS markup_percent,
-                -- Цена за штуку с учетом динамической наценки группы
                 ROUND(COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS price_with_markup,
-                -- Сумма наценки за 1 штуку в денежном выражении
                 ROUND(COALESCE(ri.price, 0) * (COALESCE(gt.markup_percent, 0) / 100.0), 2) AS markup_amount,
-                -- Итоговая сумма: количество * (цена с учетом наценки группы)
                 ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS total,
                 COALESCE(
                     CASE 
@@ -1338,13 +1336,18 @@ router.get('/repair_items', async (req, res) => {
         query += ' ORDER BY ri.id DESC';
 
         const result = await pool.query(query, params);
+        
+        // Выводим в консоль то, что реально вернулась из базы по каждой запчасти
+        result.rows.forEach(row => {
+            console.log(`[DEBUG ITEM] ID запчасти в ремонте: ${row.id}, Наименование: ${row.zaphasti_name}, zaphast_id: ${row.zaphast_id}, gruppa_tsen_id в запчасти: ${row.db_gruppa_tsen_id}, Найдено групп цен: ${row.price_group_name}, Процент наценки: ${row.markup_percent}%`);
+        });
+
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении запчастей ремонта:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
