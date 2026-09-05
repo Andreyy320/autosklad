@@ -6962,7 +6962,6 @@ function getCurrentDetailEntity() {
     }
 
     if (currentEntity === 'money_receipts') {
-        // 1. Сначала проверяем реальный активный таб в DOM, чтобы не залипать на старой переменной
         const activeTab = document.querySelector('#tabs-for-money-receipts button.active, #tabs-for-money-receipts .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
@@ -6974,7 +6973,6 @@ function getCurrentDetailEntity() {
             }
         }
 
-        // 2. Если в DOM ничего не подсвечено, смотрим на глобальную переменную
         if (typeof currentMoneyReceiptSubTab !== 'undefined' && currentMoneyReceiptSubTab) {
             console.log(`⚙️ [getCurrentDetailEntity:money_receipts] Найдено через currentMoneyReceiptSubTab: ${currentMoneyReceiptSubTab}`);
             if (currentMoneyReceiptSubTab === 'realization_works') return 'money_receipts_works_detail';
@@ -7114,7 +7112,9 @@ function getCurrentDetailEntity() {
     }
 
     if (currentEntity === 'car_cards') {
-        const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active');
+        // Ищем активную вкладку по разным возможным контейнерам вкладок автомобиля
+        const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active, #car-tabs-bar button.active, #car-tabs-bar .active, .car-tabs-container button.active, .car-tabs-container .active');
+        
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) return dataTab;
@@ -7123,19 +7123,32 @@ function getCurrentDetailEntity() {
         if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) return currentCarSubTab;
 
         if (activeTab) {
+            const text = activeTab.innerText.trim().toLowerCase();
+            if (text.includes('общ') || text.includes('основн')) return 'car_general';
+            if (text.includes('запчаст') || text.includes('товар')) return 'receipts_history';
+            if (text.includes('ремонт') || text.includes('работ')) return 'repair_history';
+            if (text.includes('дтп') || text.includes('авари')) return 'dtp_history';
+
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/loadDetailData\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
         }
+
+        // Запасная проверка текста активной кнопки, если атрибуты не сработали
+        const activeText = document.querySelector('#car-tabs-bar button.active, #tabs-for-cars button.active')?.innerText?.toLowerCase() || '';
+        if (activeText.includes('общ')) return 'car_general';
+        if (activeText.includes('запчаст')) return 'receipts_history';
+        if (activeText.includes('ремонт')) return 'repair_history';
+        if (activeText.includes('дтп')) return 'dtp_history';
+
         return 'car_details';
     }
     
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
 
 function openDetailForm(mode) {
     if (!selectedItem) {
@@ -7523,9 +7536,7 @@ tableBody.addEventListener('dblclick', (e) => {
 
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
-                           e.target.closest('#car-tabs-bar') ||
-                           document.getElementById('detail-container')?.contains(tr) ||
-                           document.getElementById('car-tabs-panel')?.contains(tr);
+                           e.target.closest('#car-tabs-bar');
     
     if (isInsideDetail) {
         return; 
@@ -7540,8 +7551,6 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'part_movement_details' ||
         currentEntity === 'car_cards' ||
         currentEntity === 'car_general' ||
-        currentEntity === 'car_spare_parts' ||
-        currentEntity === 'car_repairs' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
         currentEntity === 'receipts_history' ||
