@@ -1236,7 +1236,6 @@ router.get('/doc_types', async (req, res) => {
     }
 });
 
-
 router.get('/repairs', async (req, res) => {
     try {
         const { car_id } = req.query;
@@ -1250,7 +1249,7 @@ router.get('/repairs', async (req, res) => {
                 COALESCE(c.model, cm.name, 'Не указана') AS car_model,
                 s.name AS warehouse_name,
                 u.name AS mol_name,
-                -- Итоговая сумма: запчасти С УЧЕТОМ НАЦЕНКИ 10% + работы
+                -- Итоговая сумма: запчасти с учетом динамической наценки из gruppa_tsen + работы
                 (
                     COALESCE(parts.total_parts_sum, 0) + 
                     COALESCE(works.total_works_sum, 0)
@@ -1264,10 +1263,14 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN (
-                -- Считаем сумму запчастей сразу с коэффициентом 1.1 (наценка 10%)
-                SELECT repair_id, SUM(COALESCE(quantity, 0) * COALESCE(price, 0) * 1.1) AS total_parts_sum
-                FROM repair_items
-                GROUP BY repair_id
+                -- Считаем сумму запчастей с учетом наценки из связанной группы цен
+                SELECT 
+                    ri.repair_id, 
+                    SUM(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0)) AS total_parts_sum
+                FROM repair_items ri
+                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+                LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+                GROUP BY ri.repair_id
             ) parts ON parts.repair_id = r.id
             LEFT JOIN (
                 SELECT repair_id, SUM(COALESCE(price, 0)) AS total_works_sum
@@ -1291,7 +1294,6 @@ router.get('/repairs', async (req, res) => {
         res.status(500).send(err.message);
     }
 });
-
 
 router.get('/repair_items', async (req, res) => {
     try {
