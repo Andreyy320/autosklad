@@ -3767,6 +3767,61 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 filterCars(false);
             }
         });
+
+        // ДОБАВЛЕНО: Фильтрация автомобилей по выбранному складу (sklad_id / warehouse_id)
+        const skladCarPairs = [
+            { sklad: formElement.querySelector('[name="sklad_id"]') || formElement.querySelector('[name="warehouse_id"]'), car: formElement.querySelector('[name="car_id"]') }
+        ];
+
+        skladCarPairs.forEach(({ sklad, car }) => {
+            if (!sklad || !car) return;
+
+            async function filterCarsBySklad(isUserChange = false) {
+                const selectedSkladId = sklad.value;
+                const currentCarValue = car.value;
+
+                try {
+                    const carRes = await fetch('/api/customer_cars');
+                    if (!carRes.ok) return;
+                    const cars = await carRes.json();
+
+                    car.innerHTML = '<option value="">-- Не выбрано --</option>';
+                    let isCurrentCarStillValid = false;
+
+                    cars.forEach(c => {
+                        const cSkladId = c.sklad_id;
+                        if (!selectedSkladId || String(cSkladId) === String(selectedSkladId)) {
+                            const option = document.createElement('option');
+                            option.value = c.id;
+                            const gos = c.gos_number || c.car_number || '';
+                            const mdl = c.model || c.car_model || '';
+                            const brd = c.brand || c.car_brand || '';
+                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${c.id}`;
+
+                            if (String(c.id) === String(currentCarValue)) {
+                                option.selected = true;
+                                isCurrentCarStillValid = true;
+                            }
+                            car.appendChild(option);
+                        }
+                    });
+
+                    if (isUserChange && !isCurrentCarStillValid) {
+                        car.value = '';
+                    }
+                } catch (err) {
+                    console.error('Ошибка при фильтрации автомобилей по складу:', err);
+                }
+            }
+
+            sklad.addEventListener('change', () => {
+                filterCarsBySklad(true);
+            });
+
+            if (sklad.value) {
+                filterCarsBySklad(false);
+            }
+        });
     }
 
     const deleteBtn = drawer.querySelector('#delete-btn');
@@ -3862,7 +3917,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.err || errData.error || 'Ошибка при сохранении данных', 'error');
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
