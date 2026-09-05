@@ -7456,11 +7456,11 @@ tableBody.addEventListener('dblclick', (e) => {
         
         if (currentEntity === 'realizations') {
             openRealizationForm(currentEntity, item);
-        } else if (currentEntity === 'repairs' || currentEntity === 'repair_items') {
+        } else if (currentEntity === 'repairs') {
             openRepairForm(currentEntity, item);
         } else if (currentEntity === 'receipts') {
             openReceiptForm(currentEntity, item);
-        } else if (currentEntity === 'stock_movement') {
+        } else if (currentEntity === 'moves') {
             openMoveForm(currentEntity, item);
         } else {
             openEntityForm(currentEntity, item);
