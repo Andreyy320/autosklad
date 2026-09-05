@@ -7151,11 +7151,21 @@ function openDetailForm(mode) {
 
     const detailEntity = getCurrentDetailEntity();
 
-    // Блокируем открытие формы для таблиц-историй и сводок, которые нельзя редактировать двойным кликом
-    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'accident_images'];
+    // 1. Проверяем жестко заблокированные сущности-истории
+    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
     if (readOnlyDetailEntities.includes(detailEntity)) {
         console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" доступна только для просмотра.`);
         return;
+    }
+
+    // 2. Особая проверка для фотографий ДТП: если открыто в контексте автомобиля, редактирование запрещено
+    if (detailEntity === 'accident_images') {
+        const isCarContext = document.getElementById('detail-title')?.innerText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
+        if (isCarContext) {
+            console.log(`🛡️ [openDetailForm] Фотографии ДТП в контексте автомобиля доступны только для просмотра.`);
+            showAppNotification('Фотографии ДТП из карточки автомобиля доступны только для просмотра. Редактирование доступно из карточки самого ДТП.', 'warning');
+            return;
+        }
     }
 
     const itemToEdit = mode === 'edit' ? selectedDetailItem : null;
