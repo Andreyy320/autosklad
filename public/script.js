@@ -7864,7 +7864,16 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history'  || entity === 'car_general' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+    } else if (
+        entity === 'repairs' || 
+        entity === 'repair_history' || 
+        entity === 'receipts_history' ||  
+        entity === 'car_general' || 
+        entity === 'accidents' || 
+        entity === 'car_accidents' || 
+        entity === 'dtp_history' || 
+        entity === 'car_details'
+    ) {
         queryParamName = 'car_id';
     }
 
@@ -7997,13 +8006,9 @@ async function loadDetailData(entity, parentId) {
                 tr.dataset.id = item.id || '';
                 tr.style.cursor = 'pointer';
                 
-                // Если у конфигурации есть собственный метод render, вызываем его. 
-                // Но если это repair_works, а конфиг использует старый захардкоженный render без конфигурационного метода, 
-                // можно предусмотреть мягкий фолбэк для вывода названия вида работ.
                 if (typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
                 } else {
-                    // Универсальный рендер на случай отсутствия config.render
                     const priceVal = item.price ? Number(item.price).toFixed(2) : '0.00';
                     const workNameText = item.vidy_rabot_name || item.work_name || item.vidy_rabot_id || item.work_id || '—';
                     tr.innerHTML = `
