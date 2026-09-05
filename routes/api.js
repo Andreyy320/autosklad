@@ -1237,7 +1237,7 @@ router.get('/doc_types', async (req, res) => {
 });
 
 
-// Получение списка ремонтов с точным подсчетом суммы (запчасти + работы)
+// Получение списка ремонтов с точным суммированием
 router.get('/repairs', async (req, res) => {
     try {
         const { car_id } = req.query;
@@ -1251,7 +1251,7 @@ router.get('/repairs', async (req, res) => {
                 COALESCE(c.model, cm.name, 'Не указана') AS car_model,
                 s.name AS warehouse_name,
                 u.name AS mol_name,
-                -- Пересчитываем общую сумму: сумма запчастей (quantity * price) + сумма работ (price)
+                -- Итоговая сумма: сумма колонки total из запчастей + сумма price из работ
                 (
                     COALESCE(parts.total_parts_sum, 0) + 
                     COALESCE(works.total_works_sum, 0)
@@ -1265,7 +1265,7 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN (
-                SELECT repair_id, SUM(COALESCE(quantity, 0) * COALESCE(price, 0)) AS total_parts_sum
+                SELECT repair_id, SUM(COALESCE(total, quantity * price, 0)) AS total_parts_sum
                 FROM repair_items
                 GROUP BY repair_id
             ) parts ON parts.repair_id = r.id
