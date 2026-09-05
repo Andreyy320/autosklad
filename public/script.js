@@ -7512,6 +7512,7 @@ if (tableBody) {
 }
 
 
+
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -7520,13 +7521,9 @@ tableBody.addEventListener('dblclick', (e) => {
         return;
     }
 
-    // Жесткая проверка: если клик внутри панели вкладок карточки авто или таблиц деталей
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
-                           e.target.closest('#car-tabs-bar') ||
-                           e.target.closest('.car-tabs-content') ||
-                           e.target.closest('.tab-pane') ||
-                           document.getElementById('car-tabs-panel')?.contains(tr);
+                           e.target.closest('#car-tabs-bar');
     
     if (isInsideDetail) {
         return; 
@@ -7833,7 +7830,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history'  || entity === 'car_general' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
     }
 
