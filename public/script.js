@@ -3571,12 +3571,11 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     const art = refItem.article ? `[${refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
-                } else if (referenceName === 'customer_cars' || referenceName === 'cars' || referenceName === 'repair_cars') {
+                } else if (referenceName === 'customer_cars' || referenceName === 'cars') {
                     const gos = refItem.gos_number || refItem.car_number || '';
                     const mdl = refItem.model || refItem.car_model || '';
                     const brd = refItem.brand || refItem.car_brand || '';
-                    const doc = refItem.doc_number || '';
-                    displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : (doc ? `Док. ${doc}` : `Авто/Запись #${refItem.id}`);
+                    displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
                 } else {
                     displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
@@ -3719,70 +3718,13 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        // Функция универсальной фильтрации машин (динамически определяет эндпоинт по конфигу колонок или берет repair_cars / customer_cars)
-        const carColumnConfig = config.columns.find(c => c.field === 'car_id');
-        const targetCarApi = (carColumnConfig && carColumnConfig.ref) ? `/api/${carColumnConfig.ref}` : `/api/repair_cars`;
-
+        // СВЯЗЬ МАШИНЫ С МОЛ ОТКЛЮЧЕНА (закомментирована, чтобы не ломать выбор)
+        /*
         const molCarPairs = [
             { mol: formElement.querySelector('[name="mol_id"]'), car: formElement.querySelector('[name="car_id"]') },
             { mol: formElement.querySelector('[name="mol_from_id"]'), car: formElement.querySelector('[name="car_id"]') }
         ];
-
-        molCarPairs.forEach(({ mol, car }) => {
-            if (!mol || !car) return;
-
-            async function filterCars(isUserChange = false) {
-                const selectedMolId = mol.value;
-                const currentCarValue = car.value;
-
-                try {
-                    const carRes = await fetch(targetCarApi);
-                    if (!carRes.ok) {
-                        console.warn(`[filterCars] Ошибка загрузки ${targetCarApi}:`, carRes.status);
-                        return;
-                    }
-                    const cars = await carRes.json();
-
-                    car.innerHTML = '<option value="">-- Не выбрано --</option>';
-                    let isCurrentCarStillValid = false;
-
-                    cars.forEach(c => {
-                        const cMolId = c.mol_id || c.user_id || c.owner_id;
-                        const match = !selectedMolId || String(cMolId) === String(selectedMolId);
-
-                        if (match) {
-                            const option = document.createElement('option');
-                            option.value = c.id;
-                            const gos = c.gos_number || c.car_number || '';
-                            const mdl = c.model || c.car_model || '';
-                            const brd = c.brand || c.car_brand || '';
-                            const doc = c.doc_number || '';
-                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : (doc ? `Док. ${doc}` : `Авто #${c.id}`);
-
-                            if (String(c.id) === String(currentCarValue)) {
-                                option.selected = true;
-                                isCurrentCarStillValid = true;
-                            }
-                            car.appendChild(option);
-                        }
-                    });
-
-                    if (isUserChange && !isCurrentCarStillValid) {
-                        car.value = '';
-                    }
-                } catch (err) {
-                    console.error('Ошибка при фильтрации автомобилей по МОЛ:', err);
-                }
-            }
-
-            mol.addEventListener('change', () => {
-                filterCars(true);
-            });
-
-            if (mol.value) {
-                filterCars(false);
-            }
-        });
+        */
 
         // Фильтрация автомобилей по выбранному складу (sklad_id / warehouse_id)
         const skladCarPairs = [
@@ -3795,11 +3737,12 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterCarsBySklad(isUserChange = false) {
                 const selectedSkladId = sklad.value;
                 const currentCarValue = car.value;
+                console.log('[filterCarsBySklad] Запуск фильтрации авто по складу. Выбран склад ID:', selectedSkladId, 'Текущее авто:', currentCarValue);
 
                 try {
-                    const carRes = await fetch(targetCarApi);
+                    const carRes = await fetch('/api/customer_cars');
                     if (!carRes.ok) {
-                        console.warn(`[filterCarsBySklad] Ошибка загрузки ${targetCarApi}:`, carRes.status);
+                        console.warn('[filterCarsBySklad] Ошибка загрузки /api/customer_cars:', carRes.status);
                         return;
                     }
                     const cars = await carRes.json();
@@ -3817,8 +3760,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                             const gos = c.gos_number || c.car_number || '';
                             const mdl = c.model || c.car_model || '';
                             const brd = c.brand || c.car_brand || '';
-                            const doc = c.doc_number || '';
-                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : (doc ? `Док. ${doc}` : `Авто #${c.id}`);
+                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${c.id}`;
 
                             if (String(c.id) === String(currentCarValue)) {
                                 option.selected = true;
