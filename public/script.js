@@ -3712,7 +3712,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        // НОВАЯ ЛОГИКА: Автоматическая фильтрация автомобилей по выбранному МОЛ (аналогично складам и МОЛ)
         const molCarPairs = [
             { mol: formElement.querySelector('[name="mol_id"]'), car: formElement.querySelector('[name="car_id"]') },
             { mol: formElement.querySelector('[name="mol_from_id"]'), car: formElement.querySelector('[name="car_id"]') }
@@ -3726,7 +3725,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 const currentCarValue = car.value;
 
                 try {
-                    const carRes = await fetch('/api/customer_cars'); // или /api/cars в зависимости от эндпоинта автомобилей
+                    const carRes = await fetch('/api/customer_cars');
                     if (!carRes.ok) return;
                     const cars = await carRes.json();
 
@@ -3735,7 +3734,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     let isCurrentCarStillValid = false;
 
                     cars.forEach(c => {
-                        // Проверяем привязку автомобиля к МОЛ (поддерживаем поля mol_id, owner_id или аналогичные)
                         const cMolId = c.mol_id || c.user_id || c.owner_id;
                         if (!selectedMolId || String(cMolId) === String(selectedMolId)) {
                             const option = document.createElement('option');
