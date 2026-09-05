@@ -1320,7 +1320,6 @@ router.get('/repair_items', async (req, res) => {
 });
 
 
-
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
@@ -1330,10 +1329,10 @@ router.get('/repair_works', async (req, res) => {
         let query = `
             SELECT 
                 rw.*,
-                w.name AS work_name,
+                vr.name AS vidy_rabot_name,
                 i.name AS ispolnitel_name
             FROM repair_works rw
-            LEFT JOIN works w ON rw.work_id = w.id
+            LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
             LEFT JOIN ispolnitel i ON rw.ispolnitel_id = i.id
         `;
         let params = [];
@@ -1353,7 +1352,6 @@ router.get('/repair_works', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
-
 
 
 
