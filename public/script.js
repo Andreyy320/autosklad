@@ -7152,7 +7152,7 @@ function openDetailForm(mode) {
     const detailEntity = getCurrentDetailEntity();
 
     // Блокируем открытие формы для таблиц-историй и сводок, которые нельзя редактировать двойным кликом
-    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
+    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'accident_images'];
     if (readOnlyDetailEntities.includes(detailEntity)) {
         console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" доступна только для просмотра.`);
         return;
@@ -7168,6 +7168,8 @@ function openDetailForm(mode) {
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
     }
 }
+
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
