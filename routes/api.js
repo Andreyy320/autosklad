@@ -1453,7 +1453,6 @@ router.get('/repair_history', async (req, res) => {
     }
 });
 
-
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
