@@ -291,7 +291,8 @@ part_discounts: {
             { field: 'year', label: 'Год' },
             { field: 'color', label: 'Цвет' },
             { field: 'vin', label: 'VIN-номер' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание' },
+            { field: 'sklad_id', label: 'Склад', ref: 'skladi' }
         ],
         render: (item) => `
             <td><b>${item.gos_number || ''}</b></td>
@@ -303,6 +304,7 @@ part_discounts: {
             <td>${item.color || ''}</td>
             <td>${item.vin || ''}</td>
             <td>${item.description || ''}</td>
+            <td><b>${item.sklad_name || '—'}</b></td>
         `
     },
 car_details: {

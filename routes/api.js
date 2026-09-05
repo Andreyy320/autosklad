@@ -423,11 +423,13 @@ router.get('/customer_cars/:customer_id', async (req, res) => {
                 m.name AS car_model_name,
                 m.engine AS engine_name,
                 k.name AS body_name,
-                t.name AS toplivo_name
+                t.name AS toplivo_name,
+                s.name AS sklad_name
             FROM cars c
             LEFT JOIN car_models m ON c.model_id = m.id
             LEFT JOIN kyzov_type k ON m.kyzov_type_id = k.id
             LEFT JOIN toplivo t ON c.toplivo_id = t.id
+            LEFT JOIN skladi s ON c.sklad_id = s.id
             ORDER BY c.id ASC
         `;
         const result = await pool.query(query);
