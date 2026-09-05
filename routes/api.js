@@ -1319,7 +1319,6 @@ router.get('/repair_items', async (req, res) => {
     }
 });
 
-
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
@@ -1329,8 +1328,10 @@ router.get('/repair_works', async (req, res) => {
         let query = `
             SELECT 
                 rw.*,
-                vr.name AS vidy_rabot_name,
-                i.name AS ispolnitel_name
+                COALESCE(vr.name, '—') AS vidy_rabot_name,
+                COALESCE(vr.name, '—') AS name,
+                COALESCE(i.name, '—') AS ispolnitel_name,
+                COALESCE(rw.price, vr.price, 0) AS price
             FROM repair_works rw
             LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
             LEFT JOIN ispolnitel i ON rw.ispolnitel_id = i.id
@@ -1352,7 +1353,6 @@ router.get('/repair_works', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
-
 
 
 // ==================== РЕМОНТЫ КОНКРЕТНОЙ МАШИНЫ (запчасти + работы) ====================
