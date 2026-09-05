@@ -3862,7 +3862,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 }
             } else {
                 const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
+                showAppNotification(errData.err || errData.error || 'Ошибка при сохранении данных', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
