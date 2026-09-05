@@ -1250,7 +1250,13 @@ router.get('/repairs', async (req, res) => {
                 c.gos_number AS car_number,
                 COALESCE(c.model, cm.name, 'Не указана') AS car_model,
                 s.name AS warehouse_name,
-                u.name AS mol_name
+                u.name AS mol_name,
+                -- Сумма по запчастям (количество * цена)
+                COALESCE(parts.total_parts_sum, 0) AS parts_sum,
+                -- Сумма по работам (количество * цена)
+                COALESCE(works.total_works_sum, 0) AS works_sum,
+                -- Общая стоимость (запчасти + работы)
+                (COALESCE(parts.total_parts_sum, 0) + COALESCE(works.total_works_sum, 0)) AS total_cost
             FROM repairs r
             LEFT JOIN doc_types dt ON r.doc_type_id = dt.id
             LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
@@ -1259,17 +1265,28 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN skladi s ON r.warehouse_id = s.id
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
+            -- Подзапрос для расчета суммы запчастей по каждому ремонту
+            LEFT JOIN (
+                SELECT repair_id, SUM(COALESCE(quantity, 0) * COALESCE(price, 0)) AS total_parts_sum
+                FROM repair_items
+                GROUP BY repair_id
+            ) parts ON parts.repair_id = r.id
+            -- Подзапрос для расчета суммы работ по каждому ремонту
+            LEFT JOIN (
+                SELECT repair_id, SUM(COALESCE(quantity, 1) * COALESCE(price, 0)) AS total_works_sum
+                FROM repair_works
+                GROUP BY repair_id
+            ) works ON works.repair_id = r.id
         `;
         
         let queryParams = [];
         if (car_id) {
             query += ` WHERE r.car_id = $1`;
-            queryParams.push(car_id);
         }
         
         query += ` ORDER BY r.id DESC`;
 
-        const result = await pool.query(query, queryParams);
+        const result = await pool.query(query, queryParams.length > 0 ? queryParams : undefined);
         res.json(result.rows);
     } catch (err) {
         console.error("Ошибка в /api/repairs:", err.message);
