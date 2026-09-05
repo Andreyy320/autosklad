@@ -7537,8 +7537,9 @@ tableBody.addEventListener('dblclick', (e) => {
         return; 
     }
 
-    // Определяем реальную сущность: если клик в детальной таблице, берем activeEntity, иначе currentEntity
-    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table, .detail-table, #detail-container')) ? activeEntity : currentEntity;
+    // Жестко проверяем: если у нас сейчас активна какая-то детальная сущность (например, car_general), 
+    // то считаем целевой сущностью её, а не глобальный currentEntity.
+    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity) ? activeEntity : currentEntity;
 
     console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| activeEntity:", typeof activeEntity !== 'undefined' ? activeEntity : 'N/A', "| targetEntity:", targetEntity);
 
