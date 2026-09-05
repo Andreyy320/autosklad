@@ -677,67 +677,6 @@ move_items: {
     }
 },
 
-autostrahovanie: {
-    title: 'Автострахование',
-    columns: [
-        { field: 'doc_number', label: '№ документа', width: '120px' },
-        { field: 'date', label: 'Дата', type: 'datetime-local', width: '160px' },
-        { field: 'car_id', label: 'Гос номер / Модель', width: '180px', ref: 'cars' },
-        { field: 'autoservice_id', label: 'Автосервис', width: '150px', ref: 'autoservices' },
-        { field: 'insurance_current', label: 'Дата страх', type: 'datetime-local', width: '160px' },
-        { field: 'insurance_next', label: 'Следующая дата', type: 'datetime-local', width: '160px' },
-        { field: 'sum', label: 'Сумма', width: '100px' },
-        { field: 'description', label: 'Описание' },
-
-        { field: 'fact_date', label: 'Дата факт', width: '160px', insert: false, readonly: true },
-        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses', insert: false }
-    ],
-    render: (item) => {
-        const formatDT = (dateStr, includeTime = true) => {
-            if (!dateStr) return '—';
-            let d = new Date(dateStr);
-            if (isNaN(d)) return '—';
-
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            
-            if (!includeTime) return `${day}.${month}.${year}`;
-            
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            return `${day}.${month}.${year} ${hours}:${minutes}`;
-        };
-
-        const sumVal = Number(item.sum || 0).toFixed(2);
-        
-        let carDisplay = '—';
-        if (item.car_number && item.car_model) {
-            carDisplay = `<b>${item.car_number}</b> <span style="color: #666; font-size: 0.9em;">(${item.car_model})</span>`;
-        } else if (item.car_number) {
-            carDisplay = `<b>${item.car_number}</b>`;
-        } else if (item.car_model) {
-            carDisplay = item.car_model;
-        }
-
-        const isPostedHtml = item.is_posted 
-            ? `<span style="color: green; font-weight: bold;">Проведен</span>` 
-            : `<span style="color: gray;">Не проведен</span> <button onclick="event.stopPropagation(); postAutostrahovanie(${item.id})" style="background: #28a745; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-left: 5px;">Провести</button>`;
-
-        return `
-            <td><b>${item.doc_number || ''}</b></td>
-            <td>${formatDT(item.date)}</td>
-            <td>${carDisplay}</td>
-            <td>${item.autoservice_name || item.autoservice_id || '—'}</td>
-            <td>${formatDT(item.insurance_current, true)}</td>
-            <td>${formatDT(item.insurance_next, true)}</td>
-            <td style="text-align: right; font-weight: bold;">${sumVal}</td>
-            <td>${item.description || ''}</td>
-            <td>${formatDT(item.fact_date)}</td>
-            <td>${isPostedHtml}</td>
-        `;
-    }
-},
 car_cards: {
     title: 'Карточка авто',
     readonly: true, 
@@ -749,19 +688,9 @@ car_cards: {
         { field: 'year', label: 'Год вып.', width: '80px' },
         { field: 'color', label: 'Цвет', width: '80px' },
         { field: 'vin', label: 'VIN-номер', width: '180px' },
-        { field: 'tehosmotr_current', label: 'ТО (Тек)', width: '120px' },
-        { field: 'tehosmotr_next', label: 'ТО (След)', width: '120px' },
-        { field: 'autostrahovanie_current', label: 'Страх (Тек)', width: '120px' },
-        { field: 'autostrahovanie_next', label: 'Страх (След)', width: '120px' },
         { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
-        const formatDate = (dateStr) => {
-            if (!dateStr) return '—';
-            const d = new Date(dateStr);
-            return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-        };
-
         return `
             <td>${item.gos_number || ''}</td>
             <td>${item.car_model_name || ''}</td>
@@ -770,10 +699,6 @@ car_cards: {
             <td>${item.year || ''}</td>
             <td>${item.color || ''}</td>
             <td>${item.vin || ''}</td>
-            <td>${formatDate(item.tehosmotr_current)}</td>
-            <td>${formatDate(item.tehosmotr_next)}</td>
-            <td>${formatDate(item.autostrahovanie_current)}</td>
-            <td>${formatDate(item.autostrahovanie_next)}</td>
             <td>${item.description || ''}</td>
         `;
     }
@@ -930,72 +855,6 @@ stock_movement: {
     }
 },
 
-car_tehosmotr: {
-    title: 'Техосмотр машины',
-    columns: [
-        { field: 'to_date', label: 'Дата ТО', width: '130px' },
-        { field: 'next_to_date', label: 'Следующая дата', width: '130px' },
-        { field: 'autoservice', label: 'Автосервис', width: '180px' },
-        { field: 'sum', label: 'Стоимость', width: '100px', align: 'right' },
-        { field: 'description', label: 'Описание' },
-        { field: 'doc_number', label: 'Документ ТО', width: '200px' }
-    ],
-    render: (item) => {
-        const formatOnlyDate = (dateStr) => {
-            if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-        };
-
-        const sumVal = Number(item.sum || 0).toFixed(2);
-        
-        const formattedDate = formatOnlyDate(item.date);
-        const docText = item.doc_number ? `Техосмотр ${item.doc_number}` : 'Техосмотр';
-        const docDisplay = formattedDate ? `${docText} от ${formattedDate}` : docText;
-
-        return `
-            <td>${formatOnlyDate(item.to_date)}</td>
-            <td>${formatOnlyDate(item.next_to_date)}</td>
-            <td>${item.autoservice || '—'}</td>
-            <td style="text-align: right;">${sumVal}</td>
-            <td>${item.description || ''}</td>
-            <td><b><b>${docDisplay}</b></b></td>
-        `;
-    }
-},
-car_autostrahovanie: {
-    title: 'Страхование машины',
-    columns: [
-        { field: 'insurance_current', label: 'Дата страхования', width: '130px' },
-        { field: 'insurance_next', label: 'Следующая дата', width: '130px' },
-        { field: 'autoservice_id', label: 'Страховая компания', width: '180px' },
-        { field: 'sum', label: 'Стоимость', width: '120px', align: 'right' },
-        { field: 'description', label: 'Описание' },
-        { field: 'doc_number', label: 'Документ ТО', width: '220px' }
-    ],
-    render: (item) => {
-        const formatDT = (dateStr) => {
-            if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return isNaN(d) ? '' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-        };
-
-        const sumVal = Number(item.sum || 0).toFixed(2);
-        
-        const formattedDate = formatDT(item.date);
-        const docText = item.doc_number ? `Автострахование ${item.doc_number}` : 'Автострахование';
-        const docDisplay = formattedDate ? `${docText} от ${formattedDate}` : docText;
-
-        return `
-            <td>${formatDT(item.insurance_current)}</td>
-            <td>${formatDT(item.insurance_next)}</td>
-            <td>${item.autoservice_name || item.autoservice_id || '—'}</td>
-            <td style="text-align: right;">${sumVal}</td>
-            <td>${item.description || ''}</td>
-            <td><b>${docDisplay}</b></td>
-        `;
-    }
-},
 accidents: {
     title: 'ДТП',
     columns: [
@@ -2172,10 +2031,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     if (!item || item.id === null || item.id === undefined || item.id === '') {
         let nextId = 1;
         let prefix = 'Р-';
-
-        if (entity === 'autostrahovanie') {
-            prefix = 'АС-';
-        } else if (entity === 'accidents') {
+        if (entity === 'accidents') {
             prefix = 'ДТП-';
         } else if (entity === 'realizations' || entity === 'realization_items' || entity === 'realization_works') {
             prefix = 'РЛ-';
@@ -2434,8 +2290,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             </label>
         `;
     }
-
-    const carCol = config.columns.find(c => c.field === 'car_id');
+const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
@@ -2473,30 +2328,19 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 html += await renderField(molCol);
             }
         }
-    } else if (entity === 'autostrahovanie' && carCol) {
-        for (const col of config.columns) {
-            if (col.field === 'car_id') continue;
-            html += await renderField(col);
-            
-            if (col.field === 'end_date' || col.field === 'next_date' || col.field.includes('end') || col.field.includes('next')) {
-                html += await renderField(carCol);
-            }
-        }
     } else {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
 
             html += await renderField(col);
 
-            if (col.field === 'customer_id' && carCol && entity !== 'autostrahovanie' && entity !== 'repairs') {
+            if (col.field === 'customer_id' && carCol && entity !== 'repairs') {
                 html += await renderField(carCol);
             }
         }
 
         if (carCol && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
-            if (entity !== 'autostrahovanie') {
-                html += await renderField(carCol);
-            }
+            html += await renderField(carCol);
         }
     }
 
@@ -4895,7 +4739,6 @@ function openActiveEntityForm(action, item = null) {
     }
 }
 
-
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -4932,10 +4775,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
             loadData('users', 'Пользователи');
 
-            if (typeof checkRemindersOnStart === 'function') {
-                checkRemindersOnStart();
-            }
-
         } else {
             errorDiv.style.display = 'block';
             errorDiv.innerText = result.message || 'Ошибка входа';
@@ -4946,7 +4785,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
-
 function logout() {
     localStorage.clear(); 
     location.reload();
@@ -6892,7 +6730,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -7127,7 +6964,7 @@ function getCurrentDetailEntity() {
                 return match[1];
             }
         }
-        return 'tehosmotr';
+        return 'car_details';
     }
     
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
@@ -7233,38 +7070,6 @@ function showPostConfirmModal(title, text, onConfirm) {
 
 
 
-
-async function postAutostrahovanie(id) {
-    showPostConfirmModal(
-        'Проведение документа',
-        'Вы действительно хотите провести этот документ страхования?',
-        async () => {
-            try {
-                const response = await fetch(`/api/autostrahovanie/${id}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        is_posted: true, 
-                        fact_date: new Date().toISOString() 
-                    })
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.error || 'Ошибка при проведении документа');
-                }
-
-                showAppNotification('Документ страхования успешно проведен', 'success');
-                refreshData();
-            } catch (err) {
-                console.error(err);
-                showAppNotification('Не удалось провести документ: ' + err.message, 'error');
-            }
-        }
-    );
-}
 
 
 async function postMove(moveId) {
@@ -7568,8 +7373,6 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'part_movement_details' ||
         currentEntity === 'car_cards' ||
         currentEntity === 'car_general' ||
-        currentEntity === 'car_tehosmotr' ||
-        currentEntity === 'car_autostrahovanie' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
         currentEntity === 'repair_history' ||
@@ -7847,7 +7650,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
     }
 
@@ -8059,10 +7862,7 @@ const navMap = {
     'Строки прихода': 'receipt_items',
     'Перемещение': 'moves',
     'Строки перемещения': 'move_items',
-    'Автострахование':'autostrahovanie',
     'Карточка авто': 'car_cards',
-    'Техосмотр машины': 'car_tehosmotr',
-    'Страхование машины': 'car_autostrahovanie',
     'ДТП':'accidents',
     'ДТП история':'car_accidents',
     'Выставить счет': 'accident_invoices',
@@ -8443,181 +8243,5 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 })();
 
 
-async function checkRemindersOnStart() {
-    try {
-        const response = await fetch('/api/reminders');
-        if (!response.ok) return;
-        
-        const cars = await response.json();
-        if (!cars || cars.length === 0) return;
-
-        let modal = document.getElementById('reminders-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'reminders-modal';
-            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;';
-            modal.innerHTML = `
-                <div style="background: #fff; width: 1050px; max-height: 85vh; border-radius: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; font-family: sans-serif;">
-                    <div style="background: #f5f5f5; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd;">
-                        <h3 style="margin: 0; font-size: 18px; color: #333;">Напоминания</h3>
-                        <button id="close-reminders" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0 5px;">&times;</button>
-                    </div>
-                    <div style="padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #ddd;">
-                        <button onclick="checkRemindersOnStart()" style="padding: 5px 12px; cursor: pointer; font-size: 13px; background: #f8f9fa; color: #333; border: 1px solid #ccc; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px;"><span style="color: #007bff; font-size: 15px;">🔄</span> Обновить</button>
-                    </div>
-                    <div style="padding: 15px; overflow-y: auto; flex-grow: 1;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                            <thead>
-                                <tr style="background: #f8f9fa; text-align: center;">
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-gos" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-model" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-pto-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-curr" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-ins-next" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                    <th style="padding: 5px; border: 1px solid #ccc;"><input type="text" id="filter-desc" placeholder="Фильтр..." style="width: 95%; padding: 5px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"></th>
-                                </tr>
-                                <tr style="background: #e9ecef; text-align: center; vertical-align: middle;">
-                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Гос. номер</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Модель</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата техосмотра</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" colspan="2">Дата автострахования</th>
-                                    <th style="padding: 10px; border: 1px solid #ccc;" rowspan="2">Описание</th>
-                                </tr>
-                                <tr style="background: #f1f3f5; text-align: center; vertical-align: middle;">
-                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc;">Текущий</th>
-                                    <th style="padding: 8px; border: 1px solid #ccc;">Следующий</th>
-                                </tr>
-                            </thead>
-                            <tbody id="reminders-tbody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-
-            document.getElementById('close-reminders').addEventListener('click', () => {
-                modal.style.display = 'none';
-            });
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.style.display = 'none';
-            });
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const filteredCars = cars.filter(car => {
-            const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
-            const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
-            const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
-            const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
-
-            if (ptoCurr) ptoCurr.setHours(0,0,0,0);
-            if (ptoNext) ptoNext.setHours(0,0,0,0);
-            if (insCurr) insCurr.setHours(0,0,0,0);
-            if (insNext) insNext.setHours(0,0,0,0);
-
-            const ptoExpired = (ptoCurr && ptoCurr < today) || (ptoNext && ptoNext < today);
-            const insExpired = (insCurr && insCurr < today) || (insNext && insNext < today);
-
-            return ptoExpired || insExpired;
-        });
-
-        if (filteredCars.length === 0) {
-            modal.style.display = 'none';
-            return;
-        }
-
-        const formatDate = (d) => {
-            if (!d) return '—';
-            const dateObj = new Date(d);
-            if (isNaN(dateObj.getTime())) return '—';
-            return dateObj.toISOString().split('T')[0].split('-').reverse().join('.');
-        };
-
-        const renderTable = (dataToRender) => {
-            const tbody = document.getElementById('reminders-tbody');
-            tbody.innerHTML = '';
-
-            dataToRender.forEach(car => {
-                const tr = document.createElement('tr');
-
-                const ptoCurr = car.pto_current ? new Date(car.pto_current) : null;
-                const ptoNext = car.pto_next ? new Date(car.pto_next) : null;
-                const insCurr = car.insurance_current ? new Date(car.insurance_current) : null;
-                const insNext = car.insurance_next ? new Date(car.insurance_next) : null;
-
-                if (ptoCurr) ptoCurr.setHours(0,0,0,0);
-                if (ptoNext) ptoNext.setHours(0,0,0,0);
-                if (insCurr) insCurr.setHours(0,0,0,0);
-                if (insNext) insNext.setHours(0,0,0,0);
-
-                let isPtoCurrRed = ptoCurr && ptoCurr < today;
-                let isPtoNextRed = ptoNext && ptoNext < today;
-
-                let isInsCurrRed = insCurr && insCurr < today;
-                let isInsNextRed = insNext && insNext < today;
-
-                tr.innerHTML = `
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.gos_number || '—'}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.model_name || '—'}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoCurrRed ? '#ffcccc' : 'transparent'}; color: ${isPtoCurrRed ? '#a00' : '#000'}; font-weight: ${isPtoCurrRed ? 'bold' : 'normal'};">${formatDate(car.pto_current)}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isPtoNextRed ? '#ffcccc' : 'transparent'}; color: ${isPtoNextRed ? '#a00' : '#000'}; font-weight: ${isPtoNextRed ? 'bold' : 'normal'};">${formatDate(car.pto_next)}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsCurrRed ? '#ffcccc' : 'transparent'}; color: ${isInsCurrRed ? '#a00' : '#000'}; font-weight: ${isInsCurrRed ? 'bold' : 'normal'};">${formatDate(car.insurance_current)}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; background: ${isInsNextRed ? '#ffcccc' : 'transparent'}; color: ${isInsNextRed ? '#a00' : '#000'}; font-weight: ${isInsNextRed ? 'bold' : 'normal'};">${formatDate(car.insurance_next)}</td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle;">${car.description || ''}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        };
-
-        renderTable(filteredCars);
-
-        const applyFilters = () => {
-            const fGos = document.getElementById('filter-gos').value.toLowerCase();
-            const fModel = document.getElementById('filter-model').value.toLowerCase();
-            const fPtoCurr = document.getElementById('filter-pto-curr').value.toLowerCase();
-            const fPtoNext = document.getElementById('filter-pto-next').value.toLowerCase();
-            const fInsCurr = document.getElementById('filter-ins-curr').value.toLowerCase();
-            const fInsNext = document.getElementById('filter-ins-next').value.toLowerCase();
-            const fDesc = document.getElementById('filter-desc').value.toLowerCase();
-
-            const result = filteredCars.filter(car => {
-                const gos = (car.gos_number || '').toLowerCase();
-                const model = (car.model_name || '').toLowerCase();
-                const ptoCurrStr = formatDate(car.pto_current).toLowerCase();
-                const ptoNextStr = formatDate(car.pto_next).toLowerCase();
-                const insCurrStr = formatDate(car.insurance_current).toLowerCase();
-                const insNextStr = formatDate(car.insurance_next).toLowerCase();
-                const desc = (car.description || '').toLowerCase();
-
-                return gos.includes(fGos) &&
-                       model.includes(fModel) &&
-                       ptoCurrStr.includes(fPtoCurr) &&
-                       ptoNextStr.includes(fPtoNext) &&
-                       insCurrStr.includes(fInsCurr) &&
-                       insNextStr.includes(fInsNext) &&
-                       desc.includes(fDesc);
-            });
-
-            renderTable(result);
-        };
-
-        ['filter-gos', 'filter-model', 'filter-pto-curr', 'filter-pto-next', 'filter-ins-curr', 'filter-ins-next', 'filter-desc'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', applyFilters);
-            }
-        });
-
-        modal.style.display = 'flex';
-
-    } catch (e) {
-        console.error('Ошибка показа напоминаний:', e);
-    }
-}
 
 

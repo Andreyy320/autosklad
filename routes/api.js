@@ -933,49 +933,6 @@ router.get('/move_items', async (req, res) => {
 
 
 
-// ==================== ПОЛУЧИТЬ НАПОМИНАНИЯ ПО ДАТАМ ====================
-router.get('/reminders', async (req, res) => {
-    try {
-        const query = `
-            WITH calculated_reminders AS (
-                SELECT 
-                    c.id,
-                    c.gos_number,
-                    COALESCE(c.model, m.name, '—') AS model_name,
-                    c.description,
-                    COALESCE(c.pto_current, latest_pto.to_date) AS pto_current,
-                    COALESCE(c.pto_next, latest_pto.next_to_date) AS pto_next,
-                    COALESCE(c.insurance_current, latest_ins.insurance_current) AS insurance_current,
-                    COALESCE(c.insurance_next, latest_ins.insurance_next) AS insurance_next
-                FROM cars c
-                LEFT JOIN car_models m ON c.model_id = m.id
-                LEFT JOIN (
-                    SELECT DISTINCT ON (car_id) car_id, to_date, next_to_date
-                    FROM tehosmotr
-                    ORDER BY car_id, id DESC
-                ) latest_pto ON c.id = latest_pto.car_id
-                LEFT JOIN (
-                    SELECT DISTINCT ON (car_id) car_id, insurance_current, insurance_next
-                    FROM autostrahovanie
-                    ORDER BY car_id, id DESC
-                ) latest_ins ON c.id = latest_ins.car_id
-            )
-            SELECT * FROM calculated_reminders
-            WHERE 
-                (pto_current IS NOT NULL AND pto_current < CURRENT_DATE) OR
-                (pto_next IS NOT NULL AND pto_next < CURRENT_DATE) OR
-                (insurance_current IS NOT NULL AND insurance_current < CURRENT_DATE) OR
-                (insurance_next IS NOT NULL AND insurance_next < CURRENT_DATE)
-            ORDER BY id ASC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Ошибка при получении напоминаний:', err.message);
-        res.status(500).json({ error: 'Ошибка при получении напоминаний' });
-    }
-});
-
 
 // ==================== ОБНОВЛЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
 router.put('/moves/:id', async (req, res) => {
@@ -1068,7 +1025,6 @@ router.get('/payment_types', async (req, res) => {
 
 
 
-
 // Замени '/car-cards' на '/car_cards' в бэкенде:
 router.get('/car_cards', async (req, res) => {
     try {
@@ -1078,29 +1034,11 @@ router.get('/car_cards', async (req, res) => {
                 m.name AS car_model_name,
                 m.engine AS engine_name,
                 k.name AS body_name,
-                t.name AS toplivo_name,
-                teh.to_date AS tehosmotr_current,
-                teh.next_to_date AS tehosmotr_next,
-                ast.insurance_current AS autostrahovanie_current,
-                ast.insurance_next AS autostrahovanie_next
+                t.name AS toplivo_name
             FROM cars c
             LEFT JOIN car_models m ON c.model_id = m.id
             LEFT JOIN kyzov_type k ON m.kyzov_type_id = k.id
             LEFT JOIN toplivo t ON c.toplivo_id = t.id
-            LEFT JOIN LATERAL (
-                SELECT to_date, next_to_date 
-                FROM tehosmotr 
-                WHERE car_id = c.id 
-                ORDER BY id DESC 
-                LIMIT 1
-            ) teh ON true
-            LEFT JOIN LATERAL (
-                SELECT insurance_current, insurance_next 
-                FROM autostrahovanie 
-                WHERE car_id = c.id 
-                ORDER BY id DESC 
-                LIMIT 1
-            ) ast ON true
             ORDER BY c.id ASC
         `;
         const result = await pool.query(query);
@@ -1112,23 +1050,6 @@ router.get('/car_cards', async (req, res) => {
 });
 
 
-// ==================== ТЕХОСМОТРЫ КОНКРЕТНОЙ МАШИНЫ (для нижней таблицы) ====================
-router.get('/car_tehosmotr', async (req, res) => {
-    try {
-        const { car_id } = req.query;
-        const query = `
-            SELECT * 
-            FROM tehosmotr 
-            WHERE car_id = $1 
-            ORDER BY id DESC
-        `;
-        const result = await pool.query(query, [car_id]);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении техосмотров автомобиля');
-    }
-});
 
 // ==================== ДТП КОНКРЕТНОЙ МАШИНЫ (для нижней таблицы) ====================
 router.get('/dtp_history', async (req, res) => {
@@ -2122,6 +2043,7 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
@@ -2165,37 +2087,7 @@ router.get('/car_general', async (req, res) => {
 
             UNION ALL
 
-            -- 3. Страхование (autostrahovanie)
-            SELECT 
-                COALESCE(a.date, a.fact_date, NOW()) AS operational_date,
-                CONCAT('Страховка полис №', a.doc_number) AS name,
-                1 AS qty,
-                'шт' AS unit,
-                a.sum AS price,
-                COALESCE(a.sum, 0) AS sum,
-                a.description,
-                CONCAT('Автострахование от ', TO_CHAR(COALESCE(a.date, a.fact_date), 'DD.MM.YYYY')) AS document
-            FROM autostrahovanie a
-            WHERE a.car_id = $1
-
-            UNION ALL
-
-            -- 4. Техосмотр (tehosmotr)
-            SELECT 
-                COALESCE(t.date, t.fact_date, NOW()) AS operational_date,
-                CONCAT('Техосмотр док. №', t.doc_number) AS name,
-                1 AS qty,
-                'шт' AS unit,
-                t.sum AS price,
-                COALESCE(t.sum, 0) AS sum,
-                t.description,
-                CONCAT('Техосмотр от ', TO_CHAR(COALESCE(t.date, t.fact_date), 'DD.MM.YYYY')) AS document
-            FROM tehosmotr t
-            WHERE t.car_id = $1
-
-            UNION ALL
-
-            -- 5. ДТП (accidents)
+            -- 3. ДТП (accidents)
             SELECT 
                 COALESCE(ac.doc_date, ac.fact_date, ac.detected_date, NOW()) AS operational_date,
                 CONCAT('ДТП / Ущерб №', COALESCE(ac.doc_number, ac.id::text)) AS name,
@@ -2217,25 +2109,6 @@ router.get('/car_general', async (req, res) => {
     } catch (err) {
         console.error("Ошибка в /car_general:", err.message);
         res.status(500).send('Ошибка при получении общих данных автомобиля');
-    }
-});
-
-// ==================== АВТОСТРАХОВАНИЕ КОНКРЕТНОЙ МАШИНЫ (для нижней таблицы) ====================
-router.get('/car_autostrahovanie', async (req, res) => {
-    try {
-        const { car_id } = req.query;
-        const query = `
-            SELECT a.*, s.name AS autoservice_name 
-            FROM autostrahovanie a
-            LEFT JOIN autoservices s ON a.autoservice_id = s.id
-            WHERE a.car_id = $1 
-            ORDER BY a.id DESC
-        `;
-        const result = await pool.query(query, [car_id]);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении страхований автомобиля');
     }
 });
 
@@ -6329,7 +6202,6 @@ async function writeAuditLog(client, req, data) {
 }
 
 
-
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
@@ -6366,8 +6238,8 @@ router.post('/:entity', async (req, res) => {
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 'tehosmotr', 
-            'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
+            'moves', 'statuses', 
+            'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
@@ -6415,53 +6287,6 @@ router.post('/:entity', async (req, res) => {
                         });
                     }
                 }
-            }
-        }
-
-        if (entity === 'tehosmotr') {
-            if (!req.body.date) {
-                req.body.date = new Date();
-            }
-            if (!req.body.to_date) {
-                req.body.to_date = new Date();
-            }
-
-            if (!req.body.doc_number) {
-                const countResult = await pool.query('SELECT COUNT(*) FROM tehosmotr');
-                const nextId = Number(countResult.rows[0].count) + 1;
-                req.body.doc_number = `ТО-${nextId}`;
-            }
-            
-            if (!req.body.car_id) {
-                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!', serverLogs: logsBuffer });
-            }
-            if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                return res.status(400).json({ error: 'Необходимо указать сумму!', serverLogs: logsBuffer });
-            }
-        }
-
-        if (entity === 'autostrahovanie') {
-            if (!req.body.date) {
-                req.body.date = new Date();
-            }
-            if (!req.body.insurance_current) {
-                req.body.insurance_current = new Date();
-            }
-            if (!req.body.insurance_next) {
-                req.body.insurance_next = new Date();
-            }
-
-            if (!req.body.doc_number) {
-                const countResult = await pool.query('SELECT COUNT(*) FROM autostrahovanie');
-                const nextId = Number(countResult.rows[0].count) + 1;
-                req.body.doc_number = `СТРАХ-${nextId}`;
-            }
-            
-            if (!req.body.car_id) {
-                return res.status(400).json({ error: 'Необходимо выбрать автомобиль!', serverLogs: logsBuffer });
-            }
-            if (req.body.sum === undefined || req.body.sum === null || req.body.sum === '') {
-                return res.status(400).json({ error: 'Необходимо указать сумму!', serverLogs: logsBuffer });
             }
         }
 
@@ -6565,7 +6390,6 @@ router.post('/:entity', async (req, res) => {
     }
 });
 
-
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -6585,8 +6409,8 @@ router.put('/:entity/:id', async (req, res) => {
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 'tehosmotr',
-            'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
+            'moves', 'statuses', 
+            'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
@@ -6629,7 +6453,7 @@ router.put('/:entity/:id', async (req, res) => {
         }
         const oldDoc = currentDocRes.rows[0];
 
-        const docWithStatusTables = ['tehosmotr', 'autostrahovanie', 'receipts', 'moves', 'accidents', 'repairs', 'realizations'];
+        const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations'];
         if (docWithStatusTables.includes(entity)) {
             const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
@@ -6770,6 +6594,9 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
+
+
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -6789,8 +6616,8 @@ router.delete('/:entity/:id', async (req, res) => {
             'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
             'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 'tehosmotr',
-            'autoservices', 'payment_types', 'autostrahovanie', 'accidents',
+            'moves', 'statuses', 
+            'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
             'customer_cars','part_discounts','service_discounts','realizations'
         ];
@@ -6801,7 +6628,7 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'tehosmotr' || entity === 'autostrahovanie' || entity === 'accidents' || entity === 'repairs') {
+        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs') {
             const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1`, [id]);
             if (docCheck.rows.length === 0) {
                 await client.query('ROLLBACK');
