@@ -2598,7 +2598,11 @@ const carCol = config.columns.find(c => c.field === 'car_id');
             data.move_id = parentId;
         } else if (entity === 'repair_items' && parentId) {
             data.repair_id = parentId;
-        } else if (entity === 'receipt_items' && parentId) {
+        } 
+        else if (entity === 'repair_works' && parentId) {
+            data.repair_id = parentId; // <-- Добавлено!
+        }
+        else if (entity === 'receipt_items' && parentId) {
             data.receipt_id = parentId;
         } else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
             data.dtp_id = parentId;
@@ -2646,7 +2650,7 @@ const carCol = config.columns.find(c => c.field === 'car_id');
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'realization_items', 'realization_works', 'move_items', 'repair_items', 'receipt_items', 'accident_invoices', 
+                    'realization_items', 'realization_works', 'move_items', 'repair_items','repair_works', 'receipt_items', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
