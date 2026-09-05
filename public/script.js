@@ -3541,7 +3541,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        // ИЗМЕНЕНИЕ ЗДЕСЬ: Блокируем абсолютно все поля, если документ проведен
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -3582,10 +3581,10 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 }
 
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                optionsHtml += `<option value="${refItem.id}" ${selected} ${refItem.warehouse_id ? `data-warehouse-id="${refItem.warehouse_id}"` : ''}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : (col.field === 'car_id' || col.field === 'customer_car_id' ? 'id="car-select"' : ''));
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -3712,6 +3711,60 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 filterMols(false);
             }
         });
+
+        // Фильтрация автомобилей по выбранному складу (warehouse_id / sklad_id)
+        const warehouseFieldForCars = formElement.querySelector('[name="warehouse_id"]') || formElement.querySelector('[name="sklad_id"]');
+        const carSelectField = formElement.querySelector('#car-select') || formElement.querySelector('[name="car_id"]') || formElement.querySelector('[name="customer_car_id"]');
+
+        if (warehouseFieldForCars && carSelectField) {
+            async function filterCars(isUserChange = false) {
+                const selectedWarehouseId = warehouseFieldForCars.value;
+                const currentCarValue = carSelectField.value;
+
+                try {
+                    const carRefName = carSelectField.name === 'customer_car_id' ? 'customer_cars' : 'cars';
+                    const carsRes = await fetch(`/api/${carRefName}`);
+                    if (!carsRes.ok) return;
+                    const cars = await carsRes.json();
+
+                    carSelectField.innerHTML = '<option value="">-- Не выбрано --</option>';
+                    let isCarStillValid = false;
+
+                    cars.forEach(refItem => {
+                        if (!selectedWarehouseId || String(refItem.warehouse_id) === String(selectedWarehouseId)) {
+                            const gos = refItem.gos_number || refItem.car_number || '';
+                            const mdl = refItem.model || refItem.car_model || '';
+                            const brd = refItem.brand || refItem.car_brand || '';
+                            const displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+
+                            const option = document.createElement('option');
+                            option.value = refItem.id;
+                            option.textContent = displayName;
+
+                            if (String(refItem.id) === String(currentCarValue)) {
+                                option.selected = true;
+                                isCarStillValid = true;
+                            }
+                            carSelectField.appendChild(option);
+                        }
+                    });
+
+                    if (isUserChange && !isCarStillValid) {
+                        carSelectField.value = '';
+                    }
+                } catch (err) {
+                    console.error('Ошибка при фильтрации автомобилей по складу:', err);
+                }
+            }
+
+            warehouseFieldForCars.addEventListener('change', () => {
+                filterCars(true);
+            });
+
+            if (warehouseFieldForCars.value) {
+                filterCars(false);
+            }
+        }
     }
 
     const deleteBtn = drawer.querySelector('#delete-btn');
