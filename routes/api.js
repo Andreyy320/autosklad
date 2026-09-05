@@ -1318,12 +1318,13 @@ router.get('/repair_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-// ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
+// ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА (С ЛОГИРОВАНИЕМ) ====================
 
 router.get('/repair_works', async (req, res) => {
     try {
         const { repair_id } = req.query;
+        console.log(`\n----------------------------------------`);
+        console.log(`[GET /repair_works] Запрос получен. repair_id:`, repair_id);
         
         let query = `
             SELECT 
@@ -1345,15 +1346,21 @@ router.get('/repair_works', async (req, res) => {
 
         query += ' ORDER BY rw.id ASC';
 
+        console.log(`[GET /repair_works] SQL Запрос:`, query);
+        console.log(`[GET /repair_works] Параметры:`, params);
+
         const result = await pool.query(query, params);
         
+        console.log(`[GET /repair_works] Найдено строк:`, result.rows.length);
+        console.log(`[GET /repair_works] Данные отправляемые на фронтенд:`, JSON.stringify(result.rows, null, 2));
+
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка при получении работ для ремонта:', err);
+        console.error('❌ [GET /repair_works ОШИБКА]:', err.message);
+        console.error(err.stack);
         res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
-
 
 // ==================== РЕМОНТЫ КОНКРЕТНОЙ МАШИНЫ (запчасти + работы) ====================
 router.get('/repair_history', async (req, res) => {
@@ -6267,11 +6274,6 @@ router.post('/:entity', async (req, res) => {
                 req.body.vidy_rabot_id = req.body.work_id;
             }
             delete req.body.work_id;
-
-            // Если пришло имя поля work_name или аналогичные, но не сам ID, зачищаем чтобы не падало в БД
-            if (req.body.work_name !== undefined) {
-                delete req.body.work_name;
-            }
 
             const { repair_id } = req.body;
             
