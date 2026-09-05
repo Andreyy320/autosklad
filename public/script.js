@@ -676,64 +676,6 @@ move_items: {
         `;
     }
 },
-tehosmotr: {
-    title: 'Техосмотр',
-    columns: [
-        { field: 'doc_number', label: '№ документа', width: '120px' },
-        { field: 'date', label: 'Дата', type: 'datetime-local', width: '160px' },
-        { field: 'car_id', label: 'Гос номер / Модель', width: '180px', ref: 'cars' },
-        { field: 'autoservice', label: 'Автосервис', width: '150px' },
-        { field: 'to_date', label: 'Дата ТО', type: 'datetime-local', width: '160px' },
-        { field: 'next_to_date', label: 'Следующее ТО', type: 'datetime-local', width: '160px' },
-        { field: 'sum', label: 'Сумма', width: '100px' },
-        { field: 'description', label: 'Описание' },
-
-        { field: 'fact_date', label: 'Дата факт', width: '160px', insert: false, readonly: true },
-        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses', insert: false }
-    ],
-    render: (item) => {
-        const formatDT = (dateStr, includeTime = true) => {
-            if (!dateStr) return '—';
-            const d = new Date(dateStr);
-            if (isNaN(d)) return '—';
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            if (!includeTime) return `${day}.${month}.${year}`;
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            return `${day}.${month}.${year} ${hours}:${minutes}`;
-        };
-
-        const sumVal = Number(item.sum || 0).toFixed(2);
-        
-        let carDisplay = '—';
-        if (item.car_number && item.car_model) {
-            carDisplay = `<b>${item.car_number}</b> <span style="color: #666; font-size: 0.9em;">(${item.car_model})</span>`;
-        } else if (item.car_number) {
-            carDisplay = `<b>${item.car_number}</b>`;
-        } else if (item.car_model) {
-            carDisplay = item.car_model;
-        }
-
-        const isPostedHtml = item.is_posted 
-            ? `<span style="color: green; font-weight: bold;">Проведен</span>` 
-            : `<span style="color: gray;">Не проведен</span> <button onclick="event.stopPropagation(); postTehosmotr(${item.id})" style="background: #28a745; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-left: 5px;">Провести</button>`;
-
-        return `
-            <td><b>${item.doc_number || ''}</b></td>
-            <td>${formatDT(item.date)}</td>
-            <td>${carDisplay}</td>
-            <td>${item.autoservice || '—'}</td>
-            <td>${formatDT(item.to_date, true)}</td>
-            <td>${formatDT(item.next_to_date, true)}</td>
-            <td style="text-align: right; font-weight: bold;">${sumVal}</td>
-            <td>${item.description || ''}</td>
-            <td>${formatDT(item.fact_date)}</td>
-            <td>${isPostedHtml}</td>
-        `;
-    }
-},
 
 autostrahovanie: {
     title: 'Автострахование',
@@ -2231,9 +2173,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         let nextId = 1;
         let prefix = 'Р-';
 
-        if (entity === 'tehosmotr') {
-            prefix = 'ТО-';
-        } else if (entity === 'autostrahovanie') {
+        if (entity === 'autostrahovanie') {
             prefix = 'АС-';
         } else if (entity === 'accidents') {
             prefix = 'ДТП-';
@@ -2278,10 +2218,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 item[col.field] = currentDateTime;
             }
         });
-
-        if (entity === 'tehosmotr') {
-            item.autoservice = 'Евроавтотест';
-        }
     } else {
         if (entity === 'realization_items' && !item.currency) {
             item.currency = 'Рубль ПМР';
@@ -2550,19 +2486,15 @@ async function openEntityForm(entity, item = null, parentId = null) {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
 
-            if (col.field === 'autoservice' && carCol) {
-                html += await renderField(carCol);
-            }
-
             html += await renderField(col);
 
-            if (col.field === 'customer_id' && carCol && entity !== 'tehosmotr' && entity !== 'autostrahovanie' && entity !== 'repairs') {
+            if (col.field === 'customer_id' && carCol && entity !== 'autostrahovanie' && entity !== 'repairs') {
                 html += await renderField(carCol);
             }
         }
 
-        if (carCol && !config.columns.some(c => c.field === 'autoservice') && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
-            if (entity !== 'autostrahovanie' && entity !== 'tehosmotr') {
+        if (carCol && !config.columns.some(c => c.field === 'customer_id') && entity !== 'repairs') {
+            if (entity !== 'autostrahovanie') {
                 html += await renderField(carCol);
             }
         }
@@ -2883,13 +2815,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
             } else {
                 const errData = await response.json().catch(() => ({}));
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
-                isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
+                isSubmitting = false;
             }
         } catch (err) {
             showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
+            isSubmitting = false;
         }
     });
 }
@@ -5020,7 +4952,6 @@ function logout() {
     location.reload();
 }
 
-
 async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
@@ -5121,7 +5052,7 @@ async function refreshData() {
         } else if (currentEntity === 'car_cards' && selectedItem.id) {
             const activeTabBtn = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .car-tab-btn.active');
             if (activeTabBtn) {
-                const detailEntity = activeTabBtn.getAttribute('data-tab') || 'tehosmotr';
+                const detailEntity = activeTabBtn.getAttribute('data-tab') || 'car_details';
                 loadDetailData(detailEntity, selectedItem.id); 
             }
         } else if (currentEntity === 'accidents' && selectedItem.id) {
@@ -7301,27 +7232,6 @@ function showPostConfirmModal(title, text, onConfirm) {
 }
 
 
-async function postTehosmotr(id) {
-    try {
-        const response = await fetch(`/api/tehosmotr/${id}/post`, {
-            method: 'PATCH',
-            headers: { 
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            showAppNotification('Техосмотр успешно проведен', 'success');
-            refreshData();
-        } else {
-            const err = await response.json().catch(() => ({}));
-            showAppNotification(err.error || 'Ошибка при проведении документа', 'error');
-        }
-    } catch (e) {
-        console.error('Ошибка соединения:', e);
-        showAppNotification('Ошибка соединения с сервером', 'error');
-    }
-}
 
 
 async function postAutostrahovanie(id) {
@@ -7937,7 +7847,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'tehosmotr' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'wear' || entity === 'car_autostrahovanie' || entity === 'car_tehosmotr' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
     }
 
@@ -8149,7 +8059,6 @@ const navMap = {
     'Строки прихода': 'receipt_items',
     'Перемещение': 'moves',
     'Строки перемещения': 'move_items',
-    'Техосмотр':'tehosmotr',
     'Автострахование':'autostrahovanie',
     'Карточка авто': 'car_cards',
     'Техосмотр машины': 'car_tehosmotr',

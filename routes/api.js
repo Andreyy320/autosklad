@@ -933,87 +933,6 @@ router.get('/move_items', async (req, res) => {
 
 
 
-
-
-// ==================== ПОЛУЧИТЬ ВСЕ ТЕХОСМОТРЫ ====================
-router.get('/tehosmotr', async (req, res) => {
-    try {
-        const query = `
-            SELECT t.*, 
-                   c.gos_number AS car_number, 
-                   COALESCE(c.model, cm.name, '—') AS car_model,
-                   p.name AS payment_type_name
-            FROM tehosmotr t
-            LEFT JOIN cars c ON t.car_id = c.id
-            LEFT JOIN car_models cm ON c.model_id = cm.id
-            LEFT JOIN payment_types p ON t.payment_type_id = p.id
-            ORDER BY t.id DESC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Ошибка при получении техосмотров:', err);
-        res.status(500).json({ error: 'Ошибка сервера при получении техосмотров' });
-    }
-});
-
-
-
-// Эндпоинт для быстрой проводки техосмотра
-router.patch('/tehosmotr/:id/post', async (routerReq, routerRes) => {
-    try {
-        const { id } = routerReq.params;
-        const now = new Date();
-
-        const query = `
-            UPDATE tehosmotr 
-            SET is_posted = true, 
-                fact_date = COALESCE(fact_date, $1)
-            WHERE id = $2
-            RETURNING *;
-        `;
-        const result = await pool.query(query, [now, id]);
-
-        if (result.rows.length === 0) {
-            return routerRes.status(404).json({ error: 'Документ не найден' });
-        }
-
-        routerRes.json(result.rows[0]);
-    } catch (err) {
-        console.error('Ошибка при проведении техосмотра:', err);
-        routerRes.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-
-
-
-
-// ==================== ПОЛУЧИТЬ ВСЕ ЗАПИСИ АВТОСТРАХОВАНИЯ ====================
-router.get('/autostrahovanie', async (req, res) => {
-    try {
-        const query = `
-            SELECT a.*, 
-                   c.gos_number AS car_number, 
-                   COALESCE(c.model, cm.name, '—') AS car_model,
-                   s.name AS autoservice_name,
-                   p.name AS payment_type_name
-            FROM autostrahovanie a
-            LEFT JOIN cars c ON a.car_id = c.id
-            LEFT JOIN car_models cm ON c.model_id = cm.id
-            LEFT JOIN autoservices s ON a.autoservice_id = s.id
-            LEFT JOIN payment_types p ON a.payment_type_id = p.id
-            ORDER BY a.id DESC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Ошибка при получении автострахования:', err);
-        res.status(500).json({ error: 'Ошибка сервера при получении автострахования' });
-    }
-});
-
-
 // ==================== ПОЛУЧИТЬ НАПОМИНАНИЯ ПО ДАТАМ ====================
 router.get('/reminders', async (req, res) => {
     try {
@@ -1056,6 +975,8 @@ router.get('/reminders', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при получении напоминаний' });
     }
 });
+
+
 // ==================== ОБНОВЛЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
 router.put('/moves/:id', async (req, res) => {
     try {
