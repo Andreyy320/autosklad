@@ -7540,6 +7540,7 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'car_general' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
+             currentEntity === 'receipts_history' ||
         currentEntity === 'repair_history' ||
         currentEntity === 'money_receipts' ||
         currentEntity === 'money_receipts_by_sklad' ||
@@ -7827,7 +7828,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history' || entity === 'car_general' || entity === 'fuel' || entity === 'insurance' || entity === 'inspections' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
         queryParamName = 'car_id';
     }
 
@@ -7951,7 +7952,7 @@ async function loadDetailData(entity, parentId) {
             return;
         }
 
-        if ((activeEntity === 'repair_history' || activeEntity === 'car_general') && typeof config.render === 'function') {
+        if ((activeEntity === 'repair_history' || activeEntity === 'car_general'|| activeEntity === 'receipts_history') && typeof config.render === 'function') {
             tbody.innerHTML = config.render(items);
         } else {
             tbody.innerHTML = '';
