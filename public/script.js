@@ -1162,6 +1162,7 @@ repair_items: {
         `;
     }
 },
+
 repair_works: {
     title: 'Выполненные работы',
     columns: [
@@ -1180,7 +1181,8 @@ repair_works: {
             <td>${item.description || ''}</td>
         `;
     }
-},repair_history: {
+},
+repair_history: {
     title: 'Ремонт машины',
     columns: [
         { field: 'article', label: 'Артикул', width: '100px' },
