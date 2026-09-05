@@ -1167,7 +1167,7 @@ repair_works: {
     title: 'Выполненные работы',
     columns: [
         { field: 'ispolnitel_id', label: 'Исполнитель', width: '180px', ref: 'ispolnitel', insert: true, table: true },
-        { field: 'work_id', label: 'Работа', width: '220px', ref: 'works', insert: true, table: true },
+        { field: 'vidy_rabot_id', label: 'Работа', width: '220px', ref: 'vidy_rabot', insert: true, table: true },
         { field: 'price', label: 'Стоимость', width: '120px', align: 'right', insert: true, table: true },
         { field: 'description', label: 'Описание', insert: true, table: true }
     ],
@@ -1176,7 +1176,7 @@ repair_works: {
         
         return `
             <td>${item.ispolnitel_name || item.ispolnitel_id || '—'}</td>
-            <td><b>${item.work_name || item.work_id || '—'}</b></td>
+            <td><b>${item.vidy_rabot_name || item.name || '—'}</b></td>
             <td style="text-align: right;">${priceVal}</td>
             <td>${item.description || ''}</td>
         `;
