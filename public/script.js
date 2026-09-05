@@ -2293,7 +2293,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             </label>
         `;
     }
-const carCol = config.columns.find(c => c.field === 'car_id');
+
+    const carCol = config.columns.find(c => c.field === 'car_id');
     const molCol = config.columns.find(c => c.field === 'mol_id' || c.field === 'mol_from_id');
     const warehouseCol = config.columns.find(c => c.field === 'warehouse_id' || c.field === 'skald_id');
 
@@ -2458,11 +2459,11 @@ const carCol = config.columns.find(c => c.field === 'car_id');
     if (vidyRabotSelect) {
         vidyRabotSelect.addEventListener('change', async () => {
             const selectedWorkId = vidyRabotSelect.value;
-            if (!selectedWorkId) return;
-
             const priceInput = formElement.querySelector('[name="price"]');
-            if (priceInput && priceInput.value.trim() !== '') {
-                return; 
+            
+            if (!selectedWorkId) {
+                if (priceInput) priceInput.value = '';
+                return;
             }
 
             try {
@@ -2602,7 +2603,7 @@ const carCol = config.columns.find(c => c.field === 'car_id');
             data.repair_id = parentId;
         } 
         else if (entity === 'repair_works' && parentId) {
-            data.repair_id = parentId; // <-- Добавлено!
+            data.repair_id = parentId;
         }
         else if (entity === 'receipt_items' && parentId) {
             data.receipt_id = parentId;
@@ -2676,7 +2677,6 @@ const carCol = config.columns.find(c => c.field === 'car_id');
         }
     });
 }
-
 async function openReceiptForm(entity, item = null) {
     console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
 
