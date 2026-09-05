@@ -3491,6 +3491,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     const columns = [...config.columns];
     
+    // Переставляем car_id (гос номер) сразу после mol_id (МОЛ)
     const carColIndex = columns.findIndex(c => c.field === 'car_id');
     const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
 
@@ -3531,6 +3532,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
+        // Блокируем ВСЕ поля, если документ проведен (включая fact_date и ис_posted / статус)
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -3593,7 +3595,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
             }
-            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+            // Используем readonly и disabled для нативных инпутов дата/время, чтобы они точно не открывали выбор и были заблокированы
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly disabled' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else {
@@ -3802,7 +3805,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                             showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
                         }
                     } catch (err) {
-                        showAppNotification('Ошибка соединения с сервером', 'error');
+                        showAppNotification('Ошибка соединения с сером', 'error');
                     }
                 }
             );
@@ -3814,7 +3817,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        if (isPosted) return; // Запрещаем отправку, если документ проведен
+        if (isPosted) return; // Защита от сохранения проведенного документа
 
         if (isSubmitting) return; 
         isSubmitting = true;
