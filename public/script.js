@@ -7520,90 +7520,93 @@ if (tableBody) {
     });
 }
 
+const tableBodyForDblClick = document.getElementById('table-body');
+if (tableBodyForDblClick) {
+    tableBodyForDblClick.addEventListener('dblclick', (e) => {
+        console.log("🖱️ [DBLCLICK] Сработало событие двойного клика");
 
-tableBody.addEventListener('dblclick', (e) => {
-    console.log("🖱️ [DBLCLICK] Сработало событие двойного клика");
-
-    const tr = e.target.closest('tr');
-    if (!tr) {
-        console.log("❌ [DBLCLICK] Клик вне строки таблицы (tr не найден)");
-        return;
-    }
-
-    if (tr.querySelector('td[colspan]')) {
-        console.log("❌ [DBLCLICK] Строка содержит colspan (пустая или сервисная строка)");
-        return;
-    }
-
-    // Проверяем: если клик произошел внутри нижней таблицы деталей (табы автомобиля, истории и т.д.)
-    const isInsideDetail = e.target.closest('#detail-container') || 
-                           e.target.closest('#car-tabs-panel') || 
-                           e.target.closest('#car-tabs-bar');
-    
-    if (isInsideDetail) {
-        console.log("🛑 [DBLCLICK] Клик внутри детальной таблицы. Предотвращаем открытие формы главного списка.");
-        return; 
-    }
-
-    // Жестко определяем текущую сущность
-    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
-
-    console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| targetEntity:", targetEntity);
-
-    if (
-        targetEntity === 'stock_remains' || 
-        targetEntity === 'stock' || 
-        targetEntity === 'stock_movement' ||
-        targetEntity === 'stock_balances' ||
-        targetEntity === 'stock_batches' ||
-        targetEntity === 'part_movement_details' ||
-        targetEntity === 'car_cards' ||
-        targetEntity === 'car_general' ||
-        targetEntity === 'car_accidents' ||
-        targetEntity === 'dtp_history' ||
-        targetEntity === 'receipts_history' ||
-        targetEntity === 'repair_history' ||
-        targetEntity === 'money_receipts' ||
-        targetEntity === 'money_receipts_by_sklad' ||
-        targetEntity === 'money_receipts_detail' ||
-        targetEntity === 'expenses_by_sklad' || 
-        targetEntity === 'expenses_by_suppliers' || 
-        targetEntity === 'expenses_by_receipts'
-    ) {
-        console.log("🛑 [DBLCLICK] Сущность (" + targetEntity + ") попала в список исключений. Выход (return).");
-        return; 
-    }
-
-    const id = tr.getAttribute('data-id');
-    console.log("🆔 [DBLCLICK] ID найденной строки:", id);
-
-    const item = currentItems.find(i => i.id == id);
-    console.log("📦 [DBLCLICK] Найденный элемент в currentItems:", item);
-    
-    if (item) {
-        if (item.is_posted !== undefined) {
-            item.is_posted = (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
+        const tr = e.target.closest('tr');
+        if (!tr) {
+            console.log("❌ [DBLCLICK] Клик вне строки таблицы (tr не найден)");
+            return;
         }
 
-        selectedItem = item;
+        if (tr.querySelector('td[colspan]')) {
+            console.log("❌ [DBLCLICK] Строка содержит colspan (пустая или сервисная строка)");
+            return;
+        }
+
+        // Проверяем: если клик произошел внутри нижней таблицы деталей (табы автомобиля, истории и т.д.)
+        const isInsideDetail = e.target.closest('#detail-container') || 
+                               e.target.closest('#car-tabs-panel') || 
+                               e.target.closest('#car-tabs-bar');
         
-        console.log("🚀 [DBLCLICK] Успешно пробились к открытию формы для сущности:", currentEntity);
-
-        if (currentEntity === 'realizations') {
-            openRealizationForm(currentEntity, item);
-        } else if (currentEntity === 'repairs') {
-            openRepairForm(currentEntity, item);
-        } else if (currentEntity === 'receipts') {
-            openReceiptForm(currentEntity, item);
-        } else if (currentEntity === 'moves') {
-            openMoveForm(currentEntity, item);
-        } else {
-            openEntityForm(currentEntity, item);
+        if (isInsideDetail) {
+            console.log("🛑 [DBLCLICK] Клик внутри детальной таблицы. Предотвращаем открытие формы главного списка.");
+            return; 
         }
-    } else {
-        console.log("⚠️ [DBLCLICK] Элемент с ID", id, "не найден в массиве currentItems!");
-    }
-});
+
+        // Жестко определяем текущую сущность
+        const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
+
+        console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| targetEntity:", targetEntity);
+
+        if (
+            targetEntity === 'stock_remains' || 
+            targetEntity === 'stock' || 
+            targetEntity === 'stock_movement' ||
+            targetEntity === 'stock_balances' ||
+            targetEntity === 'stock_batches' ||
+            targetEntity === 'part_movement_details' ||
+            targetEntity === 'car_cards' ||
+            targetEntity === 'car_general' ||
+            targetEntity === 'car_accidents' ||
+            targetEntity === 'dtp_history' ||
+            targetEntity === 'receipts_history' ||
+            targetEntity === 'repair_history' ||
+            targetEntity === 'money_receipts' ||
+            targetEntity === 'money_receipts_by_sklad' ||
+            targetEntity === 'money_receipts_detail' ||
+            targetEntity === 'expenses_by_sklad' || 
+            targetEntity === 'expenses_by_suppliers' || 
+            targetEntity === 'expenses_by_receipts'
+        ) {
+            console.log("🛑 [DBLCLICK] Сущность (" + targetEntity + ") попала в список исключений. Выход (return).");
+            return; 
+        }
+
+        const id = tr.getAttribute('data-id');
+        console.log("🆔 [DBLCLICK] ID найденной строки:", id);
+
+        // Универсальный поиск элемента с поддержкой разных вариантов ID (точно так же, как в клике)
+        const item = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
+        console.log("📦 [DBLCLICK] Найденный элемент в currentItems:", item);
+        
+        if (item) {
+            if (item.is_posted !== undefined) {
+                item.is_posted = (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
+            }
+
+            selectedItem = item;
+            
+            console.log("🚀 [DBLCLICK] Успешно пробились к открытию формы для сущности:", currentEntity);
+
+            if (currentEntity === 'realizations') {
+                openRealizationForm(currentEntity, item);
+            } else if (currentEntity === 'repairs') {
+                openRepairForm(currentEntity, item);
+            } else if (currentEntity === 'receipts') {
+                openReceiptForm(currentEntity, item);
+            } else if (currentEntity === 'moves') {
+                openMoveForm(currentEntity, item);
+            } else {
+                openEntityForm(currentEntity, item);
+            }
+        } else {
+            console.log("⚠️ [DBLCLICK] Элемент с ID", id, "не найден в массиве currentItems!");
+        }
+    });
+}
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
