@@ -7520,9 +7520,13 @@ tableBody.addEventListener('dblclick', (e) => {
         return;
     }
 
+    // Жесткая проверка: если клик внутри панели вкладок карточки авто или таблиц деталей
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
-                           e.target.closest('#car-tabs-bar');
+                           e.target.closest('#car-tabs-bar') ||
+                           e.target.closest('.car-tabs-content') ||
+                           e.target.closest('.tab-pane') ||
+                           document.getElementById('car-tabs-panel')?.contains(tr);
     
     if (isInsideDetail) {
         return; 
@@ -7537,7 +7541,7 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'part_movement_details' ||
         currentEntity === 'car_cards' ||
         currentEntity === 'car_general' ||
-        currentEntity === 'accident_images' ||
+        currentEntity === 'car_spare_parts' ||
         currentEntity === 'car_repairs' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
