@@ -3502,12 +3502,15 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     }
 
     const columns = [...config.columns];
+    
+    // Переставляем car_id (гос номер) сразу после mol_id (МОЛ)
     const carColIndex = columns.findIndex(c => c.field === 'car_id');
     const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
 
-    if (carColIndex !== -1 && molColIndex !== -1 && carColIndex > molColIndex) {
+    if (carColIndex !== -1 && molColIndex !== -1 && carColIndex < molColIndex) {
         const [carCol] = columns.splice(carColIndex, 1);
-        columns.splice(molColIndex, 0, carCol);
+        const newMolIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
+        columns.splice(newMolIndex + 1, 0, carCol);
     }
 
     for (const col of columns) {
