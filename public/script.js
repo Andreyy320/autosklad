@@ -7512,7 +7512,6 @@ if (tableBody) {
 }
 
 
-
 tableBody.addEventListener('dblclick', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -7540,7 +7539,7 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'car_general' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
-             currentEntity === 'receipts_history' ||
+        currentEntity === 'receipts_history' ||
         currentEntity === 'repair_history' ||
         currentEntity === 'money_receipts' ||
         currentEntity === 'money_receipts_by_sklad' ||
