@@ -7537,6 +7537,8 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'part_movement_details' ||
         currentEntity === 'car_cards' ||
         currentEntity === 'car_general' ||
+        currentEntity === 'car_spare_parts' ||
+        currentEntity === 'car_repairs' ||
         currentEntity === 'car_accidents' ||
         currentEntity === 'dtp_history' ||
         currentEntity === 'receipts_history' ||
