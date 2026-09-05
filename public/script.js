@@ -1057,6 +1057,7 @@ accident_events: {
         `;
     }
 },
+
 repairs: {
     title: 'Ремонт',
     columns: [
@@ -3415,7 +3416,6 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
     });
 }
-
 async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) {
     let entity, item, parentId;
 
@@ -3716,7 +3716,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        // Исправленная фильтрация автомобилей: берем данные из общей таблицы /api/cars, а также проверяем /api/repair_cars при необходимости
         const skladCarPairs = [
             { sklad: formElement.querySelector('[name="sklad_id"]') || formElement.querySelector('[name="warehouse_id"]'), car: formElement.querySelector('[name="car_id"]') }
         ];
@@ -3730,7 +3729,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 console.log('[filterCarsBySklad] Запуск фильтрации авто по складу. Выбран склад ID:', selectedSkladId);
 
                 try {
-                    // Запрашиваем из основной таблицы машин (cars), либо фоллбэк на repair_cars
                     let carRes = await fetch('/api/cars');
                     if (!carRes.ok) {
                         carRes = await fetch('/api/repair_cars');
@@ -3745,7 +3743,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     let isCurrentCarStillValid = false;
 
                     cars.forEach(c => {
-                        // Поддерживаем разные варианты полей связи со складом (sklad_id, warehouse_id)
                         const cSkladId = c.sklad_id || c.warehouse_id;
                         const match = !selectedSkladId || String(cSkladId) === String(selectedSkladId);
 
