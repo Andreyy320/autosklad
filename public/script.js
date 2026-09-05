@@ -1164,6 +1164,7 @@ repair_works: {
         `;
     }
 },
+
 repair_history: {
     title: 'Ремонт машины',
     columns: [
@@ -1208,7 +1209,7 @@ repair_history: {
                         <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
                         <span style="color: #212529;">${repairType} ${docNum} от ${docDate}</span> 
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #495057;">${repair.category || 'Плановый'}</span> 
+                        <span style="color: #495057;">${repairType}</span> 
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
                         <span style="color: #d97706;">Итого: ${costVal} руб.${mileage}</span>
                     </td>
@@ -1271,6 +1272,7 @@ repair_history: {
         return html;
     }
 },
+
 car_general: {
     title: 'Общая',
     columns: [
