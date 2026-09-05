@@ -6268,6 +6268,11 @@ router.post('/:entity', async (req, res) => {
             }
             delete req.body.work_id;
 
+            // Если пришло имя поля work_name или аналогичные, но не сам ID, зачищаем чтобы не падало в БД
+            if (req.body.work_name !== undefined) {
+                delete req.body.work_name;
+            }
+
             const { repair_id } = req.body;
             
             if (repair_id) {
