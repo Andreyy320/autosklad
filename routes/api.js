@@ -1304,12 +1304,15 @@ router.get('/repair_items', async (req, res) => {
                 z.code AS zaphasti_code, 
                 z.name AS zaphasti_name, 
                 z.unit AS zaphasti_unit,
-                -- Цена за штуку с учетом наценки 10%
-                ROUND(COALESCE(ri.price, 0) * 1.1, 2) AS price_with_markup,
-                -- Сумма наценки за 1 штуку (чистые 10% от цены)
-                ROUND(COALESCE(ri.price, 0) * 0.1, 2) AS markup_amount,
-                -- Итоговая сумма: (количество * цена с наценкой 10%)
-                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * 1.1, 2) AS total,
+                gt.name AS price_group_name,
+                -- Процент наценки из справочника gruppa_tsen (если не задан, то 0)
+                COALESCE(gt.markup_percent, 0) AS markup_percent,
+                -- Цена за штуку с учетом динамической наценки группы
+                ROUND(COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS price_with_markup,
+                -- Сумма наценки за 1 штуку в денежном выражении
+                ROUND(COALESCE(ri.price, 0) * (COALESCE(gt.markup_percent, 0) / 100.0), 2) AS markup_amount,
+                -- Итоговая сумма: количество * (цена с учетом наценки группы)
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS total,
                 COALESCE(
                     CASE 
                         WHEN r.fact_date IS NOT NULL 
@@ -1320,6 +1323,7 @@ router.get('/repair_items', async (req, res) => {
                 ) AS income_document
             FROM repair_items ri
             LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
             LEFT JOIN receipts r ON ri.receipt_id = r.id
         `;
         
