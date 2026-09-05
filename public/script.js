@@ -7537,29 +7537,32 @@ tableBody.addEventListener('dblclick', (e) => {
         return; 
     }
 
-    console.log("🔍 [DBLCLICK] Текущая сущность (currentEntity):", currentEntity);
+    // Определяем реальную сущность: если клик в детальной таблице, берем activeEntity, иначе currentEntity
+    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table, .detail-table, #detail-container')) ? activeEntity : currentEntity;
+
+    console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| activeEntity:", typeof activeEntity !== 'undefined' ? activeEntity : 'N/A', "| targetEntity:", targetEntity);
 
     if (
-        currentEntity === 'stock_remains' || 
-        currentEntity === 'stock' || 
-        currentEntity === 'stock_movement' ||
-        currentEntity === 'stock_balances' ||
-        currentEntity === 'stock_batches' ||
-        currentEntity === 'part_movement_details' ||
-        currentEntity === 'car_cards' ||
-        currentEntity === 'car_general' ||
-        currentEntity === 'car_accidents' ||
-        currentEntity === 'dtp_history' ||
-        currentEntity === 'receipts_history' ||
-        currentEntity === 'repair_history' ||
-        currentEntity === 'money_receipts' ||
-        currentEntity === 'money_receipts_by_sklad' ||
-        currentEntity === 'money_receipts_detail' ||
-        currentEntity === 'expenses_by_sklad' || 
-        currentEntity === 'expenses_by_suppliers' || 
-        currentEntity === 'expenses_by_receipts'
+        targetEntity === 'stock_remains' || 
+        targetEntity === 'stock' || 
+        targetEntity === 'stock_movement' ||
+        targetEntity === 'stock_balances' ||
+        targetEntity === 'stock_batches' ||
+        targetEntity === 'part_movement_details' ||
+        targetEntity === 'car_cards' ||
+        targetEntity === 'car_general' ||
+        targetEntity === 'car_accidents' ||
+        targetEntity === 'dtp_history' ||
+        targetEntity === 'receipts_history' ||
+        targetEntity === 'repair_history' ||
+        targetEntity === 'money_receipts' ||
+        targetEntity === 'money_receipts_by_sklad' ||
+        targetEntity === 'money_receipts_detail' ||
+        targetEntity === 'expenses_by_sklad' || 
+        targetEntity === 'expenses_by_suppliers' || 
+        targetEntity === 'expenses_by_receipts'
     ) {
-        console.log("🛑 [DBLCLICK] Сущность попала в список исключений. Выход (return).");
+        console.log("🛑 [DBLCLICK] Сущность (" + targetEntity + ") попала в список исключений. Выход (return).");
         return; 
     }
 
