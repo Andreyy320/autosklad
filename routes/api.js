@@ -6261,15 +6261,13 @@ router.post('/:entity', async (req, res) => {
             delete req.body.doc_type;
         }
 
-        if (req.body.is_posted !== undefined) {
-            if (req.body.is_posted === '' || req.body.is_posted === null) {
-                delete req.body.is_posted; 
-            } else {
-                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
-            }
-        }
-
+        // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
         if (entity === 'repair_works') {
+            if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
+                req.body.vidy_rabot_id = req.body.work_id;
+            }
+            delete req.body.work_id;
+
             const { repair_id } = req.body;
             
             if (repair_id) {
@@ -6284,6 +6282,14 @@ router.post('/:entity', async (req, res) => {
                         });
                     }
                 }
+            }
+        }
+
+        if (req.body.is_posted !== undefined) {
+            if (req.body.is_posted === '' || req.body.is_posted === null) {
+                delete req.body.is_posted; 
+            } else {
+                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
             }
         }
 
@@ -6386,6 +6392,8 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
+
+
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
 // ==========================================
@@ -6437,6 +6445,14 @@ router.put('/:entity/:id', async (req, res) => {
             } else {
                 req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
             }
+        }
+
+        // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
+        if (entity === 'repair_works') {
+            if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
+                req.body.vidy_rabot_id = req.body.work_id;
+            }
+            delete req.body.work_id;
         }
 
         await client.query('BEGIN');
