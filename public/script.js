@@ -1161,7 +1161,7 @@ repair_items: {
             <td>${qty}</td>
             <td>${item.unit || item.zaphasti_unit || 'шт'}</td>
             <td>${price.toFixed(2)}</td>
-            <td style="color: #2e7d32;">+${markupSum.toFixed(2)}</td>
+            <td style="color:rgb(15, 23, 15);">+${markupSum.toFixed(2)}</td>
             <td><b>${totalSum.toFixed(2)}</b></td>
             <td>${item.description || ''}</td>
             <td style="color: #000000; font-style: normal;">${incomeDocText}</td>
