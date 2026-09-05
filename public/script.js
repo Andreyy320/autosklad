@@ -1272,7 +1272,113 @@ repair_history: {
         return html;
     }
 },
+receipts_history: {
+    title: 'Запчасти по ремонту',
+    columns: [
+        { field: 'article', label: 'Артикул', width: '100px' },
+        { field: 'code', label: 'Код', width: '80px' },
+        { field: 'name', label: 'Наименование', width: '220px' },
+        { field: 'qty', label: 'Кол-во', width: '70px', align: 'center' },
+        { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
+        { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
+        { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
+        { field: 'description', label: 'Описание' },
+        { field: 'doc_source', label: 'Документ прихода', width: '200px' }
+    ],
+    render: (repairsList) => {
+        if (!Array.isArray(repairsList) || repairsList.length === 0) {
+            return `<tr><td colspan="9" style="text-align: center; color: #888; padding: 20px;">Нет данных по запчастям</td></tr>`;
+        }
 
+        let html = '';
+
+        repairsList.forEach((repair, index) => {
+            const repairType = repair.repair_type_name || repair.type || 'Ремонт';
+            const docNum = repair.doc_number || '';
+            const docDate = repair.doc_date ? new Date(repair.doc_date).toLocaleDateString('ru-RU') : '';
+            const mileage = repair.mileage ? ` | ${repair.mileage} км` : '';
+            const groupId = `receipts-group-${repair.id || index}`;
+            
+            let calculatedTotal = 0;
+            if (repair.items && repair.items.length > 0) {
+                repair.items.forEach(item => {
+                    const itemSum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0)) || 0);
+                    calculatedTotal += itemSum;
+                });
+            } else {
+                calculatedTotal = Number(repair.total_cost || repair.sum || 0);
+            }
+            const costVal = calculatedTotal.toFixed(2);
+            
+            html += `
+                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleReceiptsGroup('${groupId}', this)">
+                    <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
+                        <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
+                        <span style="color: #212529;">${repairType} ${docNum} от ${docDate}</span> 
+                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
+                        <span style="color: #495057;">${repairType}</span> 
+                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
+                        <span style="color: #d97706;">Итого запчастей: ${costVal} руб.${mileage}</span>
+                    </td>
+                </tr>
+            `;
+
+            if (repair.items && repair.items.length > 0) {
+                repair.items.forEach(item => {
+                    const price = Number(item.price || 0).toFixed(2);
+                    const sum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0))).toFixed(2);
+                    const qty = item.quantity || item.qty || '';
+                    
+                    html += `
+                        <tr class="${groupId}" style="background-color: #ffffff;">
+                            <td style="padding-left: 25px;">${item.article || ''}</td>
+                            <td>${item.code || ''}</td>
+                            <td>${item.name || ''}</td>
+                            <td style="text-align: center;">${qty}</td>
+                            <td style="text-align: center;">${item.unit || 'шт'}</td>
+                            <td style="text-align: right;">${price}</td>
+                            <td style="text-align: right;">${sum}</td>
+                            <td>${item.description || ''}</td>
+                            <td>${item.doc_source || ''}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += `
+                    <tr class="${groupId}" style="background-color: #ffffff;">
+                        <td colspan="2"></td>
+                        <td colspan="5" style="color: #888; font-style: italic;">Нет запчастей для этого ремонта</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                `;
+            }
+        });
+
+        if (typeof window.toggleReceiptsGroup === 'undefined') {
+            window.toggleReceiptsGroup = function(groupId, headerRow) {
+                const rows = document.querySelectorAll(`.${groupId}`);
+                const icon = headerRow.querySelector('.toggle-icon');
+                if (rows.length === 0) return;
+
+                const isHidden = rows[0].style.display === 'none';
+                rows.forEach(row => {
+                    row.style.display = isHidden ? '' : 'none';
+                });
+
+                if (isHidden) {
+                    icon.classList.remove('fa-plus-square');
+                    icon.classList.add('fa-minus-square');
+                } else {
+                    icon.classList.remove('fa-minus-square');
+                    icon.classList.add('fa-plus-square');
+                }
+            };
+        }
+
+        return html;
+    }
+},
 car_general: {
     title: 'Общая',
     columns: [
@@ -7955,6 +8061,7 @@ const navMap = {
     'События': 'accident_events',
     'Ремонт': 'repairs',
     'История ремонта': 'repair_history', 
+    'История запчастей':'receipts_history',
     'Запчасти ремонта': 'repair_items', 
     'Работы ремонта': 'repair_works', 
     'Тип документа':'doc_types',
