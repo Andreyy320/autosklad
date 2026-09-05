@@ -371,21 +371,14 @@ router.get('/customer_cars/:customer_id', async (req, res) => {
     }
 });
 
-// 1. Роуты для получения ремонтных машин (поддерживает оба варианта запроса)
+// 1. Роуты для получения ремонтных машин (фильтрация только по складу)
 router.get('/repair_cars', async (req, res) => {
     try {
-        // Можно передавать mol_id или sklad_id через query (например, /api/repair_cars?mol_id=1)
-        const mol_id = req.query.mol_id;
         const sklad_id = req.query.sklad_id;
 
         let query = 'SELECT * FROM repair_cars';
         const params = [];
         const conditions = [];
-
-        if (mol_id) {
-            params.push(mol_id);
-            conditions.push(`mol_id = $${params.length}`);
-        }
 
         if (sklad_id) {
             params.push(sklad_id);
