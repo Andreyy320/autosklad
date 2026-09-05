@@ -7523,7 +7523,9 @@ tableBody.addEventListener('dblclick', (e) => {
 
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
-                           e.target.closest('#car-tabs-bar');
+                           e.target.closest('#car-tabs-bar') ||
+                           document.getElementById('detail-container')?.contains(tr) ||
+                           document.getElementById('car-tabs-panel')?.contains(tr);
     
     if (isInsideDetail) {
         return; 
