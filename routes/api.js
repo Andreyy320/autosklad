@@ -1293,7 +1293,6 @@ router.get('/repairs', async (req, res) => {
 });
 
 
-
 router.get('/repair_items', async (req, res) => {
     try {
         const { repair_id } = req.query;
@@ -1305,6 +1304,10 @@ router.get('/repair_items', async (req, res) => {
                 z.code AS zaphasti_code, 
                 z.name AS zaphasti_name, 
                 z.unit AS zaphasti_unit,
+                -- Цена за штуку с учетом наценки 10% (исходная цена * 1.1)
+                ROUND(COALESCE(ri.price, 0) * 1.1, 2) AS price_with_markup,
+                -- Итоговая сумма: (количество * цена с наценкой 10%)
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * 1.1, 2) AS total,
                 COALESCE(
                     CASE 
                         WHEN r.fact_date IS NOT NULL 
@@ -1333,6 +1336,7 @@ router.get('/repair_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
