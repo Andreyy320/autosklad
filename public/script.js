@@ -7348,6 +7348,14 @@ async function postRealization(realizationId) {
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
+        // Если клик произошел внутри контейнера деталей — не даем главному обработчику вмешиваться
+        const isInsideDetail = e.target.closest('#detail-container') || 
+                               e.target.closest('#car-tabs-panel') || 
+                               e.target.closest('#car-tabs-bar');
+        if (isInsideDetail) {
+            return;
+        }
+
         // Если это сейчас расходы — этот общий обработчик не должен вмешиваться (их обрабатывает отдельный кликер)
         if (
             currentEntity === 'expenses_by_sklad' || 
@@ -7511,7 +7519,6 @@ if (tableBody) {
         }
     });
 }
-
 
 
 tableBody.addEventListener('dblclick', (e) => {
