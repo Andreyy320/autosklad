@@ -7528,20 +7528,20 @@ tableBody.addEventListener('dblclick', (e) => {
         return;
     }
 
+    // Проверяем: если клик произошел внутри нижней таблицы деталей (табы автомобиля, истории и т.д.)
     const isInsideDetail = e.target.closest('#detail-container') || 
                            e.target.closest('#car-tabs-panel') || 
                            e.target.closest('#car-tabs-bar');
     
     if (isInsideDetail) {
-        console.log("❌ [DBLCLICK] Клик произошел внутри детальной панели или табов автомобиля");
+        console.log("🛑 [DBLCLICK] Клик внутри детальной таблицы. Предотвращаем открытие формы главного списка.");
         return; 
     }
 
-    // Жестко проверяем: если у нас сейчас активна какая-то детальная сущность (например, car_general), 
-    // то считаем целевой сущностью её, а не глобальный currentEntity.
-    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity) ? activeEntity : currentEntity;
+    // Жестко определяем текущую сущность
+    const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
 
-    console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| activeEntity:", typeof activeEntity !== 'undefined' ? activeEntity : 'N/A', "| targetEntity:", targetEntity);
+    console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| targetEntity:", targetEntity);
 
     if (
         targetEntity === 'stock_remains' || 
