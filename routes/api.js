@@ -1384,7 +1384,8 @@ router.get('/repair_works', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     }
 });
-// ==================== РЕМОНТЫ КОНКРЕТНОЙ МАШИНЫ (запчасти + работы) ====================
+
+// ==================== РЕМОНТЫ КОНКРЕТНОЙ МАШИНЫ (только работы из repair_works с учетом vidy_rabot) ====================
 router.get('/repair_history', async (req, res) => {
     try {
         const { car_id } = req.query;
@@ -1406,69 +1407,41 @@ router.get('/repair_history', async (req, res) => {
 
         const repairIds = repairs.map(r => r.id);
 
-        // 2. Получаем запчасти из repair_items с правильной подтяжкой из receipts и zaphasti (zaphasti_id)
-        const itemsQuery = `
-            SELECT 
-                ri.id,
-                ri.repair_id,
-                COALESCE(ri.article, z.article, '') AS article, 
-                COALESCE(ri.code, z.code, '') AS code, 
-                COALESCE(ri.name, z.name, 'Запчасть') AS name, 
-                COALESCE(ri.unit, z.unit, 'шт') AS unit,
-                ri.quantity,
-                ri.price,
-                COALESCE(ri.total, (ri.quantity * ri.price), 0) AS sum,
-                ri.description,
-                COALESCE(
-                    ri.receipt_doc, 
-                    CONCAT('', rc.doc_number, ' от ', TO_CHAR(rc.date, 'DD.MM.YYYY')), 
-                    ''
-                ) AS doc_source,
-                'item' AS row_type
-            FROM repair_items ri
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-            LEFT JOIN receipts rc ON ri.receipt_id = rc.id
-            WHERE ri.repair_id = ANY($1::int[])
-        `;
-
-        // 3. Получаем работы из repair_works
+        // 2. Получаем работы из repair_works с правильной связью через vidy_rabot и ispolnitel
         const worksQuery = `
             SELECT 
                 rw.id,
                 rw.repair_id,
                 '' AS article,
                 '' AS code,
-                COALESCE(w.name, rw.description, 'Работа') AS name,
+                COALESCE(vr.name, rw.description, 'Работа') AS name,
                 '' AS unit,
                 null AS quantity,
-                rw.price AS price,
-                COALESCE(rw.price, 0) AS sum,
+                COALESCE(rw.price, vr.price, 0) AS price,
+                COALESCE(rw.price, vr.price, 0) AS sum,
                 rw.description,
                 COALESCE(i.name, '') AS doc_source,
                 'work' AS row_type
             FROM repair_works rw
-            LEFT JOIN works w ON rw.work_id = w.id
+            LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
             LEFT JOIN ispolnitel i ON rw.ispolnitel_id = i.id
             WHERE rw.repair_id = ANY($1::int[])
         `;
 
-        let allItems = [];
+        let allWorks = [];
         try {
-            const [itemsRes, worksRes] = await Promise.all([
-                pool.query(itemsQuery, [repairIds]),
-                pool.query(worksQuery, [repairIds])
-            ]);
-            allItems = [...itemsRes.rows, ...worksRes.rows];
+            const worksRes = await pool.query(worksQuery, [repairIds]);
+            allWorks = worksRes.rows;
         } catch (subErr) {
-            console.warn("Ошибка при загрузке деталей/работ ремонта:", subErr.message);
+            console.warn("Ошибка при загрузке работ ремонта:", subErr.message);
         }
 
-        // 4. Собираем итоговую древовидную структуру
+        // 3. Собираем итоговую структуру с работами
         const dataWithItems = repairs.map(repair => {
-            const repairItems = allItems.filter(item => item.repair_id === repair.id);
+            const repairWorks = allWorks.filter(work => work.repair_id === repair.id);
             return {
                 ...repair,
-                items: repairItems
+                items: repairWorks
             };
         });
 
