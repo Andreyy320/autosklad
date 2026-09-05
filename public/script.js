@@ -7114,42 +7114,23 @@ function getCurrentDetailEntity() {
         return 'repair_items'; 
     }
 
-   if (currentEntity === 'car_cards') {
-        const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active, #tabs-for-cars .car-tab-btn.active');
-        
+    if (currentEntity === 'car_cards') {
+        const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) return dataTab;
+        }
 
-            const text = activeTab.innerText.trim().toLowerCase();
-            if (text.includes('общ') || text.includes('основн')) return 'car_general';
-            if (text.includes('запчаст') || text.includes('товар')) return 'receipts_history';
-            if (text.includes('ремонт') || text.includes('работ')) return 'repair_history';
-            if (text.includes('дтп') || text.includes('авари')) return 'dtp_history';
-            if (text.includes('изображ') || text.includes('фото')) return 'accident_images';
+        if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) return currentCarSubTab;
 
+        if (activeTab) {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
-            // Поддерживаем как loadDetailData, так и switchCarTab
-            const match = onclickAttr.match(/(?:loadDetailData|switchCarTab)\(['"]([^'"]+)['"]/);
+            const match = onclickAttr.match(/loadDetailData\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
                 return match[1];
             }
         }
-
-        if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) {
-            return currentCarSubTab;
-        }
-
-        // Запасной поиск активной кнопки по тексту внутри контейнера вкладок
-        const activeText = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active')?.innerText?.toLowerCase() || '';
-        if (activeText.includes('общ')) return 'car_general';
-        if (activeText.includes('запчаст')) return 'receipts_history';
-        if (activeText.includes('ремонт')) return 'repair_history';
-        if (activeText.includes('дтп')) return 'dtp_history';
-        if (activeText.includes('изображ')) return 'accident_images';
-
-        console.log(`📌 [getCurrentDetailEntity:car_cards] Дефолт -> car_general`);
-        return 'car_general'; // Безопасный дефолт вместо car_details
+        return 'car_details';
     }
     
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
@@ -7534,10 +7515,16 @@ if (tableBody) {
 
 
 tableBody.addEventListener('dblclick', (e) => {
+    console.log("🖱️ [DBLCLICK] Сработало событие двойного клика");
+
     const tr = e.target.closest('tr');
-    if (!tr) return;
+    if (!tr) {
+        console.log("❌ [DBLCLICK] Клик вне строки таблицы (tr не найден)");
+        return;
+    }
 
     if (tr.querySelector('td[colspan]')) {
+        console.log("❌ [DBLCLICK] Строка содержит colspan (пустая или сервисная строка)");
         return;
     }
 
@@ -7546,8 +7533,11 @@ tableBody.addEventListener('dblclick', (e) => {
                            e.target.closest('#car-tabs-bar');
     
     if (isInsideDetail) {
+        console.log("❌ [DBLCLICK] Клик произошел внутри детальной панели или табов автомобиля");
         return; 
     }
+
+    console.log("🔍 [DBLCLICK] Текущая сущность (currentEntity):", currentEntity);
 
     if (
         currentEntity === 'stock_remains' || 
@@ -7569,20 +7559,25 @@ tableBody.addEventListener('dblclick', (e) => {
         currentEntity === 'expenses_by_suppliers' || 
         currentEntity === 'expenses_by_receipts'
     ) {
+        console.log("🛑 [DBLCLICK] Сущность попала в список исключений. Выход (return).");
         return; 
     }
 
     const id = tr.getAttribute('data-id');
+    console.log("🆔 [DBLCLICK] ID найденной строки:", id);
+
     const item = currentItems.find(i => i.id == id);
+    console.log("📦 [DBLCLICK] Найденный элемент в currentItems:", item);
     
     if (item) {
-        // Приводим is_posted к железному булеву значению, чтобы формы всегда видели, что документ проведен
         if (item.is_posted !== undefined) {
             item.is_posted = (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
         }
 
         selectedItem = item;
         
+        console.log("🚀 [DBLCLICK] Успешно пробились к открытию формы для сущности:", currentEntity);
+
         if (currentEntity === 'realizations') {
             openRealizationForm(currentEntity, item);
         } else if (currentEntity === 'repairs') {
@@ -7594,9 +7589,10 @@ tableBody.addEventListener('dblclick', (e) => {
         } else {
             openEntityForm(currentEntity, item);
         }
+    } else {
+        console.log("⚠️ [DBLCLICK] Элемент с ID", id, "не найден в массиве currentItems!");
     }
 });
-
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
