@@ -371,7 +371,56 @@ router.get('/customer_cars/:customer_id', async (req, res) => {
     }
 });
 
+// 1. Роуты для получения ремонтных машин (поддерживает оба варианта запроса)
+router.get('/repair_cars', async (req, res) => {
+    try {
+        // Можно передавать mol_id или sklad_id через query (например, /api/repair_cars?mol_id=1)
+        const mol_id = req.query.mol_id;
+        const sklad_id = req.query.sklad_id;
 
+        let query = 'SELECT * FROM repair_cars';
+        const params = [];
+        const conditions = [];
+
+        if (mol_id) {
+            params.push(mol_id);
+            conditions.push(`mol_id = $${params.length}`);
+        }
+
+        if (sklad_id) {
+            params.push(sklad_id);
+            conditions.push(`sklad_id = $${params.length}`);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY id ASC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении ремонтных автомобилей');
+    }
+});
+
+router.get('/repair_cars/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const query = `
+            SELECT * FROM repair_cars 
+            WHERE id = $1 
+            ORDER BY id ASC
+        `;
+        const result = await pool.query(query, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Ошибка при получении ремонтного автомобиля');
+    }
+});
 
 
     // ПОЛУЧЕНИЕ СПИСКА ТИПОВ КОНТРАГЕНТОВ (из таблицы counterparty_types)
