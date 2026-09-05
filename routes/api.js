@@ -1304,8 +1304,10 @@ router.get('/repair_items', async (req, res) => {
                 z.code AS zaphasti_code, 
                 z.name AS zaphasti_name, 
                 z.unit AS zaphasti_unit,
-                -- Цена за штуку с учетом наценки 10% (исходная цена * 1.1)
+                -- Цена за штуку с учетом наценки 10%
                 ROUND(COALESCE(ri.price, 0) * 1.1, 2) AS price_with_markup,
+                -- Сумма наценки за 1 штуку (чистые 10% от цены)
+                ROUND(COALESCE(ri.price, 0) * 0.1, 2) AS markup_amount,
                 -- Итоговая сумма: (количество * цена с наценкой 10%)
                 ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * 1.1, 2) AS total,
                 COALESCE(

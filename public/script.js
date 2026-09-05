@@ -1138,15 +1138,20 @@ repair_items: {
         { field: 'name', label: 'Наименование', width: '220px', insert: false, table: true },
         { field: 'quantity', label: 'Кол-во', width: '80px', insert: true, table: true },
         { field: 'unit', label: 'Ед. изм', width: '70px', insert: false, table: true },
-        { field: 'price', label: 'Цена за штуку', width: '90px', insert: false, table: true }, // Скрываем из формы, цена подставится сама
+        { field: 'price', label: 'Цена за шт.', width: '90px', insert: false, table: true },
+        { field: 'markup_amount', label: 'Наценка (10%)', width: '90px', insert: false, table: true }, // Новая колонка наценки
         { field: 'total', label: 'Сумма', width: '90px', insert: false, table: true },
         { field: 'description', label: 'Описание', width: '150px', insert: true, table: true },
-        { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: false, table: true }, // Скрываем из формы, бэкенд подхватит со склада
+        { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: false, table: true },
     ],
     render: (item) => {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
-        const totalSum = Number(item.total) || (price * qty);
+        // Если с бэкенда приходит готовая цена с наценкой или считаем на лету:
+        const priceWithMarkup = Number(item.price_with_markup) || (price * 1.1);
+        const markupSum = Number(item.markup_amount) ? (Number(item.markup_amount) * qty) : (price * 0.1 * qty);
+        const totalSum = Number(item.total) || (priceWithMarkup * qty);
+        
         const incomeDocText = item.income_document || item.receipt_doc || (item.receipt_id ? `Документ ID: ${item.receipt_id}` : '—');
 
         return `
@@ -1156,6 +1161,7 @@ repair_items: {
             <td>${qty}</td>
             <td>${item.unit || item.zaphasti_unit || 'шт'}</td>
             <td>${price.toFixed(2)}</td>
+            <td style="color: #2e7d32;">+${markupSum.toFixed(2)}</td>
             <td><b>${totalSum.toFixed(2)}</b></td>
             <td>${item.description || ''}</td>
             <td style="color: #000000; font-style: normal;">${incomeDocText}</td>
