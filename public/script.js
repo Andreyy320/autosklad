@@ -324,32 +324,7 @@ car_details: {
             </td>
         `
     },
-    type_rabot: {
-        title: 'Тип работ',
-        columns: [
-            { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' },
-        ],
-        render: (item) => `
-            <td><b>${item.name || ''}</b></td>
-            <td>${item.description || ''}</td>
-        `
-    },
-    works: {
-        title: 'Работы',
-        columns: [
-            { field: 'name', label: 'Наименование' },
-            { field: 'type_rabot_id', label: 'Тип работ', ref: 'type_rabot' },
-            { field: 'replacement_group_id', label: 'Группа замещения', ref: 'gryppa_zamehenia' },
-            { field: 'description', label: 'Описание' }
-        ],
-        render: (item) => `
-            <td><b>${item.name || ''}</b></td>
-            <td>${item.type_rabot_name || '—'}</td>
-            <td>${item.replacement_group_name || '—'}</td>
-            <td>${item.description || ''}</td>
-        `
-    },
+ 
     ispolnitel: {
         title: 'Исполнители',
         columns: [
@@ -3516,7 +3491,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     const columns = [...config.columns];
     
-    // Переставляем car_id (гос номер) сразу после mol_id (МОЛ)
     const carColIndex = columns.findIndex(c => c.field === 'car_id');
     const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
 
@@ -3839,6 +3813,8 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
+
+        if (isPosted) return; // Запрещаем отправку, если документ проведен
 
         if (isSubmitting) return; 
         isSubmitting = true;
@@ -7939,9 +7915,7 @@ const navMap = {
     'Тип склада': 'type_sklad',
     'Типы складов': 'type_sklad',
     'Автомобили': 'cars',
-    'Тип работ': 'type_rabot',
     'Виды работ': 'vidy_rabot',
-    'Работы': 'works',
     'Исполнители': 'ispolnitel',
     'Исполнитель': 'ispolnitel',
     'МОЛ': 'mol',
