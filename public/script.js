@@ -7546,6 +7546,12 @@ if (tableBodyForDblClick) {
             return; 
         }
 
+        // 🛑 ЖЕСТКИЙ БЛОКАТОР: Если сейчас активна детальная сущность, а главный список другой
+        if (typeof activeEntity !== 'undefined' && activeEntity && activeEntity !== currentEntity) {
+            console.log(`🛑 [DBLCLICK] Клик по строке детальной таблицы. activeEntity ("${activeEntity}") != currentEntity ("${currentEntity}"). Предотвращаем открытие формы.`);
+            return;
+        }
+
         // Жестко определяем текущую сущность
         const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
 
@@ -7578,7 +7584,7 @@ if (tableBodyForDblClick) {
         const id = tr.getAttribute('data-id');
         console.log("🆔 [DBLCLICK] ID найденной строки:", id);
 
-        // Универсальный поиск элемента с поддержкой разных вариантов ID (точно так же, как в клике)
+        // Универсальный поиск элемента с поддержкой разных вариантов ID
         const item = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
         console.log("📦 [DBLCLICK] Найденный элемент в currentItems:", item);
         
