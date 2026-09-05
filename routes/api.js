@@ -1348,6 +1348,8 @@ router.get('/repair_items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
+
 // ==================== ПОЛУЧЕНИЕ РАБОТ ДЛЯ РЕМОНТА ====================
 
 router.get('/repair_works', async (req, res) => {
@@ -1452,6 +1454,85 @@ router.get('/repair_history', async (req, res) => {
         res.status(500).send('Ошибка при получении истории ремонта автомобиля');
     }
 });
+
+
+// ==================== ИСТОРИЯ ЗАПЧАСТЕЙ ПО МАШИНЕ (по аналогии с repair_history) ====================
+router.get('/receipts_history', async (req, res) => {
+    try {
+        const { car_id } = req.query;
+
+        // 1. Получаем список ремонтов для данной машины (чтобы знать их ID)
+        const repairsQuery = `
+            SELECT r.*, rt.name as repair_type_name 
+            FROM repairs r
+            LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
+            WHERE r.car_id = $1 
+            ORDER BY r.id DESC
+        `;
+        const repairsResult = await pool.query(repairsQuery, [car_id]);
+        const repairs = repairsResult.rows;
+
+        if (repairs.length === 0) {
+            return res.json([]);
+        }
+
+        const repairIds = repairs.map(r => r.id);
+
+        // 2. Получаем запчасти из repair_items с полной информацией из zaphasti, gruppa_tsen и receipts
+        const itemsQuery = `
+            SELECT 
+                ri.id,
+                ri.repair_id,
+                ri.quantity,
+                ri.price,
+                ri.description,
+                z.article AS article,
+                z.code AS code,
+                COALESCE(z.name, ri.description, 'Запчасть') AS name,
+                COALESCE(z.unit, 'шт') AS unit,
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS sum,
+                COALESCE(
+                    CASE 
+                        WHEN rec.fact_date IS NOT NULL 
+                        THEN CONCAT(rec.doc_number, ' от ', TO_CHAR(rec.fact_date, 'DD.MM.YYYY'))
+                        ELSE rec.doc_number 
+                    END, 
+                    '—'
+                ) AS doc_source,
+                'item' AS row_type
+            FROM repair_items ri
+            LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            LEFT JOIN receipts rec ON ri.receipt_id = rec.id
+            WHERE ri.repair_id = ANY($1::int[])
+            ORDER BY ri.id DESC
+        `;
+
+        let allItems = [];
+        try {
+            const itemsRes = await pool.query(itemsQuery, [repairIds]);
+            allItems = itemsRes.rows;
+        } catch (subErr) {
+            console.warn("Ошибка при загрузке запчастей ремонта:", subErr.message);
+        }
+
+        // 3. Собираем итоговую структуру с вложенными запчастями (itemы) для каждого ремонта
+        const dataWithItems = repairs.map(repair => {
+            const repairItems = allItems.filter(item => item.repair_id === repair.id);
+            return {
+                ...repair,
+                items: repairItems
+            };
+        });
+
+        res.json(dataWithItems);
+
+    } catch (err) {
+        console.error("Ошибка в /receipts_history:", err.message);
+        res.status(500).send('Ошибка при получении истории запчастей автомобиля');
+    }
+});
+
 
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
 router.get('/stock_balances', async (req, res) => {
