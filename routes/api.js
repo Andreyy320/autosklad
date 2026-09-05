@@ -2133,16 +2133,17 @@ router.get('/car_general', async (req, res) => {
             -- 1. Запчасти из ремонтов
             SELECT 
                 COALESCE(r.doc_date, NOW()) AS operational_date,
-                COALESCE(ri.name, z.name, 'Запчасть') AS name,
+                COALESCE(z.name, ri.description, 'Запчсть') AS name,
                 ri.quantity AS qty,
-                COALESCE(ri.unit, z.unit, 'шт') AS unit,
+                COALESCE(z.unit, 'шт') AS unit,
                 ri.price AS price,
-                COALESCE(ri.total, (ri.quantity * ri.price), 0) AS sum,
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS sum,
                 ri.description,
                 CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY')) AS document
             FROM repair_items ri
             JOIN repairs r ON ri.repair_id = r.id
             LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
             LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
             WHERE r.car_id = $1
 
@@ -2151,23 +2152,23 @@ router.get('/car_general', async (req, res) => {
             -- 2. Работы из ремонтов
             SELECT 
                 COALESCE(r.doc_date, NOW()) AS operational_date,
-                COALESCE(w.name, rw.description, 'Работа') AS name,
+                COALESCE(vr.name, rw.description, 'Работа') AS name,
                 null AS qty,
                 '' AS unit,
-                rw.price AS price,
-                COALESCE(rw.price, 0) AS sum,
+                COALESCE(rw.price, vr.price, 0) AS price,
+                COALESCE(rw.price, vr.price, 0) AS sum,
                 rw.description,
-                CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY'), ' | Исполнитель: ', i.name) AS document
+                CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY'), ' | Исполнитель: ', COALESCE(i.name, '—')) AS document
             FROM repair_works rw
             JOIN repairs r ON rw.repair_id = r.id
-            LEFT JOIN works w ON rw.work_id = w.id
+            LEFT JOIN vidy_rabot vr ON rw.vidy_rabot_id = vr.id
             LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
             LEFT JOIN ispolnitel i ON rw.ispolnitel_id = i.id
             WHERE r.car_id = $1
 
             UNION ALL
 
-            -- 3. ДТП (accidents)
+            -- 3. ДТП (accidents) - оставляем без изменений
             SELECT 
                 COALESCE(ac.doc_date, ac.fact_date, ac.detected_date, NOW()) AS operational_date,
                 CONCAT('ДТП / Ущерб №', COALESCE(ac.doc_number, ac.id::text)) AS name,
