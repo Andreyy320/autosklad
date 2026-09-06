@@ -6184,28 +6184,31 @@ async function writeRepairLog(client, req, data) {
         console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
     }
 }
-// DELETE /api/repair_items/:id - удаление запчасти из ремонта с полным возвратом остатков на склад в warehouse_batches
+// DELETE /api/repair_items/:id - удаление запчасти из ремонта с правильным возвратом количества на склад
 router.delete('/repair_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[DELETE REQUEST] Удаление запчасти из ремонта (repair_items) по warehouse_batches`);
-    console.log(`[ID строки или позиции]:`, req.params.id);
+    console.log(`[DELETE REQUEST] Удаление запчасти из ремонта (repair_items)`);
+    console.log(`[ID]:`, req.params.id);
 
-    const targetId = req.params.id;
+    const itemId = req.params.id;
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Находим удаляемую позицию в repair_items
-        const itemCheck = await client.query('SELECT * FROM repair_items WHERE id = $1 FOR UPDATE', [targetId]);
+        const itemCheck = await client.query('SELECT * FROM repair_items WHERE id = $1 FOR UPDATE', [itemId]);
         if (itemCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция запчасти в ремонте не найдена.' });
         }
 
-        const targetItem = itemCheck.rows[0];
-        const repair_id = targetItem.repair_id;
-        const zaphast_id = targetItem.zaphast_id;
+        const currentItem = itemCheck.rows[0];
+        const repair_id = currentItem.repair_id;
+        const zaphast_id = currentItem.zaphast_id;
+        const quantityToReturn = Number(currentItem.quantity);
+        const receiptId = currentItem.receipt_id;
+        const itemPrice = Number(currentItem.price);
 
         // 2. Проверяем документ ремонта и его статус
         const repairCheck = await client.query('SELECT doc_number, warehouse_id, car_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', [repair_id]);
@@ -6232,76 +6235,56 @@ router.delete('/repair_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад.' });
         }
 
-        // 3. Находим ВСЕ строки запчастей для этого ремонта и этой детали (на случай, если FIFO разбило их на несколько партий)
-        const allItemsCheck = await client.query(`
-            SELECT * FROM repair_items 
-            WHERE repair_id = $1 AND zaphast_id = $2
-            FOR UPDATE;
-        `, [repair_id, zaphast_id]);
+        // 3. ВОЗВРАЩАЕМ ТОВАР НА СКЛАД (строго увеличиваем остаток партии на quantityToReturn)
+        if (receiptId && quantityToReturn > 0) {
+            const batchCheck = await client.query(`
+                SELECT id FROM warehouse_batches 
+                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                FOR UPDATE;
+            `, [warehouseId, zaphast_id, receiptId]);
 
-        const itemsToReturn = allItemsCheck.rows;
-
-        console.log(`[DELETE FIFO RETURN] Найдено строк для возврата: ${itemsToReturn.length} шт.`);
-
-        // 4. Возвращаем количество по каждой партии обратно на склад
-        for (const item of itemsToReturn) {
-            const qtyToReturn = Number(item.quantity);
-            const receiptId = item.receipt_id;
-            const itemPrice = Number(item.price);
-
-            if (receiptId && qtyToReturn > 0) {
-                const batchCheck = await client.query(`
-                    SELECT id FROM warehouse_batches 
-                    WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
-                    FOR UPDATE;
-                `, [warehouseId, zaphast_id, receiptId]);
-
-                if (batchCheck.rows.length > 0) {
-                    // Увеличиваем остаток в существующей партии
-                    await client.query(`
-                        UPDATE warehouse_batches 
-                        SET quantity = quantity + $1 
-                        WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
-                    `, [qtyToReturn, warehouseId, zaphast_id, receiptId]);
-                    console.log(` ➡️ Возвращено ${qtyToReturn} шт. в партию Receipt ID: ${receiptId}`);
-                } else {
-                    // Если партия была удалена, создаем её заново
-                    await client.query(`
-                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
-                        VALUES ($1, $2, $3, $4, $5, NOW())
-                    `, [warehouseId, zaphast_id, receiptId, itemPrice, qtyToReturn]);
-                    console.log(` ➡️ Партия не найдена, создана заново. Возвращено ${qtyToReturn} шт.`);
-                }
-            }
-
-            // Логирование удаления для каждой возвращенной позиции
-            if (typeof writeRepairLog === 'function') {
-                await writeRepairLog(client, req, {
-                    action: 'DELETE',
-                    repair_id: repair_id,
-                    document_number: documentNumber,
-                    warehouse_id: warehouseId,
-                    car_id: carId,
-                    zaphast_id: zaphast_id,
-                    quantity: qtyToReturn,
-                    price: itemPrice,
-                    total: item.total,
-                    receipt_id: receiptId,
-                    description: item.description || null
-                });
+            if (batchCheck.rows.length > 0) {
+                // Возвращаем на склад (плюсуем обратно)
+                await client.query(`
+                    UPDATE warehouse_batches 
+                    SET quantity = quantity + $1 
+                    WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                `, [quantityToReturn, warehouseId, zaphast_id, receiptId]);
+                console.log(`[WAREHOUSE RETURN] Успешно возвращено ${quantityToReturn} шт. в партию Receipt ID: ${receiptId}`);
+            } else {
+                // Если партия была удалена/архивирована — воссоздаем её
+                await client.query(`
+                    INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                `, [warehouseId, zaphast_id, receiptId, itemPrice, quantityToReturn]);
+                console.log(`[WAREHOUSE RETURN] Партия не найдена, создана заново с остатком ${quantityToReturn} шт.`);
             }
         }
 
-        // 5. Удаляем все эти строки из repair_items одним запросом
-        await client.query(`
-            DELETE FROM repair_items 
-            WHERE repair_id = $1 AND zaphast_id = $2
-        `, [repair_id, zaphast_id]);
+        // 4. Удаляем позицию из repair_items
+        await client.query('DELETE FROM repair_items WHERE id = $1', [itemId]);
+
+        // 5. Логирование
+        if (typeof writeRepairLog === 'function') {
+            await writeRepairLog(client, req, {
+                action: 'DELETE',
+                repair_id: repair_id,
+                document_number: documentNumber,
+                warehouse_id: warehouseId,
+                car_id: carId,
+                zaphast_id: zaphast_id,
+                quantity: quantityToReturn,
+                price: itemPrice,
+                total: currentItem.total,
+                receipt_id: receiptId,
+                description: currentItem.description || null
+            });
+        }
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Все строки запчасти (zaphast_id: ${zaphast_id}) удалены из ремонта, остатки полностью возвращены на склад.`);
-        return res.status(200).json({ message: 'Запчасть успешно удалена из ремонта, остатки полностью возвращены на склад' });
+        console.log(`[SUCCESS] Запчасть удалена, ${quantityToReturn} шт. корректно возвращены на склад.`);
+        return res.status(200).json({ message: 'Запчасть успешно удалена из ремонта, остаток возвращен на склад', id: itemId });
 
     } catch (err) {
         await client.query('ROLLBACK');
