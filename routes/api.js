@@ -3985,13 +3985,10 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
-
-
-
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
-        const { amount, customer_id, comment, type } = req.body; // Принимаем type с фронта
+        const { amount, customer_id, comment, sklad_id } = req.body; // Принимаем sklad_id вместо type/repair
 
         if (!docId || isNaN(docId)) {
             return res.status(400).json({ error: 'Некорректный ID документа' });
@@ -4004,37 +4001,26 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
 
         let customerId = null;
         let realizationId = null;
-        let repairId = null;
+        let skladIdParam = sklad_id ? parseInt(sklad_id) : null;
 
-        // Строгая проверка по типу, который пришел с фронтенда, чтобы ID не пересекались
-        if (type === 'repair') {
-            const repairCheck = await pool.query(
-                `SELECT id FROM repairs WHERE id = $1`,
-                [docId]
-            );
+        // Проверяем документ реализации
+        const realizationCheck = await pool.query(
+            `SELECT id, customer_id, sklad_id FROM realizations WHERE id = $1`,
+            [docId]
+        );
 
-            if (repairCheck.rows.length === 0) {
-                return res.status(404).json({ error: 'Документ ремонта не найден' });
-            }
+        if (realizationCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Документ реализации не найден' });
+        }
 
-            repairId = docId;
-            customerId = null;
-        } else {
-            const realizationCheck = await pool.query(
-                `SELECT id, customer_id FROM realizations WHERE id = $1`,
-                [docId]
-            );
-
-            if (realizationCheck.rows.length === 0) {
-                return res.status(404).json({ error: 'Документ реализации не найден' });
-            }
-
-            realizationId = docId;
-            customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
+        realizationId = docId;
+        customerId = customer_id ? parseInt(customer_id) : realizationCheck.rows[0].customer_id;
+        if (!skladIdParam) {
+            skladIdParam = realizationCheck.rows[0].sklad_id;
         }
 
         const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, repair_id, amount, comment)
+            INSERT INTO customer_payments (customer_id, realization_id, sklad_id, amount, comment)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
@@ -4042,9 +4028,9 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         const values = [
             customerId, 
             realizationId, 
-            repairId,
+            skladIdParam,
             paymentAmount, 
-            comment || (repairId ? 'Оплата по ремонту' : 'Оплата по реализации')
+            comment || 'Оплата по документу'
         ];
 
         const result = await pool.query(insertQuery, values);
@@ -4062,7 +4048,7 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
 });
 
 
-// GET-эндпоинт для получения истории оплат (работает и для реализаций, и для ремонтов, подтягивая имя или машину)
+// GET-эндпоинт для получения истории оплат (с поддержкой складов-должников)
 router.get('/money_receipts/:id/payments', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
@@ -4076,22 +4062,16 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
                 cp.id,
                 cp.customer_id,
                 cp.realization_id,
-                cp.repair_id,
+                cp.sklad_id,
                 cp.date,
                 cp.amount,
                 cp.comment,
-                COALESCE(r.doc_number, rep.doc_number::text) AS doc_number,
-                CASE 
-                    WHEN cp.realization_id IS NOT NULL THEN COALESCE(c.name_full, c.name_short, 'Розничный покупатель')
-                    WHEN cp.repair_id IS NOT NULL THEN CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')
-                    ELSE '—'
-                END AS counterparty_name
+                r.doc_number AS doc_number,
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty_name
             FROM customer_payments cp
             LEFT JOIN realizations r ON cp.realization_id = r.id
             LEFT JOIN customers c ON r.customer_id = c.id
-            LEFT JOIN repairs rep ON cp.repair_id = rep.id
-            LEFT JOIN cars car ON rep.car_id = car.id
-            WHERE cp.realization_id = $1 OR cp.repair_id = $1
+            WHERE cp.realization_id = $1
             ORDER BY cp.date DESC, cp.id DESC;
         `;
 
@@ -4103,8 +4083,6 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 // 1. Расходы по складам (уровень 1)
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
