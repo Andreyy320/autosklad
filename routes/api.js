@@ -3745,63 +3745,45 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
+                -- 2. Перемещения (склад-источник фиксирует долг склада-получателя на сумму с наценкой total_rub)
                 SELECT 
-                    rep.id AS id,
-                    rep.id AS realization_id,
-                    CONCAT('', rep.doc_number)::text AS doc_number,
-                    rep.doc_date AS date,
+                    m.id AS id,
+                    m.id AS realization_id,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
+                    m.doc_date AS date,
                     NULL::integer AS customer_id,
-                    CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
-                    sk.name::text AS sklad_name,
+                    CONCAT('Склад-получатель: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    sk_from.name::text AS sklad_name,
                     1 AS total_orders,
-                    COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
-                    COALESCE(rep_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    COALESCE(m_items.total_qty, 0)::numeric AS parts_qty,
+                    COALESCE(m_items.total_purchase_sum, 0)::numeric AS total_purchase_sum,
                     0::numeric AS total_retail_sum,
-                    COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
-                    COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS parts_sum,
+                    0::numeric AS works_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
+                    0::numeric AS total_paid,
                     
-                    -- Итоговая сумма ремонта = Запчасти + Работы
-                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
+                    -- Чистая прибыль по перемещению (сумма продажи с наценкой минус себестоимость)
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
                     
-                    COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
-                    
-                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
-                    ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
-                    
-                    -- Плюс запчасти = Продажа запчастей минус их закупка
-                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
-                    
-                    -- Услуги = Сумма работ по ремонту
-                    COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
-                FROM repairs rep
-                LEFT JOIN cars car ON rep.car_id = car.id
-                LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS parts_profit,
+                    0::numeric AS works_profit
+                FROM moves m
+                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
+                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
                 LEFT JOIN (
                     SELECT 
-                        ri.repair_id,
-                        SUM(ri.quantity) AS parts_qty,
-                        0 AS total_purchase_sum,
-                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
-                    FROM repair_items ri
-                    GROUP BY ri.repair_id
-                ) rep_i ON rep.id = rep_i.repair_id
-                LEFT JOIN (
-                    SELECT 
-                        rw.repair_id,
-                        SUM(COALESCE(rw.price, 0)) AS works_sum
-                    FROM repair_works rw
-                    GROUP BY rw.repair_id
-                ) rep_w ON rep.id = rep_w.repair_id
-                LEFT JOIN (
-                    SELECT cp.repair_id, SUM(cp.amount) AS paid_sum
-                    FROM customer_payments cp
-                    GROUP BY cp.repair_id
-                ) rep_p ON rep.id = rep_p.repair_id
-                WHERE rep.is_posted = true
-                  AND ($1::integer IS NULL OR rep.warehouse_id = $1)
-                  AND ($2::date IS NULL OR rep.doc_date::date >= $2::date)
-                  AND ($3::date IS NULL OR rep.doc_date::date <= $3::date)
+                        move_id, 
+                        SUM(quantity) AS total_qty, 
+                        SUM(COALESCE(purchase_price, 0) * quantity) AS total_purchase_sum,
+                        SUM(total_rub) AS total_sum
+                    FROM move_items
+                    GROUP BY move_id
+                ) m_items ON m.id = m_items.move_id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+                  AND ($2::date IS NULL OR m.doc_date::date >= $2::date)
+                  AND ($3::date IS NULL OR m.doc_date::date <= $3::date)
             )
             SELECT 
                 id,
