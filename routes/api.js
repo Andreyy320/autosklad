@@ -3777,7 +3777,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
+                -- 2. Внутренние ремонты автомобилей (ТОЛЬКО РАБОТЫ/УСЛУГИ, запчасти исключены)
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3787,37 +3787,28 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
-                    COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
-                    COALESCE(rep_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS parts_qty,
+                    0::numeric AS total_purchase_sum,
                     0::numeric AS total_retail_sum,
-                    COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
+                    0::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     
-                    -- Итоговая сумма ремонта = Запчасти + Работы
-                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
+                    -- Итоговая сумма ремонта = Только работы
+                    COALESCE(rep_w.works_sum, 0)::numeric AS total_realization_sum,
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
-                    ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
+                    -- Полная чистая прибыль ремонта = Работы
+                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
                     
-                    -- Плюс запчасти = Продажа запчастей минус их закупка
-                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    -- Плюс запчасти = 0
+                    0::numeric AS parts_profit,
                     
                     -- Услуги = Сумма работ по ремонту
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
                 LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
-                LEFT JOIN (
-                    SELECT 
-                        ri.repair_id,
-                        SUM(ri.quantity) AS parts_qty,
-                        0 AS total_purchase_sum,
-                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
-                    FROM repair_items ri
-                    GROUP BY ri.repair_id
-                ) rep_i ON rep.id = rep_i.repair_id
                 LEFT JOIN (
                     SELECT 
                         rw.repair_id,
@@ -3834,41 +3825,6 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($1::integer IS NULL OR rep.warehouse_id = $1)
                   AND ($2::date IS NULL OR rep.doc_date::date >= $2::date)
                   AND ($3::date IS NULL OR rep.doc_date::date <= $3::date)
-
-                UNION ALL
-
-                -- 3. Документы перемещения (для центрального склада-источника)
-                SELECT 
-                    m.id AS id,
-                    m.id AS realization_id,
-                    m.doc_number::text AS doc_number,
-                    m.date AS date,
-                    NULL::integer AS customer_id,
-                    CONCAT('Перемещение на склад: ', COALESCE(sk_to.name, 'Склад'))::text AS counterparty_name,
-                    sk_from.name::text AS sklad_name,
-                    1 AS total_orders,
-                    COALESCE(m_sub.total_qty, 0)::numeric AS parts_qty,
-                    COALESCE(m_sub.total_sum, 0)::numeric AS total_purchase_sum,
-                    0::numeric AS total_retail_sum,
-                    COALESCE(m_sub.total_sum, 0)::numeric AS parts_sum,
-                    0::numeric AS works_sum,
-                    COALESCE(m_sub.total_sum, 0)::numeric AS total_realization_sum,
-                    0::numeric AS total_paid,
-                    COALESCE(m_sub.total_sum, 0)::numeric AS full_net_profit,
-                    0::numeric AS parts_profit,
-                    0::numeric AS works_profit
-                FROM moves m
-                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
-                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
-                LEFT JOIN (
-                    SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
-                    FROM move_items
-                    GROUP BY move_id
-                ) m_sub ON m.id = m_sub.move_id
-                WHERE m.is_posted = true
-                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
-                  AND ($2::date IS NULL OR m.date::date >= $2::date)
-                  AND ($3::date IS NULL OR m.date::date <= $3::date)
             )
             SELECT 
                 id,
@@ -3903,6 +3859,7 @@ router.get('/money_receipts', async (req, res) => {
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
         const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
 
+        // Считаем общие итоги за выбранный период для фронтенда
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -3912,6 +3869,7 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
+        // Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
@@ -3958,7 +3916,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 total_rub,
                 description
             FROM (
-                /* 1. Запчасти обычных реализаций */
+                -- 1. Запчасти обычных реализаций
                 SELECT 
                     ri.id,
                     'part' AS item_type,
@@ -3974,7 +3932,6 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.description, '')::text AS description,
                     real.id AS rel_id,
                     NULL::integer AS rep_id,
-                    NULL::integer AS move_id,
                     real.customer_id AS cust_id,
                     real.sklad_id AS skl_id
                 FROM realization_items ri
@@ -3983,7 +3940,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                /* 2. Работы обычных реализаций */
+                -- 2. Работы обычных реализаций
                 SELECT 
                     rw.id,
                     'work' AS item_type,
@@ -3999,7 +3956,6 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(rw.description, '')::text AS description,
                     real.id AS rel_id,
                     NULL::integer AS rep_id,
-                    NULL::integer AS move_id,
                     real.customer_id AS cust_id,
                     real.sklad_id AS skl_id
                 FROM realization_works rw
@@ -4008,7 +3964,32 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                /* 3. ТОЛЬКО Работы внутренних ремонтов (repair_works) — запчасти исключены, так как они идут через перемещения на склад */
+                -- 3. Запчасти внутренних ремонтов (repair_items + zaphasti)
+                SELECT 
+                    rep_i.id,
+                    'part' AS item_type,
+                    CONCAT('', rep.doc_number)::text AS doc_number,
+                    rep.doc_date AS date,
+                    COALESCE(NULLIF(rep_i.code, ''), NULLIF(z.code, ''), NULLIF(rep_i.article, ''), NULLIF(z.article, ''), '')::text AS product_code,
+                    COALESCE(NULLIF(rep_i.name, ''), NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
+                    COALESCE(rep_i.quantity, 0)::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(rep_i.price, 0)::numeric AS final_unit_price,
+                    COALESCE(rep_i.total, rep_i.price * rep_i.quantity, 0)::numeric AS total_rub,
+                    COALESCE(rep_i.description, '')::text AS description,
+                    NULL::integer AS rel_id,
+                    rep.id AS rep_id,
+                    NULL::integer AS cust_id,
+                    rep.warehouse_id AS skl_id
+                FROM repair_items rep_i
+                JOIN repairs rep ON rep_i.repair_id = rep.id
+                LEFT JOIN zaphasti z ON rep_i.zaphast_id = z.id
+                WHERE rep.is_posted = true
+
+                UNION ALL
+
+                -- 4. Работы внутренних ремонтов (repair_works)
                 SELECT 
                     rep_w.id,
                     'work' AS item_type,
@@ -4024,45 +4005,19 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(rep_w.description, '')::text AS description,
                     NULL::integer AS rel_id,
                     rep.id AS rep_id,
-                    NULL::integer AS move_id,
                     NULL::integer AS cust_id,
                     rep.warehouse_id AS skl_id
                 FROM repair_works rep_w
                 JOIN repairs rep ON rep_w.repair_id = rep.id
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
-
-                UNION ALL
-
-                /* 4. Документы перемещения (долг складов перед центральным за перекинутые товары) */
-                SELECT 
-                    m_item.id,
-                    'part' AS item_type,
-                    m.doc_number::text AS doc_number,
-                    m.date AS date,
-                    COALESCE(m_item.code, '')::text AS product_code,
-                    COALESCE(m_item.name, 'Товар')::text AS item_name,
-                    COALESCE(m_item.quantity, 0)::numeric AS quantity,
-                    0::numeric AS purchase_price,
-                    0::numeric AS retail_price,
-                    COALESCE(m_item.price, 0)::numeric AS final_unit_price,
-                    COALESCE(m_item.total_rub, m_item.price * m_item.quantity, 0)::numeric AS total_rub,
-                    COALESCE(m_item.description, '')::text AS description,
-                    NULL::integer AS rel_id,
-                    NULL::integer AS rep_id,
-                    m.id AS move_id,
-                    NULL::integer AS cust_id,
-                    m.warehouse_from_id AS skl_id
-                FROM move_items m_item
-                JOIN moves m ON m_item.move_id = m.id
-                WHERE m.is_posted = true
             ) sub
             WHERE 
-                /* Если передан конкретный realization_id, то берем ТОЛЬКО его реализации */
-                ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL AND sub.move_id IS NULL))
-                /* Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты (услуги) */
-                AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL AND sub.move_id IS NULL))
-                /* Фильтры по клиенту и складу работают для общих выборок */
+                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
+                ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
+                -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
+                AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
+                -- Фильтры по клиенту и складу работают для общих выборок
                 AND ($3::integer IS NULL OR sub.cust_id = $3)
                 AND ($4::integer IS NULL OR sub.skl_id = $4)
             ORDER BY date DESC, id ASC;
@@ -4200,8 +4155,6 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 
 
 // 1. Расходы по складам (уровень 1)
