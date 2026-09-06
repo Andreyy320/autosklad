@@ -4053,6 +4053,30 @@ router.get('/money_receipts_detail', async (req, res) => {
                 JOIN repairs rep ON rep_w.repair_id = rep.id
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
+
+                UNION ALL
+
+                /* 5. Документы перемещения (для склада-источника) */
+                SELECT 
+                    m_item.id,
+                    'part' AS item_type,
+                    m.doc_number::text AS doc_number,
+                    m.date AS date,
+                    COALESCE(m_item.code, '')::text AS product_code,
+                    COALESCE(m_item.name, 'Товар')::text AS item_name,
+                    COALESCE(m_item.quantity, 0)::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(m_item.price, 0)::numeric AS final_unit_price,
+                    COALESCE(m_item.total_rub, m_item.price * m_item.quantity, 0)::numeric AS total_rub,
+                    COALESCE(m_item.description, '')::text AS description,
+                    NULL::integer AS rel_id,
+                    NULL::integer AS rep_id,
+                    NULL::integer AS cust_id,
+                    m.warehouse_from_id AS skl_id
+                FROM move_items m_item
+                JOIN moves m ON m_item.move_id = m.id
+                WHERE m.is_posted = true
             ) sub
             WHERE 
                 /* Если передан конкретный realization_id, то берем ТОЛЬКО его реализации */
