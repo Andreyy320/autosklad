@@ -6658,7 +6658,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
     const config = getConfig('money_receipts_detail');
-    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти, Услуги и Перемещения)";
+    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
 
     if (detailHeaderTr && config && config.columns) {
         detailHeaderTr.innerHTML = config.columns.map(col => {
@@ -6682,7 +6682,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 
         if (!detailBody) return;
         if (items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет элементов в выбранном документе</td></tr>`;
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
 
@@ -6692,9 +6692,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             
             if (item.item_type === 'work' || item.is_work) {
                 tr.style.backgroundColor = '#f8fafc';
-            } else if (item.doc_number && item.doc_number.toString().startsWith('П')) {
-                // Подсветка для перемещений (если нужно визуально выделить)
-                tr.style.backgroundColor = '#fdfbf7';
             }
             
             tr.innerHTML = config.render(item);
@@ -6707,6 +6704,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
     }
 }
+
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
