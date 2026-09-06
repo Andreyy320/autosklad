@@ -6101,6 +6101,7 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
+    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
     console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
@@ -6173,6 +6174,7 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
 }
 
 function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
+    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
     console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
@@ -6208,6 +6210,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
 
 async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
+    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
     
     const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
     const commentVal = document.getElementById('payment-comment').value;
