@@ -3899,7 +3899,6 @@ router.get('/money_receipts', async (req, res) => {
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
-        console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
         let { realization_id, repair_id, customer_id, sklad_id } = req.query;
         
         const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? realization_id : null;
@@ -3907,15 +3906,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
         const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
 
-        console.log('🧹 [/api/money_receipts_detail] Очищенные параметры:', {
-            cleanRealizationId,
-            cleanRepairId,
-            cleanCustomerId,
-            cleanSkladId
-        });
-
         if (!cleanRealizationId && !cleanRepairId && !cleanCustomerId && !cleanSkladId) {
-            console.log('⚠️ [/api/money_receipts_detail] Все ключевые параметры пусты. Возвращаем пустой массив.');
             return res.json([]);
         }
 
@@ -4041,30 +4032,17 @@ router.get('/money_receipts_detail', async (req, res) => {
             ORDER BY date DESC, id ASC;
         `;
 
-        const queryParams = [
+        const result = await pool.query(cleanQuery, [
             cleanRealizationId, 
             cleanRepairId, 
             cleanCustomerId, 
             cleanSkladId
-        ];
-
-        console.log('⚡ [/api/money_receipts_detail] Выполняем SQL-запрос с параметрами:', queryParams);
-        const result = await pool.query(cleanQuery, queryParams);
+        ]);
         
-        console.log(`✅ [/api/money_receipts_detail] Успешно получено строк: ${result.rowCount}`);
         res.json(result.rows);
-
     } catch (err) {
-        console.error('❌ [/api/money_receipts_detail] ОШИБКА в обработчике:', err);
-        console.error('📄 Сообщение ошибки (err.message):', err.message);
-        console.error('🧩 Стек ошибки (err.stack):', err.stack);
-        
-        -- Возвращаем детали ошибки клиенту в поле details, чтобы сразу видеть на фронте или в консоли
-        res.status(500).json({ 
-            error: 'Ошибка сервера', 
-            details: err.message,
-            stack: err.stack 
-        });
+        console.error('❌ Ошибка при получении объединенной спецификации деталей:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
