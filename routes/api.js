@@ -3777,7 +3777,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Внутренние ремонты автомобилей (ТОЛЬКО РАБОТЫ/УСЛУГИ, запчасти исключены)
+                -- 2. Внутренние ремонты автомобилей (привязаны к машине, а не к покупателю)
                 SELECT 
                     rep.id AS id,
                     rep.id AS realization_id,
@@ -3787,28 +3787,37 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('Ремонт а/м (Гос. номер: ', COALESCE(car.gos_number, 'б/н'), ')')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
-                    0::numeric AS parts_qty,
-                    0::numeric AS total_purchase_sum,
+                    COALESCE(rep_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(rep_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
                     0::numeric AS total_retail_sum,
-                    0::numeric AS parts_sum,
+                    COALESCE(rep_i.parts_sum, 0)::numeric AS parts_sum,
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_sum,
                     
-                    -- Итоговая сумма ремонта = Только работы
-                    COALESCE(rep_w.works_sum, 0)::numeric AS total_realization_sum,
+                    -- Итоговая сумма ремонта = Запчасти + Работы
+                    (COALESCE(rep_i.parts_sum, 0) + COALESCE(rep_w.works_sum, 0))::numeric AS total_realization_sum,
                     
                     COALESCE(rep_p.paid_sum, 0)::numeric AS total_paid, 
                     
-                    -- Полная чистая прибыль ремонта = Работы
-                    COALESCE(rep_w.works_sum, 0)::numeric AS full_net_profit, 
+                    -- Полная чистая прибыль ремонта: (продажа запчастей - закупка запчастей) + работы
+                    ((COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0)) + COALESCE(rep_w.works_sum, 0))::numeric AS full_net_profit, 
                     
-                    -- Плюс запчасти = 0
-                    0::numeric AS parts_profit,
+                    -- Плюс запчасти = Продажа запчастей минус их закупка
+                    (COALESCE(rep_i.parts_sum, 0) - COALESCE(rep_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     
                     -- Услуги = Сумма работ по ремонту
                     COALESCE(rep_w.works_sum, 0)::numeric AS works_profit
                 FROM repairs rep
                 LEFT JOIN cars car ON rep.car_id = car.id
                 LEFT JOIN skladi sk ON rep.warehouse_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.repair_id,
+                        SUM(ri.quantity) AS parts_qty,
+                        0 AS total_purchase_sum,
+                        SUM(COALESCE(ri.total, ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM repair_items ri
+                    GROUP BY ri.repair_id
+                ) rep_i ON rep.id = rep_i.repair_id
                 LEFT JOIN (
                     SELECT 
                         rw.repair_id,
