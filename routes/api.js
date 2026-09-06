@@ -6197,7 +6197,7 @@ router.delete('/repair_items/:id', async (req, res) => {
 
         const currentItem = itemCheck.rows[0];
         const repair_id = currentItem.repair_id;
-        const zaphast_id = currentItem.zaphast_id;
+        const zaphast_id = currentItem.zaphast_id; // В repair_items колонка может называться zaphast_id
         const quantityToReturn = Number(currentItem.quantity);
         const receiptId = currentItem.receipt_id;
         const itemPrice = Number(currentItem.price);
@@ -6228,9 +6228,9 @@ router.delete('/repair_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад.' });
         }
 
-        // 4. Возвращаем количество запчасти обратно на склад в таблицу warehouse_batches
+        // 4. Возвращаем количество запчасти обратно на склад в таблицу warehouse_batches (учитывая zaphasti_id и price_rub)
         if (receiptId) {
-            // Проверяем, существует ли уже такая партия на складе
+            // Проверяем, существует ли уже такая партия на складе по правильным колонкам таблицы warehouse_batches
             const batchCheck = await client.query(`
                 SELECT id FROM warehouse_batches 
                 WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
@@ -6238,7 +6238,7 @@ router.delete('/repair_items/:id', async (req, res) => {
             `, [warehouseId, zaphast_id, receiptId]);
 
             if (batchCheck.rows.length > 0) {
-                // Если партия есть — просто увеличиваем остаток
+                // Если партия есть — увеличиваем остаток
                 await client.query(`
                     UPDATE warehouse_batches 
                     SET quantity = quantity + $1 
@@ -6246,7 +6246,7 @@ router.delete('/repair_items/:id', async (req, res) => {
                 `, [quantityToReturn, warehouseId, zaphast_id, receiptId]);
                 console.log(`[WAREHOUSE RETURN] Возвращено ${quantityToReturn} шт. в существующую партию Receipt ID: ${receiptId}`);
             } else {
-                // Если партия по какой-то причине была удалена, восстанавливаем её
+                // Если партии нет — создаем заново, используя точные имена колонок (zaphasti_id, price_rub)
                 await client.query(`
                     INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
                     VALUES ($1, $2, $3, $4, $5, NOW())
