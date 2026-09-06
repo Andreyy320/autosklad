@@ -6100,6 +6100,8 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
+
+
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
     console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
