@@ -1121,7 +1121,6 @@ repair_items: {
         { field: 'quantity', label: 'Кол-во', width: '80px', insert: true, table: true },
         { field: 'unit', label: 'Ед. изм', width: '70px', insert: false, table: true },
         { field: 'price', label: 'Цена за шт.', width: '90px', insert: false, table: true },
-        { field: 'markup_amount', label: 'Наценка', width: '90px', insert: false, table: true }, // Убрали жесткое "(10%)"
         { field: 'total', label: 'Сумма', width: '90px', insert: false, table: true },
         { field: 'description', label: 'Описание', width: '150px', insert: true, table: true },
         { field: 'receipt_id', label: 'Документ прихода', width: '150px', ref: 'receipts', insert: false, table: true },
@@ -1130,10 +1129,8 @@ repair_items: {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
         
-        // Берем данные, которые приходят с бэкенда из динамической группы цен (с фоллбеком на старые расчеты на всякий случай)
-        const markupAmountOne = Number(item.markup_amount) || (price * ((Number(item.markup_percent) || 10) / 100));
-        const totalMarkupSum = markupAmountOne * qty;
-        const totalSum = Number(item.total) || ((price + markupAmountOne) * qty);
+        // Считаем общую сумму по чистой цене (себестоимости) без всяких наценок
+        const totalSum = Number(item.total) || (price * qty);
         
         const incomeDocText = item.income_document || item.receipt_doc || (item.receipt_id ? `Документ ID: ${item.receipt_id}` : '—');
 
@@ -1144,14 +1141,12 @@ repair_items: {
             <td>${qty}</td>
             <td>${item.unit || item.zaphasti_unit || 'шт'}</td>
             <td>${price.toFixed(2)}</td>
-            <td style="color:rgb(15, 23, 15);">+${totalMarkupSum.toFixed(2)}</td>
             <td><b>${totalSum.toFixed(2)}</b></td>
             <td>${item.description || ''}</td>
             <td style="color: #000000; font-style: normal;">${incomeDocText}</td>
         `;
     }
 },
-
 repair_works: {
     title: 'Выполненные работы',
     columns: [
