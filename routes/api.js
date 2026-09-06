@@ -3719,7 +3719,7 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         ri.realization_id, 
                         SUM(ri.quantity) AS parts_qty, 
-                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.price, 0) * ri.quantity) AS total_purchase_sum,
                         SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
                         SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
                     FROM realization_items ri
@@ -3775,7 +3775,7 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         move_id, 
                         SUM(quantity) AS total_qty, 
-                        SUM(COALESCE(purchase_price, 0) * quantity) AS total_purchase_sum,
+                        SUM(COALESCE(price, 0) * quantity) AS total_purchase_sum,
                         SUM(total_rub) AS total_sum
                     FROM move_items
                     GROUP BY move_id
