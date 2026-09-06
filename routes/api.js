@@ -4043,15 +4043,16 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             // --- ЭТО ПЕРЕМЕЩЕНИЕ МЕЖДУ СКЛАДАМИ ---
             const moveData = moveCheck.rows[0];
 
-            // Пишем в созданную тобой новую таблицу для складов
-            // warehouse_from_id — кому должны (источник), warehouse_to_id — кто должен (получатель)
+            // Сохраняем платеж с жесткой привязкой к move_id, 
+            // чтобы оплата относилась именно к этому конкретному перемещению (ПЕРЕМЕЩЕНИЕ-26)
             const insertMoveQuery = `
-                INSERT INTO warehouse_debt_payments (warehouse_from_id, warehouse_to_id, amount, comment)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING *;
             `;
 
             const result = await pool.query(insertMoveQuery, [
+                docId,
                 moveData.warehouse_from_id,
                 moveData.warehouse_to_id,
                 paymentAmount,
@@ -4120,24 +4121,20 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
 
         if (moveCheck.rows.length > 0) {
             // --- ИСТОРИЯ ДЛЯ ПЕРЕМЕЩЕНИЯ МЕЖДУ СКЛАДАМИ ---
-            // Вытаскиваем платежи из новой таблицы по складам, где участвует это перемещение 
-            // (или можно привязать по складам-участникам, либо если у тебя в таблице складов есть поле move_id, 
-            // но для универсальности выведем по направлениям или между этими двумя складами)
-            const moveData = moveCheck.rows[0];
             const query = `
                 SELECT 
                     wdp.id,
                     wdp.amount,
                     wdp.date,
                     wdp.comment,
-                    CONCAT('ПЕРЕМЕЩЕНИЕ-', $1) AS doc_number,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', wdp.move_id) AS doc_number,
                     CONCAT('Склад-получатель: ', sk_to.name) AS counterparty_name
                 FROM warehouse_debt_payments wdp
                 LEFT JOIN skladi sk_to ON wdp.warehouse_to_id = sk_to.id
-                WHERE wdp.warehouse_from_id = $2 AND wdp.warehouse_to_id = $3
+                WHERE wdp.move_id = $1
                 ORDER BY wdp.date DESC, wdp.id DESC;
             `;
-            const result = await pool.query(query, [docId, moveData.warehouse_from_id, moveData.warehouse_to_id]);
+            const result = await pool.query(query, [docId]);
             return res.json(result.rows);
         }
 
