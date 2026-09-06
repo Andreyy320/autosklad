@@ -5220,11 +5220,11 @@ router.post('/move_items', async (req, res) => {
 
             console.log(`      ✅ На склад-получатель (ID: ${warehouseToId}) добавлено ${takeQty} шт. по цене ${priceWithMarkup} руб.`);
 
-            // Записываем саму позицию в move_items документа перемещения
+            // Записываем саму позицию в move_items документа перемещения (включая markup_percent)
             const insertItemQuery = `
                 INSERT INTO "move_items" 
-                ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "description", "move_id", "income_document_id") 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                ("zaphasti_id", "price", "currency", "quantity", "price_rub", "total_rub", "markup_percent", "description", "move_id", "income_document_id") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
                 RETURNING *;
             `;
             const itemValues = [
@@ -5234,6 +5234,7 @@ router.post('/move_items', async (req, res) => {
                 takeQty, 
                 priceWithMarkup, 
                 totalRub, 
+                markupPercent, // <-- Добавлено сохранение процента наценки в базу
                 description || null, 
                 move_id, 
                 batch.receipt_id 
@@ -5256,6 +5257,7 @@ router.post('/move_items', async (req, res) => {
                     currency: curr,
                     price_rub: priceWithMarkup,
                     total_rub: totalRub,
+                    markup_percent: markupPercent, // <-- Передаем наценку в лог тоже
                     income_document_id: batch.receipt_id,
                     description: description || 'Перемещение позиции с наценкой'
                 });
@@ -5290,7 +5292,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 // PUT /api/move_items/:id - редактирование позиции перемещения с использованием таблицы warehouse_batches и учетом наценки
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
