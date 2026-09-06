@@ -3987,7 +3987,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     'part' AS item_type,
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
-                    COALESCE(mi.code, '')::text AS product_code,
+                    ''::text AS product_code,
                     COALESCE(mi.name, 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
                     COALESCE(mi.price, 0)::numeric AS purchase_price,
