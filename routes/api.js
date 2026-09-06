@@ -3608,46 +3608,76 @@ router.delete('/realization_works/:id', async (req, res) => {
 });
 
 
-// GET /api/money_receipts_by_sklad - аналитика долгов по складам-должникам (перемещения с наценкой)
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
-            WITH debtor_moves AS (
-                -- Учитываем только перемещения, где склад-получатель является должником (например, partner = true или ваш признак склада-должника)
-                -- Считаем общую сумму перемещения с учетом наценки (total_rub)
+            WITH combined_docs AS (
+                -- 1. Обычные продажи из realizations
+                SELECT 
+                    real.id,
+                    real.sklad_id,
+                    COALESCE(sub_i.total_qty, 0) AS total_qty,
+                    COALESCE(sub_i.parts_sum, 0) AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0) AS works_sum,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
+                    COALESCE(sub_p.paid_sum, 0) AS paid_sum
+                FROM realizations real
+                LEFT JOIN (
+                    SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM realization_items ri
+                    GROUP BY ri.realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT rw.realization_id, SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
+                    FROM realization_works rw
+                    GROUP BY rw.realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+
+                UNION ALL
+
+                -- 2. Перемещения (склад-источник фиксирует долг склада-получателя на сумму с наценкой total_rub)
                 SELECT 
                     m.id,
-                    m.warehouse_to_id AS sklad_id, -- Склад, который нам должен (получатель)
+                    m.warehouse_from_id AS sklad_id,
                     COALESCE(m_items.total_qty, 0) AS total_qty,
-                    COALESCE(m_items.total_sum, 0) AS total_sum
+                    COALESCE(m_items.total_sum, 0) AS parts_sum,
+                    0 AS works_sum,
+                    COALESCE(m_items.total_sum, 0) AS total_sum,
+                    0 AS paid_sum
                 FROM moves m
-                JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
                 LEFT JOIN (
                     SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
                     FROM move_items
                     GROUP BY move_id
                 ) m_items ON m.id = m_items.move_id
-                WHERE m.is_posted = true 
-                  AND sk_to.is_debtor = true -- Фильтр складов-должников (при необходимости замените условие под вашу колонку, например partner = true)
+                WHERE m.is_posted = true
             )
             SELECT 
                 sk.id AS id,
                 sk.id AS sklad_id,
-                COALESCE(sk.name, 'Склад')::text AS sklad_name,
+                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
                 COUNT(DISTINCT doc.id)::integer AS total_orders,
                 COALESCE(SUM(doc.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(doc.parts_sum), 0)::numeric AS parts_sum,
+                COALESCE(SUM(doc.works_sum), 0)::numeric AS works_sum,
                 COALESCE(SUM(doc.total_sum), 0)::numeric AS total_realization_sum,
-                -- Если у складов-должников появятся отдельные таблицы оплат, их можно вычесть здесь через LEFT JOIN, пока долг равен сумме перемещений
-                COALESCE(SUM(doc.total_sum), 0)::numeric AS debt_sum
+                COALESCE(SUM(doc.paid_sum), 0)::numeric AS total_paid,
+                COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0)::numeric AS debt_sum
             FROM skladi sk
-            JOIN debtor_moves doc ON doc.sklad_id = sk.id
-            GROUP BY sk.id, sk.name
-            ORDER BY debt_sum DESC;
+            JOIN combined_docs doc ON doc.sklad_id = sk.id
+            WHERE sk.id = 1 -- Замените 1 на реальный ID вашего центрального склада, если он отличается
+            GROUP BY sk.id, sk.name;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        console.error('Ошибка получения аналитики по складам-должникам:', err);
+        console.error('Ошибка получения аналитики по складам:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
