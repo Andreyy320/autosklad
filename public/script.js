@@ -6100,8 +6100,8 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
-async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
-    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", isRepair =`, isRepair);
+async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
+    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
     
@@ -6115,7 +6115,7 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
     openDrawer();
 
     try {
-        const targetUrl = `/api/money_receipts/${docId}/payments?isRepair=${isRepair}`;
+        const targetUrl = `/api/money_receipts/${docId}/payments?sklad_id=${skladId}`;
         console.log(`[HISTORY LOG] Запрос истории по адресу: ${targetUrl}`);
 
         let response = await fetch(targetUrl);
@@ -6172,8 +6172,8 @@ async function openIncomePaymentHistory(docId, docNumber, isRepair = false) {
     }
 }
 
-function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
-    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", isRepair =`, isRepair);
+function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
+    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
     
@@ -6183,7 +6183,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
-        <form id="pay-form" onsubmit="submitIncomePayment(event, '${docId}', ${isRepair})" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitIncomePayment(event, '${docId}', '${skladId}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
                 <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
@@ -6206,23 +6206,21 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, isRepair = false) {
     openDrawer();
 }
 
-async function submitIncomePayment(event, docId, isRepair) {
+async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
     
     const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
     const commentVal = document.getElementById('payment-comment').value;
-    const docType = isRepair ? 'repair' : 'realization';
 
     const payload = {
         amount: parsedAmount,
         comment: commentVal,
-        type: docType
+        sklad_id: skladId || window.currentSkladId
     };
 
     console.log(`[SUBMIT LOG] Отправка платежа:`, {
         url: `/api/money_receipts/${docId}/pay`,
         docId: docId,
-        isRepairFlag: isRepair,
         payloadToSend: payload
     });
 
@@ -6240,7 +6238,12 @@ async function submitIncomePayment(event, docId, isRepair) {
             console.log(`[SUBMIT LOG SUCCESS] Сервер успешно зафиксировал платеж:`, resData);
             closeDrawer();
             showAppNotification('Платёж успешно сохранен', 'success');
-            if (typeof loadTableData === 'function') loadTableData();
+            
+            if (typeof applyReceiptsFilters === 'function') {
+                applyReceiptsFilters();
+            } else if (window.currentSkladId) {
+                loadReceiptMainData('money_receipts', window.currentSkladId);
+            }
         } else {
             const errData = await response.json().catch(() => ({}));
             console.warn(`[SUBMIT LOG ERROR] Сервер вернул ошибку:`, errData);
