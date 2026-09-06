@@ -3846,7 +3846,6 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
@@ -3893,7 +3892,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.code, '')::text AS product_code,
                     COALESCE(ri.name, '')::text AS item_name,
                     ri.quantity::numeric AS quantity,
-                    COALESCE(ri.purchase_price, 0)::numeric AS purchase_price,
+                    COALESCE(ri.price, 0)::numeric AS purchase_price,
                     COALESCE(ri.retail_price, 0)::numeric AS retail_price,
                     COALESCE(ri.price, 0)::numeric AS final_unit_price,
                     COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)::numeric AS total_rub,
@@ -3979,9 +3978,33 @@ router.get('/money_receipts_detail', async (req, res) => {
                 JOIN repairs rep ON rep_w.repair_id = rep.id
                 LEFT JOIN vidy_rabot vr ON rep_w.vidy_rabot_id = vr.id
                 WHERE rep.is_posted = true
+
+                UNION ALL
+
+                -- 5. Позиции перемещений (для отображения детальной разбивки перемещений по складам)
+                SELECT 
+                    mi.id,
+                    'part' AS item_type,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
+                    m.date AS date,
+                    COALESCE(mi.code, '')::text AS product_code,
+                    COALESCE(mi.name, 'Запчасть')::text AS item_name,
+                    mi.quantity::numeric AS quantity,
+                    COALESCE(mi.price, 0)::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(mi.price, 0)::numeric AS final_unit_price,
+                    COALESCE(mi.total_rub, 0)::numeric AS total_rub,
+                    COALESCE(mi.description, '')::text AS description,
+                    m.id AS rel_id,
+                    NULL::integer AS rep_id,
+                    NULL::integer AS cust_id,
+                    m.warehouse_from_id AS skl_id
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE m.is_posted = true
             ) sub
             WHERE 
-                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
+                -- Если передан конкретный realization_id (или ID перемещения), то берем ТОЛЬКО его позиции
                 ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
                 -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
                 AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
