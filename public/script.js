@@ -6215,12 +6215,13 @@ async function submitIncomePayment(event, docId, skladId) {
     const payload = {
         amount: parsedAmount,
         comment: commentVal,
-        sklad_id: skladId || window.currentSkladId
+        sklad_id: skladId || window.currentSkladId || null
     };
 
     console.log(`[SUBMIT LOG] Отправка платежа:`, {
         url: `/api/money_receipts/${docId}/pay`,
         docId: docId,
+        skladId: skladId,
         payloadToSend: payload
     });
 
@@ -6241,8 +6242,8 @@ async function submitIncomePayment(event, docId, skladId) {
             
             if (typeof applyReceiptsFilters === 'function') {
                 applyReceiptsFilters();
-            } else if (window.currentSkladId) {
-                loadReceiptMainData('money_receipts', window.currentSkladId);
+            } else if (typeof loadTableData === 'function') {
+                loadTableData();
             }
         } else {
             const errData = await response.json().catch(() => ({}));
