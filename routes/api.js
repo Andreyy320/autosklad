@@ -3611,7 +3611,6 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
@@ -3671,6 +3670,25 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     GROUP BY cp.repair_id
                 ) rep_p ON rep.id = rep_p.repair_id
                 WHERE rep.is_posted = true
+
+                UNION ALL
+
+                -- 3. Перемещения (склад-источник фиксирует долг получателя)
+                SELECT 
+                    m.id,
+                    m.warehouse_from_id AS sklad_id,
+                    COALESCE(m_items.total_qty, 0) AS total_qty,
+                    COALESCE(m_items.total_sum, 0) AS parts_sum,
+                    0 AS works_sum,
+                    COALESCE(m_items.total_sum, 0) AS total_sum,
+                    0 AS paid_sum
+                FROM moves m
+                LEFT JOIN (
+                    SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
+                    FROM move_items
+                    GROUP BY move_id
+                ) m_items ON m.id = m_items.move_id
+                WHERE m.is_posted = true
             )
             SELECT 
                 sk.id AS id,
@@ -3685,8 +3703,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0)::numeric AS debt_sum
             FROM skladi sk
             JOIN combined_docs doc ON doc.sklad_id = sk.id
-            GROUP BY sk.id, sk.name
-            ORDER BY total_realization_sum DESC;
+            WHERE sk.id = 1 -- Замените 1 на реальный ID вашего центрального склада, если он отличается
+            GROUP BY sk.id, sk.name;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -3695,7 +3713,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id, start_date, end_date } = req.query;
@@ -5233,6 +5250,8 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
+
+
 // PUT /api/move_items/:id - редактирование позиции перемещения с использованием таблицы warehouse_batches
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
