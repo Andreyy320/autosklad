@@ -5915,6 +5915,7 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
+
 // Функция для записи логов ремонта в таблицу repair_logs
 async function writeRepairLog(client, req, data) {
     try {
