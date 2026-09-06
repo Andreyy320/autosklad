@@ -3851,9 +3851,12 @@ router.get('/money_receipts', async (req, res) => {
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
-        let { realization_id, customer_id, sklad_id } = req.query;
+        let { realization_id, customer_id, sklad_id, move_id } = req.query;
         
-        const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? realization_id : null;
+        // Поддерживаем как realization_id, так и move_id, если фронтенд передает его отдельно
+        const docId = realization_id || move_id;
+        
+        const cleanRealizationId = (docId && docId !== 'null' && docId !== 'undefined') ? docId : null;
         const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
         const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
 
