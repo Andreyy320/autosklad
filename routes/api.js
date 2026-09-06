@@ -5741,8 +5741,7 @@ async function writeMoveLog(client, req, data) {
 }
 
 
-
-// POST /api/repair_items - добавление запчасти в ремонт с прямым обновлением warehouse_batches (FIFO по партиям склада)
+// POST /api/repair_items - добавление запчасти в ремонт с прямым обновлением warehouse_batches (FIFO по партиям склада, без наценки)
 router.post('/repair_items', async (req, res) => {
     console.log(`\n========================================`);
     console.log(`🔧 [REPAIR START] Добавление запчасти в ремонт по warehouse_batches`);
@@ -5816,7 +5815,7 @@ router.post('/repair_items', async (req, res) => {
         console.log(`\n📋 [СКЛАД РЕМОНТА ID: ${warehouseId}] Доступные партии для запчасти ID: ${zaphast_id}`);
         console.log(`----------------------------------------`);
         batches.forEach((b, idx) => {
-            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Цена: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
+            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Себестоимость: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
         });
         console.log(`----------------------------------------`);
         console.log(`📊 ИТОГО доступно: ${totalAvailableStock} шт. | 🎯 СПИСЫВАЕМ: ${requestedQty} шт.`);
@@ -5832,9 +5831,9 @@ router.post('/repair_items', async (req, res) => {
         let remainingToDistribute = requestedQty;
         const createdRecords = [];
 
-        console.log(`\n🔄 [FIFO СПИСАНИЕ ДЛЯ РЕМОНТА НАЧАТО]`);
+        console.log(`\n🔄 [FIFO СПИСАНИЕ ДЛЯ РЕМОНТА НАЧАТО (БЕЗ НАЦЕНКИ)]`);
 
-        // 3. Списываем со склада по FIFO из warehouse_batches и записываем в repair_items
+        // 3. Списываем со склада по FIFO из warehouse_batches по чистой себестоимости и записываем в repair_items
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -5842,9 +5841,10 @@ router.post('/repair_items', async (req, res) => {
             const takeQty = Math.min(remainingToDistribute, batchQty);
             if (takeQty <= 0) continue;
 
-            const totalSum = takeQty * Number(batch.price_rub);
+            const cleanPrice = Number(batch.price_rub);
+            const totalSum = takeQty * cleanPrice;
 
-            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Цена: ${batch.price_rub} руб.): списываем ${takeQty} шт.`);
+            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Цена: ${cleanPrice} руб.): списываем ${takeQty} шт.`);
 
             // Уменьшаем количество в партии на складе
             await client.query(
@@ -5852,7 +5852,7 @@ router.post('/repair_items', async (req, res) => {
                 [takeQty, batch.id]
             );
 
-            // Записываем позицию в repair_items документа ремонта
+            // Записываем позицию в repair_items документа ремонта (цена равна себестоимости партии, без наценки)
             const insertQuery = `
                 INSERT INTO "repair_items" 
                 ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
@@ -5862,7 +5862,7 @@ router.post('/repair_items', async (req, res) => {
 
             const values = [
                 zaphast_id, 
-                batch.price_rub, 
+                cleanPrice, 
                 takeQty, 
                 description || null, 
                 repair_id, 
@@ -5884,7 +5884,7 @@ router.post('/repair_items', async (req, res) => {
                     car_id: carId,
                     zaphast_id: zaphast_id,
                     quantity: takeQty,
-                    price: batch.price_rub,
+                    price: cleanPrice,
                     total: totalSum,
                     receipt_id: batch.receipt_id,
                     description: description || null
@@ -5901,7 +5901,7 @@ router.post('/repair_items', async (req, res) => {
 
         await client.query('COMMIT');
 
-        console.log(`\n✅ [SUCCESS] Запчасть успешно добавлена в ремонт, остатки на складе обновлены! Создано строк: ${createdRecords.length}`);
+        console.log(`\n✅ [SUCCESS] Запчасть успешно добавлена в ремонт (без наценки), остатки на складе обновлены! Создано строк: ${createdRecords.length}`);
         console.log(`========================================\n`);
 
         return res.status(201).json(createdRecords);
@@ -5915,7 +5915,6 @@ router.post('/repair_items', async (req, res) => {
         client.release();
     }
 });
-
 // Функция для записи логов ремонта в таблицу repair_logs
 async function writeRepairLog(client, req, data) {
     try {
