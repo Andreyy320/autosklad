@@ -3846,6 +3846,8 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
@@ -3981,14 +3983,14 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 5. Позиции перемещений (с подтяжкой данных из таблицы запчастей zaphasti)
+                -- 5. Позиции перемещений (с подтяжкой данных из zaphasti по колонкам кода и наименования)
                 SELECT 
                     mi.id,
                     'part' AS item_type,
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
-                    COALESCE(z.code, z.article, '')::text AS product_code,
-                    COALESCE(z.name, 'Запчасть')::text AS item_name,
+                    COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
+                    COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
                     COALESCE(mi.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
