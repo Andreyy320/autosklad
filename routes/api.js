@@ -5741,7 +5741,7 @@ async function writeMoveLog(client, req, data) {
 }
 
 
-// POST /api/repair_items - добавление запчасти в ремонт с прямым обновлением warehouse_batches (FIFO по партиям склада, без наценки)
+// POST /api/repair_items - добавление запчасти в ремонт с прямым обновлением warehouse_batches (FIFO по партиям склада, чистая цена без наценки)
 router.post('/repair_items', async (req, res) => {
     console.log(`\n========================================`);
     console.log(`🔧 [REPAIR START] Добавление запчасти в ремонт по warehouse_batches`);
@@ -5815,7 +5815,7 @@ router.post('/repair_items', async (req, res) => {
         console.log(`\n📋 [СКЛАД РЕМОНТА ID: ${warehouseId}] Доступные партии для запчасти ID: ${zaphast_id}`);
         console.log(`----------------------------------------`);
         batches.forEach((b, idx) => {
-            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Себестоимость: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
+            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Цена: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
         });
         console.log(`----------------------------------------`);
         console.log(`📊 ИТОГО доступно: ${totalAvailableStock} шт. | 🎯 СПИСЫВАЕМ: ${requestedQty} шт.`);
@@ -5833,7 +5833,7 @@ router.post('/repair_items', async (req, res) => {
 
         console.log(`\n🔄 [FIFO СПИСАНИЕ ДЛЯ РЕМОНТА НАЧАТО (БЕЗ НАЦЕНКИ)]`);
 
-        // 3. Списываем со склада по FIFO из warehouse_batches по чистой себестоимости и записываем в repair_items
+        // 3. Списываем со склада по FIFO из warehouse_batches и записываем в repair_items (чистая цена партии)
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -5841,10 +5841,10 @@ router.post('/repair_items', async (req, res) => {
             const takeQty = Math.min(remainingToDistribute, batchQty);
             if (takeQty <= 0) continue;
 
-            const cleanPrice = Number(batch.price_rub);
-            const totalSum = takeQty * cleanPrice;
+            const cleanPrice = Number(batch.price_rub) || 0;
+            const totalSum = Number((takeQty * cleanPrice).toFixed(2));
 
-            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Цена: ${cleanPrice} руб.): списываем ${takeQty} шт.`);
+            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Чистая цена: ${cleanPrice} руб.): списываем ${takeQty} шт. на сумму ${totalSum}`);
 
             // Уменьшаем количество в партии на складе
             await client.query(
@@ -5852,7 +5852,7 @@ router.post('/repair_items', async (req, res) => {
                 [takeQty, batch.id]
             );
 
-            // Записываем позицию в repair_items документа ремонта (цена равна себестоимости партии, без наценки)
+            // Записываем позицию в repair_items документа ремонта с чистой ценой и суммой
             const insertQuery = `
                 INSERT INTO "repair_items" 
                 ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
