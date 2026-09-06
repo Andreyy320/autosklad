@@ -3991,6 +3991,8 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         const docId = parseInt(req.params.id);
         const { amount, customer_id, comment, sklad_id } = req.body;
 
+        console.log(`📥 Получен запрос на оплату документа ID: ${docId}, сумма: ${amount}`);
+
         if (!docId || isNaN(docId)) {
             return res.status(400).json({ error: 'Некорректный ID документа' });
         }
@@ -4026,6 +4028,7 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
                 comment || 'Оплата по документу'
             ]);
 
+            console.log('✅ Оплата клиентской реализации успешно сохранена');
             return res.json({ 
                 success: true, 
                 message: 'Оплата успешно сохранена',
@@ -4043,8 +4046,9 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             // --- ЭТО ПЕРЕМЕЩЕНИЕ МЕЖДУ СКЛАДАМИ ---
             const moveData = moveCheck.rows[0];
 
-            // Сохраняем платеж с жесткой привязкой к move_id, 
-            // чтобы оплата относилась именно к этому конкретному перемещению (ПЕРЕМЕЩЕНИЕ-26)
+            console.log(`🔄 Найдено перемещение ID ${docId}: со склада ${moveData.warehouse_from_id} на склад ${moveData.warehouse_to_id}`);
+
+            // Сохраняем платеж с жесткой привязкой к move_id
             const insertMoveQuery = `
                 INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
                 VALUES ($1, $2, $3, $4, $5)
@@ -4059,6 +4063,7 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
                 comment || 'Погашение долга по перемещению'
             ]);
 
+            console.log('✅ Оплата между складами успешно сохранена в базу');
             return res.json({ 
                 success: true, 
                 message: 'Оплата между складами успешно сохранена',
@@ -4066,6 +4071,7 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             });
         }
 
+        console.log(`❌ Документ с ID ${docId} не найден ни в реализациях, ни в перемещениях`);
         return res.status(404).json({ error: 'Документ (реализация или перемещение) не найден' });
 
     } catch (err) {
