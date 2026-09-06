@@ -5465,7 +5465,7 @@ router.put('/move_items/:id', async (req, res) => {
             ]);
         }
 
-        // 7. Обновляем саму позицию в move_items
+        // 7. Обновляем саму позицию в move_items (включая сохранение markup_percent)
         const updateQuery = `
             UPDATE "move_items" 
             SET "quantity" = $1, 
@@ -5474,19 +5474,21 @@ router.put('/move_items/:id', async (req, res) => {
                 "total_rub" = $4, 
                 "currency" = $5, 
                 "description" = $6, 
-                "income_document_id" = $7
-            WHERE id = $8 
+                "income_document_id" = $7,
+                "markup_percent" = $8
+            WHERE id = $9 
             RETURNING *;
         `;
 
         const values = [
             requestedQty,
             finalPrice,
-            finalPrice,
+            basePrice, // Чистая закупочная цена
             totalRub,
             curr,
             desc || null,
             chosenBatch.receipt_id,
+            markupPercent, // <-- Сохраняем процент наценки при редактировании
             itemId
         ];
 
@@ -5505,8 +5507,9 @@ router.put('/move_items/:id', async (req, res) => {
                 quantity: requestedQty,
                 price: finalPrice,
                 currency: curr,
-                price_rub: finalPrice,
+                price_rub: basePrice,
                 total_rub: totalRub,
+                markup_percent: markupPercent, // <-- Передаем наценку в лог
                 income_document_id: chosenBatch.receipt_id,
                 description: desc || 'Обновление позиции перемещения с наценкой'
             });
@@ -5526,7 +5529,6 @@ router.put('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // Функция для записи логов перемещений в таблицу move_logs
 async function writeMoveLog(client, req, data) {
     try {
@@ -5587,6 +5589,7 @@ router.delete('/move_items/:id', async (req, res) => {
         const quantityToReturn = Number(currentItem.quantity) || 0;
         const receiptId = currentItem.income_document_id;
         const itemPrice = Number(currentItem.price) || 0;
+        const markupPercent = Number(currentItem.markup_percent) || 0; // Сохраняем наценку для лога
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
         const moveCheck = await client.query('SELECT doc_number, warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
@@ -5681,6 +5684,7 @@ router.delete('/move_items/:id', async (req, res) => {
                 currency: currentItem.currency,
                 price_rub: currentItem.price_rub,
                 total_rub: currentItem.total_rub,
+                markup_percent: markupPercent, // Сохраняем наценку в лог удаленной позиции
                 income_document_id: currentItem.income_document_id,
                 description: currentItem.description
             });
