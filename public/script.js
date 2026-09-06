@@ -1129,8 +1129,8 @@ repair_items: {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
         
-        // Считаем общую сумму по чистой цене (себестоимости) без всяких наценок
-        const totalSum = Number(item.total) || (price * qty);
+        // Всегда считаем как честное произведение цены на количество
+        const totalSum = price * qty;
         
         const incomeDocText = item.income_document || item.receipt_doc || (item.receipt_id ? `Документ ID: ${item.receipt_id}` : '—');
 
