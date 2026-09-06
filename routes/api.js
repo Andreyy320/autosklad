@@ -5739,7 +5739,7 @@ async function writeMoveLog(client, req, data) {
 }
 
 
-// POST /api/repair_items - добавление запчасти в ремонт с детальными логами склада до и после списания
+// POST /api/repair_items - добавление запчасти в ремонт с фиксацией batch_id
 router.post('/repair_items', async (req, res) => {
     console.log(`\n========================================`);
     console.log(`🔧 [POST START] Добавление запчасти в ремонт (FIFO списание)`);
@@ -5762,7 +5762,6 @@ router.post('/repair_items', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Проверяем документ ремонта, его склад и статус проведения
         const repairCheck = await client.query(
             'SELECT doc_number, warehouse_id, car_id, is_posted FROM repairs WHERE id = $1 FOR UPDATE', 
             [repair_id]
@@ -5792,7 +5791,6 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'В документе ремонта не указан склад, с которого списываются запчасти.' });
         }
 
-        // Защита от дублирования: проверяем, не добавлена ли уже эта запчасть в данный документ ремонта
         const existingItemCheck = await client.query(
             'SELECT id FROM repair_items WHERE repair_id = $1 AND zaphast_id = $2',
             [repair_id, zaphast_id]
@@ -5803,20 +5801,6 @@ router.post('/repair_items', async (req, res) => {
             return res.status(400).json({ error: 'Эта запчасть уже добавлена в данный документ ремонта. Измените существующую позицию или удалите её перед добавлением заново.' });
         }
 
-        // 2. СМОТРИМ СОСТОЯНИЕ СКЛАДА ДО СПИСАНИЯ
-        const stockDebugQuery = `
-            SELECT id, receipt_id, price_rub, quantity, created_at
-            FROM warehouse_batches
-            WHERE zaphasti_id = $1 AND warehouse_id = $2
-            ORDER BY created_at ASC, id ASC;
-        `;
-        const stockBeforeRes = await client.query(stockDebugQuery, [zaphast_id, warehouseId]);
-        console.log(`\n📊 [ СКЛАД ДО СПИСАНИЯ ] Склад ID: ${warehouseId}, Запчасть ID: ${zaphast_id}`);
-        stockBeforeRes.rows.forEach(b => {
-            console.log(`   👉 Batch ID: ${b.id} | Receipt ID: ${b.receipt_id} | Остаток: ${b.quantity} шт. | Цена: ${b.price_rub}`);
-        });
-
-        // 3. Берем активные партии (где quantity > 0) для FIFO с блокировкой FOR UPDATE
         const batchesQuery = `
             SELECT id, receipt_id, price_rub, quantity, created_at
             FROM warehouse_batches
@@ -5832,7 +5816,7 @@ router.post('/repair_items', async (req, res) => {
 
         if (requestedQty > totalAvailableStock) {
             await client.query('ROLLBACK');
-            console.log(`❌ [POST ERROR] Недостаточно товара на складе! Доступно: ${requestedQty}, пытаемся списать: ${totalAvailableStock}`);
+            console.log(`❌ [POST ERROR] Недостаточно товара на складе! Доступно: ${totalAvailableStock}, пытаемся списать: ${requestedQty}`);
             return res.status(400).json({ 
                 error: `Недостаточно запчастей на выбранном складе! Доступно: ${totalAvailableStock} шт., а вы пытаетесь списать: ${requestedQty} шт.` 
             });
@@ -5843,7 +5827,6 @@ router.post('/repair_items', async (req, res) => {
 
         console.log(`\n🔄 [ПРОЦЕСС СПИСАНИЯ ПО ПАРТИЯМ]:`);
 
-        // 4. Списываем по FIFO
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -5856,17 +5839,16 @@ router.post('/repair_items', async (req, res) => {
 
             console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Приход: ${batch.receipt_id}) списываем ${takeQty} шт. (Было в партии: ${batchQty}, цена: ${cleanPrice})`);
 
-            // Уменьшаем количество в партии
             await client.query(
                 'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
                 [takeQty, batch.id]
             );
 
-            // Создаем запись в repair_items
+            // Сохраняем batch_id прямо в repair_items
             const insertQuery = `
                 INSERT INTO "repair_items" 
-                ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id") 
-                VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                ("zaphast_id", "price", "quantity", "description", "repair_id", "total", "receipt_id", "batch_id") 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                 RETURNING *;
             `;
 
@@ -5877,13 +5859,13 @@ router.post('/repair_items', async (req, res) => {
                 description || null, 
                 repair_id, 
                 totalSum, 
-                batch.receipt_id 
+                batch.receipt_id,
+                batch.id 
             ];
 
             const result = await client.query(insertQuery, values);
             createdRecords.push(result.rows[0]);
 
-            // Логирование операции ремонта
             if (typeof writeRepairLog === 'function') {
                 await writeRepairLog(client, req, {
                     action: 'INSERT',
@@ -5908,13 +5890,6 @@ router.post('/repair_items', async (req, res) => {
             console.log(`❌ [POST ERROR] Ошибка распределения FIFO осталось нераспределенным: ${remainingToDistribute}`);
             return res.status(400).json({ error: 'Ошибка FIFO-распределения при добавлении в ремонт.' });
         }
-
-        // 5. СМОТРИМ СОСТОЯНИЕ СКЛАДА ПОСЛЕ СПИСАНИЯ
-        const stockAfterRes = await client.query(stockDebugQuery, [zaphast_id, warehouseId]);
-        console.log(`\n📊 [ СКЛАД ПОСЛЕ СПИСАНИЯ ]`);
-        stockAfterRes.rows.forEach(b => {
-            console.log(`   👉 Batch ID: ${b.id} | Receipt ID: ${b.receipt_id} | Остаток стал: ${b.quantity} шт. | Цена: ${b.price_rub}`);
-        });
 
         await client.query('COMMIT');
 
