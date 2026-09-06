@@ -3834,6 +3834,41 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($1::integer IS NULL OR rep.warehouse_id = $1)
                   AND ($2::date IS NULL OR rep.doc_date::date >= $2::date)
                   AND ($3::date IS NULL OR rep.doc_date::date <= $3::date)
+
+                UNION ALL
+
+                -- 3. Документы перемещения (для центрального склада-источника)
+                SELECT 
+                    m.id AS id,
+                    m.id AS realization_id,
+                    m.doc_number::text AS doc_number,
+                    m.date AS date,
+                    NULL::integer AS customer_id,
+                    CONCAT('Перемещение на склад: ', COALESCE(sk_to.name, 'Склад'))::text AS counterparty_name,
+                    sk_from.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(m_sub.total_qty, 0)::numeric AS parts_qty,
+                    COALESCE(m_sub.total_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS total_retail_sum,
+                    COALESCE(m_sub.total_sum, 0)::numeric AS parts_sum,
+                    0::numeric AS works_sum,
+                    COALESCE(m_sub.total_sum, 0)::numeric AS total_realization_sum,
+                    0::numeric AS total_paid,
+                    COALESCE(m_sub.total_sum, 0)::numeric AS full_net_profit,
+                    0::numeric AS parts_profit,
+                    0::numeric AS works_profit
+                FROM moves m
+                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
+                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
+                LEFT JOIN (
+                    SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
+                    FROM move_items
+                    GROUP BY move_id
+                ) m_sub ON m.id = m_sub.move_id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+                  AND ($2::date IS NULL OR m.date::date >= $2::date)
+                  AND ($3::date IS NULL OR m.date::date <= $3::date)
             )
             SELECT 
                 id,
@@ -3878,7 +3913,7 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        // Отдаем клиенту массив строк и общие итоги за диапазон дат
+        -- Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
