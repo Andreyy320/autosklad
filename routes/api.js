@@ -3991,8 +3991,6 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
         const docId = parseInt(req.params.id);
         const { amount, customer_id, comment, sklad_id } = req.body;
 
-        console.log(`📥 Получен запрос на оплату документа ID: ${docId}, сумма: ${amount}`);
-
         if (!docId || isNaN(docId)) {
             return res.status(400).json({ error: 'Некорректный ID документа' });
         }
@@ -4028,7 +4026,6 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
                 comment || 'Оплата по документу'
             ]);
 
-            console.log('✅ Оплата клиентской реализации успешно сохранена');
             return res.json({ 
                 success: true, 
                 message: 'Оплата успешно сохранена',
@@ -4046,24 +4043,21 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             // --- ЭТО ПЕРЕМЕЩЕНИЕ МЕЖДУ СКЛАДАМИ ---
             const moveData = moveCheck.rows[0];
 
-            console.log(`🔄 Найдено перемещение ID ${docId}: со склада ${moveData.warehouse_from_id} на склад ${moveData.warehouse_to_id}`);
-
-            // Сохраняем платеж с жесткой привязкой к move_id
+            // Пишем в созданную тобой новую таблицу для складов
+            // warehouse_from_id — кому должны (источник), warehouse_to_id — кто должен (получатель)
             const insertMoveQuery = `
-                INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO warehouse_debt_payments (warehouse_from_id, warehouse_to_id, amount, comment)
+                VALUES ($1, $2, $3, $4)
                 RETURNING *;
             `;
 
             const result = await pool.query(insertMoveQuery, [
-                docId,
                 moveData.warehouse_from_id,
                 moveData.warehouse_to_id,
                 paymentAmount,
                 comment || 'Погашение долга по перемещению'
             ]);
 
-            console.log('✅ Оплата между складами успешно сохранена в базу');
             return res.json({ 
                 success: true, 
                 message: 'Оплата между складами успешно сохранена',
@@ -4071,7 +4065,6 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             });
         }
 
-        console.log(`❌ Документ с ID ${docId} не найден ни в реализациях, ни в перемещениях`);
         return res.status(404).json({ error: 'Документ (реализация или перемещение) не найден' });
 
     } catch (err) {
@@ -4127,20 +4120,24 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
 
         if (moveCheck.rows.length > 0) {
             // --- ИСТОРИЯ ДЛЯ ПЕРЕМЕЩЕНИЯ МЕЖДУ СКЛАДАМИ ---
+            // Вытаскиваем платежи из новой таблицы по складам, где участвует это перемещение 
+            // (или можно привязать по складам-участникам, либо если у тебя в таблице складов есть поле move_id, 
+            // но для универсальности выведем по направлениям или между этими двумя складами)
+            const moveData = moveCheck.rows[0];
             const query = `
                 SELECT 
                     wdp.id,
                     wdp.amount,
                     wdp.date,
                     wdp.comment,
-                    CONCAT('ПЕРЕМЕЩЕНИЕ-', wdp.move_id) AS doc_number,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', $1) AS doc_number,
                     CONCAT('Склад-получатель: ', sk_to.name) AS counterparty_name
                 FROM warehouse_debt_payments wdp
                 LEFT JOIN skladi sk_to ON wdp.warehouse_to_id = sk_to.id
-                WHERE wdp.move_id = $1
+                WHERE wdp.warehouse_from_id = $2 AND wdp.warehouse_to_id = $3
                 ORDER BY wdp.date DESC, wdp.id DESC;
             `;
-            const result = await pool.query(query, [docId]);
+            const result = await pool.query(query, [docId, moveData.warehouse_from_id, moveData.warehouse_to_id]);
             return res.json(result.rows);
         }
 
@@ -4151,6 +4148,8 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 
 
 
