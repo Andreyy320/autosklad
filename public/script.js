@@ -1111,6 +1111,7 @@ repairs: {
         `;
     }
 },
+
 repair_items: {
     title: 'Список запчастей в ремонте',
     columns: [
