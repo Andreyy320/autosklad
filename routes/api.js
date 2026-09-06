@@ -3925,7 +3925,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 total_rub,
                 description
             FROM (
-                -- 1. Запчасти обычных реализаций
+                /* 1. Запчасти обычных реализаций */
                 SELECT 
                     ri.id,
                     'part' AS item_type,
@@ -3941,6 +3941,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.description, '')::text AS description,
                     real.id AS rel_id,
                     NULL::integer AS rep_id,
+                    NULL::integer AS move_id,
                     real.customer_id AS cust_id,
                     real.sklad_id AS skl_id
                 FROM realization_items ri
@@ -3949,7 +3950,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Работы обычных реализаций
+                /* 2. Работы обычных реализаций */
                 SELECT 
                     rw.id,
                     'work' AS item_type,
@@ -3965,6 +3966,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(rw.description, '')::text AS description,
                     real.id AS rel_id,
                     NULL::integer AS rep_id,
+                    NULL::integer AS move_id,
                     real.customer_id AS cust_id,
                     real.sklad_id AS skl_id
                 FROM realization_works rw
@@ -3973,32 +3975,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Запчасти внутренних ремонтов (repair_items + zaphasti)
-                SELECT 
-                    rep_i.id,
-                    'part' AS item_type,
-                    CONCAT('', rep.doc_number)::text AS doc_number,
-                    rep.doc_date AS date,
-                    COALESCE(NULLIF(rep_i.code, ''), NULLIF(z.code, ''), NULLIF(rep_i.article, ''), NULLIF(z.article, ''), '')::text AS product_code,
-                    COALESCE(NULLIF(rep_i.name, ''), NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
-                    COALESCE(rep_i.quantity, 0)::numeric AS quantity,
-                    0::numeric AS purchase_price,
-                    0::numeric AS retail_price,
-                    COALESCE(rep_i.price, 0)::numeric AS final_unit_price,
-                    COALESCE(rep_i.total, rep_i.price * rep_i.quantity, 0)::numeric AS total_rub,
-                    COALESCE(rep_i.description, '')::text AS description,
-                    NULL::integer AS rel_id,
-                    rep.id AS rep_id,
-                    NULL::integer AS cust_id,
-                    rep.warehouse_id AS skl_id
-                FROM repair_items rep_i
-                JOIN repairs rep ON rep_i.repair_id = rep.id
-                LEFT JOIN zaphasti z ON rep_i.zaphast_id = z.id
-                WHERE rep.is_posted = true
-
-                UNION ALL
-
-                -- 4. Работы внутренних ремонтов (repair_works)
+                /* 3. ТОЛЬКО Работы ремонтов авто (repair_works) — запчасти не участвуют */
                 SELECT 
                     rep_w.id,
                     'work' AS item_type,
@@ -4014,19 +3991,42 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(rep_w.description, '')::text AS description,
                     NULL::integer AS rel_id,
                     rep.id AS rep_id,
+                    NULL::integer AS move_id,
                     NULL::integer AS cust_id,
                     rep.warehouse_id AS skl_id
                 FROM repair_works rep_w
                 JOIN repairs rep ON rep_w.repair_id = rep.id
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
+
+                UNION ALL
+
+                /* 4. Документы перемещения */
+                SELECT 
+                    m_item.id,
+                    'part' AS item_type,
+                    m.doc_number::text AS doc_number,
+                    m.date AS date,
+                    COALESCE(m_item.code, '')::text AS product_code,
+                    COALESCE(m_item.name, 'Товар')::text AS item_name,
+                    COALESCE(m_item.quantity, 0)::numeric AS quantity,
+                    0::numeric AS purchase_price,
+                    0::numeric AS retail_price,
+                    COALESCE(m_item.price, 0)::numeric AS final_unit_price,
+                    COALESCE(m_item.total_rub, m_item.price * m_item.quantity, 0)::numeric AS total_rub,
+                    COALESCE(m_item.description, '')::text AS description,
+                    NULL::integer AS rel_id,
+                    NULL::integer AS rep_id,
+                    m.id AS move_id,
+                    NULL::integer AS cust_id,
+                    m.warehouse_from_id AS skl_id
+                FROM move_items m_item
+                JOIN moves m ON m_item.move_id = m.id
+                WHERE m.is_posted = true
             ) sub
             WHERE 
-                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
-                ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
-                -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
-                AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
-                -- Фильтры по клиенту и складу работают для общих выборок
+                ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL AND sub.move_id IS NULL))
+                AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL AND sub.move_id IS NULL))
                 AND ($3::integer IS NULL OR sub.cust_id = $3)
                 AND ($4::integer IS NULL OR sub.skl_id = $4)
             ORDER BY date DESC, id ASC;
@@ -4042,7 +4042,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('❌ Ошибка при получении объединенной спецификации деталей:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
 
