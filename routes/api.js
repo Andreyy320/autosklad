@@ -3958,7 +3958,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 total_rub,
                 description
             FROM (
-                -- 1. Запчасти обычных реализаций
+                /* 1. Запчасти обычных реализаций */
                 SELECT 
                     ri.id,
                     'part' AS item_type,
@@ -3982,7 +3982,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Работы обычных реализаций
+                /* 2. Работы обычных реализаций */
                 SELECT 
                     rw.id,
                     'work' AS item_type,
@@ -4006,7 +4006,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Запчасти внутренних ремонтов (repair_items + zaphasti)
+                /* 3. Запчасти внутренних ремонтов (repair_items + zaphasti) */
                 SELECT 
                     rep_i.id,
                     'part' AS item_type,
@@ -4031,7 +4031,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Работы внутренних ремонтов (repair_works)
+                /* 4. Работы внутренних ремонтов (repair_works) */
                 SELECT 
                     rep_w.id,
                     'work' AS item_type,
@@ -4055,11 +4055,11 @@ router.get('/money_receipts_detail', async (req, res) => {
                 WHERE rep.is_posted = true
             ) sub
             WHERE 
-                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
+                /* Если передан конкретный realization_id, то берем ТОЛЬКО его реализации */
                 ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
-                -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
+                /* Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты */
                 AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
-                -- Фильтры по клиенту и складу работают для общих выборок
+                /* Фильтры по клиенту и складу работают для общих выборок */
                 AND ($3::integer IS NULL OR sub.cust_id = $3)
                 AND ($4::integer IS NULL OR sub.skl_id = $4)
             ORDER BY date DESC, id ASC;
@@ -4078,7 +4078,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 
 
