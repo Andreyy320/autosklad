@@ -1236,7 +1236,6 @@ router.get('/doc_types', async (req, res) => {
     }
 });
 
-// 1. Получение списка всех ремонтов (с динамическим расчетом суммы)
 router.get('/repairs', async (req, res) => {
     try {
         const { car_id } = req.query;
@@ -1250,7 +1249,7 @@ router.get('/repairs', async (req, res) => {
                 COALESCE(c.model, cm.name, 'Не указана') AS car_model,
                 s.name AS warehouse_name,
                 u.name AS mol_name,
-                -- Итоговая сумма: запчасти с учетом динамической наценки из gruppa_tsen + работы
+                -- Итоговая сумма: чистые запчасти (количество * цена) + работы
                 (
                     COALESCE(parts.total_parts_sum, 0) + 
                     COALESCE(works.total_works_sum, 0)
@@ -1264,14 +1263,12 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN (
-                -- Считаем сумму запчастей с учетом наценки из связанной группы цен
+                -- Считаем сумму запчастей без наценки: количество * цена
                 SELECT 
-                    ri.repair_id, 
-                    SUM(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0)) AS total_parts_sum
-                FROM repair_items ri
-                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-                LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-                GROUP BY ri.repair_id
+                    repair_id, 
+                    SUM(COALESCE(quantity, 0) * COALESCE(price, 0)) AS total_parts_sum
+                FROM repair_items
+                GROUP BY repair_id
             ) parts ON parts.repair_id = r.id
             LEFT JOIN (
                 SELECT repair_id, SUM(COALESCE(price, 0)) AS total_works_sum
@@ -1295,62 +1292,6 @@ router.get('/repairs', async (req, res) => {
         res.status(500).send(err.message);
     }
 });
-
-// 2. Получение одного конкретного ремонта по ID (важно для формы редактирования)
-router.get('/repairs/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const query = `
-            SELECT 
-                r.*,
-                dt.name AS doc_type_name,
-                rt.name AS repair_type_name,
-                c.gos_number AS car_number,
-                COALESCE(c.model, cm.name, 'Не указана') AS car_model,
-                s.name AS warehouse_name,
-                u.name AS mol_name,
-                (
-                    COALESCE(parts.total_parts_sum, 0) + 
-                    COALESCE(works.total_works_sum, 0)
-                ) AS sum
-            FROM repairs r
-            LEFT JOIN doc_types dt ON r.doc_type_id = dt.id
-            LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
-            LEFT JOIN cars c ON r.car_id = c.id
-            LEFT JOIN car_models cm ON c.model_id = cm.id
-            LEFT JOIN skladi s ON r.warehouse_id = s.id
-            LEFT JOIN mol m ON r.mol_id = m.id
-            LEFT JOIN users u ON m.user_id = u.id
-            LEFT JOIN (
-                SELECT 
-                    ri.repair_id, 
-                    SUM(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0)) AS total_parts_sum
-                FROM repair_items ri
-                LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-                LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-                GROUP BY ri.repair_id
-            ) parts ON parts.repair_id = r.id
-            LEFT JOIN (
-                SELECT repair_id, SUM(COALESCE(price, 0)) AS total_works_sum
-                FROM repair_works
-                GROUP BY repair_id
-            ) works ON works.repair_id = r.id
-            WHERE r.id = $1
-        `;
-
-        const result = await pool.query(query, [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Ремонт не найден" });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error("Ошибка в /api/repairs/:id:", err.message);
-        res.status(500).send(err.message);
-    }
-});
-
-
 
 router.get('/repair_items', async (req, res) => {
     try {
