@@ -3761,7 +3761,7 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(m_items.total_sum, 0)::numeric AS parts_sum,
                     0::numeric AS works_sum,
                     COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
-                    0::numeric AS total_paid,
+                    COALESCE(m_mp.paid_sum, 0)::numeric AS total_paid,
                     
                     -- Чистая прибыль по перемещению (сумма продажи с наценкой минус себестоимость)
                     (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
@@ -3780,6 +3780,11 @@ router.get('/money_receipts', async (req, res) => {
                     FROM move_items
                     GROUP BY move_id
                 ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments
+                    GROUP BY move_id
+                ) m_mp ON m.id = m_mp.move_id
                 WHERE m.is_posted = true
                   AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
                   AND ($2::date IS NULL OR m.date::date >= $2::date)
