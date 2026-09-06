@@ -6009,80 +6009,80 @@ router.put('/repair_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
 
-        // 3. Временно возвращаем старое количество обратно на склад в ту же партию, откуда оно списывалось,
-        // чтобы корректно проверить доступный остаток и пересчитать FIFO при изменении.
-        if (oldReceiptId) {
-            await client.query(`
-                UPDATE warehouse_batches 
-                SET quantity = quantity + $1 
-                WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
-            `, [oldQuantity, warehouseId, zaphast_id, oldReceiptId]);
-        }
+        // Считаем разницу: сколько нужно дописать (+) или вернуть (-)
+        const qtyDifference = requestedQty - oldQuantity;
 
-        // 4. Берем актуальные партии со склада (где количество > 0) с блокировкой FOR UPDATE
-        const batchesQuery = `
-            SELECT id, receipt_id, price_rub, quantity, created_at
-            FROM warehouse_batches
-            WHERE zaphasti_id = $1 AND warehouse_id = $2 AND quantity > 0
-            ORDER BY created_at ASC, id ASC
-            FOR UPDATE;
-        `;
-        const batchesRes = await client.query(batchesQuery, [zaphast_id, warehouseId]);
-        const batches = batchesRes.rows;
-
-        const totalAvailableStock = batches.reduce((sum, b) => sum + Number(b.quantity), 0);
-
-        console.log(`[FIFO REPAIR PUT DEBUG] Запрошено количество: ${requestedQty} шт.`);
-        console.log(`[FIFO REPAIR PUT DEBUG] Доступно на складе (с учетом возврата старой позиции):`, totalAvailableStock);
-
-        if (requestedQty > totalAvailableStock) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: `Недостаточно запчастей на складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь установить: ${requestedQty} шт.` 
-            });
-        }
-
-        // 5. Распределяем новое количество по FIFO и списываем со склада (warehouse_batches)
-        let remainingToDistribute = requestedQty;
-        let chosenReceiptId = null;
+        let chosenReceiptId = oldReceiptId;
         let finalPrice = newPrice;
-        let finalBatchId = null;
 
-        // Для простоты редактирования в repair_items (т.к. одна строка хранит одну цену и один receipt_id):
-        // Если вся новая запрашиваемая масса влазит в первую подходящую партию по FIFO, берем её. 
-        // Или если цена жестко задана пользователем, можем использовать цену партии или переданную.
-        for (const batch of batches) {
-            if (remainingToDistribute <= 0) break;
+        // Если количество увеличилось, проверяем, хватит ли товара на складе для досыпки
+        if (qtyDifference > 0) {
+            const batchesQuery = `
+                SELECT id, receipt_id, price_rub, quantity, created_at
+                FROM warehouse_batches
+                WHERE zaphasti_id = $1 AND warehouse_id = $2 AND quantity > 0
+                ORDER BY created_at ASC, id ASC
+                FOR UPDATE;
+            `;
+            const batchesRes = await client.query(batchesQuery, [zaphast_id, warehouseId]);
+            const batches = batchesRes.rows;
 
-            const batchQty = Number(batch.quantity);
-            const takeQty = Math.min(remainingToDistribute, batchQty);
-            if (takeQty <= 0) continue;
+            const totalAvailableStock = batches.reduce((sum, b) => sum + Number(b.quantity), 0);
 
-            if (requestedQty === takeQty) {
-                // Если всё количество поместилось в эту партию, берем её данные
-                chosenReceiptId = batch.receipt_id;
-                finalPrice = price !== undefined ? newPrice : Number(batch.price_rub);
-                finalBatchId = batch.id;
+            console.log(`[FIFO REPAIR PUT] Увеличение количества. Требуется додатково: ${qtyDifference} шт. Доступно на складе:`, totalAvailableStock);
+
+            if (qtyDifference > totalAvailableStock) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ 
+                    error: `Недостаточно запчастей на складе! Не хватает еще: ${qtyDifference - totalAvailableStock} шт.` 
+                });
             }
 
-            // Уменьшаем остаток в партии на складе
-            await client.query(
-                'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
-                [takeQty, batch.id]
-            );
+            // Досписываем недостающую разницу по FIFO
+            let remainingToDistribute = qtyDifference;
+            for (const batch of batches) {
+                if (remainingToDistribute <= 0) break;
 
-            remainingToDistribute -= takeQty;
-        }
+                const batchQty = Number(batch.quantity);
+                const takeQty = Math.min(remainingToDistribute, batchQty);
+                if (takeQty <= 0) continue;
 
-        if (remainingToDistribute > 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка FIFO-распределения при обновлении запчасти в ремонте.' });
-        }
+                // Уменьшаем остаток в партии на складе
+                await client.query(
+                    'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+                    [takeQty, batch.id]
+                );
 
-        // Если запчасть разбилась по нескольким партиям, а структура repair_items требует 1 запись, 
-        // подстрахуемся: если chosenReceiptId остался null (взяли из нескольких партий), берем receipt_id первой задействованной партии
-        if (!chosenReceiptId && batches.length > 0) {
-            chosenReceiptId = batches[0].receipt_id;
+                remainingToDistribute -= takeQty;
+            }
+
+        } else if (qtyDifference < 0) {
+            // Если количество уменьшилось, возвращаем излишек обратно на склад
+            const returnQty = Math.abs(qtyDifference);
+
+            if (oldReceiptId) {
+                // Проверяем, существует ли исходная партия
+                const batchCheck = await client.query(`
+                    SELECT id FROM warehouse_batches 
+                    WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                    FOR UPDATE;
+                `, [warehouseId, zaphast_id, oldReceiptId]);
+
+                if (batchCheck.rows.length > 0) {
+                    await client.query(`
+                        UPDATE warehouse_batches 
+                        SET quantity = quantity + $1 
+                        WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                    `, [returnQty, warehouseId, zaphast_id, oldReceiptId]);
+                } else {
+                    // Если партии вдруг нет, создаем заново
+                    await client.query(`
+                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                        VALUES ($1, $2, $3, $4, $5, NOW())
+                    `, [warehouseId, zaphast_id, oldReceiptId, newPrice, returnQty]);
+                }
+            }
+            console.log(`[FIFO REPAIR PUT] Уменьшение количества. Возвращено на склад: ${returnQty} шт.`);
         }
 
         const totalSum = requestedQty * finalPrice;
