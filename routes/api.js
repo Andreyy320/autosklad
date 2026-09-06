@@ -3981,14 +3981,14 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 5. Позиции перемещений (для отображения детальной разбивки перемещений по складам)
+                -- 5. Позиции перемещений (с подтяжкой данных из таблицы запчастей zaphasti)
                 SELECT 
                     mi.id,
                     'part' AS item_type,
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
-                    ''::text AS product_code,
-                    COALESCE(mi.name, 'Запчасть')::text AS item_name,
+                    COALESCE(z.code, z.article, '')::text AS product_code,
+                    COALESCE(z.name, 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
                     COALESCE(mi.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
@@ -4001,6 +4001,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     m.warehouse_from_id AS skl_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.is_posted = true
             ) sub
             WHERE 
