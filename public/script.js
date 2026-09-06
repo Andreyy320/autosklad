@@ -621,7 +621,7 @@ move_items: {
         { field: 'quantity', label: 'Кол-во', width: '80px' },
         { field: 'unit', label: 'Ед.изм', width: '70px', insert: false },
         { field: 'price', label: 'Цена (закуп)', width: '90px' },
-        { field: 'markup_percent', label: 'Наценка, %', width: '80px', insert: false }, // Новое поле наценки
+        { field: 'markup_percent', label: 'Наценка, %', width: '80px', insert: false },
         { field: 'currency', label: 'Валюта', width: '100px' },
         { field: 'total_rub', label: 'Сумма', width: '90px', insert: false },
         { field: 'description', label: 'Описание' },
@@ -630,10 +630,13 @@ move_items: {
     render: (item) => {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
-        const markupPercent = Number(item.markup_percent) || 0; // Получаем процент наценки из объекта
+        const markupPercent = Number(item.markup_percent) || 0;
         
-        // Если сумма не передана с бэкенда, считаем её с учетом наценки
-        const totalSum = Number(item.total_rub) || (price * qty * (1 + markupPercent / 100));
+        // Надежный расчет: если наценка 0%, то сумма всегда будет строго price * qty (например, 15 * 10 = 150)
+        // Если есть наценка, она корректно применится поверх закупочной цены
+        const calculatedTotal = price * qty * (1 + markupPercent / 100);
+        const totalSum = calculatedTotal; // Принудительно используем расчетную актуальную сумму
+        
         const incomeDocText = item.income_document || '—';
         
         const article = item.article || item.zaphasti_article || '—';
