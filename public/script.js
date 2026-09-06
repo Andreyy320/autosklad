@@ -6100,8 +6100,6 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 
 
-
-
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
     console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
@@ -6260,6 +6258,7 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6299,7 +6298,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
     } 
-    // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
+    // 2 уровень: Документы (реализации и ремонты) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
@@ -6478,6 +6477,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 }
                 groupedByMonth[m.key].items.push(item);
                 
+                const docTitle = String(item.doc_number || item.id || '');
+                const isRepair = !item.customer_id || docTitle.includes('РЕМ') || docTitle.includes('Р-') || item.repair_id || String(item.id).startsWith('рем');
+
                 let realizationSum = Number(item.total_realization_sum || item.total_sum || item.sum || 0);
                 let paidSum = Number(item.total_paid || item.paid || 0);
                 let debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
@@ -6536,8 +6538,17 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         selectedItem = item;
 
-                        window.currentRealizationId = item.realization_id || item.id;
-                        window.currentRepairId = null;
+                        const docTitle = String(item.doc_number || item.id || '');
+                        const isRepair = !item.customer_id || docTitle.includes('РЕМ') || docTitle.includes('Р-') || item.repair_id || String(item.id).startsWith('рем');
+
+                        if (isRepair) {
+                            window.currentRepairId = item.repair_id || item.id;
+                            window.currentRealizationId = null;
+                        } else {
+                            window.currentRealizationId = item.realization_id || item.id;
+                            window.currentRepairId = null;
+                        }
+
                         window.currentCustomerId = item.customer_id || '';
 
                         const tabsBlock = document.getElementById('tabs-for-money-receipts');
@@ -6564,14 +6575,15 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         const detailEntity = getCurrentDetailEntity();
                         let realizationId = window.currentRealizationId || '';
+                        let repairId = window.currentRepairId || '';
                         let customerId = window.currentCustomerId || '';
                         let skladId = item.sklad_id || window.currentSkladId || '';
                         
                         let url = '';
                         if (detailEntity === 'money_receipts_works_detail') {
-                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
                         } else {
-                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                            url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
                         }
 
                         loadReceiptDetailTable(url, detailEntity);
