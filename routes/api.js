@@ -5071,10 +5071,10 @@ router.delete('/receipt_items/:id', async (req, res) => {
     }
 });
 
-// POST /api/move_items - перемещение с прямым обновлением warehouse_batches (FIFO по партиям склада)
+// POST /api/move_items - перемещение с прямым обновлением warehouse_batches (FIFO по партиями склада с учетом наценки)
 router.post('/move_items', async (req, res) => {
     console.log(`\n========================================`);
-    console.log(`📦 [MOVE START] Перемещение позиции по warehouse_batches`);
+    console.log(`📦 [MOVE START] Перемещение позиции по warehouse_batches (с учетом наценки)`);
     console.log(`[BODY]:`, req.body);
 
     const { zaphasti_id, currency, quantity, description, move_id } = req.body;
@@ -5133,6 +5133,21 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Эта запчасть уже добавлена в данный документ перемещения. Измените существующую позицию или удалите её перед добавлением заново.' });
         }
 
+        // 1.1. Узнаем процент наценки для данной запчасти из таблицы gruppa_tsen через связку gruppa_tsen_id
+        const markupQuery = `
+            SELECT COALESCE(gt.markup_percent, 0) as markup_percent
+            FROM zaphasti z
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            WHERE z.id = $1
+        `;
+        const markupRes = await client.query(markupQuery, [zaphasti_id]);
+        
+        let markupPercent = 0;
+        if (markupRes.rows.length > 0) {
+            markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
+        }
+        console.log(`🏷️ [MARKUP] Запчасть ID ${zaphasti_id}: наценка = ${markupPercent}%`);
+
         // 2. Берем реальные активные партии со склада-источника прямо из warehouse_batches (где количество > 0)
         const batchesQuery = `
             SELECT id, receipt_id, price_rub, quantity, created_at
@@ -5149,7 +5164,7 @@ router.post('/move_items', async (req, res) => {
         console.log(`\n📋 [СКЛАД ОТКУДА ID: ${warehouseFromId}] Доступные партии для запчасти ID: ${zaphasti_id}`);
         console.log(`----------------------------------------`);
         batches.forEach((b, idx) => {
-            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Цена: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
+            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Базовая цена: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
         });
         console.log(`----------------------------------------`);
         console.log(`📊 ИТОГО доступно: ${totalAvailableStock} шт. | 🎯 ПЕРЕНОСИМ: ${requestedQty} шт.`);
@@ -5166,9 +5181,9 @@ router.post('/move_items', async (req, res) => {
         const createdRecords = [];
         const curr = currency || 'Рубль ПМР';
 
-        console.log(`\n🔄 [FIFO СПИСАНИЕ И ПЕРЕНОС НАЧАТЫ]`);
+        console.log(`\n🔄 [FIFO СПИСАНИЕ, РАСЧЕТ НАЦЕНКИ И ПЕРЕНОС НАЧАТЫ]`);
 
-        // 3. Списываем со склада-источника и создаем на складе-получателе
+        // 3. Списываем со склада-источника и создаем на складе-получателе с учетом наценки
         for (const batch of batches) {
             if (remainingToDistribute <= 0) break;
 
@@ -5176,9 +5191,13 @@ router.post('/move_items', async (req, res) => {
             const takeQty = Math.min(remainingToDistribute, batchQty);
             if (takeQty <= 0) continue;
 
-            const totalRub = takeQty * Number(batch.price_rub);
+            const basePrice = Number(batch.price_rub);
+            
+            // Считаем цену с наценкой без округления (только стандартные знаки после запятой)
+            const priceWithMarkup = Number((basePrice * (1 + markupPercent / 100)).toFixed(2));
+            const totalRub = Number((takeQty * priceWithMarkup).toFixed(2));
 
-            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (Цена: ${batch.price_rub} руб.): списываем ${takeQty} шт.`);
+            console.log(`   ➡️ Из партии Batch ID: ${batch.id} (База: ${basePrice} руб. -> С наценкой ${markupPercent}%: ${priceWithMarkup} руб.): списываем ${takeQty} шт.`);
 
             // Уменьшаем количество в партии на складе-источнике
             await client.query(
@@ -5186,7 +5205,7 @@ router.post('/move_items', async (req, res) => {
                 [takeQty, batch.id]
             );
 
-            // Создаем точно такую же партию на складе-получателе (warehouse_to_id)
+            // Создаем партию на складе-получателе с ценой с учетом наценки
             await client.query(`
                 INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
                 VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
@@ -5194,12 +5213,12 @@ router.post('/move_items', async (req, res) => {
                 warehouseToId,
                 zaphasti_id,
                 batch.receipt_id,
-                batch.price_rub,
+                priceWithMarkup,
                 takeQty,
                 batch.created_at
             ]);
 
-            console.log(`      ✅ На склад-получатель (ID: ${warehouseToId}) добавлено ${takeQty} шт. по цене ${batch.price_rub} руб.`);
+            console.log(`      ✅ На склад-получатель (ID: ${warehouseToId}) добавлено ${takeQty} шт. по цене ${priceWithMarkup} руб.`);
 
             // Записываем саму позицию в move_items документа перемещения
             const insertItemQuery = `
@@ -5210,10 +5229,10 @@ router.post('/move_items', async (req, res) => {
             `;
             const itemValues = [
                 zaphasti_id, 
-                batch.price_rub, 
+                priceWithMarkup, 
                 curr, 
                 takeQty, 
-                batch.price_rub, 
+                priceWithMarkup, 
                 totalRub, 
                 description || null, 
                 move_id, 
@@ -5233,12 +5252,12 @@ router.post('/move_items', async (req, res) => {
                     warehouse_to_id: warehouseToId,
                     zaphasti_id: zaphasti_id,
                     quantity: takeQty,
-                    price: batch.price_rub,
+                    price: priceWithMarkup,
                     currency: curr,
-                    price_rub: batch.price_rub,
+                    price_rub: priceWithMarkup,
                     total_rub: totalRub,
                     income_document_id: batch.receipt_id,
-                    description: description || 'Перемещение позиции'
+                    description: description || 'Перемещение позиции с наценкой'
                 });
             }
 
@@ -5253,11 +5272,11 @@ router.post('/move_items', async (req, res) => {
         await client.query('COMMIT');
 
         const finalStockLeft = totalAvailableStock - requestedQty;
-        console.log(`\n✅ [SUCCESS] Перемещение успешно завершено! Остаток на складе-источнике: ${finalStockLeft} шт.`);
+        console.log(`\n✅ [SUCCESS] Перемещение с наценкой успешно завершено! Остаток на складе-источнике: ${finalStockLeft} шт.`);
         console.log(`========================================\n`);
 
         return res.status(201).json({
-            message: 'Позиция успешно перемещена, остатки на складах обновлены',
+            message: 'Позиция успешно перемещена с учетом наценки, остатки на складах обновлены',
             items: createdRecords,
             stock_left_on_source: finalStockLeft
         });
@@ -5271,7 +5290,6 @@ router.post('/move_items', async (req, res) => {
         client.release();
     }
 });
-
 
 // PUT /api/move_items/:id - редактирование позиции перемещения с использованием таблицы warehouse_batches
 router.put('/move_items/:id', async (req, res) => {
