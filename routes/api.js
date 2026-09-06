@@ -3985,10 +3985,11 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
+// 1. Проведение оплаты / погашения долга (для клиентов или между складами)
 router.post('/money_receipts/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
-        const { amount, customer_id, comment, sklad_id, is_move } = req.body; // Можно передавать флаг или определять автоматически
+        const { amount, customer_id, comment } = req.body;
 
         if (!docId || isNaN(docId)) {
             return res.status(400).json({ error: 'Некорректный ID документа' });
@@ -3999,63 +4000,69 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
 
-        let customerId = customer_id ? parseInt(customer_id) : null;
-        let realizationId = null;
-        let moveId = null;
-        let skladIdParam = sklad_id ? parseInt(sklad_id) : null;
-
-        // Сначала проверяем, не реализация ли это
+        // Сначала проверяем, обычная ли это реализация
         const realizationCheck = await pool.query(
-            `SELECT id, customer_id, sklad_id FROM realizations WHERE id = $1`,
+            `SELECT id, customer_id FROM realizations WHERE id = $1`,
             [docId]
         );
 
         if (realizationCheck.rows.length > 0) {
-            realizationId = docId;
-            customerId = customerId || realizationCheck.rows[0].customer_id;
-            if (!skladIdParam) skladIdParam = realizationCheck.rows[0].sklad_id;
-        } else {
-            // Если не нашли в реализациях, проверяем в перемещениях (moves)
-            const moveCheck = await pool.query(
-                `SELECT id, warehouse_from_id FROM moves WHERE id = $1`,
-                [docId]
-            );
+            // --- ЭТО КЛИЕНТСКАЯ РЕАЛИЗАЦИЯ (старая логика без изменений) ---
+            const realData = realizationCheck.rows[0];
+            const customerId = customer_id ? parseInt(customer_id) : realData.customer_id;
 
-            if (moveCheck.rows.length > 0) {
-                // Для перемещений realization_id можно либо оставлять NULL (если таблица customer_payments 
-                // это позволяет), либо завести отдельное поле, либо писать в realization_id, 
-                // но тогда в колонке должна быть гибкая структура. 
-                // Предположим, у тебя в customer_payments хранится realization_id. 
-                // Если нужно фиксировать долг склада-получателя, убедись, что таблица customer_payments 
-                // принимает такие записи (или у тебя под перемещения идет отдельный учет).
-                moveId = docId;
-                if (!skladIdParam) skladIdParam = moveCheck.rows[0].warehouse_from_id;
-            } else {
-                return res.status(404).json({ error: 'Документ (реализация или перемещение) не найден' });
-            }
+            const insertQuery = `
+                INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
+                VALUES ($1, $2, $3, $4)
+                RETURNING *;
+            `;
+            
+            const result = await pool.query(insertQuery, [
+                customerId, 
+                docId, 
+                paymentAmount, 
+                comment || 'Оплата по документу'
+            ]);
+
+            return res.json({ 
+                success: true, 
+                message: 'Оплата успешно сохранена',
+                payment: result.rows[0] 
+            });
         }
 
-        const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, sklad_id, amount, comment)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *;
-        `;
-        
-        const values = [
-            customerId, 
-            realizationId, // Для перемещения здесь может быть null, либо тебе нужно адаптировать схему БД под move_id
-            skladIdParam,
-            paymentAmount, 
-            comment || 'Оплата по документу'
-        ];
+        // Если не нашли в реализациях, проверяем, перемещение ли это (склады используют свою таблицу)
+        const moveCheck = await pool.query(
+            `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1`,
+            [docId]
+        );
 
-        const result = await pool.query(insertQuery, values);
+        if (moveCheck.rows.length > 0) {
+            // --- ЭТО ПЕРЕМЕЩЕНИЕ МЕЖДУ СКЛАДАМИ (использует отдельную таблицу) ---
+            const moveData = moveCheck.rows[0];
 
-        res.json({ 
-            success: true, 
-            message: 'Оплата успешно сохранена',
-            payment: result.rows[0] 
-        });
+            const insertMoveQuery = `
+                INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING *;
+            `;
+
+            const result = await pool.query(insertMoveQuery, [
+                docId,
+                moveData.warehouse_from_id,
+                moveData.warehouse_to_id,
+                paymentAmount,
+                comment || 'Погашение долга по перемещению'
+            ]);
+
+            return res.json({ 
+                success: true, 
+                message: 'Оплата между складами успешно сохранена',
+                payment: result.rows[0] 
+            });
+        }
+
+        return res.status(404).json({ error: 'Документ (реализация или перемещение) не найден' });
 
     } catch (err) {
         console.error('❌ Ошибка при проведении оплаты (money_receipts/pay):', err);
