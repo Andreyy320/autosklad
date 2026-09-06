@@ -3958,7 +3958,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                 total_rub,
                 description
             FROM (
-                /* 1. Запчасти обычных реализаций */
+                -- 1. Запчасти обычных реализаций
                 SELECT 
                     ri.id,
                     'part' AS item_type,
@@ -3982,7 +3982,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                /* 2. Работы обычных реализаций */
+                -- 2. Работы обычных реализаций
                 SELECT 
                     rw.id,
                     'work' AS item_type,
@@ -4006,7 +4006,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                /* 3. Запчасти внутренних ремонтов (repair_items + zaphasti) */
+                -- 3. Запчасти внутренних ремонтов (repair_items + zaphasti)
                 SELECT 
                     rep_i.id,
                     'part' AS item_type,
@@ -4031,7 +4031,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                /* 4. Работы внутренних ремонтов (repair_works) */
+                -- 4. Работы внутренних ремонтов (repair_works)
                 SELECT 
                     rep_w.id,
                     'work' AS item_type,
@@ -4053,37 +4053,13 @@ router.get('/money_receipts_detail', async (req, res) => {
                 JOIN repairs rep ON rep_w.repair_id = rep.id
                 LEFT JOIN works w ON rep_w.work_id = w.id
                 WHERE rep.is_posted = true
-
-                UNION ALL
-
-                /* 5. Документы перемещения (для склада-источника) */
-                SELECT 
-                    m_item.id,
-                    'part' AS item_type,
-                    m.doc_number::text AS doc_number,
-                    m.date AS date,
-                    COALESCE(m_item.code, '')::text AS product_code,
-                    COALESCE(m_item.name, 'Товар')::text AS item_name,
-                    COALESCE(m_item.quantity, 0)::numeric AS quantity,
-                    0::numeric AS purchase_price,
-                    0::numeric AS retail_price,
-                    COALESCE(m_item.price, 0)::numeric AS final_unit_price,
-                    COALESCE(m_item.total_rub, m_item.price * m_item.quantity, 0)::numeric AS total_rub,
-                    COALESCE(m_item.description, '')::text AS description,
-                    NULL::integer AS rel_id,
-                    NULL::integer AS rep_id,
-                    NULL::integer AS cust_id,
-                    m.warehouse_from_id AS skl_id
-                FROM move_items m_item
-                JOIN moves m ON m_item.move_id = m.id
-                WHERE m.is_posted = true
             ) sub
             WHERE 
-                /* Если передан конкретный realization_id, то берем ТОЛЬКО его реализации */
+                -- Если передан конкретный realization_id, то берем ТОЛЬКО его реализации
                 ($1::integer IS NULL OR (sub.rel_id = $1 AND sub.rep_id IS NULL))
-                /* Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты */
+                -- Если передан конкретный repair_id, то берем ТОЛЬКО его ремонты
                 AND ($2::integer IS NULL OR (sub.rep_id = $2 AND sub.rel_id IS NULL))
-                /* Фильтры по клиенту и складу работают для общих выборок */
+                -- Фильтры по клиенту и складу работают для общих выборок
                 AND ($3::integer IS NULL OR sub.cust_id = $3)
                 AND ($4::integer IS NULL OR sub.skl_id = $4)
             ORDER BY date DESC, id ASC;
@@ -4102,6 +4078,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 
 
 
@@ -4220,6 +4197,8 @@ router.get('/money_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 
 
 // 1. Расходы по складам (уровень 1)
