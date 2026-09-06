@@ -6536,7 +6536,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         selectedItem = item;
 
-                        // Устанавливаем realization_id (для перемещений doc_number начинается с "ПЕРЕМЕЩЕНИЕ-", но id перемещения хранится в id или realization_id)
                         window.currentRealizationId = item.realization_id || item.id;
                         window.currentRepairId = null;
                         window.currentCustomerId = item.customer_id || '';
