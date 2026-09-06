@@ -3903,7 +3903,6 @@ router.get('/money_receipts', async (req, res) => {
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
         const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
 
-        // Считаем общие итоги за выбранный период для фронтенда
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -3913,7 +3912,6 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        -- Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
