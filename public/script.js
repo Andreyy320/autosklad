@@ -620,7 +620,8 @@ move_items: {
         { field: 'name', label: 'Наименование', width: '220px', insert: false },
         { field: 'quantity', label: 'Кол-во', width: '80px' },
         { field: 'unit', label: 'Ед.изм', width: '70px', insert: false },
-        { field: 'price', label: 'Цена', width: '90px' },
+        { field: 'price', label: 'Цена (закуп)', width: '90px' },
+        { field: 'markup_percent', label: 'Наценка, %', width: '80px', insert: false }, // Новое поле наценки
         { field: 'currency', label: 'Валюта', width: '100px' },
         { field: 'total_rub', label: 'Сумма', width: '90px', insert: false },
         { field: 'description', label: 'Описание' },
@@ -629,7 +630,10 @@ move_items: {
     render: (item) => {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
-        const totalSum = Number(item.total_rub) || (price * qty);
+        const markupPercent = Number(item.markup_percent) || 0; // Получаем процент наценки из объекта
+        
+        // Если сумма не передана с бэкенда, считаем её с учетом наценки
+        const totalSum = Number(item.total_rub) || (price * qty * (1 + markupPercent / 100));
         const incomeDocText = item.income_document || '—';
         
         const article = item.article || item.zaphasti_article || '—';
@@ -644,6 +648,7 @@ move_items: {
             <td>${qty}</td>
             <td>${unit}</td>
             <td>${price.toFixed(2)}</td>
+            <td style="color: #2e7d32; font-weight: 500;">${markupPercent > 0 ? `+${markupPercent}%` : '0%'}</td>
             <td>${item.currency || 'Рубль ПМР'}</td>
             <td><b>${totalSum.toFixed(2)}</b></td>
             <td>${item.description || ''}</td>
@@ -651,7 +656,6 @@ move_items: {
         `;
     }
 },
-
 car_cards: {
     title: 'Карточка авто',
     readonly: true, 

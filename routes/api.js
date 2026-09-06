@@ -5291,10 +5291,10 @@ router.post('/move_items', async (req, res) => {
     }
 });
 
-// PUT /api/move_items/:id - редактирование позиции перемещения с использованием таблицы warehouse_batches
+// PUT /api/move_items/:id - редактирование позиции перемещения с использованием таблицы warehouse_batches и учетом наценки
 router.put('/move_items/:id', async (req, res) => {
     console.log(`\n----------------------------------------`);
-    console.log(`[PUT REQUEST] Редактирование позиции перемещения (move_items) с warehouse_batches`);
+    console.log(`[PUT REQUEST] Редактирование позиции перемещения (move_items) с warehouse_batches (с учетом наценки)`);
     console.log(`[ID]:`, req.params.id);
     console.log(`[BODY]:`, req.body);
 
@@ -5341,14 +5341,27 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'В документе перемещения должны быть указаны склад-источник и склад-получатель.' });
         }
 
-        // Новое количество и цена (если не переданы, берем старые)
+        // Новое количество (если не передано, берем старое)
         const requestedQty = quantity !== undefined ? Number(quantity) : oldQuantity;
-        const newPrice = price !== undefined ? Number(price) : Number(currentItem.price);
 
         if (requestedQty <= 0) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
         }
+
+        // 2.1. Узнаем процент наценки для данной запчасти (как в POST)
+        const markupQuery = `
+            SELECT COALESCE(gt.markup_percent, 0) as markup_percent
+            FROM zaphasti z
+            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            WHERE z.id = $1
+        `;
+        const markupRes = await client.query(markupQuery, [zaphasti_id]);
+        let markupPercent = 0;
+        if (markupRes.rows.length > 0) {
+            markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
+        }
+        console.log(`🏷️ [MARKUP PUT] Запчасть ID ${zaphasti_id}: наценка = ${markupPercent}%`);
 
         // 3. ШАГ ОТКАТА СТАРЫХ ЗНАЧЕНИЙ: 
         // Возвращаем количество обратно на склад-источник и убираем со склада-получателя по старой партии (oldReceiptId)
@@ -5400,14 +5413,23 @@ router.put('/move_items/:id', async (req, res) => {
             });
         }
 
-        // Берем по FIFO первую доступную партию (или ту же самую, если в ней хватает места)
+        // Берем по FIFO подходящую партию (или ту же самую старую, если в ней хватает места)
         let chosenBatch = batches.find(b => b.receipt_id === oldReceiptId && Number(b.quantity) >= requestedQty);
         if (!chosenBatch) {
             chosenBatch = batches[0]; // Берем самую старую доступную партию по FIFO
         }
 
-        const finalPrice = price !== undefined ? newPrice : Number(chosenBatch.price_rub);
-        const totalRub = requestedQty * finalPrice;
+        const basePrice = Number(chosenBatch.price_rub);
+        
+        // Если пользователь явно передал цену в теле запроса — используем её, иначе рассчитываем по базовой цене партии с учетом наценки
+        let finalPrice;
+        if (price !== undefined) {
+            finalPrice = Number(price);
+        } else {
+            finalPrice = Number((basePrice * (1 + markupPercent / 100)).toFixed(2));
+        }
+
+        const totalRub = Number((requestedQty * finalPrice).toFixed(2));
         const curr = currency !== undefined ? currency : (currentItem.currency || 'Рубль ПМР');
         const desc = description !== undefined ? description : currentItem.description;
 
@@ -5417,7 +5439,7 @@ router.put('/move_items/:id', async (req, res) => {
             [requestedQty, chosenBatch.id]
         );
 
-        // 6. Добавляем/обновляем партию на складе-получателе
+        // 6. Добавляем/обновляем партию на складе-получателе с учетом актуальной цены с наценкой
         const existingTargetRes = await client.query(
             'SELECT id FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
             [warehouseToId, zaphasti_id, chosenBatch.receipt_id]
@@ -5485,13 +5507,13 @@ router.put('/move_items/:id', async (req, res) => {
                 price_rub: finalPrice,
                 total_rub: totalRub,
                 income_document_id: chosenBatch.receipt_id,
-                description: desc || null
+                description: desc || 'Обновление позиции перемещения с наценкой'
             });
         }
 
         await client.query('COMMIT');
 
-        console.log(`[SUCCESS] Позиция перемещения успешно обновлена: ID ${itemId}, остатки в warehouse_batches пересчитаны.`);
+        console.log(`[SUCCESS] Позиция перемещения успешно обновлена: ID ${itemId}, остатки в warehouse_batches пересчитаны с учетом наценки.`);
         return res.status(200).json(updatedRecord);
 
     } catch (err) {
@@ -5563,6 +5585,7 @@ router.delete('/move_items/:id', async (req, res) => {
         const zaphasti_id = currentItem.zaphasti_id;
         const quantityToReturn = Number(currentItem.quantity) || 0;
         const receiptId = currentItem.income_document_id;
+        const itemPrice = Number(currentItem.price) || 0;
 
         // 2. Проверяем родительский документ перемещения (moves), его статус проведения и склады
         const moveCheck = await client.query('SELECT doc_number, warehouse_from_id, warehouse_to_id, is_posted FROM moves WHERE id = $1 FOR UPDATE', [move_id]);
@@ -5589,12 +5612,34 @@ router.delete('/move_items/:id', async (req, res) => {
         }
 
         // 4. ВОЗВРАТ НА СКЛАД-ИСТОЧНИК: прибавляем количество обратно в партию warehouse_batches
-        if (receiptId) {
-            await client.query(
-                'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4',
-                [quantityToReturn, warehouseFromId, zaphasti_id, receiptId]
+        if (receiptId && quantityToReturn > 0) {
+            // Проверяем, существует ли вообще такая партия на складе-источнике
+            const sourceBatchCheck = await client.query(
+                'SELECT id FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                [warehouseFromId, zaphasti_id, receiptId]
             );
-            console.log(`[DELETE FIFO] Возвращено ${quantityToReturn} шт. на склад-источник (ID: ${warehouseFromId}), партия прихода ID: ${receiptId}`);
+
+            if (sourceBatchCheck.rows.length > 0) {
+                // Если партия есть — просто увеличиваем количество
+                await client.query(
+                    'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4',
+                    [quantityToReturn, warehouseFromId, zaphasti_id, receiptId]
+                );
+                console.log(`[DELETE FIFO] Возвращено ${quantityToReturn} шт. на склад-источник (ID: ${warehouseFromId}), партия прихода ID: ${receiptId}`);
+            } else {
+                // Если исходная партия была удалена, создаем её заново, чтобы не потерять остатки
+                await client.query(`
+                    INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                `, [
+                    warehouseFromId,
+                    zaphasti_id,
+                    receiptId,
+                    itemPrice,
+                    quantityToReturn
+                ]);
+                console.log(`[DELETE FIFO] Партия прихода ID ${receiptId} на складе-источнике не найдена, создана новая запись для возврата ${quantityToReturn} шт.`);
+            }
 
             // 5. УДАЛЕНИЕ/УМЕНЬШЕНИЕ СО СКЛАДА-ПОЛУЧАТЕЛЯ: убираем товар со склада куда пытались переместить
             const targetBatchCheck = await client.query(
@@ -5654,7 +5699,6 @@ router.delete('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
-
 // Функция для записи логов перемещений в таблицу move_logs
 async function writeMoveLog(client, req, data) {
     try {
