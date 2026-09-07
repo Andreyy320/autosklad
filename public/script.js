@@ -6165,6 +6165,9 @@ function applyExpensesFilters() {
     }
 }
 
+
+
+
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
@@ -6817,7 +6820,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
-    // Удаляем старые слушатели через клон или AbortController, либо просто вешаем один раз флаг защиты от дублирования
     if (!tableBodyForReceipts.dataset.listenerAttached) {
         tableBodyForReceipts.dataset.listenerAttached = "true";
 
@@ -6840,16 +6842,48 @@ if (tableBodyForReceipts) {
             const tr = e.target.closest('tr');
             if (!tr) return;
 
-            const id = tr.getAttribute('data-id');
+            // Игнорируем клики по строкам-шапкам групп (например, по месяцам)
+            if (tr.querySelector('[id^="icon-"]') || tr.style.background === 'rgb(241, 245, 249)' || tr.style.background === '#f1f5f9') {
+                return;
+            }
+
+            // ИЗВЛЕЧЕНИЕ ID С УЧЕТОМ РАЗНЫХ СУЩНОСТЕЙ И СТРУКТУРЫ
+            let id = tr.getAttribute('data-id');
+            
+            if (!id || id === 'null' || id === 'undefined') {
+                const targetWithId = tr.querySelector('[data-id]');
+                if (targetWithId) {
+                    id = targetWithId.dataset.id;
+                }
+            }
+
+            if (!id || id === 'null' || id === 'undefined') {
+                const hiddenInput = tr.querySelector('input[type="hidden"]');
+                if (hiddenInput && hiddenInput.value) {
+                    id = hiddenInput.value;
+                } else {
+                    const firstCell = tr.querySelector('td');
+                    if (firstCell && !firstCell.querySelector('input')) {
+                        const textVal = firstCell.innerText.trim();
+                        if (/^\d+$/.test(textVal)) {
+                            id = textVal;
+                        }
+                    }
+                }
+            }
+
             console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
 
-            document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+            document.querySelectorAll('#table-body tr').forEach(row => {
+                if (!row.querySelector('[id^="icon-"]')) {
+                    row.style.background = '';
+                }
+            });
             tr.style.background = '#e2e8f0';
 
             let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
             let selectedItem = null;
 
-            // Пытаемся найти элемент в текущем массиве данных
             if (itemsSource) {
                 const listArray = Array.isArray(itemsSource) ? itemsSource : (itemsSource.items || []);
                 selectedItem = listArray.find(i => 
@@ -6861,14 +6895,15 @@ if (tableBodyForReceipts) {
                 );
             }
 
-            // ЖЕЛЕЗОБЕТОННЫЙ FALLBACK: если не нашли, собираем базовый объект из строки/глобальных переменных
             if (!selectedItem && id) {
                 console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
                 selectedItem = {
                     id: id,
                     realization_id: id,
+                    receipt_id: id,
                     customer_id: window.currentCustomerId || null,
-                    sklad_id: window.currentSkladId || null
+                    sklad_id: window.currentSkladId || null,
+                    postavhik_id: window.currentPostavhikId || null
                 };
             }
             
@@ -6915,8 +6950,6 @@ if (tableBodyForReceipts) {
 
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
                 
-                // ЗАЩИТА ОТ ДВОЙНЫХ ЗАПРОСОВ: проверяем, не отправлялся ли точно такой же запрос миллисекунду назад, 
-                // либо просто вызываем штатно с подробными логами (на скриншоте видно дублирование из-за всплытия / повторного бинда)
                 const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
                 
                 if (typeof loadReceiptDetailTable === 'function') {
@@ -6966,7 +6999,6 @@ if (tableBodyForReceipts) {
         });
     }
 }
-
 
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
