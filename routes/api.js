@@ -3778,9 +3778,7 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         move_id, 
                         SUM(quantity) AS total_qty, 
-                        -- Закупка: если price_rub или price — это закупка, берем ее умноженную на количество
                         SUM(COALESCE(NULLIF(price_rub, 0), price, 0) * quantity) AS total_purchase_sum,
-                        -- Сумма с наценкой: total_rub
                         SUM(COALESCE(total_rub, price * quantity, 0)) AS total_sum
                     FROM move_items
                     GROUP BY move_id
@@ -3838,7 +3836,7 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        -- Отдаем клиенту массив строк и общие итоги за диапазон дат
+        // Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
