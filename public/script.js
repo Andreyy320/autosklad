@@ -5528,8 +5528,8 @@ async function loadData(entity, title, customParams = {}) {
                 if (detailToolbarTarget) {
                     if (entity === 'stock_movement') {
                         detailToolbarTarget.style.display = 'none';
-                    } else if (entity === 'car_cards') {
-                        // Скрываем кнопки тулбара детализации для карточки авто, так как вкладки read-only
+                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
+                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
@@ -5618,12 +5618,11 @@ async function loadData(entity, title, customParams = {}) {
         }
 
     } catch (err) {
-        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ` + entity + `', err);
+        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
         currentItems = [];
-        document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
+        document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
-
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
