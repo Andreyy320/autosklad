@@ -3864,6 +3864,8 @@ router.get('/money_receipts_detail', async (req, res) => {
         const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
         const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
 
+        console.log('🧹 [/api/money_receipts_detail] Очищенные параметры:', { cleanRealizationId, cleanCustomerId, cleanSkladId });
+
         if (!cleanRealizationId && !cleanCustomerId && !cleanSkladId) {
             return res.json([]);
         }
@@ -3929,7 +3931,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Позиции перемещений (с разделением закупки и цены продажи с наценкой)
+                -- 3. Позиции перемещений с логгированием полей
                 SELECT 
                     mi.id,
                     'part' AS item_type,
@@ -3938,10 +3940,9 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
-                    -- Чистая закупка за единицу
-                    COALESCE(NULLIF(mi.price_rub, 0), mi.price, 0)::numeric AS purchase_price,
+                    -- Пробуем вытащить чистую закупку (если mi.price это уже продажа, посмотрим по логике)
+                    COALESCE(mi.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
-                    -- Цена продажи с учетом наценки за единицу (total_rub / quantity)
                     CASE 
                         WHEN mi.quantity > 0 THEN COALESCE(mi.total_rub, mi.price * mi.quantity, 0) / mi.quantity 
                         ELSE COALESCE(mi.total_rub, mi.price, 0) 
@@ -3964,7 +3965,18 @@ router.get('/money_receipts_detail', async (req, res) => {
         `;
 
         const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId];
+        console.log('⚡ [/api/money_receipts_detail] Параметры запроса:', queryParams);
+        
         const result = await pool.query(cleanQuery, queryParams);
+        
+        // Выводим в лог то, что реально вернулось для перемещений, чтобы увидеть расхождение цен
+        result.rows.forEach(r => {
+            if (r.doc_number && r.doc_number.startsWith('ПЕРЕМЕЩЕНИЕ')) {
+                console.log(`🔍 [DEBUG MOVE ITEM]: Документ: ${r.doc_number}, Товар: ${r.item_name}, Кол-во: ${r.quantity}, Закупка: ${r.purchase_price}, Итог с наценкой: ${r.total_rub}`);
+            }
+        });
+
+        console.log(`✅ [/api/money_receipts_detail] Успешно получено строк: ${result.rowCount}`);
         res.json(result.rows);
 
     } catch (err) {
