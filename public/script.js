@@ -5836,6 +5836,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
+    // Управление кнопкой «Назад» для разных уровней
+    let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
+    if (!backBtn) {
+        // Если кнопки в DOM нет, можем найти место или создать её динамически, но для примера предполагаем её наличие или контейнер
+        // Давайте сделаем безопасную проверку: если кнопка есть, управляем её видимостью и обработчиком
+    }
+
     // Элементы панели фильтров по датам (показываем только на уровне expenses_by_receipts)
     const receiptsFilterPanel = document.getElementById('expenses-filter-panel') || document.getElementById('receipts-filter-panel');
     if (receiptsFilterPanel) {
@@ -5856,6 +5863,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // На складах кнопки «Назад» не будет
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) backBtnElement.style.display = 'none';
     } 
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
@@ -5871,6 +5882,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // На поставщиках (уровень после складов) показываем стрелку назад -> ведет на склады (expenses_by_sklad)
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_sklad');
+        }
     } 
     else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
@@ -5899,6 +5917,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // На накладных (expenses_by_receipts) показываем стрелку назад -> ведет на поставщиков (expenses_by_suppliers) с текущим skladId
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+        }
     } 
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
@@ -5919,6 +5944,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // На деталях накладной (товарах) кнопка назад тоже должна работать -> ведет к списку накладных (expenses_by_receipts)
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+        }
 
         loadExpenseDetailTable(fetchUrl);
         return; 
@@ -6116,7 +6148,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 // Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
     const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
