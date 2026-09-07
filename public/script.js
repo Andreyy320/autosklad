@@ -5512,8 +5512,8 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                // Если у сущности нет детализации, строка просто выделяется, но нижняя таблица не открывается
-                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts'];
+                // Добавили 'stock_balances' в список сущностей с детализацией, чтобы клик открывал stock_batches
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
                 }
