@@ -97,6 +97,13 @@
                 <span id="row-count" style="margin-left: 10px; font-size: 13px; font-weight: bold; color: #333;  display: none;"></span>
 
                 <div class="separator"></div>
+
+<!-- Вот сюда добавляем кнопку Назад -->
+    <button id="btn-back-expense" class="tool-btn" style="display: none;">
+        <i class="fas fa-arrow-left" style="color: #0078d7;"></i> Назад
+    </button>
+
+
                 <button class="tool-btn" onclick="logout()" style="margin-left: auto;"><i class="fas fa-right-from-bracket" style="color: #c00;"></i> Выйти</button>
             </div>
 
@@ -215,13 +222,6 @@
         <div id="tabs-for-realizations" style="display: none; gap: 2px;">
     <button class="realization-tab-btn active" data-tab="realization_items" onclick="switchRealizationTab('realization_items', this)">Запчасти</button>
     <button class="realization-tab-btn" data-tab="realization_works" onclick="switchRealizationTab('realization_works', this)">Услуги</button>
-</div>
-
-<!-- Пример добавления кнопки Назад в HTML -->
-<div class="expense-controls" style="margin-bottom: 10px;">
-    <button id="btn-back-expense" class="btn" style="display: none; padding: 6px 12px; cursor: pointer;">
-        ⬅ Назад
-    </button>
 </div>
 
 
