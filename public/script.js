@@ -5512,7 +5512,6 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                // Добавили 'stock_balances' в список сущностей с детализацией, чтобы клик открывал stock_batches
                 const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
@@ -5525,9 +5524,12 @@ async function loadData(entity, title, customParams = {}) {
                 if (detailContainerTarget) {
                     detailContainerTarget.style.display = 'flex';
                 }
+                
                 if (detailToolbarTarget) {
-                    // Возвращаем логику тулбара для нужных сущностей
                     if (entity === 'stock_movement') {
+                        detailToolbarTarget.style.display = 'none';
+                    } else if (entity === 'car_cards') {
+                        // Скрываем кнопки тулбара детализации для карточки авто, так как вкладки read-only
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
@@ -5616,7 +5618,7 @@ async function loadData(entity, title, customParams = {}) {
         }
 
     } catch (err) {
-        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
+        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ` + entity + `', err);
         currentItems = [];
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
