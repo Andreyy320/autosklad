@@ -6111,9 +6111,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 }
 
+
 // Вспомогательная функция для кнопки «Применить» на панели фильтров (приходы)
 function applyReceiptsFilters() {
-    // Жестко берем skladId из глобальной переменной или пытаемся подтянуть из сохраненного состояния
     const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
     
     console.log(`🔍 [applyReceiptsFilters] Применение фильтра дат. skladId:`, skladId);
@@ -6121,7 +6121,6 @@ function applyReceiptsFilters() {
     if (skladId) {
         loadReceiptMainData('money_receipts', skladId);
     } else {
-        // Если склад почему-то потерялся, возвращаемся на самый верхний уровень складов
         console.warn('⚠️ [applyReceiptsFilters] skladId утерян, сбрасываем на список складов');
         loadReceiptMainData('money_receipts_by_sklad');
     }
@@ -6144,7 +6143,6 @@ function applyExpensesFilters() {
         loadExpenseMainData('expenses_by_sklad');
     }
 }
-
 
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
