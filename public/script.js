@@ -6321,7 +6321,6 @@ async function submitIncomePayment(event, docId, skladId) {
     }
 }
 
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6582,20 +6581,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 headerTr.style.borderTop = '2px solid #e2e8f0';
                 headerTr.style.borderBottom = '1px solid #e2e8f0';
 
-                // Итоги выводим и сверху в заголовке месяца
                 headerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 12px; cursor: pointer;">
-                        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
-                            <span style="color: #334155;">[-] ${group.title}</span>
-                            <div style="font-size: 13px; font-weight: normal; display: flex; flex-wrap: wrap; gap: 10px;">
-                                <span style="color: #64748b;">Сумма: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
-                                <span style="color: #64748b;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                                <span style="color: #64748b;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
-                                <span style="color: #64748b;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                                <span style="color: #64748b;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
-                                <span style="color: #64748b;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
-                            </div>
-                        </div>
+                        <span style="color: #334155; margin-right: 12px;">[-] ${group.title}</span>
                     </td>
                 `;
                 
@@ -6621,6 +6609,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         window.currentRepairId = null;
                         window.currentCustomerId = item.customer_id || '';
                         
+                        // Сохраняем тип документа для правильной маршрутизации при оплате/истории
                         window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
 
                         const tabsBlock = document.getElementById('tabs-for-money-receipts');
@@ -6664,7 +6653,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     mainTableBody.appendChild(tr);
                 });
 
-                // Итоги снизу месяца остаются на своих местах
                 const footerTr = document.createElement('tr');
                 footerTr.style.background = '#f1f5f9';
                 footerTr.style.fontWeight = 'bold';
@@ -6725,6 +6713,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
