@@ -4957,7 +4957,6 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
-
 async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
@@ -5019,10 +5018,16 @@ async function refreshData() {
                 let skladId = savedSelectedItem.sklad_id || window.currentSkladId || '';
                 
                 let url = '';
+                const currentType = window.currentDocType || 'realization';
+
                 if (detailEntity === 'money_receipts_works_detail') {
                     url = `/api/money_receipts_works_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
                 } else {
-                    url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                    if (currentType === 'move') {
+                        url = `/api/money_receipts_detail?move_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=move`;
+                    } else {
+                        url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=realization`;
+                    }
                 }
                 loadReceiptDetailTable(url, detailEntity);
             }
