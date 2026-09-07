@@ -6329,7 +6329,7 @@ async function submitIncomePayment(event, docId, skladId) {
     }
 }
 
-asyasync function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
+async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
