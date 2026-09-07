@@ -3742,6 +3742,56 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
                   AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
                   AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
+
+                UNION ALL
+
+                -- 2. Перемещения (склады-должники) по аналогии с реализациями
+                SELECT 
+                    m.id AS id,
+                    m.id AS realization_id,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
+                    m.date AS date,
+                    NULL::integer AS customer_id,
+                    CONCAT('Склад-получатель: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    sk_from.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(m_items.total_qty, 0)::numeric AS parts_qty,
+                    COALESCE(m_items.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS total_retail_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS parts_sum,
+                    0::numeric AS works_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
+                    
+                    -- Оплата перемещения (если в warehouse_debt_payments пусто, ставим полную сумму, как у реализаций)
+                    COALESCE(m_p.paid_sum, COALESCE(m_items.total_sum, 0))::numeric AS total_paid,
+                    
+                    -- Чистая прибыль по перемещению (продажа с наценкой минус закупка)
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
+                    
+                    -- Плюс по запчастям отдельно
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS parts_profit,
+                    0::numeric AS works_profit
+                FROM moves m
+                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
+                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
+                LEFT JOIN (
+                    SELECT 
+                        move_id, 
+                        SUM(quantity) AS total_qty, 
+                        SUM(COALESCE(price, 0) * quantity) AS total_purchase_sum,
+                        SUM(COALESCE(total_rub, price * quantity, 0)) AS total_sum
+                    FROM move_items
+                    GROUP BY move_id
+                ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments
+                    GROUP BY move_id
+                ) m_p ON m.id = m_p.move_id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+                  AND ($2::date IS NULL OR m.date::date >= $2::date)
+                  AND ($3::date IS NULL OR m.date::date <= $3::date)
             )
             SELECT 
                 id,
