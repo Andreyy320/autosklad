@@ -6858,7 +6858,7 @@ if (tableBodyForReceipts) {
                 return;
             }
 
-            // ИЗВЛЕЧЕНИЕ ID С УЧЕТОМ РАЗНЫХ СУЩНОСТЕЙ И СТРУКТУРЫ
+            // 🛡️ НАДЕЖНОЕ ИЗВЛЕЧЕНИЕ ID (только из атрибутов или скрытых полей, без чтения текста строк)
             let id = tr.getAttribute('data-id');
             
             if (!id || id === 'null' || id === 'undefined') {
@@ -6872,18 +6872,15 @@ if (tableBodyForReceipts) {
                 const hiddenInput = tr.querySelector('input[type="hidden"]');
                 if (hiddenInput && hiddenInput.value) {
                     id = hiddenInput.value;
-                } else {
-                    const firstCell = tr.querySelector('td');
-                    if (firstCell && !firstCell.querySelector('input')) {
-                        const textVal = firstCell.innerText.trim();
-                        if (/^\d+$/.test(textVal)) {
-                            id = textVal;
-                        }
-                    }
                 }
             }
 
             console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
+
+            if (!id || id === 'null' || id === 'undefined') {
+                console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] У выбранной строки отсутствует действительный ID. Клик отклонен.`);
+                return;
+            }
 
             document.querySelectorAll('#table-body tr').forEach(row => {
                 if (!row.querySelector('[id^="icon-"]')) {
@@ -6906,16 +6903,11 @@ if (tableBodyForReceipts) {
                 );
             }
 
-            if (!selectedItem && id) {
-                console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
-                selectedItem = {
-                    id: id,
-                    realization_id: id,
-                    receipt_id: id,
-                    customer_id: window.currentCustomerId || null,
-                    sklad_id: window.currentSkladId || null,
-                    postavhik_id: window.currentPostavhikId || null
-                };
+            // 🛑 БЕЗОПАСНОСТЬ: если элемент не найден в массиве, прекращаем выполнение, 
+            // чтобы не подставлять фейковые ID и не ломать запросы к API.
+            if (!selectedItem) {
+                console.error(`❌ [КЛИК В ТАБЛИЦЕ] Критично: элемент с ID ${id} не найден в текущем массиве itemsSource.`);
+                return;
             }
             
             if (typeof window !== 'undefined') {
@@ -6924,11 +6916,6 @@ if (tableBodyForReceipts) {
             }
 
             console.log(`📥 [КЛИК ИТОГ] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
-
-            if (!selectedItem) {
-                console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
-                return;
-            }
 
             // ==========================================
             // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
@@ -7792,6 +7779,8 @@ if (tableBody) {
         }
     });
 }
+
+
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
