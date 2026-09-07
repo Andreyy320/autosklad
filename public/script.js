@@ -6993,7 +6993,6 @@ if (tableBodyForReceipts) {
 }
 
 
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -7002,7 +7001,7 @@ function emptyDetailBody(entity) {
     const config = getConfig(entity);
     
     // Считаем только те колонки, у которых не стоит table: false
-    const visibleColumnsCount = config.columns 
+    const visibleColumnsCount = config && config.columns 
         ? config.columns.filter(col => col.table !== false).length 
         : 1; // Дефолт на случай отсутствия конфига
 
@@ -7022,20 +7021,29 @@ function filterTable() {
     });
 
     const rows = document.querySelectorAll('#table-body tr');
+    const config = getConfig(currentEntity);
 
     rows.forEach(row => {
         let isVisible = true;
         const id = row.getAttribute('data-id');
-        const item = currentItems.find(i => i.id == id);
+        
+        // Универсальный поиск элемента по возможным ID-шникам, чтобы не терять составные или специфичные ключи
+        const item = currentItems.find(i => 
+            String(i.id || '') === String(id) || 
+            String(i.realization_id || '') === String(id) || 
+            String(i.receipt_id || '') === String(id) || 
+            String(i.sklad_id || '') === String(id) || 
+            String(i.postavhik_id || '') === String(id)
+        );
 
         if (!item) return;
+
+        const cells = Array.from(row.children);
 
         for (const field in filters) {
             const cellValue = String(item[field] !== undefined && item[field] !== null ? item[field] : '').toLowerCase();
             
-            const cells = Array.from(row.children);
-            const config = getConfig(currentEntity);
-            const colIndex = config.columns.findIndex(c => c.field === field);
+            const colIndex = config && config.columns ? config.columns.findIndex(c => c.field === field) : -1;
             
             let match = cellValue.includes(filters[field]);
             if (!match && colIndex !== -1 && cells[colIndex]) {
@@ -7052,8 +7060,10 @@ function filterTable() {
     });
 }
 
+
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -7284,6 +7294,7 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
+
 function openDetailForm(mode) {
     console.log(`🚀 [openDetailForm] Вызов функции с режимом (mode): "${mode}"`);
     console.log(`📋 [openDetailForm] Текущий выбор: selectedItem =`, selectedItem, `, selectedDetailItem =`, selectedDetailItem);
@@ -7337,6 +7348,7 @@ function openDetailForm(mode) {
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
     }
 }
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
@@ -7565,7 +7577,14 @@ if (tableBody) {
         console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
         // Универсальный поиск элемента с поддержкой разных вариантов ID
-        selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
+        selectedItem = currentItems.find(i => 
+            String(i.id || '') === String(id) || 
+            String(i.receipt_id || '') === String(id) || 
+            String(i.sklad_id || '') === String(id) || 
+            String(i.postavhik_id || '') === String(id) || 
+            String(i.move_id || '') === String(id) ||
+            String(i.realization_id || '') === String(id)
+        );
 
         if (!selectedItem) {
             console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems, пробуем поиск по индексу строки.`);
@@ -7608,7 +7627,7 @@ if (tableBody) {
         }
 
         if (selectedItem) {
-            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
+            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || selectedItem.move_id || selectedItem.realization_id || id;
             console.log(`🎯 [tableBody click] Выбран элемент с итоговым идентификатором (itemId): ${itemId}`);
 
             if (currentEntity === 'cars') {
@@ -7733,6 +7752,7 @@ if (tableBody) {
         }
     });
 }
+
 
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
@@ -7954,19 +7974,24 @@ function switchRepairTab(tabName, btnElement) {
 let currentMoneyReceiptSubTab = 'money_receipts_detail';
 
 
+const detailBody = document.getElementById('detail-body');
 
-    const detailBody = document.getElementById('detail-body');
-
-    if (detailBody) {
-        detailBody.addEventListener('click', (e) => {
-            const tr = e.target.closest('tr');
-            if (!tr) return;
-            
+if (detailBody) {
+    detailBody.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        
         document.querySelectorAll('#detail-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
         const id = tr.getAttribute('data-id');
-        selectedDetailItem = currentDetailItems.find(i => i.id == id);
+        selectedDetailItem = currentDetailItems.find(i => 
+            String(i.id || '') === String(id) || 
+            String(i.zaphasti_id || '') === String(id) || 
+            String(i.detail_id || '') === String(id) ||
+            String(i.receipt_id || '') === String(id) ||
+            String(i.realization_id || '') === String(id)
+        );
     });
 
     detailBody.addEventListener('dblclick', (e) => {
@@ -7974,13 +7999,20 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         if (!tr) return;
         
         const id = tr.getAttribute('data-id');
-        const item = currentDetailItems.find(i => i.id == id);
+        const item = currentDetailItems.find(i => 
+            String(i.id || '') === String(id) || 
+            String(i.zaphasti_id || '') === String(id) || 
+            String(i.detail_id || '') === String(id) ||
+            String(i.receipt_id || '') === String(id) ||
+            String(i.realization_id || '') === String(id)
+        );
         if (item) {
             selectedDetailItem = item;
             openDetailForm('edit'); 
         }
     });
 }
+
 
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
@@ -8114,7 +8146,21 @@ async function loadDetailData(entity, parentId) {
 
     console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
 
-    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
+    // УРОВЕНЬ ЛОГИРОВАНИЯ И УСЛОВИЯ ПОКАЗА ФИЛЬТРОВ:
+    // Показываем фильтры для всех связанных сущностей (где есть queryParamName, включая машины, ДТП, ремонты, реализации и т.д.), 
+    // чтобы пользователь мог легко фильтровать детальные таблицы по столбцам.
+    const entitiesWithFilters = ['car_id', 'dtp_id', 'repair_id', 'accident_id', 'realization_id', 'customer_id', 'receipt_id', 'move_id', 'postavhik_id', 'counterparty_id'];
+    
+    console.log(`🔍 [loadDetailData:filters] Проверка необходимости отрисовки фильтров:`, {
+        queryParamName,
+        activeEntity,
+        isAllowedParam: entitiesWithFilters.includes(queryParamName),
+        notAccidentImages: activeEntity !== 'accident_images',
+        theadExists: !!thead,
+        visibleColumnsCount: visibleColumns.length
+    });
+
+    if (entitiesWithFilters.includes(queryParamName) && activeEntity !== 'accident_images') {
         if (thead && visibleColumns.length > 0) {
             filterRow = document.createElement('tr');
             filterRow.id = 'detail-filter-row';
@@ -8125,13 +8171,18 @@ async function loadDetailData(entity, parentId) {
                         <input type="text" 
                                data-column="${col.field}" 
                                oninput="filterDetailTable()" 
-                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;"
+                               placeholder="Фильтр...">
                     </th>
                 `;
             }).join('');
             thead.insertBefore(filterRow, headerTr);
-            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
+            console.log(`✅ [loadDetailData] Успешно создан и вставлен #detail-filter-row с ${visibleColumns.length} инпутами для полей:`, visibleColumns.map(c => c.field));
+        } else {
+            console.warn(`⚠️ [loadDetailData] Не удалось вставить #detail-filter-row: thead отсутствует (${!!thead}) или видимых колонок нет (${visibleColumns.length})`);
         }
+    } else {
+        console.log(`ℹ️ [loadDetailData] Фильтры для сущности "${activeEntity}" с параметром "${queryParamName}" не предусмотрены текущим условием.`);
     }
 
     if (headerTr && visibleColumns.length > 0) {
@@ -8143,6 +8194,7 @@ async function loadDetailData(entity, parentId) {
     }
 
     try {
+        console.log(`🚀 [loadDetailData] Выполнение fetch запроса по адресу: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: {
@@ -8202,13 +8254,16 @@ async function loadDetailData(entity, parentId) {
         }
         
         if (items.length === 0) {
+            console.log(`⚠️ [loadDetailData] Получен пустой массив данных для "${activeEntity}". Выводим сообщение о пустышке.`);
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
         if ((activeEntity === 'repair_history' || activeEntity === 'car_general'|| activeEntity === 'receipts_history') && typeof config.render === 'function') {
+            console.log(`🎨 [loadDetailData] Рендеринг через кастомный метод config.render для ${activeEntity}`);
             tbody.innerHTML = config.render(items);
         } else {
+            console.log(`🎨 [loadDetailData] Стандартный цикл рендеринга строк для ${activeEntity}, элементов: ${items.length}`);
             tbody.innerHTML = '';
             items.forEach(item => {
                 const tr = document.createElement('tr');
@@ -8239,7 +8294,7 @@ async function loadDetailData(entity, parentId) {
                 tbody.appendChild(tr);
             });
         }
-
+        console.log(`🏁 [loadDetailData] Загрузка и отрисовка деталей для "${activeEntity}" успешно завершена.`);
     } catch (err) {
         console.error('❌ [loadDetailData ОШИБКА]:', err);
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
@@ -8247,12 +8302,33 @@ async function loadDetailData(entity, parentId) {
 }
 
 function filterDetailTable() {
+    console.log(`🔍 [filterDetailTable] СТАРТ фильтрации таблицы деталей...`);
+
     const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
     const rows = document.querySelectorAll('#detail-body tr');
 
-    rows.forEach(row => {
+    console.log(`📊 [filterDetailTable] Найдено инпутов фильтрации: ${filterInputs.length}, строк в таблице для проверки: ${rows.length}`);
+
+    // Собираем активные фильтры для логирования
+    const activeFilters = [];
+    filterInputs.forEach(input => {
+        const val = input.value.trim();
+        const col = input.getAttribute('data-column');
+        if (val) {
+            activeFilters.push({ column: col, query: val });
+        }
+    });
+    console.log(`🎯 [filterDetailTable] Активные фильтры (${activeFilters.length}):`, activeFilters);
+
+    let visibleCount = 0;
+    let hiddenCount = 0;
+
+    rows.forEach((row, rowIndex) => {
         // Пропускаем служебные строки (например, "Нет данных" или "Загрузка...")
-        if (row.cells.length <= 1) return;
+        if (row.cells.length <= 1) {
+            console.log(`⏭️ [filterDetailTable] Строка #${rowIndex} пропущена (служебная строка с ячейками <= 1).`);
+            return;
+        }
 
         let isVisible = true;
 
@@ -8261,12 +8337,9 @@ function filterDetailTable() {
             if (!searchText) return;
 
             const columnField = input.getAttribute('data-column');
-            
-            // Ищем ячейку, у которой совпадает дата-атрибут поля, 
-            // либо ищем по сохраненному индексу колонки
             let targetCell = null;
             
-            // Пытаемся найти по индексу колонки из шапки таблицы, если они синхронизированы
+            // Пытаемся найти по индексу колонки из шапки таблицы
             const th = input.closest('th');
             if (th) {
                 const ths = Array.from(th.parentElement.children);
@@ -8278,14 +8351,25 @@ function filterDetailTable() {
 
             if (targetCell) {
                 const cellText = targetCell.textContent.toLowerCase();
-                if (!cellText.includes(searchText)) {
+                const matches = cellText.includes(searchText);
+                if (!matches) {
                     isVisible = false;
                 }
+            } else {
+                console.warn(`⚠️ [filterDetailTable] Не удалось найти целевую ячейку для колонки "${columnField}" в строке #${rowIndex}`);
             }
         });
 
         row.style.display = isVisible ? '' : 'none';
+        
+        if (isVisible) {
+            visibleCount++;
+        } else {
+            hiddenCount++;
+        }
     });
+
+    console.log(`🏁 [filterDetailTable] Фильтрация завершена. Видимых строк: ${visibleCount}, скрытых строк: ${hiddenCount}`);
 }
 
 const navMap = {
@@ -8359,6 +8443,7 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
+
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
@@ -8404,7 +8489,6 @@ function updateFilterPanels(entity) {
         console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -8488,13 +8572,19 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          // Справочник запчастей/товаров (второй скриншот)
-            'nomenclature',   // Если так называется номенклатура
+            'parts',          // Справочник запчастей/товаров
+            'nomenclature',   // Номенклатура
             'goods'
         ];
 
         // Жестко проверяем, нужно ли показывать нижнюю таблицу
         const shouldShowDetails = entitiesWithDetails.includes(entity) && !summaryEntitiesWithoutDetails.includes(entity);
+
+        console.log(`🔍 [nav-link:detailsCheck] Анализ необходимости отображения деталей для "${entity}":`, {
+            isIncludedInEntitiesWithDetails: entitiesWithDetails.includes(entity),
+            isExcludedSummaryEntity: summaryEntitiesWithoutDetails.includes(entity),
+            shouldShowDetails
+        });
 
         if (shouldShowDetails) {
             console.log(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
@@ -8503,13 +8593,16 @@ document.querySelectorAll('.nav-link').forEach(link => {
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
             if (detailActionButtons) {
                 detailActionButtons.style.setProperty('display', 'flex', 'important');
+                console.log(`✅ [nav-link] Кнопки панели деталей показаны.`);
             }
 
             if (carTabsBar) {
                 if (['car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts'].includes(entity)) {
                     carTabsBar.style.display = 'flex';
+                    console.log(`🚗 [nav-link] Панель вкладок для машин/модулей активирована.`);
                 } else {
                     carTabsBar.style.display = 'none';
+                    console.log(`🚫 [nav-link] Панель вкладок скрыта (сущность не требует табов).`);
                 }
             }
 
@@ -8551,8 +8644,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (shouldShowDetails) {
                 const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
                 if ($firstRow.length) {
-                    console.log(`👉 [nav-link] Автоматический клик по первой строке загруженной таблицы`);
+                    console.log(`👉 [nav-link] Автоматический клик по первой строке загруженной таблицы для сущности "${entity}"`);
                     $firstRow.trigger('click');
+                } else {
+                    console.log(`⚠️ [nav-link] Первая строка в таблице не найдена, авто-клик пропущен.`);
                 }
             } else {
                 console.log(`🛑 [nav-link] Авто-клики по первой строке отменены: у "${entity}" нет нижней таблицы деталей.`);
