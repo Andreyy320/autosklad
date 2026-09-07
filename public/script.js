@@ -6376,6 +6376,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
+    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
+    const btnBackExpense = document.getElementById('btn-back-expense');
+
     // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
@@ -6392,6 +6395,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // Скрываем кнопку «Назад» на уровне складов
+        if (btnBackExpense) {
+            btnBackExpense.style.display = 'none';
+            btnBackExpense.onclick = null;
+        }
     } 
     // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
@@ -6434,6 +6443,14 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
+
+        // Показываем и настраиваем кнопку «Назад» на уровне документов склада
+        if (btnBackExpense) {
+            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
+            btnBackExpense.onclick = () => {
+                loadReceiptMainData('money_receipts_by_sklad', '');
+            };
+        }
     }
 
     currentEntity = currentReceiptView;
@@ -6653,14 +6670,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         const detailToolbar = document.getElementById('detail-toolbar');
                         if (detailToolbar) {
-                            // Скрываем основные кнопки действий (так как детализация приходов read-only)
                             const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
                             actionButtons.forEach(btn => {
                                 btn.style.display = 'none';
                             });
                         }
 
-                        // Если функция получения текущей сущности не найдена, используем строку по умолчанию
                         let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
                         
                         let realizationId = window.currentRealizationId || '';
@@ -6739,7 +6754,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
