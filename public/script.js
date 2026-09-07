@@ -7028,7 +7028,6 @@ function filterTable() {
         row.style.display = isVisible ? '' : 'none';
     });
 }
-
 let selectedDetailItem = null;
 let currentDetailItems = []; 
 function getCurrentDetailEntity() {
