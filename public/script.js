@@ -5775,8 +5775,93 @@ async function submitPayment(event, receiptId) {
 }
 
 
+// Функция для нижней таблицы (спецификация запчастей)
+async function loadExpenseDetailTable(fetchUrl) {
+    console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
+    console.trace('📍 [TRACE] Кто вызвал loadExpenseDetailTable:');
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const config = getConfig('expense_items');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
+
+    if (detailHeaderTr && visibleColumns.length > 0) {
+        detailHeaderTr.innerHTML = visibleColumns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+
+        const thead = detailHeaderTr.closest('thead');
+        let filterRow = document.getElementById('detail-table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'detail-table-filter-row';
+            thead.insertBefore(filterRow, detailHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, detailHeaderTr);
+        }
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterDetailTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
+    }
+
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error('Ошибка загрузки позиций');
+        const items = await response.json();
+        console.log(`📦 [Detail Data] Получено позиций:`, items);
+
+        if (!detailBody) return;
+
+        if (!items || items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            if (config && typeof config.render === 'function') {
+                tr.innerHTML = config.render(item);
+            } else {
+                console.error('❌ [Config] Функция render не найдена в конфиге для expense_items');
+            }
+            detailBody.appendChild(tr);
+        });
+        console.log('✅ [loadExpenseDetailTable] Рендеринг таблицы детализации успешно завершен.');
+
+    } catch (err) {
+        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
+        }
+    }
+}
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
+    console.trace('📍 [TRACE] Кто вызвал loadExpenseMainData:');
 
     let fetchUrl = '';
     let currentExpenseView = entity;
@@ -6069,89 +6154,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 }
 
-// Функция для нижней таблицы (спецификация запчастей)
-async function loadExpenseDetailTable(fetchUrl) {
-    console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
-    const detailBody = document.getElementById('detail-body');
-    const detailTitle = document.getElementById('detail-title');
-    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
-    
-    const config = getConfig('expense_items');
-    if (detailTitle && config) detailTitle.innerText = config.title;
-
-    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
-    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
-
-    if (detailHeaderTr && visibleColumns.length > 0) {
-        detailHeaderTr.innerHTML = visibleColumns.map(col => {
-            let widthStyle = col.width ? `width: ${col.width};` : '';
-            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-
-        const thead = detailHeaderTr.closest('thead');
-        let filterRow = document.getElementById('detail-table-filter-row');
-
-        if (!filterRow) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'detail-table-filter-row';
-            thead.insertBefore(filterRow, detailHeaderTr);
-        } else {
-            thead.insertBefore(filterRow, detailHeaderTr);
-        }
-
-        filterRow.innerHTML = visibleColumns.map(col => {
-            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-            if (col.style && col.style.includes('display: none')) {
-                return `<th style="display: none; padding: 4px;"></th>`;
-            }
-            return `
-                <th ${styleAttr}>
-                    <input type="text" 
-                           data-column="${col.field}" 
-                           oninput="filterDetailTable()" 
-                           placeholder="Фильтр..."
-                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                </th>
-            `;
-        }).join('');
-    }
-
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
-
-    try {
-        const response = await fetch(fetchUrl);
-        if (!response.ok) throw new Error('Ошибка загрузки позиций');
-        const items = await response.json();
-        console.log(`📦 [Detail Data] Получено позиций:`, items);
-
-        if (!detailBody) return;
-
-        if (!items || items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
-            return;
-        }
-
-        detailBody.innerHTML = '';
-        items.forEach(item => {
-            const tr = document.createElement('tr');
-            if (config && typeof config.render === 'function') {
-                tr.innerHTML = config.render(item);
-            } else {
-                console.error('❌ [Config] Функция render не найдена в конфиге для expense_items');
-            }
-            detailBody.appendChild(tr);
-        });
-        console.log('✅ [loadExpenseDetailTable] Рендеринг таблицы детализации успешно завершен.');
-
-    } catch (err) {
-        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
-        }
-    }
-}
-
 // Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
     if (window.currentPostavhikId) {
@@ -6162,7 +6164,6 @@ function applyExpensesFilters() {
         loadExpenseMainData('expenses_by_sklad');
     }
 }
-
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
