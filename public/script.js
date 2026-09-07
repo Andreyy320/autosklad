@@ -6802,6 +6802,8 @@ if (tableBodyForReceipts) {
         } else if (activeEntity === 'money_receipts') {
             // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
+            window.currentRepairId = null;
+            window.currentCustomerId = selectedItem.customer_id || '';
             
             // ЖЕЛЕЗОБЕТОННОЕ определение типа: проверяем и поле в объекте, и весь текст строки в DOM
             const docNumFromItem = String(selectedItem.doc_number || '');
@@ -6818,11 +6820,48 @@ if (tableBodyForReceipts) {
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
 
-            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
+            const tabsBlock = document.getElementById('tabs-for-money-receipts');
+            if (tabsBlock) {
+                tabsBlock.style.display = 'flex';
+            }
+
+            const detailToolbar = document.getElementById('detail-toolbar');
+            if (detailToolbar) {
+                const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
+                actionButtons.forEach(btn => {
+                    if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
+                        btn.style.display = 'none';
+                    }
+                });
+            }
+
+            document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
+            });
+
+            window.currentMoneyReceiptSubTab = 'money_receipts_detail';
+
+            const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
+            let realizationId = window.currentRealizationId || '';
+            let customerId = window.currentCustomerId || '';
+            let skladId = selectedItem.sklad_id || window.currentSkladId || '';
             
-            if (typeof switchMoneyReceiptTab === 'function') {
-                switchMoneyReceiptTab(activeTab, activeBtn);
+            let url = '';
+            const currentType = window.currentDocType || 'realization';
+
+            if (detailEntity === 'money_receipts_works_detail') {
+                url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
+            } else {
+                if (currentType === 'move') {
+                    url = `/api/money_receipts_detail?move_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=move`;
+                } else {
+                    url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=realization`;
+                }
+            }
+
+            if (typeof loadReceiptDetailTable === 'function') {
+                loadReceiptDetailTable(url, detailEntity);
             }
         }
 
@@ -6876,6 +6915,7 @@ if (tableBodyForReceipts) {
         }
     });
 }
+
 
 
 
