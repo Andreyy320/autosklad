@@ -4966,93 +4966,267 @@ function logout() {
     location.reload();
 }
 
-async function refreshData() {
+ async function refreshData() {
+
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
-    
-    // 1. Фиксируем состояние на момент вызова (замораживаем контекст)
+
+    console.trace('🔍 [refreshData] Стек вызовов (кто вызвал refreshData):');
+
+
+
+    // Сохраняем ID текущего выбранного элемента и текущий вид
+
     const savedSelectedItem = selectedItem;
+
     const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
+
     const previousEntity = currentEntity;
 
-    // Жестко фиксируем глобальные ID текущего экрана, чтобы они не переписались асинхронно
-    const lockedSkladId = window.currentSkladId;
-    const lockedPostavhikId = window.currentPostavhikId;
-    const lockedReceiptId = window.currentReceiptId;
-    const lockedRealizationId = window.currentRealizationId;
-    const lockedRepairId = window.currentRepairId;
-    const lockedCustomerId = window.currentCustomerId;
+
 
     // Специальная ветка для приходов денег
+
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
-        const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
+
+        const parentParam = (previousEntity === 'money_receipts') ? (window.currentSkladId || savedSelectedItem) : '';
+
         await loadReceiptMainData(previousEntity, parentParam);
-    } 
-    // Специальная ветка для расходов денег
-    else if (
-        previousEntity === 'expenses_by_sklad' || 
-        previousEntity === 'expenses_by_suppliers' || 
-        previousEntity === 'expenses_by_receipts' || 
-        previousEntity === 'expense_items'
-    ) {
-        let parentParam = '';
-        if (previousEntity === 'expenses_by_suppliers') {
-            parentParam = lockedSkladId || savedSelectedItem;
-        } else if (previousEntity === 'expenses_by_receipts') {
-            parentParam = lockedPostavhikId || savedSelectedItem;
-        } else if (previousEntity === 'expense_items') {
-            parentParam = lockedReceiptId || savedSelectedItem;
-        }
-        await loadExpenseMainData(previousEntity, parentParam);
-    } 
-    else {
-        const activeLink = document.querySelector('.nav-link.active');
-        const title = activeLink ? activeLink.innerText : 'Данные';
-        await loadData(previousEntity, title);
+
     }
 
-    // Восстанавливаем подсветку строки, используя зафиксированные locked-переменные
+    // Специальная ветка для расходов денег
+
+    else if (
+
+        previousEntity === 'expenses_by_sklad' ||
+
+        previousEntity === 'expenses_by_suppliers' ||
+
+        previousEntity === 'expenses_by_receipts' ||
+
+        previousEntity === 'expense_items'
+
+    ) {
+
+        let parentParam = '';
+
+        if (previousEntity === 'expenses_by_suppliers') {
+
+            parentParam = window.currentSkladId || savedSelectedItem;
+
+        } else if (previousEntity === 'expenses_by_receipts') {
+
+            parentParam = window.currentPostavhikId || savedSelectedItem;
+
+        } else if (previousEntity === 'expense_items') {
+
+            parentParam = window.currentReceiptId || savedSelectedItem;
+
+        }
+
+        await loadExpenseMainData(previousEntity, parentParam);
+
+    }
+
+    else {
+
+        const activeLink = document.querySelector('.nav-link.active');
+
+        const title = activeLink ? activeLink.innerText : 'Данные';
+
+        await loadData(currentEntity, title);
+
+    }
+
+
+
+    // Восстанавливаем подсветку строки и выбранный элемент после обновления таблицы
+
     if (savedSelectedItem && savedId) {
+
         const rows = document.querySelectorAll('#table-body tr');
+
         let foundRow = null;
-        
+
+       
+
         rows.forEach(row => {
+
             if (row.dataset.id == String(savedId)) {
+
                 foundRow = row;
+
             }
+
         });
 
+
+
         if (foundRow) {
+
             foundRow.classList.add('selected-row');
+
             selectedItem = savedSelectedItem;
 
+
+
+            // Если это второй уровень приходов
+
             if (previousEntity === 'money_receipts') {
+
                 const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
-                let realizationId = lockedRealizationId || savedSelectedItem.realization_id || savedSelectedItem.id || '';
-                let repairId = lockedRepairId || savedSelectedItem.repair_id || '';
-                let customerId = lockedCustomerId || savedSelectedItem.customer_id || '';
-                let skladId = savedSelectedItem.sklad_id || lockedSkladId || '';
-                
+
+                let realizationId = window.currentRealizationId || savedSelectedItem.realization_id || savedSelectedItem.id || '';
+
+                let repairId = window.currentRepairId || savedSelectedItem.repair_id || '';
+
+                let customerId = window.currentCustomerId || savedSelectedItem.customer_id || '';
+
+                let skladId = savedSelectedItem.sklad_id || window.currentSkladId || '';
+
+               
+
                 let url = '';
+
                 if (detailEntity === 'money_receipts_works_detail') {
+
                     url = `/api/money_receipts_works_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
+
                 } else {
+
                     url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
+
                 }
+
                 loadReceiptDetailTable(url, detailEntity);
+
             }
 
+
+
+            // Если это нижний уровень расходов (спецификация накладной)
+
             if (previousEntity === 'expense_items') {
-                let skladId = lockedSkladId || '';
-                let postavhikId = lockedPostavhikId || '';
-                let currentReceipt = lockedReceiptId || savedId || '';
+
+                let skladId = window.currentSkladId || '';
+
+                let postavhikId = window.currentPostavhikId || '';
+
+                let currentReceipt = window.currentReceiptId || savedId || '';
+
                 let url = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+
                 loadExpenseDetailTable(url);
+
             }
+
         }
+
     }
-    
-    // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
-}
+
+
+
+    // Стандартная логика для остальных разделов (если элемент выбран)
+
+    if (selectedItem &&
+
+        previousEntity !== 'money_receipts' &&
+
+        previousEntity !== 'money_receipts_by_sklad' &&
+
+        previousEntity !== 'expenses_by_sklad' &&
+
+        previousEntity !== 'expenses_by_suppliers' &&
+
+        previousEntity !== 'expenses_by_receipts' &&
+
+        previousEntity !== 'expense_items'
+
+    ) {
+
+        console.log('📌 [refreshData] Есть выбранный элемент (selectedItem):', selectedItem);
+
+
+
+        if (currentEntity === 'receipts' && selectedItem.id) {
+
+            loadDetailData('receipt_items', selectedItem.id);
+
+        } else if (currentEntity === 'moves' && selectedItem.id) {
+
+            loadDetailData('move_items', selectedItem.id);
+
+        } else if (currentEntity === 'cars' && selectedItem.id) {
+
+            loadDetailData('car_details', selectedItem.id);
+
+        } else if (currentEntity === 'car_cards' && selectedItem.id) {
+
+            const activeTabBtn = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .car-tab-btn.active');
+
+            if (activeTabBtn) {
+
+                const detailEntity = activeTabBtn.getAttribute('data-tab') || 'car_details';
+
+                loadDetailData(detailEntity, selectedItem.id);
+
+            }
+
+        } else if (currentEntity === 'accidents' && selectedItem.id) {
+
+            const activeTabBtn = document.querySelector('#tabs-for-accidents button.active, #tabs-for-accidents .accident-tab-btn.active');
+
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : (typeof currentAccidentSubTab !== 'undefined' ? currentAccidentSubTab : 'accident_invoices');
+
+            loadDetailData(detailEntity, selectedItem.id);
+
+        } else if (currentEntity === 'repairs' && selectedItem.id) {
+
+            const activeTabBtn = document.querySelector('#tabs-for-repairs button.active, #tabs-for-repairs .repair-tab-btn.active');
+
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : (typeof currentRepairSubTab !== 'undefined' ? currentRepairSubTab : 'repair_items');
+
+            loadDetailData(detailEntity, selectedItem.id);
+
+        } else if (currentEntity === 'realizations' && selectedItem.id) {
+
+            const activeTabBtn = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active');
+
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+
+            loadDetailData(detailEntity, selectedItem.id);
+
+        } else if (currentEntity === 'customers' && selectedItem.id) {
+
+            const activeTabBtn = document.querySelector('#tabs-for-customers button.active, #tabs-for-customers .customer-tab-btn.active');
+
+            const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : (typeof currentCustomerSubTab !== 'undefined' ? currentCustomerSubTab : 'customer_contacts');
+
+            loadDetailData(detailEntity, selectedItem.id);
+
+        } else if (currentEntity === 'stock_balances') {
+
+            const zId = selectedItem.zaphasti_id || selectedItem.id;
+
+            const wId = selectedItem.warehouse_id || selectedItem.sklad_id || selectedItem.id_sklad || selectedItem.warehouseId;
+
+            loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId });
+
+        } else if (currentEntity === 'stock_movement') {
+
+            loadDetailData('part_movement_details', selectedItem);
+
+        }
+
+    } else if (!selectedItem) {
+
+        console.log('⚠️ [refreshData] selectedItem пустой (null/undefined)');
+
+    }
+
+} 
+
+
 
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
@@ -6120,20 +6294,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 }
 
 
-// Вспомогательная функция для кнопки «Применить» на панели фильтров (приходы)
-function applyReceiptsFilters() {
-    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
-    
-    console.log(`🔍 [applyReceiptsFilters] Применение фильтра дат. skladId:`, skladId);
-
-    if (skladId) {
-        loadReceiptMainData('money_receipts', skladId);
-    } else {
-        console.warn('⚠️ [applyReceiptsFilters] skladId утерян, сбрасываем на список складов');
-        loadReceiptMainData('money_receipts_by_sklad');
-    }
-} 
-
 // Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
     const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
@@ -6151,6 +6311,20 @@ function applyExpensesFilters() {
         loadExpenseMainData('expenses_by_sklad');
     }
 }
+
+// Вспомогательная функция для кнопки «Применить» на панели фильтров (приходы)
+function applyReceiptsFilters() {
+    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
+    
+    console.log(`🔍 [applyReceiptsFilters] Применение фильтра дат. skladId:`, skladId);
+
+    if (skladId) {
+        loadReceiptMainData('money_receipts', skladId);
+    } else {
+        console.warn('⚠️ [applyReceiptsFilters] skladId утерян, сбрасываем на список складов');
+        loadReceiptMainData('money_receipts_by_sklad');
+    }
+} 
 
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
