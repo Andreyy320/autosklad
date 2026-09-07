@@ -6590,11 +6590,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                                 <span style="color: #64748b; font-weight: normal;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
                                 <span style="color: #64748b; font-weight: normal;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                                <span style="color: #64748b; font-weight: normal;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                                <span style="color: #64748b; font-weight: normal;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
-                                <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
-                            </div>
                         </div>
                     </td>
                 `;
@@ -6673,8 +6668,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 footerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 8px 12px;">
                         <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                            <span style="color: #334155;">Итого по месяцу:</span>
-                            <span style="color: #64748b; font-weight: normal;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                            <span style="color: #334155;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
                             <span style="color: #64748b; font-weight: normal;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
                             <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
                         </div>
