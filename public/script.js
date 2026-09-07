@@ -7816,6 +7816,46 @@ if (tableBody) {
             console.log(`⚠️ [tableBody click] Клик вне строк таблицы (tr не найден).`);
             return;
         }
+
+        // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
+        const entitiesWithDetails = [
+            'receipts', 
+            'moves', 
+            'cars', 
+            'car_cards', 
+            'accidents', 
+            'repairs', 
+            'realizations', 
+            'money_receipts', 
+            'stock_movement', 
+            'postavhik', 
+            'counterparties', 
+            'customers',
+            'expenses_by_receipts'
+        ];
+
+        const summaryEntitiesWithoutDetails = [
+            'repair_types',
+            'money_receipts_by_sklad',
+            'expenses_by_sklad',
+            'expenses_by_suppliers',
+            'stock_balances',
+            'расходы',
+            'expenses',
+            'parts',
+            'nomenclature',
+            'goods'
+        ];
+
+        const shouldLoadDetails = entitiesWithDetails.includes(currentEntity) && !summaryEntitiesWithoutDetails.includes(currentEntity);
+
+        if (!shouldLoadDetails) {
+            console.log(`🛑 [tableBody click] У сущности "${currentEntity}" нет детализации, клик по строке проигнорирован, нижняя таблица не открывается.`);
+            // Подсветим строку, но дальше загрузку деталей не пускаем
+            document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+            tr.style.background = '#e2e8f0';
+            return;
+        }
         
         // Отладка
         if (!e.isTrusted) {
@@ -7997,7 +8037,6 @@ if (tableBody) {
         }
     });
 }
-
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
