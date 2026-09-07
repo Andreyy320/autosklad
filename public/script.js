@@ -6097,6 +6097,18 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 
+// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
+function applyExpensesFilters() {
+    // Если мы находимся на уровне накладных или поставщиков, перезагружаем данные с учетом выбранных дат
+    if (currentEntity === 'expenses_by_receipts' && window.currentPostavhikId) {
+        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+    } else if (window.currentSkladId) {
+        loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+    } else {
+        loadExpenseMainData('expenses_by_sklad');
+    }
+}
+
 
 
 
