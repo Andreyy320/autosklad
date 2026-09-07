@@ -5760,125 +5760,19 @@ async function loadExpenseDetailTable(fetchUrl) {
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
 
+    // На всякий случай удаляем старый ряд фильтров, если он остался от других таблиц
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+
+    const existingAlternativeRow = document.getElementById('detail-table-filter-row');
+    if (existingAlternativeRow) existingAlternativeRow.remove();
+
+    // Рендерим только заголовки таблицы (без инпутов фильтрации)
     if (detailHeaderTr && visibleColumns.length > 0) {
         detailHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-
-        const thead = detailHeaderTr.closest('thead');
-        
-        // ❌ Было: let filterRow = document.getElementById('detail-table-filter-row');
-        // ✅ Ставим единый ID, который ищет filterDetailTable():
-        let filterRow = document.getElementById('detail-filter-row');
-
-        // Также на всякий случай очищаем старый фильтр с другим ID, если он остался от других таблиц
-        const oldAlternativeRow = document.getElementById('detail-table-filter-row');
-        if (oldAlternativeRow) oldAlternativeRow.remove();
-
-        if (!filterRow) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'detail-filter-row'; // Используем единый ID!
-            thead.insertBefore(filterRow, detailHeaderTr);
-        }
-
-        filterRow.innerHTML = visibleColumns.map(col => {
-            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-            if (col.style && col.style.includes('display: none')) {
-                return `<th style="display: none; padding: 4px;"></th>`;
-            }
-            return `
-                <th ${styleAttr}>
-                    <input type="text" 
-                           data-column="${col.field}" 
-                           oninput="filterDetailTable()" 
-                           placeholder="Фильтр..."
-                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                </th>
-            `;
-        }).join('');
-    }
-
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
-
-    try {
-        const response = await fetch(fetchUrl);
-        if (!response.ok) throw new Error(`Ошибка загрузки позиций (Статус: ${response.status})`);
-        
-        const items = await response.json();
-
-        if (!detailBody) return;
-
-        if (!items || items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
-            return;
-        }
-
-        detailBody.innerHTML = '';
-        items.forEach((item, index) => {
-            const tr = document.createElement('tr');
-            if (config && typeof config.render === 'function') {
-                tr.innerHTML = config.render(item);
-            }
-            detailBody.appendChild(tr);
-        });
-
-    } catch (err) {
-        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации: ${err.message}</td></tr>`;
-        }
-    }
-}async function loadExpenseDetailTable(fetchUrl) {
-    console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
-    const detailBody = document.getElementById('detail-body');
-    const detailTitle = document.getElementById('detail-title');
-    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
-    
-    const config = getConfig('expense_items');
-    if (detailTitle && config) detailTitle.innerText = config.title;
-
-    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
-    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
-
-    if (detailHeaderTr && visibleColumns.length > 0) {
-        detailHeaderTr.innerHTML = visibleColumns.map(col => {
-            let widthStyle = col.width ? `width: ${col.width};` : '';
-            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
-        }).join('');
-
-        const thead = detailHeaderTr.closest('thead');
-        
-        // ❌ Было: let filterRow = document.getElementById('detail-table-filter-row');
-        // ✅ Ставим единый ID, который ищет filterDetailTable():
-        let filterRow = document.getElementById('detail-filter-row');
-
-        // Также на всякий случай очищаем старый фильтр с другим ID, если он остался от других таблиц
-        const oldAlternativeRow = document.getElementById('detail-table-filter-row');
-        if (oldAlternativeRow) oldAlternativeRow.remove();
-
-        if (!filterRow) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'detail-filter-row'; // Используем единый ID!
-            thead.insertBefore(filterRow, detailHeaderTr);
-        }
-
-        filterRow.innerHTML = visibleColumns.map(col => {
-            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-            if (col.style && col.style.includes('display: none')) {
-                return `<th style="display: none; padding: 4px;"></th>`;
-            }
-            return `
-                <th ${styleAttr}>
-                    <input type="text" 
-                           data-column="${col.field}" 
-                           oninput="filterDetailTable()" 
-                           placeholder="Фильтр..."
-                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                </th>
-            `;
         }).join('');
     }
 
