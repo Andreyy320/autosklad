@@ -6848,7 +6848,7 @@ if (tableBodyForReceipts) {
         tableBodyForReceipts.dataset.listenerAttached = "true";
 
         tableBodyForReceipts.addEventListener('click', async (e) => {
-            e.stopPropagation(); // Останавливаем всплытие, чтобы другие обработчики не трогали строку
+            
             const allowedEntities = [
                 'money_receipts_by_sklad', 
                 'money_receipts',
@@ -7640,13 +7640,11 @@ if (tableBody) {
         // Универсальный поиск элемента с поддержкой разных вариантов ID
         selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
 
+        // Безопасная проверка: если в текущем массиве элемент по ID не найден, 
+        // НЕ берем случайную строку по индексу, чтобы не подменять ID документов на ID пользователей/других сущностей!
         if (!selectedItem) {
-            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems, пробуем поиск по индексу строки.`);
-            const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
-            if (rowIndex >= 0 && currentItems[rowIndex]) {
-                selectedItem = currentItems[rowIndex];
-                console.log(`📌 [tableBody click] Элемент найден по индексу строки ${rowIndex}:`, selectedItem);
-            }
+            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Прерываем во избежание подмены данных.`);
+            return;
         }
         
         selectedDetailItem = null;  
@@ -7806,7 +7804,6 @@ if (tableBody) {
         }
     });
 }
-
 
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
