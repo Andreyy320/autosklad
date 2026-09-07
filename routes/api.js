@@ -3909,7 +3909,8 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
-                    real.sklad_id AS skl_id
+                    real.sklad_id AS skl_id,
+                    'realization' AS doc_type
                 FROM realization_items ri
                 JOIN realizations real ON ri.realization_id = real.id
                 WHERE real.is_posted = true
@@ -3932,7 +3933,8 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(rw.description, '')::text AS description,
                     real.id AS rel_id,
                     real.customer_id AS cust_id,
-                    real.sklad_id AS skl_id
+                    real.sklad_id AS skl_id,
+                    'realization' AS doc_type
                 FROM realization_works rw
                 JOIN realizations real ON rw.realization_id = real.id
                 WHERE real.is_posted = true
@@ -3949,7 +3951,6 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
                     
-                    -- Берем чистую закупочную цену из исходного прихода (receipt_items), если нет — фоллбек на mi.price
                     COALESCE(
                         NULLIF(ri_orig.price_rub, 0),
                         NULLIF(ri_orig.price, 0),
@@ -3968,23 +3969,45 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(mi.description, '')::text AS description,
                     m.id AS rel_id,
                     m.warehouse_to_id AS cust_id,
-                    m.warehouse_from_id AS skl_id
+                    m.warehouse_from_id AS skl_id,
+                    'move' AS doc_type
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
-                -- Подтягиваем оригинальный документ прихода и его позицию для точной закупочной цены
                 LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
                 LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
                 WHERE m.is_posted = true
             ) sub
             WHERE 
-                ($1::integer IS NULL OR sub.rel_id = $1)
+                -- Если передан конкретный ID документа, требуем совпадения и ID, и типа (чтобы реализация и перемещение с одинаковым ID не смешивались)
+                (
+                    $1::integer IS NULL 
+                    OR (
+                        sub.rel_id = $1 
+                        AND (
+                            (SUBSTRING(sub.doc_number FROM 1 for 11) = 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'move') 
+                            OR 
+                            (SUBSTRING(sub.doc_number FROM 1 for 11) != 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'realization')
+                            OR 
+                            $4 IS NULL
+                        )
+                    )
+                )
                 AND ($2::integer IS NULL OR sub.cust_id = $2)
                 AND ($3::integer IS NULL OR sub.skl_id = $3)
             ORDER BY date DESC, id ASC;
         `;
 
-        const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId];
+        // Определяем тип документа по первому символу или наличию параметра, либо передаем null
+        // Если у тебя фронтенд вызывает этот эндпоинт, можно также передавать ?doc_type=realization или move
+        let docType = req.query.doc_type || null;
+        if (!docType && cleanRealizationId) {
+            // Автоопределение, если фронт не передал doc_type явно, но прислал ID
+            // Если запрос идет из таблицы реализаций/перемещений
+            docType = null; // Если тип не передан, отфильтруем по ID в обеих таблицах, но теперь у нас есть разметка doc_type
+        }
+
+        const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId, docType];
         console.log('⚡ [/api/money_receipts_detail] Параметры запроса:', queryParams);
         
         const result = await pool.query(cleanQuery, queryParams);
