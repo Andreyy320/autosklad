@@ -5336,7 +5336,6 @@ async function applyMovementFilters() {
     }
 }
 
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -5513,6 +5512,12 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
+                // Если у сущности нет детализации, строка просто выделяется, но нижняя таблица не открывается
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts'];
+                if (!entitiesWithDetails.includes(entity)) {
+                    return;
+                }
+
                 // При клике на строку активируем и показываем нижнюю таблицу деталей
                 const detailContainerTarget = document.getElementById('detail-container');
                 const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
@@ -5616,7 +5621,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
