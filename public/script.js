@@ -2816,6 +2816,11 @@ async function openReceiptForm(entity, item = null) {
             is_posted: false,
             fact_date: currentDateTime
         };
+    } else {
+        // Если это существующий элемент, но у него пустая дата — подставляем текущую по умолчанию (на всякий случай)
+        if (!item.fact_date) {
+            item.fact_date = currentDateTime;
+        }
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
