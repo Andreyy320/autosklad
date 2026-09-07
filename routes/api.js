@@ -3614,7 +3614,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
         const query = `
             WITH combined_docs AS (
-                -- 1. Обычные продажи из realizations
+                -- 1. Обычные продажи из realizations (участвуют в суммах и оплатах клиентов)
                 SELECT 
                     real.id,
                     real.sklad_id,
@@ -3643,7 +3643,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (теперь полноценно учитывают сумму из move_items)
+                -- 2. Перемещения (учитывают количество и сумму в обороте склада, но НЕ создают оплату клиента)
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
@@ -3651,7 +3651,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     COALESCE(m_items.total_sum, 0) AS parts_sum,
                     0 AS works_sum,
                     COALESCE(m_items.total_sum, 0) AS total_sum,
-                    COALESCE(m_items.total_sum, 0) AS paid_sum -- Если перемещения считаются сразу оплаченными/закрытыми внутренне
+                    0 AS paid_sum -- Перемещения не оплачиваются деньгами клиентов через кассу
                 FROM moves m
                 LEFT JOIN (
                     SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
