@@ -6304,8 +6304,19 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     } 
     // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
-        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
-        if (skladId) window.currentSkladId = skladId;
+        let skladId = '';
+        if (parentId && typeof parentId === 'object') {
+            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
+        } else if (parentId) {
+            skladId = parentId;
+        } else {
+            skladId = window.currentSkladId;
+        }
+
+        if (skladId) {
+            window.currentSkladId = skladId;
+        }
+        
         window.currentCustomerId = null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
@@ -6411,6 +6422,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             saldoData = parsedData.saldo || null;
         }
 
+        // Сохраняем в глобальный контекст для других функций
+        window.currentItems = currentItems;
+
         if (!mainTableBody) return;
 
         let saldoHeaderHtml = '';
@@ -6485,12 +6499,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 let paidSum = Number(item.total_paid || item.paid || 0);
                 let debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
                 
-                // ИСПРАВЛЕНИЕ: Берем готовые и посчитанные бэкендом значения прибыли напрямую, без зануления через payRatio
                 let itemPartsProfit = Number(item.parts_profit || 0);
                 let itemWorksSum = Number(item.works_sum || item.work_sum || item.services_sum || 0);
                 let itemNetProfit = Number(item.net_profit || (itemPartsProfit + itemWorksSum));
-
-                console.debug(`🔍 [Row #${index}] Doc: ${item.doc_number || item.id} | RealizationSum: ${realizationSum} | Paid: ${paidSum} | PartsProfit: ${itemPartsProfit} | Works: ${itemWorksSum} | NetProfit: ${itemNetProfit}`);
 
                 groupedByMonth[m.key].totalSum += realizationSum;
                 groupedByMonth[m.key].totalPaid += paidSum;
@@ -6534,7 +6545,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
-                        selectedItem = item;
+                        window.selectedItem = item;
 
                         window.currentRealizationId = item.realization_id || item.id;
                         window.currentRepairId = null;
@@ -6560,7 +6571,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                             if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
                         });
 
-                        currentMoneyReceiptSubTab = 'money_receipts_detail';
+                        window.currentMoneyReceiptSubTab = 'money_receipts_detail';
 
                         const detailEntity = getCurrentDetailEntity();
                         let realizationId = window.currentRealizationId || '';
@@ -6623,7 +6634,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
-                    selectedItem = item;
+                    window.selectedItem = item;
 
                     if (currentEntity === 'money_receipts_by_sklad') {
                         loadReceiptMainData('money_receipts', item);
@@ -6641,6 +6652,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
 // Вспомогательная функция для кнопки «Применить» на панели фильтров
 function applyReceiptsFilters() {
     if (window.currentSkladId) {
