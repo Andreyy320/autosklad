@@ -7610,14 +7610,16 @@ if (tableBody) {
         const id = tr.getAttribute('data-id');
         console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
-        // Универсальный надежный поиск элемента строго по ID (без опасного фоллбэка по индексу строки)
+        // Универсальный поиск элемента с поддержкой разных вариантов ID и без опасного индекса
         selectedItem = currentItems.find(i => 
             String(i.id || '') === String(id) || 
-            String(i.receipt_id || '') === String(id) || 
             String(i.realization_id || '') === String(id) || 
+            String(i.receipt_id || '') === String(id) || 
             String(i.sklad_id || '') === String(id) || 
             String(i.postavhik_id || '') === String(id) || 
-            String(i.move_id || '') === String(id)
+            String(i.move_id || '') === String(id) ||
+            String(i.payment_id || '') === String(id) ||
+            String(i.customer_id || '') === String(id)
         );
 
         if (!selectedItem) {
@@ -7657,7 +7659,7 @@ if (tableBody) {
         }
 
         if (selectedItem) {
-            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.realization_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
+            const itemId = selectedItem.id || selectedItem.realization_id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || selectedItem.move_id || selectedItem.payment_id || id;
             console.log(`🎯 [tableBody click] Выбран элемент с итоговым идентификатором (itemId): ${itemId}`);
 
             if (currentEntity === 'cars') {
