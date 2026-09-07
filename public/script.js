@@ -5774,7 +5774,7 @@ async function submitPayment(event, receiptId) {
     }
 }
 
-async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
+ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
@@ -5788,9 +5788,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
-    // Элементы панели фильтров по датам (принудительно скрываем на всех уровнях расходов)
-    const receiptsFilterPanel = document.getElementById('receipts-filter-panel');
-    if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
+    // Элементы панели фильтров по датам (показываем только на уровне expenses_by_receipts)
+    const receiptsFilterPanel = document.getElementById('expenses-filter-panel') || document.getElementById('receipts-filter-panel');
+    if (receiptsFilterPanel) {
+        receiptsFilterPanel.style.display = (currentExpenseView === 'expenses_by_receipts') ? 'flex' : 'none';
+    }
 
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
@@ -5831,6 +5833,17 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         let currentPostavhik = window.currentPostavhikId || '';
 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
+        
+        // Добавление параметров дат из инпутов фильтра, если они заполнены
+        const startDateInput = document.getElementById('expenses-start-date');
+        const endDateInput = document.getElementById('expenses-end-date');
+        if (startDateInput && startDateInput.value) {
+            fetchUrl += `&start_date=${startDateInput.value}`;
+        }
+        if (endDateInput && endDateInput.value) {
+            fetchUrl += `&end_date=${endDateInput.value}`;
+        }
+
         console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, URL: ${fetchUrl}`);
 
         if (detailContainer) detailContainer.style.display = 'none';
@@ -6046,6 +6059,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
+
 // Функция для нижней таблицы (спецификация запчастей)
 async function loadExpenseDetailTable(fetchUrl) {
     console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
