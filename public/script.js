@@ -2814,10 +2814,13 @@ async function openReceiptForm(entity, item = null) {
         item = { 
             doc_number: `${prefix}${nextId}`,
             is_posted: false,
-            fact_date: currentDateTime
+            date: currentDateTime,     /* Подставляем в обычное поле даты */
+            fact_date: currentDateTime /* И в поле даты факт */
         };
     } else {
-        // Если это существующий элемент, но у него пустая дата — подставляем текущую по умолчанию (на всякий случай)
+        if (!item.date) {
+            item.date = currentDateTime;
+        }
         if (!item.fact_date) {
             item.fact_date = currentDateTime;
         }
@@ -2895,7 +2898,7 @@ async function openReceiptForm(entity, item = null) {
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
-            if (col.field === 'fact_date' && !val && isPosted) {
+            if ((col.field === 'fact_date' || col.field === 'date') && !val && (isPosted || !item.id)) {
                 val = currentDateTime;
             }
 
