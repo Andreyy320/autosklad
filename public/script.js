@@ -6019,11 +6019,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-${currentGIdx}`;
                     
-                    // Безопасный клик для проваливания в детализацию накладной
-                    tr.addEventListener('click', () => {
-                        loadExpenseMainData('expense_items', item);
-                    });
-
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
                     } else {
@@ -6055,15 +6050,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
                 
-                // Добавляем правильный обработчик перехода по уровням для обычной таблицы
-                if (currentEntity === 'expenses_by_sklad') {
-                    tr.dataset.skladId = item.sklad_id;
-                    tr.addEventListener('click', () => loadExpenseMainData('expenses_by_suppliers', item));
-                } else if (currentEntity === 'expenses_by_suppliers') {
-                    tr.dataset.postavhikId = item.postavhik_id;
-                    tr.addEventListener('click', () => loadExpenseMainData('expenses_by_receipts', item));
-                }
-
                 if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
                 } else {
@@ -6176,6 +6162,7 @@ function applyExpensesFilters() {
         loadExpenseMainData('expenses_by_sklad');
     }
 }
+
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
