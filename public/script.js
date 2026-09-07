@@ -5774,6 +5774,17 @@ async function submitPayment(event, receiptId) {
     }
 }
 
+// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
+function applyExpensesFilters() {
+    if (currentEntity === 'expenses_by_receipts' && window.currentPostavhikId) {
+        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+    } else if (window.currentSkladId) {
+        loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+    } else {
+        loadExpenseMainData('expenses_by_sklad');
+    }
+}
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
 
@@ -5788,9 +5799,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
-    // Элементы панели фильтров по датам (принудительно скрываем на всех уровнях расходов)
+    // Элементы панели фильтров по датам
     const receiptsFilterPanel = document.getElementById('receipts-filter-panel');
     if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
+
+    const expensesFilterPanel = document.getElementById('expenses-filter-panel');
 
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
@@ -5798,6 +5811,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         window.currentPostavhikId = null;
         window.currentReceiptId = null;
 
+        if (expensesFilterPanel) expensesFilterPanel.style.display = 'none';
         fetchUrl = `/api/expenses_by_sklad`;
         console.log(`📂 [View: expenses_by_sklad] Установлен URL: ${fetchUrl}`);
 
@@ -5813,6 +5827,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         window.currentPostavhikId = null;
         window.currentReceiptId = null;
 
+        if (expensesFilterPanel) expensesFilterPanel.style.display = 'none';
         fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
         console.log(`📂 [View: expenses_by_suppliers] sklad_id=${window.currentSkladId}, URL: ${fetchUrl}`);
 
@@ -5830,8 +5845,18 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         let skladId = window.currentSkladId || '';
         let currentPostavhik = window.currentPostavhikId || '';
 
+        // Показываем панель фильтров на уровне накладных расходов
+        if (expensesFilterPanel) expensesFilterPanel.style.display = 'flex';
+
+        // Считываем значения дат из инпутов
+        let dateFrom = document.getElementById('expenses-start-date')?.value || '';
+        let dateTo = document.getElementById('expenses-end-date')?.value || '';
+
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
-        console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, URL: ${fetchUrl}`);
+        if (dateFrom) fetchUrl += `&date_from=${dateFrom}`;
+        if (dateTo) fetchUrl += `&date_to=${dateTo}`;
+
+        console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, date_from=${dateFrom}, date_to=${dateTo}, URL: ${fetchUrl}`);
 
         if (detailContainer) detailContainer.style.display = 'none';
 
@@ -5850,6 +5875,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         let postavhikId = window.currentPostavhikId || '';
         let currentReceipt = window.currentReceiptId || '';
 
+        if (expensesFilterPanel) expensesFilterPanel.style.display = 'none';
         fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
         console.log(`📂 [View: expense_items] URL: ${fetchUrl}`);
 
@@ -6097,17 +6123,7 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 
-// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
-function applyExpensesFilters() {
-    // Если мы находимся на уровне накладных или поставщиков, перезагружаем данные с учетом выбранных дат
-    if (currentEntity === 'expenses_by_receipts' && window.currentPostavhikId) {
-        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
-    } else if (window.currentSkladId) {
-        loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
-    } else {
-        loadExpenseMainData('expenses_by_sklad');
-    }
-}
+
 
 
 
