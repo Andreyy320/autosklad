@@ -3754,7 +3754,7 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
                     NULL::integer AS customer_id,
-                    CONCAT('', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     1 AS total_orders,
                     COALESCE(m_items.total_qty, 0)::numeric AS parts_qty,
@@ -4237,8 +4237,7 @@ router.get('/moves/:id/payments', async (req, res) => {
     }
 });
 
-
-   router.get('/realizations/:id/payments', async (req, res) => {
+router.get('/realizations/:id/payments', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
 
@@ -4274,21 +4273,23 @@ router.get('/moves/:id/payments', async (req, res) => {
 });
 
 
-// 1. Расходы по складам (уровень 1)
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
+        const skladId = req.query.sklad_id || 1;
+
         const query = `
             WITH sklad_payments AS (
-                -- Считаем сколько всего денег отдали поставщикам в разрезе складов
+                -- Считаем сколько всего денег отдали поставщикам по конкретному складу
                 SELECT rec.warehouse_id, SUM(sp.amount) AS total_paid
                 FROM supplier_payments sp
                 JOIN receipts rec ON sp.receipt_id = rec.id
+                WHERE rec.warehouse_id = $1
                 GROUP BY rec.warehouse_id
             )
             SELECT 
                 sk.id AS id,
                 sk.id AS sklad_id,
-                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
+                COALESCE(sk.name, 'Центральный')::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
@@ -4302,19 +4303,16 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
             LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
-            GROUP BY sk.id, sk.name, spay.total_paid
-            ORDER BY total_expense_sum DESC;
+            WHERE sk.id = $1
+            GROUP BY sk.id, sk.name, spay.total_paid;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [skladId]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения расходов по складам:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
-
-
 
 // 2. Список поставщиков для конкретного склада (уровень 2)
 router.get('/expenses_by_suppliers', async (req, res) => {
