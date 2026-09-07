@@ -6098,10 +6098,10 @@ async function loadExpenseDetailTable(fetchUrl) {
 }
 
 
-
-
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
-    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
+    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
+        skladId = window.currentSkladId || '';
+    }
     console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
@@ -6174,7 +6174,9 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
 }
 
 function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
-    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
+    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
+        skladId = window.currentSkladId || '';
+    }
     console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}"`);
     
     const drawer = getOrCreateDrawer();
@@ -6210,7 +6212,9 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
 
 async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
-    if (skladId === true || skladId === 'true') skladId = window.currentSkladId || '';
+    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
+        skladId = window.currentSkladId || '';
+    }
     
     const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
     const commentVal = document.getElementById('payment-comment').value;
@@ -6732,20 +6736,26 @@ if (tableBodyForReceipts) {
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        const rowsArray = Array.from(newTableBody.querySelectorAll('tr'));
-        const rowIndex = rowsArray.indexOf(tr);
-
         let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
+        let selectedItem = null;
 
-        if (rowIndex >= 0 && itemsSource && itemsSource[rowIndex]) {
-            selectedItem = itemsSource[rowIndex];
-        } else if (itemsSource) {
-            selectedItem = itemsSource.find(i => String(i.id || i.sklad_id || i.realization_id || i.receipt_id || i.postavhik_id) === String(id));
+        // ИСПРАВЛЕНИЕ: Ищем строго по ID, исключая ошибки с индексом строки
+        if (itemsSource && Array.isArray(itemsSource)) {
+            selectedItem = itemsSource.find(i => 
+                String(i.id || '') === String(id) || 
+                String(i.realization_id || '') === String(id) || 
+                String(i.sklad_id || '') === String(id) || 
+                String(i.receipt_id || '') === String(id) || 
+                String(i.postavhik_id || '') === String(id)
+            );
         }
 
-        // Страховка: если по какой-то причине через find не нашлось, но ID есть в DOM
-        if (!selectedItem && id && itemsSource) {
-            selectedItem = itemsSource.find(i => String(i.id) === String(id) || String(i.realization_id) === String(id));
+        // Если в массиве не нашлось, собираем базовый объект из DOM-атрибутов строки
+        if (!selectedItem && id) {
+            selectedItem = {
+                id: id,
+                realization_id: id
+            };
         }
         
         if (typeof window !== 'undefined') {
@@ -6831,7 +6841,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
 
 
 
