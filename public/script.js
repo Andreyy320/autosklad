@@ -7018,7 +7018,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 // Вспомогательная функция для кнопки «Применить» на панели фильтров
 function applyReceiptsFilters() {
     if (window.currentSkladId) {
