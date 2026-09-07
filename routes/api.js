@@ -3931,7 +3931,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Позиции перемещений с логгированием полей
+                -- 3. Позиции перемещений с получением чистой закупки из связанного прихода
                 SELECT 
                     mi.id,
                     'part' AS item_type,
@@ -3940,13 +3940,22 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
-                    -- Пробуем вытащить чистую закупку (если mi.price это уже продажа, посмотрим по логике)
-                    COALESCE(mi.price, 0)::numeric AS purchase_price,
+                    
+                    -- Берем чистую закупочную цену из исходного прихода (receipt_items), если нет — фоллбек на mi.price
+                    COALESCE(
+                        NULLIF(ri_orig.price_rub, 0),
+                        NULLIF(ri_orig.price, 0),
+                        mi.price,
+                        0
+                    )::numeric AS purchase_price,
+
                     0::numeric AS retail_price,
+                    
                     CASE 
                         WHEN mi.quantity > 0 THEN COALESCE(mi.total_rub, mi.price * mi.quantity, 0) / mi.quantity 
                         ELSE COALESCE(mi.total_rub, mi.price, 0) 
                     END::numeric AS final_unit_price,
+                    
                     COALESCE(mi.total_rub, mi.price * mi.quantity, 0)::numeric AS total_rub,
                     COALESCE(mi.description, '')::text AS description,
                     m.id AS rel_id,
@@ -3955,6 +3964,9 @@ router.get('/money_receipts_detail', async (req, res) => {
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
+                -- Подтягиваем оригинальный документ прихода и его позицию для точной закупочной цены
+                LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
+                LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
                 WHERE m.is_posted = true
             ) sub
             WHERE 
@@ -3969,7 +3981,6 @@ router.get('/money_receipts_detail', async (req, res) => {
         
         const result = await pool.query(cleanQuery, queryParams);
         
-        // Выводим в лог то, что реально вернулось для перемещений, чтобы увидеть расхождение цен
         result.rows.forEach(r => {
             if (r.doc_number && r.doc_number.startsWith('ПЕРЕМЕЩЕНИЕ')) {
                 console.log(`🔍 [DEBUG MOVE ITEM]: Документ: ${r.doc_number}, Товар: ${r.item_name}, Кол-во: ${r.quantity}, Закупка: ${r.purchase_price}, Итог с наценкой: ${r.total_rub}`);
