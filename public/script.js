@@ -7515,7 +7515,6 @@ async function postRealization(realizationId) {
         }
     );
 }
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -7527,7 +7526,7 @@ if (tableBody) {
             return;
         }
 
-        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться (их обрабатывает отдельный кликер)
+        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться
         if (
             currentEntity === 'expenses_by_sklad' || 
             currentEntity === 'expenses_by_suppliers' || 
@@ -7670,23 +7669,28 @@ if (tableBody) {
                     carTabsPanel.style.display = (currentEntity === 'receipts' || currentEntity === 'moves' || currentEntity === 'customers') ? 'flex' : 'none';
                 }
 
+                if (detailContainer) detailContainer.style.display = 'flex';
+
                 if (currentEntity === 'receipts') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('receipt_items', itemId);
                 } else if (currentEntity === 'moves') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('move_items', itemId);
                 } else if (currentEntity === 'postavhik') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('counterparty_contacts', itemId);
                 } else if (currentEntity === 'customers') {
-                    if (detailContainer) detailContainer.style.display = 'flex';
                     loadDetailData('customer_contacts', itemId);
                 }
             }
+
+            // Гарантированно восстанавливаем видимость панели кнопок спецификации после загрузки данных детализации
+            setTimeout(() => {
+                const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+                if (detailActionButtons) {
+                    detailActionButtons.style.display = 'flex';
+                }
+            }, 50);
         }
     });
 }
@@ -8373,6 +8377,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
         const tabsForMoneyReceipts = document.getElementById('tabs-for-money-receipts');
 
+        // Управляем ТОЛЬКО главным баром кнопок верхней таблицы
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
             const readOnlyMainEntities = [
@@ -8392,6 +8397,13 @@ document.querySelectorAll('.nav-link').forEach(link => {
             } else {
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
             }
+        }
+
+        // ВАЖНО: Гарантируем, что панель кнопок НИЖНЕЙ таблицы (спецификации) всегда остается доступной, 
+        // если открыт контейнер деталей, чтобы кнопки там не пропадали.
+        const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+        if (detailActionButtons) {
+            detailActionButtons.style.setProperty('display', 'flex', 'important');
         }
 
         if (
