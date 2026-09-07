@@ -3612,7 +3612,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const query = `
             WITH combined_docs AS (
-                -- 1. Обычные продажи из realizations
+                -- 1. Обычные продажи из realizations (участвуют в деньгах, долгах и оплатах)
                 SELECT 
                     real.id,
                     real.sklad_id,
@@ -3641,18 +3641,18 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (склад-источник фиксирует долг склада-получателя на сумму с наценкой total_rub)
+                -- 2. Перемещения (учитывают только количество товара на складе, но НЕ создают долг/оплату клиента)
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
                     COALESCE(m_items.total_qty, 0) AS total_qty,
-                    COALESCE(m_items.total_sum, 0) AS parts_sum,
+                    0 AS parts_sum,
                     0 AS works_sum,
-                    COALESCE(m_items.total_sum, 0) AS total_sum,
+                    0 AS total_sum,
                     0 AS paid_sum
                 FROM moves m
                 LEFT JOIN (
-                    SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
+                    SELECT move_id, SUM(quantity) AS total_qty
                     FROM move_items
                     GROUP BY move_id
                 ) m_items ON m.id = m_items.move_id
@@ -3671,7 +3671,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0)::numeric AS debt_sum
             FROM skladi sk
             JOIN combined_docs doc ON doc.sklad_id = sk.id
-            WHERE sk.id = 1 -- Замените 1 на реальный ID вашего центрального склада, если он отличается
             GROUP BY sk.id, sk.name;
         `;
         const result = await pool.query(query);
