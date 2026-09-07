@@ -6665,7 +6665,14 @@ function applyReceiptsFilters() {
 }
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
-    console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
+    console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
+    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
+        currentDocType: window.currentDocType,
+        currentRealizationId: window.currentRealizationId,
+        currentCustomerId: window.currentCustomerId,
+        currentSkladId: window.currentSkladId,
+        subTabName
+    });
     
     // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
@@ -6693,8 +6700,10 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
 
     try {
+        console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl);
         const responseText = await response.text();
+        console.<code>log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
 
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const data = JSON.parse(responseText);
@@ -6746,21 +6755,29 @@ if (tableBodyForReceipts) {
 
         // Автоопределение, если currentEntity вдруг пустой или undefined, но открыт раздел расходов
         let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
+        console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
         
         if (!allowedEntities.includes(activeEntity)) {
+            console.log(`⚠️ [КЛИК В ТАБЛИЦЕ] Сущность "${activeEntity}" не входит в список разрешенных. Клик проигнорирован.`);
             return;
         }
 
         const tr = e.target.closest('tr');
-        if (!tr) return;
+        if (!tr) {
+            console.log(`⚠️ [КЛИК В ТАБЛИЦЕ] Клик был не по строке (tr).`);
+            return;
+        }
 
         const id = tr.getAttribute('data-id');
+        console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
 
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
         let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
         let selectedItem = null;
+
+        console.log(`📦 [КЛИК В ТАБЛИЦЕ] Доступный массив currentItems (itemsSource):`, itemsSource);
 
         // ИСПРАВЛЕНИЕ: Ищем строго по ID, исключая ошибки с индексом строки
         if (itemsSource && Array.isArray(itemsSource)) {
@@ -6775,6 +6792,7 @@ if (tableBodyForReceipts) {
 
         // Если в массиве не нашлось, собираем базовый объект из DOM-атрибутов строки
         if (!selectedItem && id) {
+            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Создаем fallback-объект из DOM.`);
             selectedItem = {
                 id: id,
                 realization_id: id
@@ -6786,7 +6804,7 @@ if (tableBodyForReceipts) {
             window.selectedDetailItem = null;
         }
 
-        console.log(`📥 [КЛИК] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
+        console.log(`📥 [КЛИК ИТОГ] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
 
         if (!selectedItem) {
             console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
@@ -6797,9 +6815,11 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
-            // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
+            console.log(`📂 [КЛИК ПРИХОДЫ ССКЛАД] Кликнули по складу, вызываем loadReceiptMainData для sklad_id:`, selectedItem.sklad_id || selectedItem.id);
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
+            console.log(`📂 [КЛИК ПРИХОДЫ ДОКУМЕНТЫ] Кликнули по документу прихода. Данные строки:`, selectedItem);
+            
             // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             window.currentRepairId = null;
@@ -6815,55 +6835,19 @@ if (tableBodyForReceipts) {
                 window.currentDocType = 'realization';
             }
             
-            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType });
+            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, rowTextSnippet: rowText.substring(0, 50), detectedType: window.currentDocType });
             
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
 
-            const tabsBlock = document.getElementById('tabs-for-money-receipts');
-            if (tabsBlock) {
-                tabsBlock.style.display = 'flex';
-            }
-
-            const detailToolbar = document.getElementById('detail-toolbar');
-            if (detailToolbar) {
-                const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete, button');
-                actionButtons.forEach(btn => {
-                    if (!btn.classList.contains('money-receipt-tab-btn') && !btn.hasAttribute('data-tab')) {
-                        btn.style.display = 'none';
-                    }
-                });
-            }
-
-            document.querySelectorAll('.money-receipt-tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.tab === 'money_receipts_detail') btn.classList.add('active');
-            });
-
-            window.currentMoneyReceiptSubTab = 'money_receipts_detail';
-
-            const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
-            let docId = window.currentRealizationId || '';
-            let customerId = window.currentCustomerId || '';
-            let skladId = selectedItem.sklad_id || window.currentSkladId || '';
+            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
+            const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
             
-            let url = '';
-            const currentType = window.currentDocType || 'realization';
-
-            if (detailEntity === 'money_receipts_works_detail') {
-                url = `/api/money_receipts_works_detail?realization_id=${docId}&customer_id=${customerId}&sklad_id=${skladId}`;
+            console.log(`🔀 [КЛИК ПРИХОДЫ] Вызываем switchMoneyReceiptTab с табом: "${activeTab}"`);
+            if (typeof switchMoneyReceiptTab === 'function') {
+                switchMoneyReceiptTab(activeTab, activeBtn);
             } else {
-                if (currentType === 'move') {
-                    // Для перемещений передаем строго move_id
-                    url = `/api/money_receipts_detail?move_id=${docId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=move`;
-                } else {
-                    // Для обычной реализации передаем realization_id
-                    url = `/api/money_receipts_detail?realization_id=${docId}&customer_id=${customerId}&sklad_id=${skladId}&doc_type=realization`;
-                }
-            }
-
-            if (typeof loadReceiptDetailTable === 'function') {
-                loadReceiptDetailTable(url, detailEntity);
+                console.warn(`⚠️ [КЛИК ПРИХОДЫ] Функция switchMoneyReceiptTab не найдена!`);
             }
         }
 
@@ -6875,6 +6859,7 @@ if (tableBodyForReceipts) {
             activeEntity === 'expenses_by_suppliers' || 
             activeEntity === 'expenses_by_receipts'
         ) {
+            console.log(`💸 [КЛИК РАСХОДЫ] Обработка для сущности: "${activeEntity}"`);
             const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
             ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
                 const el = document.getElementById(tabId);
@@ -6886,14 +6871,17 @@ if (tableBodyForReceipts) {
             if (actionButtonsBar) actionButtonsBar.style.display = 'none';
 
             if (activeEntity === 'expenses_by_sklad') {
+                console.log(`➡️ [РАСХОДЫ] Переход к поставщикам склада`, selectedItem);
                 if (typeof loadExpenseMainData === 'function') {
                     loadExpenseMainData('expenses_by_suppliers', selectedItem);
                 }
             } else if (activeEntity === 'expenses_by_suppliers') {
+                console.log(`➡️ [РАСХОДЫ] Переход к чекам/документам поставщика`, selectedItem);
                 if (typeof loadExpenseMainData === 'function') {
                     loadExpenseMainData('expenses_by_receipts', selectedItem);
                 }
             } else if (activeEntity === 'expenses_by_receipts') {
+                console.log(`➡️ [РАСХОДЫ] Загрузка позиций конкретного чека/расхода`, selectedItem);
                 let receiptId = selectedItem.receipt_id || selectedItem.id || id;
                 if (receiptId) {
                     window.currentReceiptId = receiptId;
@@ -6904,6 +6892,7 @@ if (tableBodyForReceipts) {
                 let currentReceipt = window.currentReceiptId || '';
 
                 const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                console.log(`🌐 [РАСХОДЫ ДЕТАЛИ] Сформирован URL для деталей расхода: ${fetchUrl}`);
                 
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'flex';
@@ -6917,9 +6906,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
-
-
 
 
 function emptyDetailBody(entity) {
