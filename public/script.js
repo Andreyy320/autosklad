@@ -6676,7 +6676,20 @@ function applyReceiptsFilters() {
         loadReceiptMainData('money_receipts', window.currentSkladId);
     }
 }
+// Глобальные переменные для защиты от дублирования запросов
+let lastReceiptFetchUrl = '';
+let lastReceiptFetchTime = 0;
+
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
+    // СТРАХОВКА ОТ ДВОЙНЫХ ЗАПРОСОВ: если точно такой же URL запрашивается чаще, чем раз в 300 мс, глушим дубль
+    const now = Date.now();
+    if (fetchUrl === lastReceiptFetchUrl && (now - lastReceiptFetchTime) < 300) {
+        console.log(`⚠️ [ДУБЛЬ ОТФИЛЬТРОВАН] Запрос пропущен: ${fetchUrl}`);
+        return;
+    }
+    lastReceiptFetchUrl = fetchUrl;
+    lastReceiptFetchTime = now;
+
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
         currentDocType: window.currentDocType,
