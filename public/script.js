@@ -6142,7 +6142,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
     if (window.currentPostavhikId) {
         loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
