@@ -4966,6 +4966,93 @@ function logout() {
     location.reload();
 }
 
+async function refreshData() {
+    console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
+    
+    // 1. Фиксируем состояние на момент вызова (замораживаем контекст)
+    const savedSelectedItem = selectedItem;
+    const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
+    const previousEntity = currentEntity;
+
+    // Жестко фиксируем глобальные ID текущего экрана, чтобы они не переписались асинхронно
+    const lockedSkladId = window.currentSkladId;
+    const lockedPostavhikId = window.currentPostavhikId;
+    const lockedReceiptId = window.currentReceiptId;
+    const lockedRealizationId = window.currentRealizationId;
+    const lockedRepairId = window.currentRepairId;
+    const lockedCustomerId = window.currentCustomerId;
+
+    // Специальная ветка для приходов денег
+    if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
+        const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
+        await loadReceiptMainData(previousEntity, parentParam);
+    } 
+    // Специальная ветка для расходов денег
+    else if (
+        previousEntity === 'expenses_by_sklad' || 
+        previousEntity === 'expenses_by_suppliers' || 
+        previousEntity === 'expenses_by_receipts' || 
+        previousEntity === 'expense_items'
+    ) {
+        let parentParam = '';
+        if (previousEntity === 'expenses_by_suppliers') {
+            parentParam = lockedSkladId || savedSelectedItem;
+        } else if (previousEntity === 'expenses_by_receipts') {
+            parentParam = lockedPostavhikId || savedSelectedItem;
+        } else if (previousEntity === 'expense_items') {
+            parentParam = lockedReceiptId || savedSelectedItem;
+        }
+        await loadExpenseMainData(previousEntity, parentParam);
+    } 
+    else {
+        const activeLink = document.querySelector('.nav-link.active');
+        const title = activeLink ? activeLink.innerText : 'Данные';
+        await loadData(previousEntity, title);
+    }
+
+    // Восстанавливаем подсветку строки, используя зафиксированные locked-переменные
+    if (savedSelectedItem && savedId) {
+        const rows = document.querySelectorAll('#table-body tr');
+        let foundRow = null;
+        
+        rows.forEach(row => {
+            if (row.dataset.id == String(savedId)) {
+                foundRow = row;
+            }
+        });
+
+        if (foundRow) {
+            foundRow.classList.add('selected-row');
+            selectedItem = savedSelectedItem;
+
+            if (previousEntity === 'money_receipts') {
+                const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
+                let realizationId = lockedRealizationId || savedSelectedItem.realization_id || savedSelectedItem.id || '';
+                let repairId = lockedRepairId || savedSelectedItem.repair_id || '';
+                let customerId = lockedCustomerId || savedSelectedItem.customer_id || '';
+                let skladId = savedSelectedItem.sklad_id || lockedSkladId || '';
+                
+                let url = '';
+                if (detailEntity === 'money_receipts_works_detail') {
+                    url = `/api/money_receipts_works_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                } else {
+                    url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
+                }
+                loadReceiptDetailTable(url, detailEntity);
+            }
+
+            if (previousEntity === 'expense_items') {
+                let skladId = lockedSkladId || '';
+                let postavhikId = lockedPostavhikId || '';
+                let currentReceipt = lockedReceiptId || savedId || '';
+                let url = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                loadExpenseDetailTable(url);
+            }
+        }
+    }
+    
+    // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
+}
 
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
@@ -5248,6 +5335,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
