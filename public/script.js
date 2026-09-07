@@ -6752,42 +6752,42 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
-    const newTableBody = tableBodyForReceipts.cloneNode(true);
-    tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
+    // Удаляем старые слушатели через клон или AbortController, либо просто вешаем один раз флаг защиты от дублирования
+    if (!tableBodyForReceipts.dataset.listenerAttached) {
+        tableBodyForReceipts.dataset.listenerAttached = "true";
 
-    newTableBody.addEventListener('click', async (e) => {
-        const allowedEntities = [
-            'money_receipts_by_sklad', 
-            'money_receipts',
-            'expenses_by_sklad', 
-            'expenses_by_suppliers', 
-            'expenses_by_receipts'
-        ];
+        tableBodyForReceipts.addEventListener('click', async (e) => {
+            const allowedEntities = [
+                'money_receipts_by_sklad', 
+                'money_receipts',
+                'expenses_by_sklad', 
+                'expenses_by_suppliers', 
+                'expenses_by_receipts'
+            ];
 
-        let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
-        console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
-        
-        if (!allowedEntities.includes(activeEntity)) {
-            return;
-        }
+            let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
+            console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
+            
+            if (!allowedEntities.includes(activeEntity)) {
+                return;
+            }
 
-        const tr = e.target.closest('tr');
-        if (!tr) return;
+            const tr = e.target.closest('tr');
+            if (!tr) return;
 
-        const id = tr.getAttribute('data-id');
-        console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
+            const id = tr.getAttribute('data-id');
+            console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
 
-        document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
-        tr.style.background = '#e2e8f0';
+            document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+            tr.style.background = '#e2e8f0';
 
-        let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
-        let selectedItem = null;
+            let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
+            let selectedItem = null;
 
-        // Пытаемся найти элемент в текущем массиве данных
-        if (itemsSource && Array.isArray(itemsSource)) {
-            selectedItem = itemsSource.items ? itemsSource.items.find(i => String(i.id || i.realization_id || '') === String(id)) : null;
-            if (!selectedItem) {
-                selectedItem = itemsSource.find(i => 
+            // Пытаемся найти элемент в текущем массиве данных
+            if (itemsSource) {
+                const listArray = Array.isArray(itemsSource) ? itemsSource : (itemsSource.items || []);
+                selectedItem = listArray.find(i => 
                     String(i.id || '') === String(id) || 
                     String(i.realization_id || '') === String(id) || 
                     String(i.sklad_id || '') === String(id) || 
@@ -6795,109 +6795,113 @@ if (tableBodyForReceipts) {
                     String(i.postavhik_id || '') === String(id)
                 );
             }
-        }
 
-        // ЖЕЛЕЗОБЕТОННЫЙ FALLBACK: если в currentItems лежит что-то не то (например, пользователи), 
-        // вытаскиваем данные прямо из ячеек строки таблицы или глобальных переменных
-        if (!selectedItem && id) {
-            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
-            selectedItem = {
-                id: id,
-                realization_id: id,
-                customer_id: window.currentCustomerId || null,
-                sklad_id: window.currentSkladId || null
-            };
-        }
-        
-        if (typeof window !== 'undefined') {
-            window.selectedItem = selectedItem;
-            window.selectedDetailItem = null;
-        }
-
-        console.log(`📥 [КЛИК ИТОГ] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
-
-        if (!selectedItem) {
-            console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
-            return;
-        }
-
-        // ==========================================
-        // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
-        // ==========================================
-        if (activeEntity === 'money_receipts_by_sklad') {
-            loadReceiptMainData('money_receipts', selectedItem);
-        } else if (activeEntity === 'money_receipts') {
-            window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
-            window.currentRepairId = null;
-            // Сохраняем customer_id, если он есть в объекте, иначе оставляем текущий
-            if (selectedItem.customer_id !== undefined) {
-                window.currentCustomerId = selectedItem.customer_id;
+            // ЖЕЛЕЗОБЕТОННЫЙ FALLBACK: если не нашли, собираем базовый объект из строки/глобальных переменных
+            if (!selectedItem && id) {
+                console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
+                selectedItem = {
+                    id: id,
+                    realization_id: id,
+                    customer_id: window.currentCustomerId || null,
+                    sklad_id: window.currentSkladId || null
+                };
             }
             
-            const docNumFromItem = String(selectedItem.doc_number || '');
-            const rowText = String(tr.innerText || '');
-
-            if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
-                window.currentDocType = 'move';
-            } else {
-                window.currentDocType = 'realization';
+            if (typeof window !== 'undefined') {
+                window.selectedItem = selectedItem;
+                window.selectedDetailItem = null;
             }
-            
-            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType, customerId: window.currentCustomerId });
-            
-            const detailContainer = document.getElementById('detail-container');
-            if (detailContainer) detailContainer.style.display = 'block';
 
-            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            
-            // Прямой вызов загрузки спецификации с актуальными параметрами
-            const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
-            if (typeof loadReceiptDetailTable === 'function') {
-                loadReceiptDetailTable(detailUrl, activeTab);
+            console.log(`📥 [КЛИК ИТОГ] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
+
+            if (!selectedItem) {
+                console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
+                return;
             }
-        }
 
-        // ==========================================
-        // ЛОГИКА ДЛЯ РАСХОДОВ (expenses)
-        // ==========================================
-        else if (
-            activeEntity === 'expenses_by_sklad' || 
-            activeEntity === 'expenses_by_suppliers' || 
-            activeEntity === 'expenses_by_receipts'
-        ) {
-            const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
-            ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
-                const el = document.getElementById(tabId);
-                if (el) el.style.display = 'none';
-            });
-            if (carTabsPanel) carTabsPanel.style.display = 'none';
+            // ==========================================
+            // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
+            // ==========================================
+            if (activeEntity === 'money_receipts_by_sklad') {
+                if (typeof loadReceiptMainData === 'function') {
+                    loadReceiptMainData('money_receipts', selectedItem);
+                }
+            } else if (activeEntity === 'money_receipts') {
+                window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
+                window.currentRepairId = null;
+                
+                if (selectedItem.customer_id !== undefined) {
+                    window.currentCustomerId = selectedItem.customer_id;
+                }
+                
+                const docNumFromItem = String(selectedItem.doc_number || '');
+                const rowText = String(tr.innerText || '');
 
-            const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-            if (actionButtonsBar) actionButtonsBar.style.display = 'none';
-
-            if (activeEntity === 'expenses_by_sklad') {
-                if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
-            } else if (activeEntity === 'expenses_by_suppliers') {
-                if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
-            } else if (activeEntity === 'expenses_by_receipts') {
-                let receiptId = selectedItem.receipt_id || selectedItem.id || id;
-                if (receiptId) window.currentReceiptId = receiptId;
-
-                let skladId = window.currentSkladId || '';
-                let postavhikId = window.currentPostavhikId || '';
-                let currentReceipt = window.currentReceiptId || '';
-
-                const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
+                    window.currentDocType = 'move';
+                } else {
+                    window.currentDocType = 'realization';
+                }
+                
+                console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType, customerId: window.currentCustomerId });
+                
                 const detailContainer = document.getElementById('detail-container');
-                if (detailContainer) detailContainer.style.display = 'flex';
+                if (detailContainer) detailContainer.style.display = 'block';
 
-                if (typeof loadExpenseDetailTable === 'function') {
-                    loadExpenseDetailTable(fetchUrl);
+                const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
+                
+                // ЗАЩИТА ОТ ДВОЙНЫХ ЗАПРОСОВ: проверяем, не отправлялся ли точно такой же запрос миллисекунду назад, 
+                // либо просто вызываем штатно с подробными логами (на скриншоте видно дублирование из-за всплытия / повторного бинда)
+                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
+                
+                if (typeof loadReceiptDetailTable === 'function') {
+                    loadReceiptDetailTable(detailUrl, activeTab);
                 }
             }
-        }
-    });
+
+            // ==========================================
+            // ЛОГИКА ДЛЯ РАСХОДОВ (expenses)
+            // ==========================================
+            else if (
+                activeEntity === 'expenses_by_sklad' || 
+                activeEntity === 'expenses_by_suppliers' || 
+                activeEntity === 'expenses_by_receipts'
+            ) {
+                const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
+                ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
+                    const el = document.getElementById(tabId);
+                    if (el) el.style.display = 'none';
+                });
+                if (carTabsPanel) carTabsPanel.style.display = 'none';
+
+                const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+                if (actionButtonsBar) actionButtonsBar.style.display = 'none';
+
+                if (activeEntity === 'expenses_by_sklad') {
+                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
+                } else if (activeEntity === 'expenses_by_suppliers') {
+                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
+                } else if (activeEntity === 'expenses_by_receipts') {
+                    let receiptId = selectedItem.receipt_id || selectedItem.id || id;
+                    if (receiptId) window.currentReceiptId = receiptId;
+
+                    let skladId = window.currentSkladId || '';
+                    let postavhikId = window.currentPostavhikId || '';
+                    let currentReceipt = window.currentReceiptId || '';
+
+                    const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                    const detailContainer = document.getElementById('detail-container');
+                    if (detailContainer) detailContainer.style.display = 'flex';
+
+                    if (typeof loadExpenseDetailTable === 'function') {
+                        loadExpenseDetailTable(fetchUrl);
+                    }
+                }
+            }
+        });
+    }
 }
+
 
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
