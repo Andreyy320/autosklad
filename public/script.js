@@ -5336,7 +5336,6 @@ async function applyMovementFilters() {
     }
 }
 
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -5388,14 +5387,16 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     const detailContainer = document.getElementById('detail-container');
-    const detailToolbar = document.getElementById('detail-toolbar');
+    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
 
     if (detailContainer) {
         if (entity === 'receipts' || entity === 'moves' || entity === 'cars' || entity === 'car_cards' || entity === 'accidents' || entity === 'repairs' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'postavhik' || entity === 'counterparties' || entity === 'customers' || entity === 'realizations' || entity === 'expenses_by_receipts') {
             detailContainer.style.display = 'flex'; 
 
             if (detailToolbar) {
-                if (entity === 'car_cards' || entity === 'stock_balances' || entity === 'stock_movement') {
+                // Скрываем тулбар спецификации ТОЛЬКО там, где это действительно чисто информационные отчеты без ручного ввода
+                if (entity === 'stock_movement') {
                     detailToolbar.style.display = 'none';
                 } else {
                     detailToolbar.style.display = 'flex';
@@ -5605,7 +5606,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервере)`;
     }
 }
-
 
 
 async function openPaymentHistory(receiptId, docNumber) {
@@ -7801,7 +7801,7 @@ function switchCustomerTab(tabName, btnElement) {
         btnElement.classList.add('active');
     }
 
-    const detailToolbar = document.getElementById('detail-toolbar');
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbar) {
         detailToolbar.style.display = 'flex';
     }
@@ -7827,7 +7827,7 @@ function switchRealizationTab(tabName, btnElement) {
         btnElement.classList.add('active');
     }
 
-    const detailToolbar = document.getElementById('detail-toolbar');
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbar) {
         detailToolbar.style.display = 'flex';
     }
@@ -7848,7 +7848,7 @@ function switchCarTab(tabName, btnElement) {
         btnElement.classList.add('active');
     }
 
-    const detailToolbar = document.getElementById('detail-toolbar');
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbar) {
         detailToolbar.style.display = 'none';
     }
@@ -7859,7 +7859,6 @@ function switchCarTab(tabName, btnElement) {
 }
 
 let currentRepairSubTab = 'repair_items';
-
 
 function switchAccidentTab(tabName, btnElement) {
     currentAccidentSubTab = tabName;
@@ -7872,7 +7871,7 @@ function switchAccidentTab(tabName, btnElement) {
         btnElement.classList.add('active');
     }
 
-    const detailToolbar = document.getElementById('detail-toolbar');
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbar) {
         detailToolbar.style.display = 'flex';
     }
@@ -7898,7 +7897,7 @@ function switchRepairTab(tabName, btnElement) {
         btnElement.classList.add('active');
     }
 
-    const detailToolbar = document.getElementById('detail-toolbar');
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbar) {
         detailToolbar.style.display = 'flex';
     }
