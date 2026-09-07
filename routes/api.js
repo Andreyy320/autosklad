@@ -3899,7 +3899,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(ri.code, '')::text AS product_code,
                     COALESCE(ri.name, '')::text AS item_name,
                     ri.quantity::numeric AS quantity,
-                    COALESCE(ri.price, 0)::numeric AS purchase_price,
+                    COALESCE(ri.purchase_price, 0)::numeric AS purchase_price,
                     COALESCE(ri.retail_price, 0)::numeric AS retail_price,
                     COALESCE(ri.price, 0)::numeric AS final_unit_price,
                     COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)::numeric AS total_rub,
@@ -3936,7 +3936,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Позиции перемещений (для отображения спецификации перемещений по складам)
+                -- 3. Позиции перемещений (с разделением на закупку и цену продажи с наценкой)
                 SELECT 
                     mi.id,
                     'part' AS item_type,
@@ -3945,10 +3945,15 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
-                    COALESCE(mi.price, 0)::numeric AS purchase_price,
+                    -- Закупочная цена за единицу
+                    COALESCE(NULLIF(mi.price_rub, 0), mi.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
-                    COALESCE(mi.price, 0)::numeric AS final_unit_price,
-                    COALESCE(mi.total_rub, 0)::numeric AS total_rub,
+                    -- Итоговая цена за единицу с учетом наценки (total_rub / quantity)
+                    CASE 
+                        WHEN mi.quantity > 0 THEN COALESCE(mi.total_rub, mi.price * mi.quantity, 0) / mi.quantity 
+                        ELSE COALESCE(mi.total_rub, mi.price, 0) 
+                    END::numeric AS final_unit_price,
+                    COALESCE(mi.total_rub, mi.price * mi.quantity, 0)::numeric AS total_rub,
                     COALESCE(mi.description, '')::text AS description,
                     m.id AS rel_id,
                     NULL::integer AS cust_id,
