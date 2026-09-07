@@ -3688,7 +3688,7 @@ router.get('/money_receipts', async (req, res) => {
 
         const query = `
             WITH calc_data AS (
-                -- 1. Обычные реализации (покупатели)
+                -- 1. Обычные реализации (покупатели) — здесь считаем прибыль как и раньше
                 SELECT 
                     real.id AS id,
                     real.id AS realization_id,
@@ -3746,7 +3746,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (склад-источник фиксирует долг склада-получателя на сумму с наценкой total_rub)
+                -- 2. Перемещения — оставляем суммы движения товара, но прибыль обнуляем (как просили)
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
@@ -3762,16 +3762,11 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(m_items.total_sum, 0)::numeric AS parts_sum,
                     0::numeric AS works_sum,
                     COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS total_paid,
                     
-                    -- ИСПРАВЛЕНИЕ ДЛЯ ПЕРЕМОЩЕНИЙ: если нет оплат в warehouse_debt_payments, 
-                    -- приравниваем total_paid к total_sum, чтобы прибыль не занулялась коэффициентом оплаты.
-                    -- Если же table warehouse_debt_payments используется реально, оставляем логику с COALESCE(m_mp.paid_sum, COALESCE(m_items.total_sum, 0))
-                    COALESCE(m_mp.paid_sum, COALESCE(m_items.total_sum, 0))::numeric AS total_paid,
-                    
-                    -- Чистая прибыль по перемещению (сумма продажи с наценкой минус себестоимость)
-                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
-                    
-                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS parts_profit,
+                    -- Прибыль по перемещениям равна нулю
+                    0::numeric AS full_net_profit,
+                    0::numeric AS parts_profit,
                     0::numeric AS works_profit,
                     'move'::text AS doc_type
                 FROM moves m
@@ -3786,11 +3781,6 @@ router.get('/money_receipts', async (req, res) => {
                     FROM move_items
                     GROUP BY move_id
                 ) m_items ON m.id = m_items.move_id
-                LEFT JOIN (
-                    SELECT move_id, SUM(amount) AS paid_sum
-                    FROM warehouse_debt_payments
-                    GROUP BY move_id
-                ) m_mp ON m.id = m_mp.move_id
                 WHERE m.is_posted = true
                   AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
                   AND ($2::date IS NULL OR m.date::date >= $2::date)
@@ -3830,12 +3820,6 @@ router.get('/money_receipts', async (req, res) => {
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
         const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
 
-        // Логируем количество найденных документов каждого типа для контроля
-        const realCount = result.rows.filter(r => r.doc_type === 'realization').length;
-        const moveCount = result.rows.filter(r => r.doc_type === 'move').length;
-        console.log(`📊 [/api/money_receipts] Найдено реализаций: ${realCount}, перемещений: ${moveCount}. Всего строк:`, result.rowCount);
-
-        // Считаем общие итоги за выбранный период для фронтенда
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -3843,9 +3827,8 @@ router.get('/money_receipts', async (req, res) => {
             totalPeriodProfit += Number(row.net_profit || 0);
         });
 
-        console.log(`✅ [/api/money_receipts] Итоги посчитаны. Оплачено за период: ${totalPeriodPaid}, Прибыль за период: ${totalPeriodProfit}`);
+        console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Строк: ${result.rowCount}, Прибыль: ${totalPeriodProfit}`);
         
-        // Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
@@ -3858,12 +3841,9 @@ router.get('/money_receipts', async (req, res) => {
 
     } catch (err) {
         console.error('❌ [/api/money_receipts] Ошибка при выполнении запроса:', err);
-        console.error('📄 Текст ошибки (message):', err.message);
-        console.error('🧩 Стек ошибки (stack):', err.stack);
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
