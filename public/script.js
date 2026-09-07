@@ -8747,13 +8747,21 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          // Справочник запчастей/товаров (второй скриншот)
-            'nomenclature',   // Если так называется номенклатура
+            'parts',          // Справочник запчастей/товаров
+            'nomenclature',   // Номенклатура
             'goods'
         ];
 
-        // Жестко проверяем, нужно ли показывать нижнюю таблицу
-        const shouldShowDetails = entitiesWithDetails.includes(entity) && !summaryEntitiesWithoutDetails.includes(entity);
+        // ЖЕСТКАЯ ПРОВЕРКА с подробными логами в консоль, чтобы сразу видеть причину
+        const isInEntitiesWithDetails = entitiesWithDetails.includes(entity);
+        const isInSummaryWithoutDetails = summaryEntitiesWithoutDetails.includes(entity);
+        const shouldShowDetails = isInEntitiesWithDetails && !isInSummaryWithoutDetails;
+
+        console.log(`🔍 [nav-link ДЕТАЛИЗАЦИЯ] Проверка для entity = "${entity}":`, {
+            isInEntitiesWithDetails,
+            isInSummaryWithoutDetails,
+            shouldShowDetails
+        });
 
         if (shouldShowDetails) {
             console.log(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
@@ -8779,7 +8787,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
 
         } else {
-            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности без деталей: ${entity}`);
+            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity} (Причина: ${!isInEntitiesWithDetails ? 'нет в списке entitiesWithDetails' : 'исключена в summaryEntitiesWithoutDetails'})`);
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
