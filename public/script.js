@@ -6097,11 +6097,15 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 
+
+
+
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${window.currentDocType || 'realization'}"`);
+    const docType = window.currentDocType || 'realization';
+    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${docType}"`);
     
     const drawer = getOrCreateDrawer();
     
@@ -6115,8 +6119,9 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     openDrawer();
 
     try {
-        const docType = window.currentDocType || 'realization';
-        const targetUrl = `/api/money_receipts/${docId}/payments?sklad_id=${skladId}&doc_type=${docType}`;
+        // Выбираем правильный эндпоинт в зависимости от типа документа
+        const endpointPrefix = docType === 'move' ? 'moves' : 'realizations';
+        const targetUrl = `/api/${endpointPrefix}/${docId}/payments?sklad_id=${skladId}`;
         console.log(`[HISTORY LOG] Запрос истории по адресу: ${targetUrl}`);
 
         let response = await fetch(targetUrl);
@@ -6177,23 +6182,14 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    
-    // ДОП. ЛОГ: фиксируем точные входящие аргументы в момент открытия
-    console.log(`[DRAWER LOG] 🟢 СТАРТ открытия формы оплаты. АРГУМЕНТЫ:`, {
-        docId: docId,
-        typeDocId: typeof docId,
-        debtSum: debtSum,
-        docNumber: docNumber,
-        skladId: skladId,
-        globalCurrentDocType: window.currentDocType,
-        globalCurrentSkladId: window.currentSkladId
-    });
+    const docType = window.currentDocType || 'realization';
+    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${docType}"`);
     
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа ${docNumber} (ID: ${docId})</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа ${docNumber}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
@@ -6222,14 +6218,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
 
 async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
-    
-    // СТРАХОВКА: если docId пришел пустым или undefined, пытаемся вытащить из активной строки или глобальных переменных
-    if (!docId || docId === 'undefined' || docId === 'null') {
-        docId = window.currentRealizationId || window.selectedItem?.id || window.selectedItem?.realization_id;
-        console.warn(`⚠️ [SUBMIT WARNING] docId был пустым! Восстановлен из глобальных переменных:`, docId);
-    }
-
-    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null' || !skladId) {
+    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
     
@@ -6244,13 +6233,15 @@ async function submitIncomePayment(event, docId, skladId) {
         doc_type: currentDocType
     };
 
-    const targetUrl = `/api/money_receipts/${docId}/pay`;
+    // Динамически выбираем правильный URL в зависимости от типа документа
+    const endpointPrefix = currentDocType === 'move' ? 'moves' : 'realizations';
+    const targetUrl = `/api/${endpointPrefix}/${docId}/pay`;
 
-    console.log(`[SUBMIT LOG] 🚀 ОТПРАВКА ПЛАТЕЖА СТРОГО НА URL:`, {
+    console.log(`[SUBMIT LOG] Отправка платежа:`, {
         url: targetUrl,
-        finalDocId: docId,
-        finalSkladId: skladId,
-        finalDocType: currentDocType,
+        docId: docId,
+        skladId: skladId,
+        docType: currentDocType,
         payloadToSend: payload
     });
 
@@ -6284,6 +6275,8 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
@@ -6571,6 +6564,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         window.currentRealizationId = item.realization_id || item.id;
                         window.currentRepairId = null;
                         window.currentCustomerId = item.customer_id || '';
+                        
+                        // Сохраняем тип документа для правильной маршрутизации при оплате/истории
+                        window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
 
                         const tabsBlock = document.getElementById('tabs-for-money-receipts');
                         if (tabsBlock) {
@@ -6680,7 +6676,6 @@ function applyReceiptsFilters() {
         loadReceiptMainData('money_receipts', window.currentSkladId);
     }
 }
-
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
@@ -6903,7 +6898,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
 
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');

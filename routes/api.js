@@ -4027,242 +4027,249 @@ router.get('/money_receipts_detail', async (req, res) => {
     }
 });
 
-router.post('/money_receipts/:id/pay', async (req, res) => {
+// --- 1. Эндпоинт для оплаты клиентских реализаций ---
+router.post('/realizations/:id/pay', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
         const { amount, customer_id, comment } = req.body;
 
         if (!docId || isNaN(docId)) {
-            return res.status(400).json({ error: 'Некорректный ID документа' });
+            return res.status(400).json({ error: 'Некорректный ID реализации' });
         }
 
-        // Округляем сумму входящего платежа до 2 знаков
         const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
 
-        // --- 1. Проверяем, клиентская ли это реализация ---
+        // Проверяем существование реализации
         const realizationCheck = await pool.query(
             `SELECT id, customer_id FROM realizations WHERE id = $1`,
             [docId]
         );
 
-        if (realizationCheck.rows.length > 0) {
-            const realData = realizationCheck.rows[0];
-            const customerId = customer_id ? parseInt(customer_id) : realData.customer_id;
+        if (realizationCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Реализация не найдена' });
+        }
 
-            // Считаем общую сумму реализации (товары + работы)
-            const totalSumQuery = `
-                SELECT 
-                    COALESCE(SUM(i_sum.sum, 0) + SUM(w_sum.sum, 0), 0) AS total_sum
-                FROM realizations r
-                LEFT JOIN (
-                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) as sum 
-                    FROM realization_items GROUP BY realization_id
-                ) i_sum ON i_sum.realization_id = r.id
-                LEFT JOIN (
-                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) as sum 
-                    FROM realization_works GROUP BY realization_id
-                ) w_sum ON w_sum.realization_id = r.id
-                WHERE r.id = $1
-            `;
-            
-            // Проверка долга с учетом уже внесенных оплат
-            const debtCheckQuery = `
-                SELECT 
-                    COALESCE(tot.total_sum, 0) AS total_sum,
-                    COALESCE(paid.paid_sum, 0) AS paid_sum
-                FROM realizations r
-                LEFT JOIN (
-                    SELECT realization_id, 
-                           SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                    FROM realization_items WHERE realization_id = $1 GROUP BY realization_id
-                ) i ON true
-                LEFT JOIN (
-                    SELECT realization_id, 
-                           SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                    FROM realization_works WHERE realization_id = $1 GROUP BY realization_id
-                ) w ON true
-                LEFT JOIN (
-                    SELECT realization_id, SUM(amount) AS paid_sum 
-                    FROM customer_payments WHERE realization_id = $1 GROUP BY realization_id
-                ) paid ON true
-                -- Считаем общую сумму
-                CROSS JOIN LATERAL (
-                    SELECT COALESCE(i.s, 0) + COALESCE(w.s, 0) AS total_sum
-                ) tot
-                WHERE r.id = $1
-            `;
+        const realData = realizationCheck.rows[0];
+        const customerId = customer_id ? parseInt(customer_id) : realData.customer_id;
 
-            const debtRes = await pool.query(debtCheckQuery, [docId]);
-            const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
-            const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
-            
-            // Округляем текущий долг до 2 знаков, чтобы сравнение работало корректно
-            const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
+        // Проверка долга с учетом уже внесенных оплат
+        const debtCheckQuery = `
+            SELECT 
+                COALESCE(tot.total_sum, 0) AS total_sum,
+                COALESCE(paid.paid_sum, 0) AS paid_sum
+            FROM realizations r
+            LEFT JOIN (
+                SELECT realization_id, 
+                    SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
+                FROM realization_items WHERE realization_id = $1 GROUP BY realization_id
+            ) i ON true
+            LEFT JOIN (
+                SELECT realization_id, 
+                    SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
+                FROM realization_works WHERE realization_id = $1 GROUP BY realization_id
+            ) w ON true
+            LEFT JOIN (
+                SELECT realization_id, SUM(amount) AS paid_sum 
+                FROM customer_payments WHERE realization_id = $1 GROUP BY realization_id
+            ) paid ON true
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(i.s, 0) + COALESCE(w.s, 0) AS total_sum
+            ) tot
+            WHERE r.id = $1
+        `;
 
-            if (paymentAmount > currentDebt) {
-                return res.status(400).json({ 
-                    error: `Сумма оплаты (${paymentAmount}) превышает остаток долга (${currentDebt.toFixed(2)} руб.). Переплата запрещена!` 
-                });
-            }
+        const debtRes = await pool.query(debtCheckQuery, [docId]);
+        const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
+        const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
+        
+        const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
 
-            const insertQuery = `
-                INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
-                VALUES ($1, $2, $3, $4)
-                RETURNING *;
-            `;
-            
-            const result = await pool.query(insertQuery, [
-                customerId, 
-                docId, 
-                paymentAmount, 
-                comment || 'Оплата по документу'
-            ]);
-
-            return res.json({ 
-                success: true, 
-                message: 'Оплата успешно сохранена',
-                payment: result.rows[0] 
+        if (paymentAmount > currentDebt) {
+            return res.status(400).json({ 
+                error: `Сумма оплаты (${paymentAmount}) превышает остаток долга (${currentDebt.toFixed(2)} руб.). Переплата запрещена!` 
             });
         }
 
-        // --- 2. Проверяем, перемещение ли это между складами ---
+        const insertQuery = `
+            INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        
+        const result = await pool.query(insertQuery, [
+            customerId, 
+            docId, 
+            paymentAmount, 
+            comment || 'Оплата по реализации'
+        ]);
+
+        return res.json({ 
+            success: true, 
+            message: 'Оплата реализации успешно сохранена',
+            payment: result.rows[0] 
+        });
+
+    } catch (err) {
+        console.error('❌ Ошибка при оплате реализации:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// --- 2. Эндпоинт для погашения долга по перемещениям ---
+router.post('/moves/:id/pay', async (req, res) => {
+    try {
+        const docId = parseInt(req.params.id);
+        const { amount, comment } = req.body;
+
+        if (!docId || isNaN(docId)) {
+            return res.status(400).json({ error: 'Некорректный ID перемещения' });
+        }
+
+        const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
+        if (!paymentAmount || paymentAmount <= 0) {
+            return res.status(400).json({ error: 'Сумма погашения должна быть больше нуля' });
+        }
+
+        // Проверяем существование перемещения
         const moveCheck = await pool.query(
             `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1`,
             [docId]
         );
 
-        if (moveCheck.rows.length > 0) {
-            const moveData = moveCheck.rows[0];
+        if (moveCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Перемещение не найдено' });
+        }
 
-            // Считаем долг по перемещению (сумма move_items минус уже внесенные погашения)
-            const moveDebtQuery = `
-                SELECT 
-                    COALESCE(m_tot.total_sum, 0) AS total_sum,
-                    COALESCE(m_paid.paid_sum, 0) AS paid_sum
-                FROM moves m
-                LEFT JOIN (
-                    SELECT move_id, SUM(total_rub) AS total_sum 
-                    FROM move_items WHERE move_id = $1 GROUP BY move_id
-                ) m_tot ON true
-                LEFT JOIN (
-                    SELECT move_id, SUM(amount) AS paid_sum 
-                    FROM warehouse_debt_payments WHERE move_id = $1 GROUP BY move_id
-                ) m_paid ON true
-                WHERE m.id = $1
-            `;
+        const moveData = moveCheck.rows[0];
 
-            const moveDebtRes = await pool.query(moveDebtQuery, [docId]);
-            const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
-            const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
-            
-            // Округляем долг по перемещению до 2 знаков
-            const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
+        // Считаем долг по перемещению (сумма move_items минус уже внесенные погашения)
+        const moveDebtQuery = `
+            SELECT 
+                COALESCE(m_tot.total_sum, 0) AS total_sum,
+                COALESCE(m_paid.paid_sum, 0) AS paid_sum
+            FROM moves m
+            LEFT JOIN (
+                SELECT move_id, SUM(total_rub) AS total_sum 
+                FROM move_items WHERE move_id = $1 GROUP BY move_id
+            ) m_tot ON true
+            LEFT JOIN (
+                SELECT move_id, SUM(amount) AS paid_sum 
+                FROM warehouse_debt_payments WHERE move_id = $1 GROUP BY move_id
+            ) m_paid ON true
+            WHERE m.id = $1
+        `;
 
-            if (paymentAmount > moveCurrentDebt) {
-                return res.status(400).json({ 
-                    error: `Сумма погашения (${paymentAmount}) превышает долг по перемещению (${moveCurrentDebt.toFixed(2)} руб.)!` 
-                });
-            }
+        const moveDebtRes = await pool.query(moveDebtQuery, [docId]);
+        const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
+        const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
+        
+        const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
 
-            const insertMoveQuery = `
-                INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING *;
-            `;
-
-            const result = await pool.query(insertMoveQuery, [
-                docId,
-                moveData.warehouse_from_id,
-                moveData.warehouse_to_id,
-                paymentAmount,
-                comment || 'Погашение долга по перемещению'
-            ]);
-
-            return res.json({ 
-                success: true, 
-                message: 'Оплата между складами успешно сохранена',
-                payment: result.rows[0] 
+        if (paymentAmount > moveCurrentDebt) {
+            return res.status(400).json({ 
+                error: `Сумма погашения (${paymentAmount}) превышает долг по перемещению (${moveCurrentDebt.toFixed(2)} руб.)!` 
             });
         }
 
-        return res.status(404).json({ error: 'Документ (реализация или перемещение) не найден' });
+        const insertMoveQuery = `
+            INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *;
+        `;
+
+        const result = await pool.query(insertMoveQuery, [
+            docId,
+            moveData.warehouse_from_id,
+            moveData.warehouse_to_id,
+            paymentAmount,
+            comment || 'Погашение долга по перемещению'
+        ]);
+
+        return res.json({ 
+            success: true, 
+            message: 'Погашение долга по перемещению успешно сохранено',
+            payment: result.rows[0] 
+        });
 
     } catch (err) {
-        console.error('❌ Ошибка при проведении оплаты (money_receipts/pay):', err);
+        console.error('❌ Ошибка при погашении долга по перемещению:', err);
         res.status(500).json({ error: err.message });
     }
 });
-
-
-router.get('/money_receipts/:id/payments', async (req, res) => {
+router.get('/moves/:id/payments', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
 
         if (!docId || isNaN(docId)) {
-            return res.status(400).json({ error: 'Некорректный ID документа' });
+            return res.status(400).json({ error: 'Некорректный ID перемещения' });
         }
 
-        // Проверяем, реализация ли это
-        const realizationCheck = await pool.query(`SELECT id FROM realizations WHERE id = $1`, [docId]);
+        const query = `
+            SELECT 
+                wdp.id,
+                NULL AS customer_id,
+                NULL AS realization_id,
+                wdp.move_id,
+                wdp.date,
+                wdp.amount,
+                wdp.comment,
+                m.doc_number AS doc_number,
+                COALESCE(sk.name, 'Склад-получатель') AS counterparty_name
+            FROM warehouse_debt_payments wdp
+            LEFT JOIN moves m ON wdp.move_id = m.id
+            LEFT JOIN skladi sk ON m.warehouse_to_id = sk.id
+            WHERE wdp.move_id = $1
+            ORDER BY wdp.date DESC, wdp.id DESC;
+        `;
         
-        if (realizationCheck.rows.length > 0) {
-            const query = `
-                SELECT 
-                    cp.id,
-                    cp.customer_id,
-                    cp.realization_id,
-                    NULL AS move_id,
-                    cp.date,
-                    cp.amount,
-                    cp.comment,
-                    r.doc_number AS doc_number,
-                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty_name
-                FROM customer_payments cp
-                LEFT JOIN realizations r ON cp.realization_id = r.id
-                LEFT JOIN customers c ON r.customer_id = c.id
-                WHERE cp.realization_id = $1
-                ORDER BY cp.date DESC, cp.id DESC;
-            `;
-            const result = await pool.query(query, [docId]);
-            return res.json(result.rows);
-        }
-
-        // Проверяем, перемещение ли это
-        const moveCheck = await pool.query(`SELECT id FROM moves WHERE id = $1`, [docId]);
-
-        if (moveCheck.rows.length > 0) {
-            const query = `
-                SELECT 
-                    wdp.id,
-                    NULL AS customer_id,
-                    NULL AS realization_id,
-                    wdp.move_id,
-                    wdp.date,
-                    wdp.amount,
-                    wdp.comment,
-                    m.doc_number AS doc_number,
-                    COALESCE(sk.name, 'Склад-получатель') AS counterparty_name
-                FROM warehouse_debt_payments wdp
-                LEFT JOIN moves m ON wdp.move_id = m.id
-                LEFT JOIN skladi sk ON m.warehouse_to_id = sk.id
-                WHERE wdp.move_id = $1
-                ORDER BY wdp.date DESC, wdp.id DESC;
-            `;
-            const result = await pool.query(query, [docId]);
-            return res.json(result.rows);
-        }
-
-        return res.status(404).json({ error: 'Документ не найден' });
+        const result = await pool.query(query, [docId]);
+        return res.json(result.rows);
 
     } catch (err) {
-        console.error('❌ Ошибка получения истории оплат:', err);
+        console.error('❌ Ошибка получения погашений перемещения:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
+
+   router.get('/realizations/:id/payments', async (req, res) => {
+    try {
+        const docId = parseInt(req.params.id);
+
+        if (!docId || isNaN(docId)) {
+            return res.status(400).json({ error: 'Некорректный ID реализации' });
+        }
+
+        const query = `
+            SELECT 
+                cp.id,
+                cp.customer_id,
+                cp.realization_id,
+                NULL AS move_id,
+                cp.date,
+                cp.amount,
+                cp.comment,
+                r.doc_number AS doc_number,
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty_name
+            FROM customer_payments cp
+            LEFT JOIN realizations r ON cp.realization_id = r.id
+            LEFT JOIN customers c ON r.customer_id = c.id
+            WHERE cp.realization_id = $1
+            ORDER BY cp.date DESC, cp.id DESC;
+        `;
+        
+        const result = await pool.query(query, [docId]);
+        return res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ Ошибка получения оплат реализации:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 // 1. Расходы по складам (уровень 1)
