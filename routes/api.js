@@ -3614,7 +3614,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
         const query = `
             WITH combined_docs AS (
-                -- 1. Обычные продажи из realizations (участвуют в суммах и оплатах клиентов)
+                -- 1. Обычные продажи из realizations
                 SELECT 
                     real.id,
                     real.sklad_id,
@@ -3643,7 +3643,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (учитывают количество и сумму в обороте склада, но НЕ создают оплату клиента)
+                -- 2. Перемещения (теперь полноценно учитывают сумму из move_items)
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
@@ -3651,7 +3651,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     COALESCE(m_items.total_sum, 0) AS parts_sum,
                     0 AS works_sum,
                     COALESCE(m_items.total_sum, 0) AS total_sum,
-                    0 AS paid_sum -- Перемещения не оплачиваются деньгами клиентов через кассу
+                    COALESCE(m_items.total_sum, 0) AS paid_sum -- Если перемещения считаются сразу оплаченными/закрытыми внутренне
                 FROM moves m
                 LEFT JOIN (
                     SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
@@ -3754,7 +3754,7 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
                     NULL::integer AS customer_id,
-                    CONCAT('Склад-получатель: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    CONCAT('', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     1 AS total_orders,
                     COALESCE(m_items.total_qty, 0)::numeric AS parts_qty,
