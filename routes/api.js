@@ -3745,7 +3745,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (склады-должники с корректным вычислением закупка vs наценка)
+                -- 2. Перемещения (берем чистую закупку из связанного прихода через receipt_items)
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
@@ -3765,7 +3765,7 @@ router.get('/money_receipts', async (req, res) => {
                     -- Реальные оплаты из таблицы warehouse_debt_payments
                     COALESCE(m_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Чистая прибыль по перемещению: Сумма с наценкой (total_rub) минус Закупочная себестоимость
+                    -- Чистая прибыль по перемещению: Сумма с наценкой минус Закупочная себестоимость из прихода
                     (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
                     
                     -- Плюс по запчастям отдельно
@@ -3776,12 +3776,22 @@ router.get('/money_receipts', async (req, res) => {
                 LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
                 LEFT JOIN (
                     SELECT 
-                        move_id, 
-                        SUM(quantity) AS total_qty, 
-                        SUM(COALESCE(NULLIF(price_rub, 0), price, 0) * quantity) AS total_purchase_sum,
-                        SUM(COALESCE(total_rub, price * quantity, 0)) AS total_sum
-                    FROM move_items
-                    GROUP BY move_id
+                        mi.move_id, 
+                        SUM(mi.quantity) AS total_qty, 
+                        -- ЧИСТАЯ ЗАКУПКА ИЗ ПРИХОДА: подтягиваем из receipt_items по income_document_id
+                        SUM(
+                            COALESCE(
+                                NULLIF(ri_orig.price_rub, 0),
+                                NULLIF(ri_orig.price, 0),
+                                mi.price,
+                                0
+                            ) * mi.quantity
+                        ) AS total_purchase_sum,
+                        SUM(COALESCE(mi.total_rub, mi.price * mi.quantity, 0)) AS total_sum
+                    FROM move_items mi
+                    LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
+                    LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
+                    GROUP BY mi.move_id
                 ) m_items ON m.id = m_items.move_id
                 LEFT JOIN (
                     SELECT move_id, SUM(amount) AS paid_sum
@@ -3826,7 +3836,6 @@ router.get('/money_receipts', async (req, res) => {
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
         const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
 
-        // Считаем общие итоги за выбранный период для фронтенда
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -3836,7 +3845,6 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        // Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
