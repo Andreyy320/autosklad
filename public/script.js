@@ -6755,6 +6755,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
+// ==========================================
+// ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЬНОЙ ТАБЛИЦЫ
+// ==========================================
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
@@ -6948,6 +6951,7 @@ if (tableBodyForReceipts) {
                 const docNumFromItem = String(selectedItem.doc_number || '');
                 const rowText = String(tr.innerText || '');
 
+                // Сначала определяем тип документа
                 if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
                     window.currentDocType = 'move';
                 } else {
@@ -6961,7 +6965,8 @@ if (tableBodyForReceipts) {
 
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
                 
-                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
+                // И только после определения типа собираем URL, включая в него doc_type
+                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}&doc_type=${window.currentDocType}`;
                 
                 if (typeof loadReceiptDetailTable === 'function') {
                     loadReceiptDetailTable(detailUrl, activeTab);
