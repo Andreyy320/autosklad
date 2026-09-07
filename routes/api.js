@@ -4420,7 +4420,8 @@ router.get('/expenses_by_receipts', async (req, res) => {
         const eDate = (end_date && end_date !== '' && end_date !== 'undefined') ? end_date : null;
         if (eDate) {
             queryParams.push(eDate);
-            query += ` AND rec.date <= $${queryParams.length}`;
+            // Добавляем ' 23:59:59', чтобы дата «По» захватывала весь день включительно
+            query += ` AND rec.date <= ($${queryParams.length}::text || ' 23:59:59')::timestamp`;
         }
 
         query += ` ORDER BY rec.date DESC;`;
