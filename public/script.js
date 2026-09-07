@@ -8146,17 +8146,33 @@ function filterDetailTable() {
     const rows = document.querySelectorAll('#detail-body tr');
 
     rows.forEach(row => {
+        // Пропускаем служебные строки (например, "Нет данных" или "Загрузка...")
         if (row.cells.length <= 1) return;
 
         let isVisible = true;
 
-        filterInputs.forEach((input, index) => {
+        filterInputs.forEach(input => {
             const searchText = input.value.trim().toLowerCase();
-            if (!searchText) return; 
+            if (!searchText) return;
 
-            const cell = row.cells[index];
-            if (cell) {
-                const cellText = cell.textContent.toLowerCase();
+            const columnField = input.getAttribute('data-column');
+            
+            // Ищем ячейку, у которой совпадает дата-атрибут поля, 
+            // либо ищем по сохраненному индексу колонки
+            let targetCell = null;
+            
+            // Пытаемся найти по индексу колонки из шапки таблицы, если они синхронизированы
+            const th = input.closest('th');
+            if (th) {
+                const ths = Array.from(th.parentElement.children);
+                const colIndex = ths.indexOf(th);
+                if (colIndex !== -1 && row.cells[colIndex]) {
+                    targetCell = row.cells[colIndex];
+                }
+            }
+
+            if (targetCell) {
+                const cellText = targetCell.textContent.toLowerCase();
                 if (!cellText.includes(searchText)) {
                     isVisible = false;
                 }
