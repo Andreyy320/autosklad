@@ -8477,6 +8477,33 @@ document.querySelectorAll('.nav-link').forEach(link => {
             console.log(`🔄 [nav-link] Сущность 'money_receipts' подменена на 'money_receipts_by_sklad'`);
         }
         
+        // ==========================================
+        // УПРАВЛЕНИЕ КНОПКОЙ «НАЗАД» ДЛЯ ГЛАВНОГО МЕНЮ
+        // ==========================================
+        const btnBackExpense = document.getElementById('btn-back-expense');
+        if (btnBackExpense) {
+            // Проверяем, является ли выбранный раздел приходами или расходами денег
+            const isMoneySection = (
+                text === 'Приходы' || text === 'Расходы' || 
+                entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || 
+                entity === 'расходы' || entity === 'expenses' ||
+                entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts'
+            );
+
+            if (isMoneySection) {
+                // На верхнем уровне списков (склады приходов/расходов) кнопка «Назад» пока не нужна,
+                // она появляется внутри, когда проваливаешься в конкретный склад. Скрываем её по умолчанию:
+                btnBackExpense.style.setProperty('display', 'none', 'important');
+                btnBackExpense.onclick = null;
+                console.log(`🔙 [nav-link] Кнопка «Назад» скрыта на главном экране раздела: ${text}`);
+            } else {
+                // На всех остальных экранах (Приход запчастей, Справочники и т.д.) кнопка гарантированно скрыта
+                btnBackExpense.style.setProperty('display', 'none', 'important');
+                btnBackExpense.onclick = null;
+            }
+        }
+        // ==========================================
+
         // Корректно обновляем панели фильтров (скрываем ненужные, показываем нужную)
         if (typeof updateFilterPanels === 'function') {
             console.log(`🎛️ [nav-link] Вызов updateFilterPanels для entity:`, entity);
@@ -8581,7 +8608,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
 
         } else {
-            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity} (Причина: ${!isInEntitiesWithDetails ? 'нет в списке entitiesWithDetails' : 'исключена в summaryEntitiesWithoutDetails'})`);
+            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity} (Причина: ${!isInEntitiesWithDetails ? 'нет в списке entitiesWithDetails' : 'исключена in summaryEntitiesWithoutDetails'})`);
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
