@@ -4364,7 +4364,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
 // 3. Список накладных по поставщику и складу (уровень 3)
 router.get('/expenses_by_receipts', async (req, res) => {
     try {
-        const { sklad_id, postavhik_id, start_date, end_date } = req.query;
+        const { sklad_id, postavhik_id } = req.query;
 
         let query = `
             SELECT 
@@ -4409,19 +4409,6 @@ router.get('/expenses_by_receipts', async (req, res) => {
         if (pId) {
             queryParams.push(pId);
             query += ` AND rec.supplier_id = $${queryParams.length}`;
-        }
-
-        // Фильтрация по датам (учитываем дату накладной rec.date)
-        const sDate = (start_date && start_date !== '' && start_date !== 'undefined') ? start_date : null;
-        if (sDate) {
-            queryParams.push(sDate);
-            query += ` AND rec.date >= $${queryParams.length}`;
-        }
-
-        const eDate = (end_date && end_date !== '' && end_date !== 'undefined') ? end_date : null;
-        if (eDate) {
-            queryParams.push(eDate);
-            query += ` AND rec.date <= $${queryParams.length}`;
         }
 
         query += ` ORDER BY rec.date DESC;`;
