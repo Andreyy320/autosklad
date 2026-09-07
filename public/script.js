@@ -6097,12 +6097,11 @@ async function loadExpenseDetailTable(fetchUrl) {
     }
 }
 
-
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}"`);
+    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${window.currentDocType || 'realization'}"`);
     
     const drawer = getOrCreateDrawer();
     
@@ -6116,7 +6115,8 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     openDrawer();
 
     try {
-        const targetUrl = `/api/money_receipts/${docId}/payments?sklad_id=${skladId}`;
+        const docType = window.currentDocType || 'realization';
+        const targetUrl = `/api/money_receipts/${docId}/payments?sklad_id=${skladId}&doc_type=${docType}`;
         console.log(`[HISTORY LOG] Запрос истории по адресу: ${targetUrl}`);
 
         let response = await fetch(targetUrl);
@@ -6177,7 +6177,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}"`);
+    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${window.currentDocType || 'realization'}"`);
     
     const drawer = getOrCreateDrawer();
     
@@ -6218,22 +6218,27 @@ async function submitIncomePayment(event, docId, skladId) {
     
     const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
     const commentVal = document.getElementById('payment-comment').value;
+    const currentDocType = window.currentDocType || 'realization';
 
     const payload = {
         amount: parsedAmount,
         comment: commentVal,
-        sklad_id: skladId || window.currentSkladId || null
+        sklad_id: skladId || window.currentSkladId || null,
+        doc_type: currentDocType
     };
 
+    const targetUrl = `/api/money_receipts/${docId}/pay`;
+
     console.log(`[SUBMIT LOG] Отправка платежа:`, {
-        url: `/api/money_receipts/${docId}/pay`,
+        url: targetUrl,
         docId: docId,
         skladId: skladId,
+        docType: currentDocType,
         payloadToSend: payload
     });
 
     try {
-        let response = await fetch(`/api/money_receipts/${docId}/pay`, {
+        let response = await fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -6262,7 +6267,6 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
