@@ -4013,7 +4013,8 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             return res.status(400).json({ error: 'Некорректный ID документа' });
         }
 
-        const paymentAmount = parseFloat(amount);
+        // Округляем сумму входящего платежа до 2 знаков
+        const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
@@ -4044,7 +4045,7 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
                 WHERE r.id = $1
             `;
             
-            // Простая альтернатива, если у тебя суммы уже где-то агрегируются, но через подзапрос надежнее:
+            // Проверка долга с учетом уже внесенных оплат
             const debtCheckQuery = `
                 SELECT 
                     COALESCE(tot.total_sum, 0) AS total_sum,
@@ -4074,7 +4075,9 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             const debtRes = await pool.query(debtCheckQuery, [docId]);
             const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
             const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
-            const currentDebt = totalSum - alreadyPaid;
+            
+            // Округляем текущий долг до 2 знаков, чтобы сравнение работало корректно
+            const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
 
             if (paymentAmount > currentDebt) {
                 return res.status(400).json({ 
@@ -4131,7 +4134,9 @@ router.post('/money_receipts/:id/pay', async (req, res) => {
             const moveDebtRes = await pool.query(moveDebtQuery, [docId]);
             const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
             const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
-            const moveCurrentDebt = moveTotal - movePaid;
+            
+            // Округляем долг по перемещению до 2 знаков
+            const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
 
             if (paymentAmount > moveCurrentDebt) {
                 return res.status(400).json({ 
