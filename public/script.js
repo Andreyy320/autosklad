@@ -6481,15 +6481,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 let paidSum = Number(item.total_paid || item.paid || 0);
                 let debtSum = Number(item.debt_sum || item.total_debt || item.debt || 0);
                 
-                let partProfitFull = Number(item.parts_profit || item.parts_sum || item.parts_margin || item.profit || item.margin || 0);
-                let workSumFull = Number(item.works_sum || item.work_sum || item.services_sum || 0);
-                let netProfitFull = Number(item.net_profit || (partProfitFull + workSumFull));
+                // ИСПРАВЛЕНИЕ: Берем готовые и посчитанные бэкендом значения прибыли напрямую, без зануления через payRatio
+                let itemPartsProfit = Number(item.parts_profit || 0);
+                let itemWorksSum = Number(item.works_sum || item.work_sum || item.services_sum || 0);
+                let itemNetProfit = Number(item.net_profit || (itemPartsProfit + itemWorksSum));
 
-                const payRatio = realizationSum > 0 ? Math.min(paidSum / realizationSum, 1) : (paidSum > 0 ? 1 : 0);
-
-                const itemPartsProfit = Number((partProfitFull * payRatio).toFixed(2));
-                const itemWorksSum = Number((workSumFull * payRatio).toFixed(2));
-                const itemNetProfit = Number((netProfitFull * payRatio).toFixed(2));
+                console.debug(`🔍 [Row #${index}] Doc: ${item.doc_number || item.id} | RealizationSum: ${realizationSum} | Paid: ${paidSum} | PartsProfit: ${itemPartsProfit} | Works: ${itemWorksSum} | NetProfit: ${itemNetProfit}`);
 
                 groupedByMonth[m.key].totalSum += realizationSum;
                 groupedByMonth[m.key].totalPaid += paidSum;
@@ -6640,7 +6637,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 // Вспомогательная функция для кнопки «Применить» на панели фильтров
 function applyReceiptsFilters() {
     if (window.currentSkladId) {
