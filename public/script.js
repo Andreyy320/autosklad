@@ -6663,6 +6663,13 @@ function applyReceiptsFilters() {
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] Запуск загрузки. URL: ${fetchUrl}`);
     
+    // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
+    if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
+        const separator = fetchUrl.includes('?') ? '&' : '?';
+        fetchUrl = `${fetchUrl}${separator}doc_type=${window.currentDocType}`;
+        console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
+    }
+    
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
@@ -6792,6 +6799,14 @@ if (tableBodyForReceipts) {
             // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
+            // Четко определяем тип документа, чтобы избежать коллизий ID между реализациями и перемещениями
+            const docNumber = String(selectedItem.doc_number || tr.cells[0]?.innerText || '');
+            if (docNumber.includes('ПЕРЕМЕЩЕНИЕ')) {
+                window.currentDocType = 'move';
+            } else {
+                window.currentDocType = 'realization';
+            }
+            
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
 
@@ -6853,7 +6868,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
 
 
 
