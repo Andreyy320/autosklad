@@ -3610,11 +3610,11 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
-        const skladId = req.query.sklad_id || 1; // Берем из запроса или по умолчанию ваш склад
+        const skladId = req.query.sklad_id || 1;
 
         const query = `
             WITH combined_docs AS (
-                -- 1. Обычные продажи из realizations
+                -- 1. Обычные продажи из realizations (участвуют в деньгах, долгах и оплатах)
                 SELECT 
                     real.id,
                     real.sklad_id,
@@ -3643,7 +3643,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (учитывают количество, но не создают долг/оплату)
+                -- 2. Перемещения (учитывают только количество товара, финансы равны 0)
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
