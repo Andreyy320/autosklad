@@ -3610,9 +3610,11 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
+        const skladId = req.query.sklad_id || 1; // Берем из запроса или по умолчанию ваш склад
+
         const query = `
             WITH combined_docs AS (
-                -- 1. Обычные продажи из realizations (участвуют в деньгах, долгах и оплатах)
+                -- 1. Обычные продажи из realizations
                 SELECT 
                     real.id,
                     real.sklad_id,
@@ -3641,7 +3643,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (учитывают только количество товара на складе, но НЕ создают долг/оплату клиента)
+                -- 2. Перемещения (учитывают количество, но не создают долг/оплату)
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
@@ -3661,7 +3663,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
             SELECT 
                 sk.id AS id,
                 sk.id AS sklad_id,
-                COALESCE(sk.name, 'Основной склад')::text AS sklad_name,
+                COALESCE(sk.name, 'Центральный')::text AS sklad_name,
                 COUNT(DISTINCT doc.id)::integer AS total_orders,
                 COALESCE(SUM(doc.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(doc.parts_sum), 0)::numeric AS parts_sum,
@@ -3671,9 +3673,10 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0)::numeric AS debt_sum
             FROM skladi sk
             JOIN combined_docs doc ON doc.sklad_id = sk.id
+            WHERE sk.id = $1
             GROUP BY sk.id, sk.name;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [skladId]);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка получения аналитики по складам:', err);
