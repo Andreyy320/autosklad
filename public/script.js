@@ -6703,7 +6703,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl);
         const responseText = await response.text();
-        console.<code>log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
+        console.log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
 
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const data = JSON.parse(responseText);
@@ -6815,7 +6815,7 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
-            console.log(`📂 [КЛИК ПРИХОДЫ ССКЛАД] Кликнули по складу, вызываем loadReceiptMainData для sklad_id:`, selectedItem.sklad_id || selectedItem.id);
+            console.log(`📂 [КЛИК ПРИХОДЫ СКЛАД] Кликнули по складу, вызываем loadReceiptMainData для sklad_id:`, selectedItem.sklad_id || selectedItem.id);
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
             console.log(`📂 [КЛИК ПРИХОДЫ ДОКУМЕНТЫ] Кликнули по документу прихода. Данные строки:`, selectedItem);
