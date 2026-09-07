@@ -8300,6 +8300,7 @@ function updateFilterPanels(entity) {
         console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -8389,7 +8390,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const shouldShowDetails = entitiesWithDetails.includes(entity) && !summaryEntitiesWithoutDetails.includes(entity);
 
         if (shouldShowDetails) {
-            console.lib?.(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
+            console.log(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'flex', 'important');
             
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
@@ -8437,13 +8438,18 @@ document.querySelectorAll('.nav-link').forEach(link => {
             return;
         }
 
-        // Для всех остальных разделов вызываем стандартный loadData и сразу подсвечиваем/прогружаем первую строку
+        // Для всех остальных разделов вызываем стандартный loadData
         console.log(`📂 [nav-link] Запуск стандартной загрузки loadData для entity: "${entity}", text: "${text}"`);
         loadData(entity, text, () => {
-            const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
-            if ($firstRow.length) {
-                console.log(`👉 [nav-link] Автоматический клик по первой строке загруженной таблицы`);
-                $firstRow.trigger('click');
+            // Авто-клик делаем ТОЛЬКО если у сущности реально есть детали и это не сводный отчет!
+            if (shouldShowDetails) {
+                const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
+                if ($firstRow.length) {
+                    console.log(`👉 [nav-link] Автоматический клик по первой строке загруженной таблицы`);
+                    $firstRow.trigger('click');
+                }
+            } else {
+                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены: сущность "${entity}" не имеет детальной таблицы.`);
             }
         });
     });
