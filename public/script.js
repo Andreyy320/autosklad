@@ -6777,7 +6777,6 @@ if (tableBodyForReceipts) {
                 'expenses_by_suppliers', 
                 'expenses_by_receipts'
             ];
-
             let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
             console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
             
