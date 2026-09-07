@@ -5773,10 +5773,10 @@ async function submitPayment(event, receiptId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
+
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
-    // Трассировка покажет точный источник вызова (кто именно вызвал эту функцию)
-    console.trace("🔍 [loadExpenseMainData TRACE] Стеки вызова:");
 
     let fetchUrl = '';
     let currentExpenseView = entity;
@@ -5868,7 +5868,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         console.log(`📂 [View: expense_items] URL: ${fetchUrl}`);
 
         // Защита глобального контекста от затирания чужими модулями
-        if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+        if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses_by_suppliers' || currentExpenseView === 'expenses_by_receipts' || currentExpenseView === 'expense_items') {
             currentEntity = currentExpenseView; 
         }
         
@@ -5883,7 +5883,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 
     // Защита глобального контекста от затирания чужими модулями
-    if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+    if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses_by_suppliers' || currentExpenseView === 'expenses_by_receipts' || currentExpenseView === 'expense_items') {
         currentEntity = currentExpenseView;
     }
     
@@ -6019,6 +6019,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-${currentGIdx}`;
                     
+                    // Безопасный клик для проваливания в детализацию накладной
+                    tr.addEventListener('click', () => {
+                        loadExpenseMainData('expense_items', item);
+                    });
+
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
                     } else {
@@ -6050,6 +6055,15 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
                 
+                // Добавляем правильный обработчик перехода по уровням для обычной таблицы
+                if (currentEntity === 'expenses_by_sklad') {
+                    tr.dataset.skladId = item.sklad_id;
+                    tr.addEventListener('click', () => loadExpenseMainData('expenses_by_suppliers', item));
+                } else if (currentEntity === 'expenses_by_suppliers') {
+                    tr.dataset.postavhikId = item.postavhik_id;
+                    tr.addEventListener('click', () => loadExpenseMainData('expenses_by_receipts', item));
+                }
+
                 if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
                 } else {
