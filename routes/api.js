@@ -3868,15 +3868,13 @@ router.get('/money_receipts', async (req, res) => {
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
-        let { realization_id, customer_id, sklad_id, doc_type } = req.query;
+        let { realization_id, customer_id, sklad_id } = req.query;
         
-        // Превращаем ID в числа (integer), чтобы PostgreSQL не путался с типами
-        const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? parseInt(realization_id, 10) : null;
-        const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? parseInt(customer_id, 10) : null;
-        const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? parseInt(sklad_id, 10) : null;
-        const cleanDocType = (doc_type && doc_type !== 'null' && doc_type !== 'undefined') ? doc_type : null;
+        const cleanRealizationId = (realization_id && realization_id !== 'null' && realization_id !== 'undefined') ? realization_id : null;
+        const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
+        const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
 
-        console.log('🧹 [/api/money_receipts_detail] Очищенные параметры:', { cleanRealizationId, cleanCustomerId, cleanSkladId, cleanDocType });
+        console.log('🧹 [/api/money_receipts_detail] Очищенные параметры:', { cleanRealizationId, cleanCustomerId, cleanSkladId });
 
         if (!cleanRealizationId && !cleanCustomerId && !cleanSkladId) {
             return res.json([]);
@@ -3945,7 +3943,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Позиции перемещений
+                -- 3. Позиции перемещений с получением чистой закупки из связанного прихода
                 SELECT 
                     mi.id,
                     'part' AS item_type,
@@ -3983,13 +3981,17 @@ router.get('/money_receipts_detail', async (req, res) => {
                 WHERE m.is_posted = true
             ) sub
             WHERE 
+                -- Если передан конкретный ID документа, требуем совпадения и ID, и типа (чтобы реализация и перемещение с одинаковым ID не смешивались)
                 (
                     $1::integer IS NULL 
                     OR (
                         sub.rel_id = $1 
                         AND (
-                            ($4::text IS NULL) 
-                            OR (sub.doc_type = $4::text)
+                            (SUBSTRING(sub.doc_number FROM 1 for 11) = 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'move') 
+                            OR 
+                            (SUBSTRING(sub.doc_number FROM 1 for 11) != 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'realization')
+                            OR 
+                            $4 IS NULL
                         )
                     )
                 )
@@ -3998,11 +4000,26 @@ router.get('/money_receipts_detail', async (req, res) => {
             ORDER BY date DESC, id ASC;
         `;
 
-        const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId, cleanDocType];
+        // Определяем тип документа по первому символу или наличию параметра, либо передаем null
+        // Если у тебя фронтенд вызывает этот эндпоинт, можно также передавать ?doc_type=realization или move
+        let docType = req.query.doc_type || null;
+        if (!docType && cleanRealizationId) {
+            // Автоопределение, если фронт не передал doc_type явно, но прислал ID
+            // Если запрос идет из таблицы реализаций/перемещений
+            docType = null; // Если тип не передан, отфильтруем по ID в обеих таблицах, но теперь у нас есть разметка doc_type
+        }
+
+        const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId, docType];
         console.log('⚡ [/api/money_receipts_detail] Параметры запроса:', queryParams);
         
         const result = await pool.query(cleanQuery, queryParams);
         
+        result.rows.forEach(r => {
+            if (r.doc_number && r.doc_number.startsWith('ПЕРЕМЕЩЕНИЕ')) {
+                console.log(`🔍 [DEBUG MOVE ITEM]: Документ: ${r.doc_number}, Товар: ${r.item_name}, Кол-во: ${r.quantity}, Закупка: ${r.purchase_price}, Итог с наценкой: ${r.total_rub}`);
+            }
+        });
+
         console.log(`✅ [/api/money_receipts_detail] Успешно получено строк: ${result.rowCount}`);
         res.json(result.rows);
 
