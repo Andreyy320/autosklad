@@ -4966,93 +4966,6 @@ function logout() {
     location.reload();
 }
 
-async function refreshData() {
-    console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
-    
-    // 1. Фиксируем состояние на момент вызова (замораживаем контекст)
-    const savedSelectedItem = selectedItem;
-    const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
-    const previousEntity = currentEntity;
-
-    // Жестко фиксируем глобальные ID текущего экрана, чтобы они не переписались асинхронно
-    const lockedSkladId = window.currentSkladId;
-    const lockedPostavhikId = window.currentPostavhikId;
-    const lockedReceiptId = window.currentReceiptId;
-    const lockedRealizationId = window.currentRealizationId;
-    const lockedRepairId = window.currentRepairId;
-    const lockedCustomerId = window.currentCustomerId;
-
-    // Специальная ветка для приходов денег
-    if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
-        const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
-        await loadReceiptMainData(previousEntity, parentParam);
-    } 
-    // Специальная ветка для расходов денег
-    else if (
-        previousEntity === 'expenses_by_sklad' || 
-        previousEntity === 'expenses_by_suppliers' || 
-        previousEntity === 'expenses_by_receipts' || 
-        previousEntity === 'expense_items'
-    ) {
-        let parentParam = '';
-        if (previousEntity === 'expenses_by_suppliers') {
-            parentParam = lockedSkladId || savedSelectedItem;
-        } else if (previousEntity === 'expenses_by_receipts') {
-            parentParam = lockedPostavhikId || savedSelectedItem;
-        } else if (previousEntity === 'expense_items') {
-            parentParam = lockedReceiptId || savedSelectedItem;
-        }
-        await loadExpenseMainData(previousEntity, parentParam);
-    } 
-    else {
-        const activeLink = document.querySelector('.nav-link.active');
-        const title = activeLink ? activeLink.innerText : 'Данные';
-        await loadData(previousEntity, title);
-    }
-
-    // Восстанавливаем подсветку строки, используя зафиксированные locked-переменные
-    if (savedSelectedItem && savedId) {
-        const rows = document.querySelectorAll('#table-body tr');
-        let foundRow = null;
-        
-        rows.forEach(row => {
-            if (row.dataset.id == String(savedId)) {
-                foundRow = row;
-            }
-        });
-
-        if (foundRow) {
-            foundRow.classList.add('selected-row');
-            selectedItem = savedSelectedItem;
-
-            if (previousEntity === 'money_receipts') {
-                const detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
-                let realizationId = lockedRealizationId || savedSelectedItem.realization_id || savedSelectedItem.id || '';
-                let repairId = lockedRepairId || savedSelectedItem.repair_id || '';
-                let customerId = lockedCustomerId || savedSelectedItem.customer_id || '';
-                let skladId = savedSelectedItem.sklad_id || lockedSkladId || '';
-                
-                let url = '';
-                if (detailEntity === 'money_receipts_works_detail') {
-                    url = `/api/money_receipts_works_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                } else {
-                    url = `/api/money_receipts_detail?realization_id=${realizationId}&repair_id=${repairId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                }
-                loadReceiptDetailTable(url, detailEntity);
-            }
-
-            if (previousEntity === 'expense_items') {
-                let skladId = lockedSkladId || '';
-                let postavhikId = lockedPostavhikId || '';
-                let currentReceipt = lockedReceiptId || savedId || '';
-                let url = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
-                loadExpenseDetailTable(url);
-            }
-        }
-    }
-    
-    // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
-}
 
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
@@ -7521,6 +7434,7 @@ async function postRealization(realizationId) {
     );
 }
 
+
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -7535,21 +7449,13 @@ if (tableBody) {
             return;
         }
 
-        // Если это сейчас расходы — обрабатываем выбор строки локально для расходов, не ломая логику
+        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться
         if (
             currentEntity === 'expenses_by_sklad' || 
             currentEntity === 'expenses_by_suppliers' || 
             currentEntity === 'expenses_by_receipts'
         ) {
-            console.log(`💰 [tableBody click] Обработка клика для сущности расходов: ${currentEntity}`);
-            const tr = e.target.closest('tr');
-            if (tr) {
-                document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
-                tr.style.background = '#e2e8f0';
-                const id = tr.getAttribute('data-id');
-                selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.postavhik_id || i.sklad_id) === String(id));
-                console.log(`💰 [tableBody click] Выбран элемент расходов ID ${id}:`, selectedItem);
-            }
+            console.log(`💰 [tableBody click] Текущая сущность расходов (${currentEntity}), общий обработчик пропущен.`);
             return;
         }
 
@@ -7739,6 +7645,7 @@ if (tableBody) {
         }
     });
 }
+
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
