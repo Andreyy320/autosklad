@@ -6799,13 +6799,17 @@ if (tableBodyForReceipts) {
             // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
-            // Четко определяем тип документа, чтобы избежать коллизий ID между реализациями и перемещениями
-            const docNumber = String(selectedItem.doc_number || tr.cells[0]?.innerText || '');
-            if (docNumber.includes('ПЕРЕМЕЩЕНИЕ')) {
+            // ЖЕЛЕЗОБЕТОННОЕ определение типа: проверяем и поле в объекте, и весь текст строки в DOM
+            const docNumFromItem = String(selectedItem.doc_number || '');
+            const rowText = String(tr.innerText || '');
+
+            if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
                 window.currentDocType = 'move';
             } else {
                 window.currentDocType = 'realization';
             }
+            
+            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType });
             
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
@@ -6868,7 +6872,6 @@ if (tableBodyForReceipts) {
         }
     });
 }
-
 
 
 
