@@ -7521,7 +7521,6 @@ async function postRealization(realizationId) {
     );
 }
 
-
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
@@ -7536,13 +7535,21 @@ if (tableBody) {
             return;
         }
 
-        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться
+        // Если это сейчас расходы — обрабатываем выбор строки локально для расходов, не ломая логику
         if (
             currentEntity === 'expenses_by_sklad' || 
             currentEntity === 'expenses_by_suppliers' || 
             currentEntity === 'expenses_by_receipts'
         ) {
-            console.log(`💰 [tableBody click] Текущая сущность расходов (${currentEntity}), общий обработчик пропущен.`);
+            console.log(`💰 [tableBody click] Обработка клика для сущности расходов: ${currentEntity}`);
+            const tr = e.target.closest('tr');
+            if (tr) {
+                document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
+                tr.style.background = '#e2e8f0';
+                const id = tr.getAttribute('data-id');
+                selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.postavhik_id || i.sklad_id) === String(id));
+                console.log(`💰 [tableBody click] Выбран элемент расходов ID ${id}:`, selectedItem);
+            }
             return;
         }
 
@@ -7732,7 +7739,6 @@ if (tableBody) {
         }
     });
 }
-
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
