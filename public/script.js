@@ -6070,15 +6070,44 @@ async function loadExpenseDetailTable(fetchUrl) {
     const config = getConfig('expense_items');
     if (detailTitle && config) detailTitle.innerText = config.title;
 
-    if (detailHeaderTr && config && config.columns) {
-        detailHeaderTr.innerHTML = config.columns.map(col => {
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
+
+    if (detailHeaderTr && visibleColumns.length > 0) {
+        detailHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
+
+        const thead = detailHeaderTr.closest('thead');
+        let filterRow = document.getElementById('detail-table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'detail-table-filter-row';
+            thead.insertBefore(filterRow, detailHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, detailHeaderTr);
+        }
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterDetailTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
     }
 
-    const colCount = config && config.columns ? config.columns.length : 5;
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
 
     try {
@@ -6089,7 +6118,7 @@ async function loadExpenseDetailTable(fetchUrl) {
 
         if (!detailBody) return;
 
-        if (items.length === 0) {
+        if (!items || items.length === 0) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
             return;
         }
@@ -6099,9 +6128,13 @@ async function loadExpenseDetailTable(fetchUrl) {
             const tr = document.createElement('tr');
             if (config && typeof config.render === 'function') {
                 tr.innerHTML = config.render(item);
+            } else {
+                console.error('❌ [Config] Функция render не найдена в конфиге для expense_items');
             }
             detailBody.appendChild(tr);
         });
+        console.log('✅ [loadExpenseDetailTable] Рендеринг таблицы детализации успешно завершен.');
+
     } catch (err) {
         console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
         if (detailBody) {
@@ -6109,8 +6142,16 @@ async function loadExpenseDetailTable(fetchUrl) {
         }
     }
 }
-
-
+// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
+function applyExpensesFilters() {
+    if (window.currentPostavhikId) {
+        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+    } else if (window.currentSkladId) {
+        loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+    } else {
+        loadExpenseMainData('expenses_by_sklad');
+    }
+}
 
 
 
