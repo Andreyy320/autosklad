@@ -7610,7 +7610,7 @@ if (tableBody) {
         const id = tr.getAttribute('data-id');
         console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
-        // Универсальный поиск элемента с поддержкой разных вариантов ID (без опасного фоллбэка по индексу строки)
+        // Универсальный надежный поиск элемента строго по ID (без опасного фоллбэка по индексу строки)
         selectedItem = currentItems.find(i => 
             String(i.id || '') === String(id) || 
             String(i.receipt_id || '') === String(id) || 
@@ -7621,7 +7621,7 @@ if (tableBody) {
         );
 
         if (!selectedItem) {
-            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Поиск по индексу отключен во избежание ошибок.`);
+            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Загрузка деталей отменена во избежание подстановки неверных данных.`);
             return;
         }
         
