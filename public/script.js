@@ -6177,13 +6177,23 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${window.currentDocType || 'realization'}"`);
+    
+    // ДОП. ЛОГ: фиксируем точные входящие аргументы в момент открытия
+    console.log(`[DRAWER LOG] 🟢 СТАРТ открытия формы оплаты. АРГУМЕНТЫ:`, {
+        docId: docId,
+        typeDocId: typeof docId,
+        debtSum: debtSum,
+        docNumber: docNumber,
+        skladId: skladId,
+        globalCurrentDocType: window.currentDocType,
+        globalCurrentSkladId: window.currentSkladId
+    });
     
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата документа ${docNumber} (ID: ${docId})</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
 
@@ -6212,7 +6222,14 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
 
 async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
-    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
+    
+    // СТРАХОВКА: если docId пришел пустым или undefined, пытаемся вытащить из активной строки или глобальных переменных
+    if (!docId || docId === 'undefined' || docId === 'null') {
+        docId = window.currentRealizationId || window.selectedItem?.id || window.selectedItem?.realization_id;
+        console.warn(`⚠️ [SUBMIT WARNING] docId был пустым! Восстановлен из глобальных переменных:`, docId);
+    }
+
+    if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null' || !skladId) {
         skladId = window.currentSkladId || '';
     }
     
@@ -6229,11 +6246,11 @@ async function submitIncomePayment(event, docId, skladId) {
 
     const targetUrl = `/api/money_receipts/${docId}/pay`;
 
-    console.log(`[SUBMIT LOG] Отправка платежа:`, {
+    console.log(`[SUBMIT LOG] 🚀 ОТПРАВКА ПЛАТЕЖА СТРОГО НА URL:`, {
         url: targetUrl,
-        docId: docId,
-        skladId: skladId,
-        docType: currentDocType,
+        finalDocId: docId,
+        finalSkladId: skladId,
+        finalDocType: currentDocType,
         payloadToSend: payload
     });
 
