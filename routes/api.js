@@ -3864,14 +3864,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         const cleanCustomerId = (customer_id && customer_id !== 'null' && customer_id !== 'undefined') ? customer_id : null;
         const cleanSkladId = (sklad_id && sklad_id !== 'null' && sklad_id !== 'undefined') ? sklad_id : null;
 
-        console.log('🧹 [/api/money_receipts_detail] Очищенные параметры:', {
-            cleanRealizationId,
-            cleanCustomerId,
-            cleanSkladId
-        });
-
         if (!cleanRealizationId && !cleanCustomerId && !cleanSkladId) {
-            console.log('⚠️ [/api/money_receipts_detail] Все ключевые параметры пусты. Возвращаем пустой массив.');
             return res.json([]);
         }
 
@@ -3936,7 +3929,7 @@ router.get('/money_receipts_detail', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Позиции перемещений (с разделением на закупку и цену продажи с наценкой)
+                -- 3. Позиции перемещений (с разделением закупки и цены продажи с наценкой)
                 SELECT 
                     mi.id,
                     'part' AS item_type,
@@ -3945,10 +3938,10 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
-                    -- Закупочная цена за единицу
+                    -- Чистая закупка за единицу
                     COALESCE(NULLIF(mi.price_rub, 0), mi.price, 0)::numeric AS purchase_price,
                     0::numeric AS retail_price,
-                    -- Итоговая цена за единицу с учетом наценки (total_rub / quantity)
+                    -- Цена продажи с учетом наценки за единицу (total_rub / quantity)
                     CASE 
                         WHEN mi.quantity > 0 THEN COALESCE(mi.total_rub, mi.price * mi.quantity, 0) / mi.quantity 
                         ELSE COALESCE(mi.total_rub, mi.price, 0) 
@@ -3964,36 +3957,19 @@ router.get('/money_receipts_detail', async (req, res) => {
                 WHERE m.is_posted = true
             ) sub
             WHERE 
-                -- Если передан конкретный realization_id (или ID перемещения), то берем ТОЛЬКО его позиции
                 ($1::integer IS NULL OR sub.rel_id = $1)
-                -- Фильтры по клиенту и складу работают для общих выборок
                 AND ($2::integer IS NULL OR sub.cust_id = $2)
                 AND ($3::integer IS NULL OR sub.skl_id = $3)
             ORDER BY date DESC, id ASC;
         `;
 
-        const queryParams = [
-            cleanRealizationId, 
-            cleanCustomerId, 
-            cleanSkladId
-        ];
-
-        console.log('⚡ [/api/money_receipts_detail] Выполняем SQL-запрос с параметрами:', queryParams);
+        const queryParams = [cleanRealizationId, cleanCustomerId, cleanSkladId];
         const result = await pool.query(cleanQuery, queryParams);
-        
-        console.log(`✅ [/api/money_receipts_detail] Успешно получено строк: ${result.rowCount}`);
         res.json(result.rows);
 
     } catch (err) {
-        console.error('❌ [/api/money_receipts_detail] ОШИБКА в обработчике:', err);
-        console.error('📄 Сообщение ошибки (err.message):', err.message);
-        console.error('🧩 Стек ошибки (err.stack):', err.stack);
-        
-        res.status(500).json({ 
-            error: 'Ошибка сервера', 
-            details: err.message,
-            stack: err.stack 
-        });
+        console.error('❌ [/api/money_receipts_detail] ОШИБКА:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
 
