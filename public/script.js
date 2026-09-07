@@ -8288,37 +8288,51 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
-
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
-    const expenseFilter = document.getElementById('expense-filter-panel'); // Если есть отдельная панель для расходов
+    const expenseFilter = document.getElementById('expenses-filter-panel') || document.getElementById('expense-filter-panel'); 
+    const receiptsFilter = document.getElementById('receipts-filter-panel');
 
-    if (!partsFilter || !movementFilter) return;
+    console.log("🎛️ [updateFilterPanels] Вызвана для entity:", entity);
 
-    // Сбрасываем отображение всех панелей
-    partsFilter.style.display = 'none';
-    movementFilter.style.display = 'none';
+    // Сбрасываем отображение всех известных панелей фильтров
+    if (partsFilter) partsFilter.style.display = 'none';
+    if (movementFilter) movementFilter.style.display = 'none';
     if (expenseFilter) expenseFilter.style.display = 'none';
+    if (receiptsFilter) receiptsFilter.style.display = 'none';
 
-    // Сохраняем вашу старую логику без изменений
-    if (entity === 'stock_balances') {
-        partsFilter.style.display = 'flex';
-    } else if (entity === 'stock_movement') {
-        movementFilter.style.display = 'flex';
-    } 
-    // Добавляем поддержку расходов, чтобы они не ломали интерфейс
-    else if (entity && entity.startsWith('expenses_') || entity === 'expense_items') {
+    // Безопасно проверяем сущность
+    const currentEntity = String(entity || '');
+
+    if (currentEntity === 'stock_balances') {
+        if (partsFilter) {
+            partsFilter.style.display = 'flex';
+            console.log("✅ [updateFilterPanels] Включена панель: parts-filter-panel");
+        }
+    } else if (currentEntity === 'stock_movement') {
+        if (movementFilter) {
+            movementFilter.style.display = 'flex';
+            console.log("✅ [updateFilterPanels] Включена панель: movement-filter-panel");
+        }
+    } else if (currentEntity.startsWith('expenses_') || currentEntity === 'expense_items' || currentEntity === 'расходы' || currentEntity === 'expenses') {
         if (expenseFilter) {
             expenseFilter.style.display = 'flex';
+            console.log("✅ [updateFilterPanels] Включена панель расходов: expenses-filter-panel");
         } else {
-            // Если отдельной панели нет, используем partsFilter как универсальную, 
-            // либо оставляем скрытой, чтобы инпуты не съезжали
-            partsFilter.style.display = 'none'; 
+            console.warn("⚠️ [updateFilterPanels] Панель расходов не найдена в DOM!");
         }
+    } else if (currentEntity.startsWith('money_receipts')) {
+        if (receiptsFilter) {
+            receiptsFilter.style.display = 'flex';
+            console.log("✅ [updateFilterPanels] Включена панель приходов: receipts-filter-panel");
+        } else {
+            console.warn("⚠️ [updateFilterPanels] Панель приходов не найдена в DOM!");
+        }
+    } else {
+        console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -8334,6 +8348,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             entity = 'money_receipts_by_sklad';
         }
         
+        // Корректно обновляем панели фильтров (скрываем ненужные, показываем нужную)
         updateFilterPanels(entity);
 
         const detailContainer = document.getElementById('detail-container');
@@ -8461,7 +8476,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
-
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
