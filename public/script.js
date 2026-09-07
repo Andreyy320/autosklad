@@ -7610,7 +7610,7 @@ if (tableBody) {
         const id = tr.getAttribute('data-id');
         console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
-        // Универсальный поиск элемента с поддержкой разных вариантов ID и без опасного индекса
+        // Универсальный поиск элемента с поддержкой всех возможных вариантов ID в currentItems
         selectedItem = currentItems.find(i => 
             String(i.id || '') === String(id) || 
             String(i.realization_id || '') === String(id) || 
@@ -7622,9 +7622,28 @@ if (tableBody) {
             String(i.customer_id || '') === String(id)
         );
 
+        // Страховка: если в currentItems не нашлось, проверяем itemsSource
+        if (!selectedItem && typeof itemsSource !== 'undefined' && Array.isArray(itemsSource)) {
+            selectedItem = itemsSource.find(i => 
+                String(i.id || '') === String(id) || 
+                String(i.realization_id || '') === String(id) || 
+                String(i.receipt_id || '') === String(id) || 
+                String(i.sklad_id || '') === String(id) || 
+                String(i.postavhik_id || '') === String(id) || 
+                String(i.move_id || '') === String(id) ||
+                String(i.payment_id || '') === String(id) ||
+                String(i.customer_id || '') === String(id)
+            );
+        }
+
+        // Запасной вариант: поиск по индексу строки в таблице
         if (!selectedItem) {
-            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Загрузка деталей отменена во избежание подстановки неверных данных.`);
-            return;
+            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массивах данных, пробуем поиск по индексу строки.`);
+            const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
+            if (rowIndex >= 0 && currentItems[rowIndex]) {
+                selectedItem = currentItems[rowIndex];
+                console.log(`📌 [tableBody click] Элемент найден по индексу строки ${rowIndex}:`, selectedItem);
+            }
         }
         
         selectedDetailItem = null;  
@@ -7659,7 +7678,7 @@ if (tableBody) {
         }
 
         if (selectedItem) {
-            const itemId = selectedItem.id || selectedItem.realization_id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || selectedItem.move_id || selectedItem.payment_id || id;
+            const itemId = selectedItem.id || selectedItem.realization_id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || selectedItem.move_id || id;
             console.log(`🎯 [tableBody click] Выбран элемент с итоговым идентификатором (itemId): ${itemId}`);
 
             if (currentEntity === 'cars') {
