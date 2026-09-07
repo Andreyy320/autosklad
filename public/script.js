@@ -8254,7 +8254,6 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
-
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
@@ -8359,7 +8358,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица (детали)
+        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -8368,22 +8367,25 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', // именно детальные приходы, если открыты
+            'money_receipts', 
             'stock_movement', 
             'postavhik', 
             'counterparties', 
             'customers',
-            'expenses_by_receipts' // если здесь детали нужны
+            'expenses_by_receipts'
         ];
 
-        // Сущности уровня "по складам" или "общие отчеты", где нижняя таблица категорически НЕ нужна
+        // Сущности уровня "по складам", справочники или общие отчеты, где нижняя таблица НЕ нужна
         const summaryEntitiesWithoutDetails = [
             'money_receipts_by_sklad',
             'expenses_by_sklad',
             'expenses_by_suppliers',
             'stock_balances',
             'расходы',
-            'expenses'
+            'expenses',
+            'parts',          // Справочник запчастей/товаров (второй скриншот)
+            'nomenclature',   // Если так называется номенклатура
+            'goods'
         ];
 
         // Жестко проверяем, нужно ли показывать нижнюю таблицу
@@ -8413,25 +8415,24 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
 
         } else {
-            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сводной сущности: ${entity}`);
+            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности без деталей: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
-            // Также прячем кнопки нижней таблицы, чтобы они не висели в воздухе
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
             if (detailActionButtons) {
                 detailActionButtons.style.setProperty('display', 'none', 'important');
             }
         }
         
-        // Если выбрали Расходы, запускаем нашу изолированную функцию
+        // Если выбрали Расходы, запускаем изолированную функцию
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
-        // Если выбрали Приходы, запускаем вашу изолированную функцию уровней складов
+        // Если выбрали Приходы, запускаем изолированную функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
             loadReceiptMainData('money_receipts_by_sklad');
@@ -8441,7 +8442,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         // Для всех остальных разделов вызываем стандартный loadData
         console.log(`📂 [nav-link] Запуск стандартной загрузки loadData для entity: "${entity}", text: "${text}"`);
         loadData(entity, text, () => {
-            // Авто-клик делаем ТОЛЬКО если у сущности реально есть детали и это не сводный отчет!
+            // Авто-клик делаем ТОЛЬКО если у сущности реально есть детали и контейнер открыт!
             if (shouldShowDetails) {
                 const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
                 if ($firstRow.length) {
@@ -8449,7 +8450,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
                     $firstRow.trigger('click');
                 }
             } else {
-                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены: сущность "${entity}" не имеет детальной таблицы.`);
+                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены: у "${entity}" нет нижней таблицы деталей.`);
             }
         });
     });
@@ -8471,8 +8472,6 @@ document.querySelectorAll('.accordion-header').forEach(header => {
         }
     });
 });
-
-
 
 
 
