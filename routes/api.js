@@ -3967,7 +3967,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(mi.total_rub, mi.price * mi.quantity, 0)::numeric AS total_rub,
                     COALESCE(mi.description, '')::text AS description,
                     m.id AS rel_id,
-                    NULL::integer AS cust_id,
+                    m.warehouse_to_id AS cust_id,
                     m.warehouse_from_id AS skl_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
