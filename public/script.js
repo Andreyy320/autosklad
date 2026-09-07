@@ -7610,16 +7610,19 @@ if (tableBody) {
         const id = tr.getAttribute('data-id');
         console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
-        // Универсальный поиск элемента с поддержкой разных вариантов ID
-        selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
+        // Универсальный поиск элемента с поддержкой разных вариантов ID (без опасного фоллбэка по индексу строки)
+        selectedItem = currentItems.find(i => 
+            String(i.id || '') === String(id) || 
+            String(i.receipt_id || '') === String(id) || 
+            String(i.realization_id || '') === String(id) || 
+            String(i.sklad_id || '') === String(id) || 
+            String(i.postavhik_id || '') === String(id) || 
+            String(i.move_id || '') === String(id)
+        );
 
         if (!selectedItem) {
-            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems, пробуем поиск по индексу строки.`);
-            const rowIndex = Array.from(tr.parentNode.children).indexOf(tr);
-            if (rowIndex >= 0 && currentItems[rowIndex]) {
-                selectedItem = currentItems[rowIndex];
-                console.log(`📌 [tableBody click] Элемент найден по индексу строки ${rowIndex}:`, selectedItem);
-            }
+            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Поиск по индексу отключен во избежание ошибок.`);
+            return;
         }
         
         selectedDetailItem = null;  
@@ -7654,7 +7657,7 @@ if (tableBody) {
         }
 
         if (selectedItem) {
-            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
+            const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.realization_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
             console.log(`🎯 [tableBody click] Выбран элемент с итоговым идентификатором (itemId): ${itemId}`);
 
             if (currentEntity === 'cars') {
