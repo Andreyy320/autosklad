@@ -7876,6 +7876,7 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -7934,6 +7935,8 @@ async function loadDetailData(entity, parentId) {
 
     if (entity === 'move_items') {
         queryParamName = 'move_id';
+    } else if (entity === 'expense_items') {
+        queryParamName = 'receipt_id';
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
@@ -8059,6 +8062,7 @@ async function loadDetailData(entity, parentId) {
             repair_items: 'Список запчастей',
             repair_works: 'Виды работ',
             receipt_items: 'Спецификация прихода',
+            expense_items: 'Спецификация расходов по накладной',
             move_items: 'Спецификация перемещения',
             realization_items: 'Спецификация реализации',
             realization_works: 'Спецификация услуг',
@@ -8106,13 +8110,9 @@ async function loadDetailData(entity, parentId) {
                 tr.dataset.id = item.id || '';
                 tr.style.cursor = 'pointer';
                 
-                // Если у конфигурации есть собственный метод render, вызываем его. 
-                // Но если это repair_works, а конфиг использует старый захардкоженный render без конфигурационного метода, 
-                // можно предусмотреть мягкий фолбэк для вывода названия вида работ.
                 if (typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
                 } else {
-                    // Универсальный рендер на случай отсутствия config.render
                     const priceVal = item.price ? Number(item.price).toFixed(2) : '0.00';
                     const workNameText = item.vidy_rabot_name || item.work_name || item.vidy_rabot_id || item.work_id || '—';
                     tr.innerHTML = `
