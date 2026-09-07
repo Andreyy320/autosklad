@@ -6765,7 +6765,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 // ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
-    // Удаляем старые слушатели через клон или AbortController, либо просто вешаем один раз флаг защиты от дублирования
     if (!tableBodyForReceipts.dataset.listenerAttached) {
         tableBodyForReceipts.dataset.listenerAttached = "true";
 
@@ -6777,6 +6776,7 @@ if (tableBodyForReceipts) {
                 'expenses_by_suppliers', 
                 'expenses_by_receipts'
             ];
+
             let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
             console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
             
@@ -6796,24 +6796,24 @@ if (tableBodyForReceipts) {
             let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
             let selectedItem = null;
 
-            // Пытаемся найти элемент в текущем массиве данных
             if (itemsSource) {
                 const listArray = Array.isArray(itemsSource) ? itemsSource : (itemsSource.items || []);
                 selectedItem = listArray.find(i => 
                     String(i.id || '') === String(id) || 
                     String(i.realization_id || '') === String(id) || 
+                    String(i.move_id || '') === String(id) || 
                     String(i.sklad_id || '') === String(id) || 
                     String(i.receipt_id || '') === String(id) || 
                     String(i.postavhik_id || '') === String(id)
                 );
             }
 
-            // ЖЕЛЕЗОБЕТОННЫЙ FALLBACK: если не нашли, собираем базовый объект из строки/глобальных переменных
             if (!selectedItem && id) {
                 console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
                 selectedItem = {
                     id: id,
                     realization_id: id,
+                    move_id: id,
                     customer_id: window.currentCustomerId || null,
                     sklad_id: window.currentSkladId || null
                 };
@@ -6839,14 +6839,7 @@ if (tableBodyForReceipts) {
                     loadReceiptMainData('money_receipts', selectedItem);
                 }
             } else if (activeEntity === 'money_receipts') {
-                window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
-                window.currentRepairId = null;
-                
-                if (selectedItem.customer_id !== undefined) {
-                    window.currentCustomerId = selectedItem.customer_id;
-                }
-                
-                const docNumFromItem = String(selectedItem.doc_number || '');
+                const docNumFromItem = String(selectedItem.doc_number || selectedItem.name || '');
                 const rowText = String(tr.innerText || '');
 
                 if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
@@ -6854,17 +6847,27 @@ if (tableBodyForReceipts) {
                 } else {
                     window.currentDocType = 'realization';
                 }
+
+                window.currentRealizationId = selectedItem.realization_id || selectedItem.move_id || selectedItem.id;
+                window.currentRepairId = null;
                 
-                console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType, customerId: window.currentCustomerId });
+                if (selectedItem.customer_id !== undefined) {
+                    window.currentCustomerId = selectedItem.customer_id;
+                }
+                
+                console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { 
+                    id: window.currentRealizationId, 
+                    docNumFromItem, 
+                    detectedType: window.currentDocType, 
+                    customerId: window.currentCustomerId 
+                });
                 
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'block';
 
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
                 
-                // ЗАЩИТА ОТ ДВОЙНЫХ ЗАПРОСОВ: проверяем, не отправлялся ли точно такой же запрос миллисекунду назад, 
-                // либо просто вызываем штатно с подробными логами (на скриншоте видно дублирование из-за всплытия / повторного бинда)
-                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
+                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}&doc_type=${window.currentDocType}`;
                 
                 if (typeof loadReceiptDetailTable === 'function') {
                     loadReceiptDetailTable(detailUrl, activeTab);
