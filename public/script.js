@@ -8317,8 +8317,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
-        // Убираем управление переключателем для приходов (tabsForMoneyReceipts не трогаем/скрываем)
-        const tabsForMoneyReceipts = null; 
 
         // Управляем ТОЛЬКО главным баром кнопок верхней таблицы
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -8344,78 +8342,69 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        // ВАЖНО: Гарантируем, что панель кнопок НИЖНЕЙ таблицы (спецификации) всегда остается доступной, 
-        // если открыт контейнер деталей, чтобы кнопки там не пропадали.
-        const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
-        if (detailActionButtons) {
-            detailActionButtons.style.setProperty('display', 'flex', 'important');
-        }
+        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица (детали)
+        const entitiesWithDetails = [
+            'receipts', 
+            'moves', 
+            'cars', 
+            'car_cards', 
+            'accidents', 
+            'repairs', 
+            'realizations', 
+            'money_receipts', // именно детальные приходы, если открыты
+            'stock_movement', 
+            'postavhik', 
+            'counterparties', 
+            'customers',
+            'expenses_by_receipts' // если здесь детали нужны
+        ];
 
-        if (
-            entity === 'receipts' || 
-            entity === 'moves' || 
-            entity === 'cars' || 
-            entity === 'car_cards' || 
-            entity === 'accidents' || 
-            entity === 'repairs' || 
-            entity === 'realizations' || 
-            entity === 'money_receipts' || 
-            entity === 'money_receipts_by_sklad' ||
-            entity === 'stock_balances' || 
-            entity === 'stock_movement' || 
-            entity === 'postavhik' || 
-            entity === 'counterparties' || 
-            entity === 'customers'
-        ) {
-            if (detailContainer) detailContainer.style.display = 'flex';
+        // Сущности уровня "по складам" или "общие отчеты", где нижняя таблица категорически НЕ нужна
+        const summaryEntitiesWithoutDetails = [
+            'money_receipts_by_sklad',
+            'expenses_by_sklad',
+            'expenses_by_suppliers',
+            'stock_balances',
+            'расходы',
+            'expenses'
+        ];
+
+        // Жестко проверяем, нужно ли показывать нижнюю таблицу
+        const shouldShowDetails = entitiesWithDetails.includes(entity) && !summaryEntitiesWithoutDetails.includes(entity);
+
+        if (shouldShowDetails) {
+            console.lib?.(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
+            if (detailContainer) detailContainer.style.setProperty('display', 'flex', 'important');
             
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+            if (detailActionButtons) {
+                detailActionButtons.style.setProperty('display', 'flex', 'important');
+            }
+
             if (carTabsBar) {
-                if (
-                    entity === 'car_cards' || 
-                    entity === 'accidents' || 
-                    entity === 'repairs' || 
-                    entity === 'realizations' || 
-                    entity === 'money_receipts' || 
-                    entity === 'money_receipts_by_sklad'
-                ) {
+                if (['car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts'].includes(entity)) {
                     carTabsBar.style.display = 'flex';
                 } else {
                     carTabsBar.style.display = 'none';
                 }
             }
 
-            if (entity === 'car_cards') {
-                if (tabsForCars) tabsForCars.style.display = 'flex';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            } else if (entity === 'accidents') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            } else if (entity === 'repairs') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            } else if (entity === 'realizations') {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-            } else if (entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
-                // Убираем отображение переключателя для Приходов, так как их у тебя нет
-                console.log(`🚫 [nav-link] Переключатели для Приходов (money_receipts) пропущены/отключены`);
-            } else {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-            }
+            // Переключатели табов
+            if (tabsForCars) tabsForCars.style.display = (entity === 'car_cards') ? 'flex' : 'none';
+            if (tabsForAccidents) tabsForAccidents.style.display = (entity === 'accidents') ? 'flex' : 'none';
+            if (tabsForRepairs) tabsForRepairs.style.display = (entity === 'repairs') ? 'flex' : 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
+
         } else {
-            if (detailContainer) detailContainer.style.display = 'none';
-            if (carTabsBar) carTabsBar.style.display = 'none';
+            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сводной сущности: ${entity}`);
+            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
+            if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
+            
+            // Также прячем кнопки нижней таблицы, чтобы они не висели в воздухе
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+            if (detailActionButtons) {
+                detailActionButtons.style.setProperty('display', 'none', 'important');
+            }
         }
         
         // Если выбрали Расходы, запускаем нашу изолированную функцию
