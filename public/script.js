@@ -5335,6 +5335,7 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -5463,18 +5464,6 @@ async function loadData(entity, title, customParams = {}) {
         const thead = headerTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
 
-        // Сначала генерируем основные заголовки таблицы, чтобы знать точное количество и размеры колонок
-        const visibleColumns = config.columns.filter(col => col.table !== false);
-
-        let headersHtml = visibleColumns.map(col => {
-            let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
-            let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
-            return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.label}</th>`;
-        }).join('');
-
-        headerTr.innerHTML = headersHtml;
-
-        // Теперь настраиваем строку фильтров строго под получившиеся колонки
         if (entity === 'car_cards') {
             if (filterRow) {
                 filterRow.remove();
@@ -5506,6 +5495,16 @@ async function loadData(entity, title, customParams = {}) {
                 `;
             }).join('');
         }
+
+        const visibleColumns = config.columns.filter(col => col.table !== false);
+
+        let headersHtml = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
+            let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
+            return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.label}</th>`;
+        }).join('');
+
+        headerTr.innerHTML = headersHtml;
 
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
