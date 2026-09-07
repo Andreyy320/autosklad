@@ -3745,7 +3745,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (склады-должники) по аналогии с реализациями
+                -- 2. Перемещения (склады-должники с учетом наценки и оплат через warehouse_debt_payments)
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
@@ -3762,10 +3762,10 @@ router.get('/money_receipts', async (req, res) => {
                     0::numeric AS works_sum,
                     COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
                     
-                    -- Оплата перемещения (если в warehouse_debt_payments пусто, ставим полную сумму, как у реализаций)
-                    COALESCE(m_p.paid_sum, COALESCE(m_items.total_sum, 0))::numeric AS total_paid,
+                    -- Реальные оплаты из таблицы warehouse_debt_payments
+                    COALESCE(m_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Чистая прибыль по перемещению (продажа с наценкой минус закупка)
+                    -- Чистая прибыль по перемещению: Сумма с наценкой (total_rub) минус Закупочная себестоимость (price * quantity)
                     (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
                     
                     -- Плюс по запчастям отдельно
