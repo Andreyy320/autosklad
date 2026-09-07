@@ -7587,6 +7587,7 @@ if (tableBody) {
         }
 
         // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
+       // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -7595,7 +7596,7 @@ if (tableBody) {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', 
+            'money_receipts', // <--- Уберите отсюда 'money_receipts', если эта таблица не должна управляться этим кодом
             'stock_movement', 
             'postavhik', 
             'counterparties', 
@@ -7613,7 +7614,8 @@ if (tableBody) {
             'expenses',
             'parts',
             'nomenclature',
-            'goods'
+            'goods',
+            'money_receipts' // <--- Добавьте 'money_receipts' сюда, чтобы клики по ней обрабатывались вашей старой логикой без вмешательства нового кода
         ];
 
         const shouldLoadDetails = entitiesWithDetails.includes(currentEntity) && !summaryEntitiesWithoutDetails.includes(currentEntity);
