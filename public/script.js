@@ -6744,7 +6744,6 @@ if (tableBodyForReceipts) {
     tableBodyForReceipts.parentNode.replaceChild(newTableBody, tableBodyForReceipts);
 
     newTableBody.addEventListener('click', async (e) => {
-        // Проверяем, относится ли текущая сущность к приходам или расходам
         const allowedEntities = [
             'money_receipts_by_sklad', 
             'money_receipts',
@@ -6753,20 +6752,15 @@ if (tableBodyForReceipts) {
             'expenses_by_receipts'
         ];
 
-        // Автоопределение, если currentEntity вдруг пустой или undefined, но открыт раздел расходов
         let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
         console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
         
         if (!allowedEntities.includes(activeEntity)) {
-            console.log(`⚠️ [КЛИК В ТАБЛИЦЕ] Сущность "${activeEntity}" не входит в список разрешенных. Клик проигнорирован.`);
             return;
         }
 
         const tr = e.target.closest('tr');
-        if (!tr) {
-            console.log(`⚠️ [КЛИК В ТАБЛИЦЕ] Клик был не по строке (tr).`);
-            return;
-        }
+        if (!tr) return;
 
         const id = tr.getAttribute('data-id');
         console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
@@ -6777,27 +6771,29 @@ if (tableBodyForReceipts) {
         let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
         let selectedItem = null;
 
-        console.log(`📦 [КЛИК В ТАБЛИЦЕ] Доступный массив currentItems (itemsSource):`, itemsSource);
-
-        // ИСПРАВЛЕНИЕ: Ищем строго по ID
+        // Пытаемся найти элемент в текущем массиве данных
         if (itemsSource && Array.isArray(itemsSource)) {
-            selectedItem = itemsSource.find(i => 
-                String(i.id || '') === String(id) || 
-                String(i.realization_id || '') === String(id) || 
-                String(i.sklad_id || '') === String(id) || 
-                String(i.receipt_id || '') === String(id) || 
-                String(i.postavhik_id || '') === String(id)
-            );
+            selectedItem = itemsSource.items ? itemsSource.items.find(i => String(i.id || i.realization_id || '') === String(id)) : null;
+            if (!selectedItem) {
+                selectedItem = itemsSource.find(i => 
+                    String(i.id || '') === String(id) || 
+                    String(i.realization_id || '') === String(id) || 
+                    String(i.sklad_id || '') === String(id) || 
+                    String(i.receipt_id || '') === String(id) || 
+                    String(i.postavhik_id || '') === String(id)
+                );
+            }
         }
 
-        // Если в массиве не нашлось, берем данные прямо из dataset строки или собираем fallback
+        // ЖЕЛЕЗОБЕТОННЫЙ FALLBACK: если в currentItems лежит что-то не то (например, пользователи), 
+        // вытаскиваем данные прямо из ячеек строки таблицы или глобальных переменных
         if (!selectedItem && id) {
-            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Пытаемся достать из dataset.`);
+            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
             selectedItem = {
                 id: id,
                 realization_id: id,
-                customer_id: tr.dataset.customerId || null,
-                doc_number: tr.dataset.docNumber || ''
+                customer_id: window.currentCustomerId || null,
+                sklad_id: window.currentSkladId || null
             };
         }
         
@@ -6817,17 +6813,15 @@ if (tableBodyForReceipts) {
         // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
         // ==========================================
         if (activeEntity === 'money_receipts_by_sklad') {
-            console.log(`📂 [КЛИК ПРИХОДЫ СКЛАД] Кликнули по складу, вызываем loadReceiptMainData для sklad_id:`, selectedItem.sklad_id || selectedItem.id);
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
-            console.log(`📂 [КЛИК ПРИХОДЫ ДОКУМЕНТЫ] Кликнули по документу прихода. Данные строки:`, selectedItem);
-            
-            // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             window.currentRepairId = null;
-            window.currentCustomerId = selectedItem.customer_id || '';
+            // Сохраняем customer_id, если он есть в объекте, иначе оставляем текущий
+            if (selectedItem.customer_id !== undefined) {
+                window.currentCustomerId = selectedItem.customer_id;
+            }
             
-            // ЖЕЛЕЗОБЕТОННОЕ определение типа: проверяем и поле в объекте, и весь текст строки в DOM
             const docNumFromItem = String(selectedItem.doc_number || '');
             const rowText = String(tr.innerText || '');
 
@@ -6837,22 +6831,16 @@ if (tableBodyForReceipts) {
                 window.currentDocType = 'realization';
             }
             
-            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, rowTextSnippet: rowText.substring(0, 50), detectedType: window.currentDocType });
+            console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType, customerId: window.currentCustomerId });
             
             const detailContainer = document.getElementById('detail-container');
             if (detailContainer) detailContainer.style.display = 'block';
 
             const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
-            const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
             
-            console.log(`🔀 [КЛИК ПРИХОДЫ] Вызываем переключение таба для спецификации...`);
-            
-            // Безопасный вызов переключения таба (если функции нет, вызываем loadReceiptDetailTable напрямую)
-            if (typeof switchMoneyReceiptTab === 'function') {
-                switchMoneyReceiptTab(activeTab, activeBtn);
-            } else {
-                console.warn(`⚠️ [КЛИК ПРИХОДЫ] Функция switchMoneyReceiptTab не найдена, вызываем loadReceiptDetailTable напрямую.`);
-                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${window.currentSkladId || ''}`;
+            // Прямой вызов загрузки спецификации с актуальными параметрами
+            const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
+            if (typeof loadReceiptDetailTable === 'function') {
                 loadReceiptDetailTable(detailUrl, activeTab);
             }
         }
@@ -6865,7 +6853,6 @@ if (tableBodyForReceipts) {
             activeEntity === 'expenses_by_suppliers' || 
             activeEntity === 'expenses_by_receipts'
         ) {
-            console.log(`💸 [КЛИК РАСХОДЫ] Обработка для сущности: "${activeEntity}"`);
             const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
             ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
                 const el = document.getElementById(tabId);
@@ -6877,36 +6864,23 @@ if (tableBodyForReceipts) {
             if (actionButtonsBar) actionButtonsBar.style.display = 'none';
 
             if (activeEntity === 'expenses_by_sklad') {
-                console.log(`➡️ [РАСХОДЫ] Переход к поставщикам склада`, selectedItem);
-                if (typeof loadExpenseMainData === 'function') {
-                    loadExpenseMainData('expenses_by_suppliers', selectedItem);
-                }
+                if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
             } else if (activeEntity === 'expenses_by_suppliers') {
-                console.log(`➡️ [РАСХОДЫ] Переход к чекам/документам поставщика`, selectedItem);
-                if (typeof loadExpenseMainData === 'function') {
-                    loadExpenseMainData('expenses_by_receipts', selectedItem);
-                }
+                if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
             } else if (activeEntity === 'expenses_by_receipts') {
-                console.log(`➡️ [РАСХОДЫ] Загрузка позиций конкретного чека/расхода`, selectedItem);
                 let receiptId = selectedItem.receipt_id || selectedItem.id || id;
-                if (receiptId) {
-                    window.currentReceiptId = receiptId;
-                }
+                if (receiptId) window.currentReceiptId = receiptId;
 
                 let skladId = window.currentSkladId || '';
                 let postavhikId = window.currentPostavhikId || '';
                 let currentReceipt = window.currentReceiptId || '';
 
                 const fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
-                console.log(`🌐 [РАСХОДЫ ДЕТАЛИ] Сформирован URL для деталей расхода: ${fetchUrl}`);
-                
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 if (typeof loadExpenseDetailTable === 'function') {
                     loadExpenseDetailTable(fetchUrl);
-                } else {
-                    console.error('❌ Функция loadExpenseDetailTable не найдена!');
                 }
             }
         }
