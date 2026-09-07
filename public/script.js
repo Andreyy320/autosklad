@@ -5336,6 +5336,7 @@ async function applyMovementFilters() {
     }
 }
 
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
