@@ -6779,7 +6779,7 @@ if (tableBodyForReceipts) {
 
         console.log(`📦 [КЛИК В ТАБЛИЦЕ] Доступный массив currentItems (itemsSource):`, itemsSource);
 
-        // ИСПРАВЛЕНИЕ: Ищем строго по ID, исключая ошибки с индексом строки
+        // ИСПРАВЛЕНИЕ: Ищем строго по ID
         if (itemsSource && Array.isArray(itemsSource)) {
             selectedItem = itemsSource.find(i => 
                 String(i.id || '') === String(id) || 
@@ -6790,12 +6790,14 @@ if (tableBodyForReceipts) {
             );
         }
 
-        // Если в массиве не нашлось, собираем базовый объект из DOM-атрибутов строки
+        // Если в массиве не нашлось, берем данные прямо из dataset строки или собираем fallback
         if (!selectedItem && id) {
-            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Создаем fallback-объект из DOM.`);
+            console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Пытаемся достать из dataset.`);
             selectedItem = {
                 id: id,
-                realization_id: id
+                realization_id: id,
+                customer_id: tr.dataset.customerId || null,
+                doc_number: tr.dataset.docNumber || ''
             };
         }
         
@@ -6843,11 +6845,15 @@ if (tableBodyForReceipts) {
             const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
             const activeBtn = document.querySelector('#tabs-for-money-receipts .active') || document.querySelector('#tabs-for-money-receipts button');
             
-            console.log(`🔀 [КЛИК ПРИХОДЫ] Вызываем switchMoneyReceiptTab с табом: "${activeTab}"`);
+            console.log(`🔀 [КЛИК ПРИХОДЫ] Вызываем переключение таба для спецификации...`);
+            
+            // Безопасный вызов переключения таба (если функции нет, вызываем loadReceiptDetailTable напрямую)
             if (typeof switchMoneyReceiptTab === 'function') {
                 switchMoneyReceiptTab(activeTab, activeBtn);
             } else {
-                console.warn(`⚠️ [КЛИК ПРИХОДЫ] Функция switchMoneyReceiptTab не найдена!`);
+                console.warn(`⚠️ [КЛИК ПРИХОДЫ] Функция switchMoneyReceiptTab не найдена, вызываем loadReceiptDetailTable напрямую.`);
+                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${window.currentSkladId || ''}`;
+                loadReceiptDetailTable(detailUrl, activeTab);
             }
         }
 
