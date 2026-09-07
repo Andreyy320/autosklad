@@ -5842,11 +5842,17 @@ async function loadExpenseDetailTable(fetchUrl) {
 }
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
+    let currentExpenseView = entity;
+    
+    // Сразу фиксируем текущую сущность в глобальной переменной для защиты контекста
+    if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+        currentEntity = currentExpenseView;
+    }
+
     console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
     console.trace('📍 [TRACE] Кто вызвал loadExpenseMainData:');
 
     let fetchUrl = '';
-    let currentExpenseView = entity;
 
     const detailContainer = document.getElementById('detail-container');
     const mainTableBody = document.getElementById('table-body');
@@ -5934,11 +5940,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
         console.log(`📂 [View: expense_items] URL: ${fetchUrl}`);
 
-        // Защита глобального контекста от затирания чужими модулями
-        if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses_by_suppliers' || currentExpenseView === 'expenses_by_receipts' || currentExpenseView === 'expense_items') {
-            currentEntity = currentExpenseView; 
-        }
-        
         if (detailContainer) detailContainer.style.display = 'flex';
 
         if (btnAdd) btnAdd.style.display = 'none';
@@ -5949,8 +5950,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         return; 
     }
 
-    // Защита глобального контекста от затирания чужими модулями
-    if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses_by_suppliers' || currentExpenseView === 'expenses_by_receipts' || currentExpenseView === 'expense_items') {
+    // Защита глобального контекста уже выполнена в начале функции, но оставляем для синхронизации currentEntity
+    if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
     
@@ -6141,7 +6142,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 
 // Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
