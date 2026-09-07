@@ -6848,6 +6848,7 @@ if (tableBodyForReceipts) {
         tableBodyForReceipts.dataset.listenerAttached = "true";
 
         tableBodyForReceipts.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Останавливаем всплытие, чтобы другие обработчики не трогали строку
             const allowedEntities = [
                 'money_receipts_by_sklad', 
                 'money_receipts',
