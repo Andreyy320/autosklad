@@ -6583,7 +6583,19 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                 headerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 12px; cursor: pointer;">
-                        <span style="color: #334155; margin-right: 12px;">[-] ${group.title}</span>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                <span style="color: #334155;">[-] ${group.title}</span>
+                                <span style="color: #64748b; font-weight: normal;">Сумма: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                <span style="color: #64748b; font-weight: normal;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
+                            </div>
+                        </div>
                     </td>
                 `;
                 
@@ -6660,14 +6672,20 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 footerTr.style.borderBottom = '2px solid #cbd5e1';
 
                 footerTr.innerHTML = `
-                    <td colspan="${colCount}" style="padding: 8px 12px; text-align: right;">
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Итого по месяцу:</span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Сумма: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal; margin-right: 12px;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
-                        <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
+                    <td colspan="${colCount}" style="padding: 8px 12px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                <span style="color: #334155;">Итого по месяцу:</span>
+                                <span style="color: #64748b; font-weight: normal;">Сумма: <b style="color: #0f172a;">${group.totalSum.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Оплачено: <b style="color: #16a34a;">${group.totalPaid.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Долг: <b style="color: #dc2626;">${group.totalDebt.toFixed(2)}</b></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                <span style="color: #64748b; font-weight: normal;">Плюс запчасти: <b style="color: #0284c7;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Услуги: <b style="color: #7c3aed;">${group.totalWorksSum.toFixed(2)}</b></span>
+                                <span style="color: #64748b; font-weight: normal;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'};">${group.totalNetProfit.toFixed(2)}</b></span>
+                            </div>
+                        </div>
                     </td>
                 `;
                 mainTableBody.appendChild(footerTr);
@@ -6713,7 +6731,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
