@@ -3745,7 +3745,7 @@ router.get('/money_receipts', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (склады-должники с учетом наценки и оплат через warehouse_debt_payments)
+                -- 2. Перемещения (склады-должники с корректным вычислением закупка vs наценка)
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
@@ -3765,7 +3765,7 @@ router.get('/money_receipts', async (req, res) => {
                     -- Реальные оплаты из таблицы warehouse_debt_payments
                     COALESCE(m_p.paid_sum, 0)::numeric AS total_paid,
                     
-                    -- Чистая прибыль по перемещению: Сумма с наценкой (total_rub) минус Закупочная себестоимость (price * quantity)
+                    -- Чистая прибыль по перемещению: Сумма с наценкой (total_rub) минус Закупочная себестоимость
                     (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
                     
                     -- Плюс по запчастям отдельно
@@ -3778,7 +3778,9 @@ router.get('/money_receipts', async (req, res) => {
                     SELECT 
                         move_id, 
                         SUM(quantity) AS total_qty, 
-                        SUM(COALESCE(price, 0) * quantity) AS total_purchase_sum,
+                        -- Закупка: если price_rub или price — это закупка, берем ее умноженную на количество
+                        SUM(COALESCE(NULLIF(price_rub, 0), price, 0) * quantity) AS total_purchase_sum,
+                        -- Сумма с наценкой: total_rub
                         SUM(COALESCE(total_rub, price * quantity, 0)) AS total_sum
                     FROM move_items
                     GROUP BY move_id
@@ -3836,7 +3838,7 @@ router.get('/money_receipts', async (req, res) => {
 
         console.log(`✅ [/api/money_receipts] Запрос успешно выполнен. Получено строк:`, result.rowCount);
         
-        // Отдаем клиенту массив строк и общие итоги за диапазон дат
+        -- Отдаем клиенту массив строк и общие итоги за диапазон дат
         res.json({
             rows: result.rows,
             totals: {
