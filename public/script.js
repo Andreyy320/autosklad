@@ -5045,6 +5045,7 @@ async function refreshData() {
     
     // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
 }
+
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -6110,17 +6111,39 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 }
 
+// Вспомогательная функция для кнопки «Применить» на панели фильтров (приходы)
+function applyReceiptsFilters() {
+    // Жестко берем skladId из глобальной переменной или пытаемся подтянуть из сохраненного состояния
+    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
+    
+    console.log(`🔍 [applyReceiptsFilters] Применение фильтра дат. skladId:`, skladId);
+
+    if (skladId) {
+        loadReceiptMainData('money_receipts', skladId);
+    } else {
+        // Если склад почему-то потерялся, возвращаемся на самый верхний уровень складов
+        console.warn('⚠️ [applyReceiptsFilters] skladId утерян, сбрасываем на список складов');
+        loadReceiptMainData('money_receipts_by_sklad');
+    }
+} 
+
 // Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
 function applyExpensesFilters() {
-    if (window.currentPostavhikId) {
-        loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
-    } else if (window.currentSkladId) {
-        loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+    const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
+    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
+
+    console.log(`🔍 [applyExpensesFilters] Применение фильтра дат. postavhikId:`, postavhikId, 'skladId:', skladId);
+
+    if (currentEntity === 'expenses_by_receipts' && postavhikId) {
+        loadExpenseMainData('expenses_by_receipts', postavhikId);
+    } else if (postavhikId) {
+        loadExpenseMainData('expenses_by_receipts', postavhikId);
+    } else if (skladId) {
+        loadExpenseMainData('expenses_by_suppliers', skladId);
     } else {
         loadExpenseMainData('expenses_by_sklad');
     }
 }
-
 
 
 
@@ -6694,12 +6717,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Вспомогательная функция для кнопки «Применить» на панели фильтров
-function applyReceiptsFilters() {
-    if (window.currentSkladId) {
-        loadReceiptMainData('money_receipts', window.currentSkladId);
-    }
-}
+
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
