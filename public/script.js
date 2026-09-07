@@ -6755,9 +6755,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// ==========================================
-// ФУНКЦИЯ ЗАГРУЗКИ ДЕТАЛЬНОЙ ТАБЛИЦЫ
-// ==========================================
+// Глобальный контроллер для отмены предыдущего запроса детальной таблицы
+let currentDetailController = null;
+
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
@@ -6767,6 +6767,12 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         currentSkladId: window.currentSkladId,
         subTabName
     });
+    
+    // Отменяем предыдущий незавершенный запрос, если он был
+    if (currentDetailController) {
+        currentDetailController.abort();
+    }
+    currentDetailController = new AbortController();
     
     // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
@@ -6795,7 +6801,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
 
     try {
         console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
-        const response = await fetch(fetchUrl);
+        const response = await fetch(fetchUrl, { signal: currentDetailController.signal });
         const responseText = await response.text();
         console.log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
 
@@ -6822,6 +6828,10 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             detailBody.appendChild(tr);
         });
     } catch (err) {
+        if (err.name === 'AbortError') {
+            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен.`);
+            return;
+        }
         console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
@@ -6951,7 +6961,6 @@ if (tableBodyForReceipts) {
                 const docNumFromItem = String(selectedItem.doc_number || '');
                 const rowText = String(tr.innerText || '');
 
-                // Сначала определяем тип документа
                 if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
                     window.currentDocType = 'move';
                 } else {
@@ -6965,8 +6974,7 @@ if (tableBodyForReceipts) {
 
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
                 
-                // И только после определения типа собираем URL, включая в него doc_type
-                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}&doc_type=${window.currentDocType}`;
+                const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
                 
                 if (typeof loadReceiptDetailTable === 'function') {
                     loadReceiptDetailTable(detailUrl, activeTab);
