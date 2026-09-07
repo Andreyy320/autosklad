@@ -5747,10 +5747,9 @@ async function submitPayment(event, receiptId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-// Функция для нижней таблицы (спецификация запчастей)
+
 async function loadExpenseDetailTable(fetchUrl) {
     console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
-    console.trace('📍 [TRACE] Кто вызвал loadExpenseDetailTable:');
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
@@ -5769,14 +5768,20 @@ async function loadExpenseDetailTable(fetchUrl) {
         }).join('');
 
         const thead = detailHeaderTr.closest('thead');
-        let filterRow = document.getElementById('detail-table-filter-row');
+        
+        // ❌ Было: let filterRow = document.getElementById('detail-table-filter-row');
+        // ✅ Ставим единый ID, который ищет filterDetailTable():
+        let filterRow = document.getElementById('detail-filter-row');
+
+        // Также на всякий случай очищаем старый фильтр с другим ID, если он остался от других таблиц
+        const oldAlternativeRow = document.getElementById('detail-table-filter-row');
+        if (oldAlternativeRow) oldAlternativeRow.remove();
 
         if (!filterRow) {
             filterRow = document.createElement('tr');
-            filterRow.id = 'detail-table-filter-row';
+            filterRow.id = 'detail-filter-row'; // Используем единый ID!
             thead.insertBefore(filterRow, detailHeaderTr);
         }
-        // Убрали повторный insertBefore из ветки else, чтобы строка фильтра не дублировалась и не дергалась
 
         filterRow.innerHTML = visibleColumns.map(col => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
@@ -5798,21 +5803,14 @@ async function loadExpenseDetailTable(fetchUrl) {
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
 
     try {
-        console.log(`🌐 [loadExpenseDetailTable Fetch] Отправка GET запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl);
-        console.log(`📥 [loadExpenseDetailTable Fetch] Ответ получен. Статус: ${response.status} (${response.statusText})`);
         if (!response.ok) throw new Error(`Ошибка загрузки позиций (Статус: ${response.status})`);
         
         const items = await response.json();
-        console.log(`📦 [loadExpenseDetailTable Data] Получено позиций: ${Array.isArray(items) ? items.length : 'не массив'}`, items);
 
-        if (!detailBody) {
-            console.error('❌ [loadExpenseDetailTable DOM] Элемент #detail-body не найден на странице!');
-            return;
-        }
+        if (!detailBody) return;
 
         if (!items || items.length === 0) {
-            console.warn('⚠️ [loadExpenseDetailTable Data] Массив позиций пуст. Выводим сообщение "Нет запчастей".');
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
             return;
         }
@@ -5820,16 +5818,93 @@ async function loadExpenseDetailTable(fetchUrl) {
         detailBody.innerHTML = '';
         items.forEach((item, index) => {
             const tr = document.createElement('tr');
-            console.log(`🛠️ [loadExpenseDetailTable Render] Рендеринг позиции #${index + 1}:`, item);
-
             if (config && typeof config.render === 'function') {
                 tr.innerHTML = config.render(item);
-            } else {
-                console.error('❌ [loadExpenseDetailTable Config] Функция render не найдена в конфиге для expense_items');
             }
             detailBody.appendChild(tr);
         });
-        console.log('✅ [loadExpenseDetailTable] Рендеринг таблицы детализации успешно завершен.');
+
+    } catch (err) {
+        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
+        if (detailBody) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации: ${err.message}</td></tr>`;
+        }
+    }
+}async function loadExpenseDetailTable(fetchUrl) {
+    console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
+    const detailBody = document.getElementById('detail-body');
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    
+    const config = getConfig('expense_items');
+    if (detailTitle && config) detailTitle.innerText = config.title;
+
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
+
+    if (detailHeaderTr && visibleColumns.length > 0) {
+        detailHeaderTr.innerHTML = visibleColumns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+
+        const thead = detailHeaderTr.closest('thead');
+        
+        // ❌ Было: let filterRow = document.getElementById('detail-table-filter-row');
+        // ✅ Ставим единый ID, который ищет filterDetailTable():
+        let filterRow = document.getElementById('detail-filter-row');
+
+        // Также на всякий случай очищаем старый фильтр с другим ID, если он остался от других таблиц
+        const oldAlternativeRow = document.getElementById('detail-table-filter-row');
+        if (oldAlternativeRow) oldAlternativeRow.remove();
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'detail-filter-row'; // Используем единый ID!
+            thead.insertBefore(filterRow, detailHeaderTr);
+        }
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterDetailTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
+    }
+
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
+
+    try {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error(`Ошибка загрузки позиций (Статус: ${response.status})`);
+        
+        const items = await response.json();
+
+        if (!detailBody) return;
+
+        if (!items || items.length === 0) {
+            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
+            return;
+        }
+
+        detailBody.innerHTML = '';
+        items.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            if (config && typeof config.render === 'function') {
+                tr.innerHTML = config.render(item);
+            }
+            detailBody.appendChild(tr);
+        });
 
     } catch (err) {
         console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
