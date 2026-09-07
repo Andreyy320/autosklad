@@ -6742,6 +6742,11 @@ if (tableBodyForReceipts) {
         } else if (itemsSource) {
             selectedItem = itemsSource.find(i => String(i.id || i.sklad_id || i.realization_id || i.receipt_id || i.postavhik_id) === String(id));
         }
+
+        // Страховка: если по какой-то причине через find не нашлось, но ID есть в DOM
+        if (!selectedItem && id && itemsSource) {
+            selectedItem = itemsSource.find(i => String(i.id) === String(id) || String(i.realization_id) === String(id));
+        }
         
         if (typeof window !== 'undefined') {
             window.selectedItem = selectedItem;
@@ -6762,7 +6767,7 @@ if (tableBodyForReceipts) {
             // Кликнули по складу -> открываем список документов (money_receipts) для этого склада
             loadReceiptMainData('money_receipts', selectedItem);
         } else if (activeEntity === 'money_receipts') {
-            // Кликнули по конкретной реализации -> подгружаем нижнюю таблицу
+            // Кликнули по конкретной реализации или перемещению -> подгружаем нижнюю таблицу
             window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
             
             const detailContainer = document.getElementById('detail-container');
@@ -6826,6 +6831,8 @@ if (tableBodyForReceipts) {
         }
     });
 }
+
+
 
 
 
