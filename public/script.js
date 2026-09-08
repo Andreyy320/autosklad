@@ -8485,10 +8485,35 @@ function updateFilterPanels(entity) {
         console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
-
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
+        
+        // ==========================================
+        // ТОТАЛЬНЫЙ СБРОС ВСЕХ СОСТОЯНИЙ И ХВОСТОВ ДАННЫХ
+        // ==========================================
+        if (typeof selectedItem !== 'undefined') selectedItem = null;
+        if (typeof selectedDetailItem !== 'undefined') selectedDetailItem = null;
+        if (typeof currentRealizationId !== 'undefined') currentRealizationId = null;
+        if (typeof currentCustomerId !== 'undefined') currentCustomerId = null;
+        if (typeof currentSkladId !== 'undefined') currentSkladId = null;
+        if (typeof currentDocType !== 'undefined') currentDocType = null;
+        if (typeof window.currentMainEntity !== 'undefined') window.currentMainEntity = null;
+
+        // Очищаем таблицы на экране от старых данных
+        const mainTableBody = document.querySelector('#mainTable tbody, .data-table tbody, table tbody');
+        if (mainTableBody) mainTableBody.innerHTML = '';
+
+        const detailTableBody = document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
+        if (detailTableBody) detailTableBody.innerHTML = '';
+
+        const detailContainer = document.getElementById('detail-container');
+        if (detailContainer) {
+            detailContainer.style.setProperty('display', 'none', 'important');
+            detailContainer.innerHTML = '';
+        }
+        console.log(`🧹 [nav-link] Произведен полный сброс всех переменных, таблиц и контейнеров.`);
+        // ==========================================
         
         const text = link.innerText.trim();
         console.log(`🔗 [nav-link] Клик по навигационной ссылке: "${text}"`);
@@ -8536,7 +8561,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
             console.log(`⚠️ [nav-link] Функция updateFilterPanels не найдена`);
         }
 
-        const detailContainer = document.getElementById('detail-container');
         const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
@@ -8566,7 +8590,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов (убран 'money_receipts')
+        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -8591,7 +8615,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',           
+            'parts',          
             'nomenclature',   
             'goods'
         ];
@@ -8630,7 +8654,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         } else {
             console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
-            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
+            if (detailContainer) {
+                detailContainer.style.setProperty('display', 'none', 'important');
+                detailContainer.innerHTML = '';
+            }
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
@@ -8667,7 +8694,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
-
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
