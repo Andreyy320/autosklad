@@ -1544,6 +1544,14 @@ router.get('/stock_balances', async (req, res) => {
         let warehouseFilterForBatches = '';
         let warehouseFilterForSkladi = '';
         let molFilterClause = '';
+        let dateFilterClause = '';
+
+        // 1. Фильтр по дате: срез остатков на конец выбранного дня (все движения до указанной даты включительно)
+        if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
+            queryParams.push(date);
+            dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
+            paramIndex++;
+        }
 
         // 2. Фильтр по конкретному складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
@@ -1568,13 +1576,14 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Считаем актуальный остаток по всем активным партиям на складе
+                -- Суммируем количество в партиях на выбранную дату (все, что было создано до этой даты)
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
                     SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
                 WHERE 1=1 
+                ${dateFilterClause}
                 ${warehouseFilterForBatches}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
