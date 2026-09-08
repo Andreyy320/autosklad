@@ -6807,6 +6807,18 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         subTabName
     });
     
+    // Принудительно и гарантированно скрываем кнопки управления спецификацией для приходов денег
+    const detailToolbar = document.getElementById('detail-toolbar');
+    if (detailToolbar) {
+        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
+        actionButtons.forEach(btn => {
+            btn.style.display = 'none';
+            console.log(`🔒 [loadReceiptDetailTable КНОПКИ] Кнопка #${btn.id} принудительно СКРЫТА`);
+        });
+    } else {
+        console.warn(`⚠️ [loadReceiptDetailTable КНОПКИ] Элемент #detail-toolbar не найден в DOM!`);
+    }
+    
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
         console.log(`🛑 [loadReceiptDetailTable] Обнаружен предыдущий незавершенный запрос. Вызываю abort()...`);
@@ -7180,6 +7192,8 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
