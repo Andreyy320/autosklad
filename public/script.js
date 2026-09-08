@@ -2931,11 +2931,14 @@ async function openRealizationWorksForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
