@@ -7713,7 +7713,9 @@ if (tableBody) {
                 currentEntity === 'stock_batches' ||
                 currentEntity === 'part_movement_details' ||
                 currentEntity === 'car_general' ||
-                currentEntity === 'car_cards'
+                currentEntity === 'car_cards' || 
+                currentEntity === 'money_receipts' || // <--- Добавили сюда
+                currentEntity === 'money_receipts_by_sklad' // <--- И сюда на всякий случай
             ) {
                 console.log(`🔒 [tableBody click] Скрытие панели основных кнопок действий для сущности: "${currentEntity}"`);
                 actionButtonsBar.style.display = 'none';
