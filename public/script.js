@@ -2814,7 +2814,6 @@ async function openReceiptForm(entity, item = null) {
         item = { 
             doc_number: `${prefix}${nextId}`,
             is_posted: false,
-            date: currentDateTime,    /* Подставляем в обычное поле даты */
             fact_date: currentDateTime /* И в поле даты факт */
         };
     } else {
@@ -2877,6 +2876,7 @@ async function openReceiptForm(entity, item = null) {
 
             // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+
         } else if (col.ref === 'zaphasti' || col.field === 'zaphasti_id' || col.field === 'zaphast_id') {
             let displayZaphastName = '';
             if (val) {
@@ -2899,6 +2899,7 @@ async function openReceiptForm(entity, item = null) {
                     <div id="zaphast-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 180px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
                 </div>
             `;
+
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -2966,6 +2967,7 @@ async function openReceiptForm(entity, item = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
 
     // Логика автокомплита запчастей
     const zapInput = formElement.querySelector('#zaphast-autocomplete-input');
@@ -3149,6 +3151,7 @@ async function openReceiptForm(entity, item = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+
         // Если автокомплит задействован, но скрытый ID пуст, отправим текст из инпута (если бэкенд это поддерживает)
         const hiddenIdInput = formElement.querySelector('#zaphast-id-hidden');
         const textInput = formElement.querySelector('#zaphast-autocomplete-input');
@@ -3162,7 +3165,6 @@ async function openReceiptForm(entity, item = null) {
                 }
             }
         }
-
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
