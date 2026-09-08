@@ -395,7 +395,6 @@ tr.selected-row {
     border-bottom: 1px solid var(--border) !important;
     padding: 3px 8px !important;
     flex-shrink: 0;
-    display: none !important; /* Скрываем по умолчанию */
 }
 
 #entity-drawer {
