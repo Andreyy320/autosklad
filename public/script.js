@@ -5336,7 +5336,7 @@ async function applyMovementFilters() {
     }
 }
 
-    async function loadData(entity, title, customParams = {}) {
+async function loadData(entity, title, customParams = {}) {
         console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
         currentEntity = entity;
@@ -5370,7 +5370,7 @@ async function applyMovementFilters() {
         const btnDelete = document.getElementById('btn-delete');
 
         if (btnAdd && btnEdit && btnDelete) {
-            if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts_detail' ) {
+            if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' ) {
                 btnAdd.style.display = 'none';
                 btnEdit.style.display = 'none';
                 btnDelete.style.display = 'none';
@@ -5550,6 +5550,8 @@ async function applyMovementFilters() {
                         loadDetailData('receipt_items', item.id);
                     } else if (entity === 'moves') {
                         loadDetailData('move_items', item.id);
+                    } else if (entity === 'money_receipts') {
+                        loadDetailData('money_receipt_items', item.id);
                     } else if (entity === 'realizations') {
                         const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
@@ -5622,8 +5624,9 @@ async function applyMovementFilters() {
             currentItems = [];
             document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
         }
-    }
-async function openPaymentHistory(receiptId, docNumber) {
+}
+
+ async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
     // Показываем прелоадер в шторке пока грузим данные
