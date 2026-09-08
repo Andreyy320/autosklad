@@ -1531,7 +1531,7 @@ router.get('/receipts_history', async (req, res) => {
     }
 });
 
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ИСТОРИЧЕСКИЙ СРЕЗ НА ДАТУ) ====================
+/// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ИСТОРИЧЕСКИЙ СРЕЗ НА ДАТУ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1546,10 +1546,10 @@ router.get('/stock_balances', async (req, res) => {
         let molFilterClause = '';
         let dateFilterClause = '';
 
-        // 1. Фильтр по дате: берем срез на конец выбранного дня (все партии до указанной даты включительно)
+        // 1. Фильтр по дате: берем срез на конец выбранного дня (до 23:59:59 включительно)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
             queryParams.push(date);
-            dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
+            dateFilterClause = ` AND wb.created_at <= ($${paramIndex}::date + INTERVAL '1 day' - INTERVAL '1 second')`;
             paramIndex++;
         }
 
@@ -1634,7 +1634,6 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
