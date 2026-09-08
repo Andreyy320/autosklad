@@ -5526,10 +5526,7 @@ async function loadData(entity, title, customParams = {}) {
                     }
                     
                     if (detailToolbarTarget) {
-                        if (entity === 'stock_movement') {
-                            detailToolbarTarget.style.display = 'none';
-                        } else if (entity === 'car_cards' || entity === 'stock_balances') {
-                            // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
+                        if (entity === 'stock_movement' || entity === 'car_cards' || entity === 'stock_balances' || entity === 'money_receipts') {
                             detailToolbarTarget.style.display = 'none';
                         } else {
                             detailToolbarTarget.style.display = 'flex';
@@ -5625,7 +5622,6 @@ async function loadData(entity, title, customParams = {}) {
             document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
         }
 }
-
  async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -6359,6 +6355,7 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] СТАРТ. entity="${entity}", parentId:`, parentId);
     console.trace(`📍 [loadReceiptMainData TRACE] Откуда вызвана loadReceiptMainData:`);
