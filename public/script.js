@@ -5335,7 +5335,6 @@ async function applyMovementFilters() {
         console.error('Ошибка применения фильтров движения:', err);
     }
 }
-
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
@@ -5370,12 +5369,11 @@ async function loadData(entity, title, customParams = {}) {
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' || entity === 'money_receipts_by_sklad' || entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers') {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
-        } else if (entity === 'expenses_by_receipts') {
-            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
+        } else if (entity === 'expenses_by_receipts' || entity === 'money_receipts') {
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -5387,12 +5385,9 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     const detailContainer = document.getElementById('detail-container');
-    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
     const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
 
     if (detailContainer) {
-        // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
-        // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
         detailContainer.style.display = 'none'; 
 
         if (detailToolbar) {
@@ -5501,23 +5496,31 @@ async function loadData(entity, title, customParams = {}) {
 
         currentItems.forEach(item => {
             const tr = document.createElement('tr');
-            tr.dataset.id = item.id || item.postavhik_id || '';
+            tr.dataset.id = item.id || item.postavhik_id || item.realization_id || item.receipt_id || '';
             tr.style.cursor = 'pointer';
             tr.innerHTML = config.render(item);
 
             tr.onclick = () => {
                 selectedItem = item;
+                window.selectedItem = item;
                 console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: ${entity}`, { selectedItem, customParams });
 
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
+                // Добавлены новые сущности приходов и расходов в список разрешенных с деталями
+                const entitiesWithDetails = [
+                    'receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 
+                    'realizations', 'money_receipts', 'money_receipts_by_sklad', 
+                    'stock_movement', 'postavhik', 'counterparties', 'customers', 
+                    'expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 
+                    'stock_balances'
+                ];
+                
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
                 }
 
-                // При клике на строку активируем и показываем нижнюю таблицу деталей
                 const detailContainerTarget = document.getElementById('detail-container');
                 const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
                 
@@ -5526,24 +5529,45 @@ async function loadData(entity, title, customParams = {}) {
                 }
                 
                 if (detailToolbarTarget) {
-                    if (entity === 'stock_movement') {
-                        detailToolbarTarget.style.display = 'none';
-                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
-                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
+                    if (entity === 'stock_movement' || entity === 'car_cards' || entity === 'stock_balances') {
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
                     }
                 }
 
-                if (entity === 'stock_balances') {
+                // Логика переходов при клике на строки приходов и расходов
+                if (entity === 'money_receipts_by_sklad') {
+                    if (typeof loadReceiptMainData === 'function') {
+                        loadReceiptMainData('money_receipts', selectedItem);
+                    }
+                } else if (entity === 'money_receipts') {
+                    window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
+                    window.currentRepairId = null;
+                    if (selectedItem.customer_id !== undefined) {
+                        window.currentCustomerId = selectedItem.customer_id;
+                    }
+                    const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
+                    if (typeof loadReceiptDetailTable === 'function') {
+                        loadReceiptDetailTable(detailUrl, window.currentMoneyReceiptSubTab || 'money_receipts_detail');
+                    }
+                } else if (entity === 'expenses_by_sklad') {
+                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
+                } else if (entity === 'expenses_by_suppliers') {
+                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
+                } else if (entity === 'expenses_by_receipts') {
+                    let receiptId = selectedItem.receipt_id || selectedItem.id;
+                    if (receiptId) window.currentReceiptId = receiptId;
+                    let skladId = window.currentSkladId || '';
+                    let postavhikId = window.currentPostavhikId || '';
+                    const fetchUrl = `/api/expense_items?receipt_id=${window.currentReceiptId}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+                    if (typeof loadExpenseDetailTable === 'function') {
+                        loadExpenseDetailTable(fetchUrl);
+                    }
+                } else if (entity === 'stock_balances') {
                     const zId = item.zaphasti_id || item.id;
                     const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
-
-                    loadDetailData('stock_batches', { 
-                        zaphasti_id: zId, 
-                        warehouse_id: wId 
-                    });
+                    loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId });
                 } else if (entity === 'stock_movement') {
                     loadDetailData('part_movement_details', item);
                 } else if (entity === 'receipts') {
@@ -5623,6 +5647,8 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
+
+
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
