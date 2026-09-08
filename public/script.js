@@ -8565,7 +8565,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'postavhik', 
             'counterparties', 
             'customers',
-            'expenses_by_receipts'
+            'expenses_by_receipts',
+            'money_receipts'
         ];
 
         // Сущности уровня "по складам", справочники или общие отчеты, где нижняя таблица НЕ нужна
@@ -8576,7 +8577,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          
+            'parts',           
             'nomenclature',   
             'goods'
         ];
@@ -8615,10 +8616,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         } else {
             console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
-            if (detailContainer) {
-                detailContainer.style.setProperty('display', 'none', 'important');
-                detailContainer.innerHTML = ''; // Безопасно вычищаем старый DOM-мусор
-            }
+            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
