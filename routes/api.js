@@ -1546,14 +1546,11 @@ router.get('/stock_balances', async (req, res) => {
         let molFilterClause = '';
         let dateFilterClause = '';
 
-        // 1. Фильтр по дате: считаем движения/партии НАЧИНАЯ С выбранной даты ПО ТЕКУЩИЙ МОМЕНТ (NOW())
+        // 1. Фильтр по дате: срез остатков на конец выбранного дня (все партии, созданные до этой даты включительно)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
-            queryParams.push(date); // $1 - дата начала
-            const startDateParamIndex = paramIndex;
+            queryParams.push(date);
+            dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
             paramIndex++;
-
-            // Если нужен интервал от выбранной даты до текущего момента:
-            dateFilterClause = ` AND wb.created_at >= $${startDateParamIndex}::timestamp AND wb.created_at <= NOW()`;
         }
 
         // 2. Фильтр по конкретному складу
@@ -1579,7 +1576,7 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Суммируем остатки из warehouse_batches за выбранный период (от даты до сейчас) и по складу
+                -- Суммируем остатки из warehouse_batches на выбранную дату
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
