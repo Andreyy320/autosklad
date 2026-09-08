@@ -2805,6 +2805,14 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 
     const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
 
+    // Формирует человекочитаемое отображаемое имя записи справочника
+    function formatDisplayName(referenceName, refItem) {
+        if (referenceName === 'vidy_rabot') {
+            return refItem.name || refItem.title || `Работа #${refItem.id}`;
+        }
+        return refItem.name || refItem.title || `Запись #${refItem.id}`;
+    }
+
     async function renderField(col) {
         if (!allowedFields.includes(col.field)) return '';
         if (col.insert === false) return '';
@@ -2842,13 +2850,26 @@ async function openRealizationWorksForm(item = null, parentId = null) {
             let extraAttributes = '';
             if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
 
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            // Searchable-select с ручным вводом и поиском по подстроке (как для запчастей в приходах)
+            let selectedDisplayName = '';
             refItems.forEach(refItem => {
-                const displayName = refItem.name || refItem.title || `Запись #${refItem.id}`;
-                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = formatDisplayName(referenceName, refItem);
+                }
             });
-            inputHtml = `<select name="${col.field}" ${extraAttributes} style="${controlStyle}">${optionsHtml}</select>`;
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                    <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+            `;
+            refItems.forEach(refItem => {
+                const displayName = formatDisplayName(referenceName, refItem);
+                inputHtml += `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+            });
+            inputHtml += `</div></div>`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else if (col.field === 'price' || col.field === 'quantity') {
@@ -2884,6 +2905,46 @@ async function openRealizationWorksForm(item = null, parentId = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    // Инициализация интерактивных выпадающих списков с поиском (ручной ввод + фильтрация по подстроке)
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
 
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
     if (vidyRabotSelect) {
