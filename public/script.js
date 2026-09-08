@@ -2121,9 +2121,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    // ИСПРАВЛЕНИЕ: если объект item пустой, но в него передали id: null или id: undefined, 
-    // либо он вообще не передан — считаем это созданием новой записи. 
-    // Если вы кликаете «Создать», убедитесь, что передаете item = null (а не объект вроде { id: null }).
     if (!item || item.id === null || item.id === undefined || item.id === '') {
         let nextId = 1;
         let prefix = 'Р-';
@@ -2152,7 +2149,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             console.error('Не удалось получить список для автонумерации', e);
         }
 
-        // Принудительно создаем новый чистый объект без id, чтобы форма знала, что это создание
         item = { 
             id: null,
             doc_number: `${prefix}${nextId}`,
@@ -2315,21 +2311,53 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 refItems = await fetchReferenceData(referenceName);
             }
 
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            let extraAttributes = '';
+            let customId = '';
+            if (col.field === 'car_id') { customId = 'car-select'; extraAttributes = 'id="car-select"'; }
+            else if (col.field === 'customer_id') { customId = 'customer-select'; extraAttributes = 'id="customer-select"'; }
+            else if (col.field === 'zaphasti_id') { customId = 'zaphasti-select'; extraAttributes = 'id="zaphasti-select"'; }
+            else if (col.field === 'vidy_rabot_id') { customId = 'vidy-rabot-select'; extraAttributes = 'id="vidy-rabot-select"'; }
+            else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_id' || col.field === 'skald_id') { customId = col.field; extraAttributes = `id="${col.field}" class="warehouse-select"`; }
+            else if (col.field === 'warehouse_to_id') { customId = 'warehouse_to_id'; extraAttributes = 'id="warehouse_to_id" class="warehouse-select"'; }
+            else if (col.field === 'mol_from_id' || col.field === 'mol_to_id' || col.field === 'mol_id') { customId = col.field; extraAttributes = `id="${col.field}" class="mol-select"`; }
 
-            refItems.forEach(refItem => {
-                let displayName = '';
-                if (referenceName === 'customer_cars' || referenceName === 'cars') {
-                    const gos = refItem.gos_number || refItem.car_number || '';
-                    const mdl = refItem.model || refItem.car_model || '';
-                    const brd = refItem.brand || refItem.car_brand || '';
-                    if (brd || mdl || gos) {
-                        displayName = `${brd} ${mdl} (${gos})`.trim();
-                    } else {
-                        displayName = `Авто #${refItem.id}`;
+            // Логика кастомного поиска для селектов (если элементов много или всегда по желанию)
+            if (refItems.length > 10 && !fieldReadonly) {
+                let selectedDisplayName = '';
+                refItems.forEach(refItem => {
+                    if (String(refItem.id) === String(val)) {
+                        if (referenceName === 'customer_cars' || referenceName === 'cars') {
+                            const gos = refItem.gos_number || refItem.car_number || '';
+                            const mdl = refItem.model || refItem.car_model || '';
+                            const brd = refItem.brand || refItem.car_brand || '';
+                            selectedDisplayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+                        } else if (referenceName === 'zaphasti') {
+                            const art = refItem.article ? `[${refItem.article}] ` : '';
+                            const nm = refItem.name || refItem.title || '';
+                            selectedDisplayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                        } else if (referenceName === 'mol') {
+                            selectedDisplayName = refItem.user_fio || refItem.name || refItem.login || `МОЛ #${refItem.id}`;
+                        } else {
+                            selectedDisplayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                        }
                     }
-                } else {
-                    if (referenceName === 'zaphasti') {
+                });
+
+                inputHtml = `
+                    <div class="searchable-select-container" style="position: relative;">
+                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
+                        <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                            <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                `;
+                refItems.forEach(refItem => {
+                    let displayName = '';
+                    if (referenceName === 'customer_cars' || referenceName === 'cars') {
+                        const gos = refItem.gos_number || refItem.car_number || '';
+                        const mdl = refItem.model || refItem.car_model || '';
+                        const brd = refItem.brand || refItem.car_brand || '';
+                        displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+                    } else if (referenceName === 'zaphasti') {
                         const art = refItem.article ? `[${refItem.article}] ` : '';
                         const nm = refItem.name || refItem.title || '';
                         displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
@@ -2338,22 +2366,36 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } else {
                         displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                     }
-                }
+                    inputHtml += `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                });
+                inputHtml += `</div></div>`;
+            } else {
+                let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+                refItems.forEach(refItem => {
+                    let displayName = '';
+                    if (referenceName === 'customer_cars' || referenceName === 'cars') {
+                        const gos = refItem.gos_number || refItem.car_number || '';
+                        const mdl = refItem.model || refItem.car_model || '';
+                        const brd = refItem.brand || refItem.car_brand || '';
+                        displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+                    } else {
+                        if (referenceName === 'zaphasti') {
+                            const art = refItem.article ? `[${refItem.article}] ` : '';
+                            const nm = refItem.name || refItem.title || '';
+                            displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                        } else if (referenceName === 'mol') {
+                            displayName = refItem.user_fio || refItem.name || refItem.login || (refItem.description && !refItem.description.includes('#') ? refItem.description : '') || `МОЛ #${refItem.id}`;
+                        } else {
+                            displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+                        }
+                    }
 
-                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
-            });
+                    const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                    optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                });
 
-            let extraAttributes = '';
-            if (col.field === 'car_id') extraAttributes = 'id="car-select"';
-            else if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
-            else if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
-            else if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
-            else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_id' || col.field === 'skald_id') extraAttributes = `id="${col.field}" class="warehouse-select"`;
-            else if (col.field === 'warehouse_to_id') extraAttributes = 'id="warehouse_to_id" class="warehouse-select"';
-            else if (col.field === 'mol_from_id' || col.field === 'mol_to_id' || col.field === 'mol_id') extraAttributes = `id="${col.field}" class="mol-select"`;
-
-            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+                inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            }
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
             if (col.field === 'fact_date' && !val && isPosted) {
@@ -2456,6 +2498,46 @@ async function openEntityForm(entity, item = null, parentId = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    // Инициализация интерактивных выпадающих списков с поиском
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
 
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
@@ -2814,7 +2896,7 @@ async function openReceiptForm(entity, item = null) {
         item = { 
             doc_number: `${prefix}${nextId}`,
             is_posted: false,
-            date: currentDateTime,    /* Подставляем в обычное поле даты */
+            date: currentDateTime,     /* Подставляем в обычное поле даты */
             fact_date: currentDateTime /* И в поле даты факт */
         };
     } else {
@@ -2877,31 +2959,6 @@ async function openReceiptForm(entity, item = null) {
 
             // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-        } else if (col.ref === 'zaphasti' || col.field === 'zaphasti_id' || col.field === 'zaphast_id') {
-            let displayZaphastName = '';
-            if (val) {
-                try {
-                    const zapRes = await fetch(`/api/zaphasti/${val}`);
-                    if (zapRes.ok) {
-                        const zapData = await zapRes.json();
-                        displayZaphastName = zapData.name || '';
-                    }
-                } catch(e) {}
-            }
-            if (!displayZaphastName && val && typeof val === 'string') {
-                displayZaphastName = val;
-            }
-
-            inputHtml = `
-                <div style="position: relative; width: 100%;">
-                    <div style="display: flex; gap: 6px;">
-                        <input type="text" id="zaphast-autocomplete-input" autocomplete="off" placeholder="Введите название или выберите из справочника..." value="${displayZaphastName}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">
-                        <button type="button" id="zaphast-search-btn" title="Поиск запчастей" ${fieldReadonly ? 'disabled' : ''} style="padding: 0 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">🔍</button>
-                    </div>
-                    <input type="hidden" name="${col.field}" id="zaphast-id-hidden" value="${val}">
-                    <div id="zaphast-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 180px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
-                </div>
-            `;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -2969,80 +3026,6 @@ async function openReceiptForm(entity, item = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
-
-    // Логика автокомплита и лупы для запчастей
-    const zapInput = formElement.querySelector('#zaphast-autocomplete-input');
-    const zapHiddenId = formElement.querySelector('#zaphast-id-hidden');
-    const zapDropdown = formElement.querySelector('#zaphast-dropdown-list');
-    const zapSearchBtn = formElement.querySelector('#zaphast-search-btn');
-
-    if (zapInput && zapDropdown && zapHiddenId && !isPosted) {
-        async function loadAndShowDropdown(filterQuery = '') {
-            try {
-                const res = await fetch('/api/zaphasti');
-                if (!res.ok) return;
-                const allZaps = await res.json();
-
-                const filtered = filterQuery 
-                    ? allZaps.filter(z => (z.name || '').toLowerCase().includes(filterQuery.toLowerCase()) || (z.article || '').toLowerCase().includes(filterQuery.toLowerCase()))
-                    : allZaps;
-
-                if (filtered.length === 0) {
-                    zapDropdown.innerHTML = `<div style="padding: 8px 12px; color: #64748b; font-size: 13px;">Совпадений нет (будет записано введенное значение)</div>`;
-                    zapDropdown.style.display = 'block';
-                    return;
-                }
-
-                let dropHtml = '';
-                filtered.forEach(z => {
-                    dropHtml += `<div class="zap-option" data-id="${z.id}" data-name="${(z.name || '').replace(/"/g, '&quot;')}" style="padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.1s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">${z.name} ${z.article ? `<span style="color: #64748b; font-size: 12px;">(арт: ${z.article})</span>` : ''}</div>`;
-                });
-
-                zapDropdown.innerHTML = dropHtml;
-                zapDropdown.style.display = 'block';
-
-                zapDropdown.querySelectorAll('.zap-option').forEach(opt => {
-                    opt.addEventListener('click', function() {
-                        zapInput.value = this.getAttribute('data-name');
-                        zapHiddenId.value = this.getAttribute('data-id');
-                        zapDropdown.style.display = 'none';
-                    });
-                });
-            } catch (err) {
-                console.error('Ошибка при загрузке запчастей:', err);
-            }
-        }
-
-        zapInput.addEventListener('input', function() {
-            const queryText = this.value.trim();
-            zapHiddenId.value = ''; // сбрасываем ID при ручном вводе, если печатают заново
-
-            if (queryText.length === 0) {
-                zapDropdown.style.display = 'none';
-                zapDropdown.innerHTML = '';
-                return;
-            }
-
-            loadAndShowDropdown(queryText);
-        });
-
-        if (zapSearchBtn) {
-            zapSearchBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (zapDropdown.style.display === 'block') {
-                    zapDropdown.style.display = 'none';
-                } else {
-                    loadAndShowDropdown(''); // Показать весь список при клике на лупу
-                }
-            });
-        }
-
-        document.addEventListener('click', function(e) {
-            if (!zapInput.contains(e.target) && !zapDropdown.contains(e.target) && (!zapSearchBtn || !zapSearchBtn.contains(e.target))) {
-                zapDropdown.style.display = 'none';
-            }
-        });
-    }
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
@@ -3169,20 +3152,6 @@ async function openReceiptForm(entity, item = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        // Обработка скрытого ID и ручного ввода запчасти
-        const hiddenIdInput = formElement.querySelector('#zaphast-id-hidden');
-        const textInput = formElement.querySelector('#zaphast-autocomplete-input');
-        if (hiddenIdInput && textInput) {
-            const fieldName = hiddenIdInput.getAttribute('name');
-            if (fieldName) {
-                if (hiddenIdInput.value) {
-                    data[fieldName] = hiddenIdInput.value;
-                } else {
-                    data[fieldName] = textInput.value;
-                }
-            }
-        }
-
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
@@ -3219,7 +3188,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
