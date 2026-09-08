@@ -6398,7 +6398,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
-    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
+    // Находим кнопку «Назад» на панели инструментов
     const btnBackExpense = document.getElementById('btn-back-expense');
 
     // 1 уровень: Склады (отображаем все)
@@ -6414,9 +6414,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Скрываем панель дат на уровне складов
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
 
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
+        if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
+        if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
+        if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
 
         // Скрываем кнопку «Назад» на уровне складов
         if (btnBackExpense) {
@@ -6462,13 +6462,13 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
 
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
+        if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
+        if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
+        if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
 
         // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
+            btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
@@ -6694,7 +6694,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         if (detailToolbar) {
                             const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
                             actionButtons.forEach(btn => {
-                                btn.style.display = 'none';
+                                btn.style.setProperty('display', 'none', 'important');
                             });
                         }
 
@@ -6790,6 +6790,14 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         subTabName
     });
     
+    // Принудительно скрываем кнопки управления спецификацией (документ Read-Only)
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
+    if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
+    if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
+    if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
+
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
         currentDetailController.abort();
@@ -6860,7 +6868,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
     }
 }
-
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
