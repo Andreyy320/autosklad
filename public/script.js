@@ -2128,9 +2128,9 @@ async function openEntityForm(entity, item = null, parentId = null) {
             prefix = 'ДТП-';
         } else if (entity === 'realizations' || entity === 'realization_items' || entity === 'realization_works') {
             prefix = 'РЛ-';
-        } else if (entity === 'moves' || entity === 'move_items') {
+        } else if (entity === 'moves') {
             prefix = 'ПМ-';
-               } else if (entity === 'receipts') {
+        } else if (entity === 'receipts') {
             prefix = 'ПР-';
         }
 
@@ -2188,8 +2188,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     } else if (entity === 'moves') {
         // Оставляем пустым для шапки перемещений, поля выводятся через columns
-    } else if (entity === 'move_items' && parentId) {
-        html += `<input type="hidden" name="move_id" value="${parentId}">`;
     } else if (entity === 'repair_items' && parentId) {
         html += `<input type="hidden" name="repair_id" value="${parentId}">`;
     } 
@@ -2208,17 +2206,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-      
-
         if (entity === 'realization_works') {
             const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
-            if (!allowedFields.includes(col.field)) {
-                return '';
-            }
-        }
-
-        if (entity === 'move_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'description'];
             if (!allowedFields.includes(col.field)) {
                 return '';
             }
@@ -2714,7 +2703,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             showAppNotification('Запись успешно удалена', 'success');
 
                             const detailEntities = [
-                                'realization_items', 'realization_works', 'move_items', 'repair_items', 'accident_invoices', 
+                                'realization_items', 'realization_works', 'repair_items', 'accident_invoices', 
                                 'accident_payments', 'accident_events', 'accident_items', 
                                 'entity_contacts', 
                                 'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2759,8 +2748,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             data.realization_id = parentId;
         } else if (entity === 'realization_works' && parentId) {
             data.realization_id = parentId;
-        } else if (entity === 'move_items' && parentId) {
-            data.move_id = parentId;
         } else if (entity === 'repair_items' && parentId) {
             data.repair_id = parentId;
         } 
@@ -2813,7 +2800,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'realization_items', 'realization_works', 'move_items', 'repair_items','repair_works', 'accident_invoices', 
+                    'realization_items', 'realization_works', 'repair_items','repair_works', 'accident_invoices', 
                     'accident_payments', 'accident_events', 'accident_items', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
@@ -2837,7 +2824,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 
 async function openReceiptItemsForm(item = null, parentId = null) {
@@ -3144,6 +3130,301 @@ async function openReceiptItemsForm(item = null, parentId = null) {
     });
 }
 
+
+async function openMoveItemsForm(item = null, parentId = null) {
+    console.log("🚀 openMoveItemsForm вызвана. item:", item, "parentId:", parentId);
+    const entity = 'move_items';
+    const config = getConfig(entity);
+    const drawer = getOrCreateDrawer();
+
+    if (!item || item.id === null || item.id === undefined || item.id === '') {
+        item = {
+            id: null
+        };
+    }
+
+    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
+    `;
+
+    if (parentId) {
+        html += `<input type="hidden" name="move_id" value="${parentId}">`;
+    }
+
+    const allowedFields = ['zaphasti_id', 'quantity', 'description'];
+
+    async function renderField(col) {
+        if (!allowedFields.includes(col.field)) return '';
+        if (col.insert === false) return '';
+        if ((col.update === false || col.edit === false) && item && item.id) return '';
+
+        let val = '';
+        if (item) {
+            const possibleKeys = [
+                col.field,
+                col.field.replace('_id', ''),
+                col.field + '_id',
+                col.ref,
+                col.ref ? col.ref.slice(0, -1) : ''
+            ];
+
+            for (const k of possibleKeys) {
+                if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
+                    val = item[k];
+                    break;
+                }
+            }
+
+            if (val && typeof val === 'object' && val.id !== undefined) {
+                val = val.id;
+            }
+        }
+
+        let inputHtml = '';
+        let fieldReadonly = col.readonly;
+        if (isPosted) {
+            fieldReadonly = true;
+        }
+
+        const controlStyle = fieldReadonly
+            ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;'
+            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+        if (col.ref) {
+            const referenceName = col.ref;
+            const refItems = await fetchReferenceData(referenceName);
+
+            let extraAttributes = '';
+            if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
+
+            const formatDisplayName = (refItem) => {
+                if (referenceName === 'zaphasti') {
+                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const nm = refItem.name || refItem.title || '';
+                    return `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                }
+                return refItem.name || refItem.title || `Запись #${refItem.id}`;
+            };
+
+            if (refItems.length > 10 && !fieldReadonly) {
+                let selectedDisplayName = '';
+                refItems.forEach(refItem => {
+                    if (String(refItem.id) === String(val)) {
+                        selectedDisplayName = formatDisplayName(refItem);
+                    }
+                });
+
+                inputHtml = `
+                    <div class="searchable-select-container" style="position: relative;">
+                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
+                        <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                            <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                `;
+                refItems.forEach(refItem => {
+                    const displayName = formatDisplayName(refItem);
+                    inputHtml += `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                });
+                inputHtml += `</div></div>`;
+            } else {
+                let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+                refItems.forEach(refItem => {
+                    const displayName = formatDisplayName(refItem);
+                    const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                    optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                });
+                inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            }
+        } else if (col.field === 'description') {
+            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else {
+            inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        }
+
+        return `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${col.label}:
+                ${inputHtml}
+            </label>
+        `;
+    }
+
+    for (const col of config.columns) {
+        html += await renderField(col);
+    }
+
+    html += `
+                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
+                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                </div>
+            </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    let rawFormElement = drawer.querySelector('#entity-form');
+    const formElement = rawFormElement.cloneNode(true);
+    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                opt.style.display = (text.includes(filter) || opt.dataset.id === '') ? 'block' : 'none';
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+
+    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', async () => {
+            const selectedZaphastiId = zaphastiSelect.value;
+            if (!selectedZaphastiId) return;
+
+            try {
+                const response = await fetch(`/api/zaphasti/${selectedZaphastiId}`);
+                if (response.ok) {
+                    const itemData = await response.json();
+                    const priceInput = formElement.querySelector('[name="price"]');
+                    const targetPrice = itemData.price !== undefined ? itemData.price : (itemData.sale_price !== undefined ? itemData.sale_price : itemData.retail_price);
+
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) {
+                        priceInput.value = targetPrice;
+                    }
+                }
+            } catch (err) {
+                console.error('Ошибка при автозаполнении данных запчасти:', err);
+            }
+        });
+    }
+
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить эту запись?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
+
+                    try {
+                        const response = await fetch(`/api/${entity}/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
+
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Запись успешно удалена', 'success');
+                            if (parentId) {
+                                loadDetailData(entity, parentId);
+                            } else {
+                                refreshData();
+                            }
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                        }
+                    } catch (err) {
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                }
+            );
+        });
+    }
+
+    let isSubmitting = false;
+
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        const saveButton = formElement.querySelector('#save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        if (parentId) {
+            data.move_id = parentId;
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Данные успешно сохранены', 'success');
+                if (parentId) {
+                    loadDetailData(entity, parentId);
+                } else {
+                    refreshData();
+                }
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
+                if (saveButton) saveButton.disabled = false;
+                isSubmitting = false;
+            }
+        } catch (err) {
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            if (saveButton) saveButton.disabled = false;
+            isSubmitting = false;
+        }
+    });
+}
 
 async function openReceiptForm(entity, item = null) {
     console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
@@ -7754,12 +8035,14 @@ function openDetailForm(mode) {
     }
     // =========================================================================
 
-       if (detailEntity === 'car_details') {
+        if (detailEntity === 'car_details') {
         openCarDetailsForm(detailEntity, itemToEdit, parentId);
     } else if (detailEntity === 'accident_images') {
         openAccidentImageForm(detailEntity, itemToEdit, parentId);
     } else if (detailEntity === 'receipt_items') {
         openReceiptItemsForm(itemToEdit, parentId);
+    } else if (detailEntity === 'move_items') {
+        openMoveItemsForm(itemToEdit, parentId);
     } else {
         openEntityForm(detailEntity, itemToEdit, parentId);
     }
