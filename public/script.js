@@ -2857,7 +2857,7 @@ async function openReceiptForm(entity, item = null) {
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        // Если документ проведен, ВСЕ поля блокируются
+        // Если документ проведен, ВСЕ поля (кроме снятия с проведения, если разрешено) блокируются
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -2875,9 +2875,9 @@ async function openReceiptForm(entity, item = null) {
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
+            // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref === 'zaphasti' || col.field === 'zaphasti_id' || col.field === 'zaphast_id') {
-            // Реализуем инпут с автокомплитом для запчастей по буквам
             let displayZaphastName = '';
             if (val) {
                 try {
@@ -2886,9 +2886,7 @@ async function openReceiptForm(entity, item = null) {
                         const zapData = await zapRes.json();
                         displayZaphastName = zapData.name || '';
                     }
-                } catch(e) {
-                    // если не удалось подтянуть по id, выведем значение как есть
-                }
+                } catch(e) {}
             }
             if (!displayZaphastName && val && typeof val === 'string') {
                 displayZaphastName = val;
@@ -2896,7 +2894,7 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `
                 <div style="position: relative; width: 100%;">
-                    <input type="text" id="zaphast-autocomplete-input" autocomplete="off" placeholder="Начните вводить название (например, Фа)..." value="${displayZaphastName}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">
+                    <input type="text" id="zaphast-autocomplete-input" autocomplete="off" placeholder="Введите или выберите запчасть..." value="${displayZaphastName}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">
                     <input type="hidden" name="${col.field}" id="zaphast-id-hidden" value="${val}">
                     <div id="zaphast-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 180px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
                 </div>
@@ -2952,6 +2950,7 @@ async function openReceiptForm(entity, item = null) {
         `;
     }
 
+    // Если документ проведен, скрываем кнопку сохранения или делаем предупреждение
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
@@ -2968,7 +2967,7 @@ async function openReceiptForm(entity, item = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Логика работы инпута автокомплита для запчастей
+    // Логика автокомплита запчастей
     const zapInput = formElement.querySelector('#zaphast-autocomplete-input');
     const zapHiddenId = formElement.querySelector('#zaphast-id-hidden');
     const zapDropdown = formElement.querySelector('#zaphast-dropdown-list');
@@ -2976,7 +2975,8 @@ async function openReceiptForm(entity, item = null) {
     if (zapInput && zapDropdown && zapHiddenId && !isPosted) {
         zapInput.addEventListener('input', async function() {
             const queryText = this.value.trim();
-            zapHiddenId.value = ''; // сбрасываем ID, пока пользователь вводит или меняет текст вручную
+            // Если ввели текст вручную, временно очищаем ID (либо сохраняем как текст, в зависимости от бэкенда)
+            zapHiddenId.value = '';
 
             if (queryText.length === 0) {
                 zapDropdown.style.display = 'none';
@@ -2989,11 +2989,10 @@ async function openReceiptForm(entity, item = null) {
                 if (!res.ok) return;
                 const allZaps = await res.json();
 
-                // Фильтруем по введенным буквам (регистронезависимо)
                 const filtered = allZaps.filter(z => (z.name || '').toLowerCase().includes(queryText.toLowerCase()));
 
                 if (filtered.length === 0) {
-                    zapDropdown.innerHTML = `<div style="padding: 8px 12px; color: #64748b; font-size: 13px;">Ничего не найдено (будет сохранено как текст/новая)</div>`;
+                    zapDropdown.innerHTML = `<div style="padding: 8px 12px; color: #64748b; font-size: 13px;">Совпадений нет (будет записано введенное значение)</div>`;
                     zapDropdown.style.display = 'block';
                     return;
                 }
@@ -3006,7 +3005,6 @@ async function openReceiptForm(entity, item = null) {
                 zapDropdown.innerHTML = dropHtml;
                 zapDropdown.style.display = 'block';
 
-                // Обработка клика по варианту из выпадающего списка
                 zapDropdown.querySelectorAll('.zap-option').forEach(opt => {
                     opt.addEventListener('click', function() {
                         zapInput.value = this.getAttribute('data-name');
@@ -3015,11 +3013,10 @@ async function openReceiptForm(entity, item = null) {
                     });
                 });
             } catch (err) {
-                console.error('Ошибка при поиске запчастей:', err);
+                console.error('Ошибка при загрузке запчастей для автокомплита:', err);
             }
         });
 
-        // Закрытие выпадающего списка при клике вне его
         document.addEventListener('click', function(e) {
             if (!zapInput.contains(e.target) && !zapDropdown.contains(e.target)) {
                 zapDropdown.style.display = 'none';
@@ -3152,6 +3149,20 @@ async function openReceiptForm(entity, item = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        // Если автокомплит задействован, но скрытый ID пуст, отправим текст из инпута (если бэкенд это поддерживает)
+        const hiddenIdInput = formElement.querySelector('#zaphast-id-hidden');
+        const textInput = formElement.querySelector('#zaphast-autocomplete-input');
+        if (hiddenIdInput && textInput) {
+            const fieldName = hiddenIdInput.getAttribute('name');
+            if (fieldName) {
+                if (hiddenIdInput.value) {
+                    data[fieldName] = hiddenIdInput.value;
+                } else {
+                    data[fieldName] = textInput.value;
+                }
+            }
+        }
+
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
@@ -3188,7 +3199,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
