@@ -8492,21 +8492,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         }
         
         // ==========================================
-        // ЖЕСТКИЙ СБРОС ХВОСТОВ ПРОШЛОЙ ВКЛАДКИ
-        // ==========================================
-        const detailContainer = document.getElementById('detail-container');
-        const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
-        
-        if (detailContainer) {
-            detailContainer.style.setProperty('display', 'none', 'important');
-            detailContainer.innerHTML = '';
-        }
-        if (detailActionButtons) {
-            detailActionButtons.style.setProperty('display', 'none', 'important');
-        }
-        // ==========================================
-
-        // ==========================================
         // УПРАВЛЕНИЕ КНОПКОЙ «НАЗАД» ДЛЯ ГЛАВНОГО МЕНЮ
         // ==========================================
         const btnBackExpense = document.getElementById('btn-back-expense');
@@ -8537,6 +8522,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             console.log(`⚠️ [nav-link] Функция updateFilterPanels не найдена`);
         }
 
+        const detailContainer = document.getElementById('detail-container');
         const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
@@ -8609,6 +8595,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             console.log(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'flex', 'important');
             
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
             if (detailActionButtons) {
                 detailActionButtons.style.setProperty('display', 'flex', 'important');
             }
@@ -8628,9 +8615,13 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         } else {
             console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
-            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
+            if (detailContainer) {
+                detailContainer.style.setProperty('display', 'none', 'important');
+                detailContainer.innerHTML = ''; // Безопасно вычищаем старый DOM-мусор
+            }
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
             if (detailActionButtons) {
                 detailActionButtons.style.setProperty('display', 'none', 'important');
             }
