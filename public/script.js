@@ -8635,18 +8635,22 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
         
-        // Если выбрали Расходы, запускаем изолированную функцию
+        // Если выбрали Расходы, принудительно гасим нижнюю панель и запускаем изолированную функцию
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
+            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
+            if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+            if (detailActionButtons) detailActionButtons.style.setProperty('display', 'none', 'important');
+
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
-        // Если выбрали Приходы, запускаем изолированную функцию уровней складов
+        // Если выбрали Приходы, принудительно гасим нижнюю панель и запускаем изолированную функцию
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
             
-            // Принудительно гасим нижнюю панель и сопутствующие элементы перед выходом
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
