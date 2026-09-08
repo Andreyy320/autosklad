@@ -3223,11 +3223,14 @@ async function openRepairWorksForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -3357,6 +3360,7 @@ async function openRepairWorksForm(item = null, parentId = null) {
         }
     });
 }
+
 async function openReceiptItemsForm(item = null, parentId = null) {
     console.log("🚀 openReceiptItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'receipt_items';
@@ -3530,11 +3534,14 @@ async function openReceiptItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -4300,11 +4307,14 @@ async function openMoveItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -4430,7 +4440,6 @@ async function openMoveItemsForm(item = null, parentId = null) {
         }
     });
 }
-
 async function openRepairItemsForm(item = null, parentId = null) {
     console.log("🚀 openRepairItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'repair_items';
@@ -4609,11 +4618,14 @@ async function openRepairItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -4890,11 +4902,14 @@ async function openRealizationItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            opt.addEventListener('click', () => {
+            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -5357,6 +5372,7 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
+
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
