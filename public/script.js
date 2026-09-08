@@ -33,7 +33,7 @@ async function fetchReferenceData(refEntity) {
 }
 
 const tableConfig = {
-     users: {
+    users: {
         title: 'Пользователи',
         columns: [
             { field: 'login', label: 'Логин', width: '150px' },
@@ -47,7 +47,7 @@ const tableConfig = {
             <td>${item.name || ''}</td>
             <td>${item.description || ''}</td>
         `
-       },
+    },
     brands: {
         title: 'Бренды',
         columns: [
@@ -140,8 +140,8 @@ const tableConfig = {
         <td><span style="color: #334155;">${item.part_discount_name || '—'}</span></td>
         <td><span style="color: #64748b; font-size: 13px;">${item.description || ''}</span></td>
     `
-        },
-    customer_contacts: {
+},
+customer_contacts: {
         title: 'Контакты покупателей',
         columns: [
             { field: 'name', label: 'Имя', width: '180px' },
@@ -227,7 +227,7 @@ const tableConfig = {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-    },
+},
     type_sklad: {
         title: 'Тип склада',
         columns: [
@@ -253,7 +253,7 @@ const tableConfig = {
         `
     },
 
-    part_discounts: {
+part_discounts: {
         title: 'Скидки на запчасти',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
@@ -307,7 +307,7 @@ const tableConfig = {
             <td><b>${item.sklad_name || '—'}</b></td>
         `
     },
-    car_details: {
+car_details: {
         title: 'Детали и фото автомобиля',
         columns: [
             { field: 'date', label: 'Дата', type: 'date' },
@@ -323,7 +323,7 @@ const tableConfig = {
                 ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" />` : '—'}
             </td>
         `
-        },
+    },
  
     ispolnitel: {
         title: 'Исполнители',
@@ -422,7 +422,7 @@ const tableConfig = {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-    },
+},
   toplivo: {
     title: 'Топливо',
     columns: [
@@ -5337,296 +5337,293 @@ async function applyMovementFilters() {
 }
 
 async function loadData(entity, title, customParams = {}) {
-        console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
+    console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
-        currentEntity = entity;
-        selectedItem = null;
-        const config = getConfig(entity);
+    currentEntity = entity;
+    selectedItem = null;
+    const config = getConfig(entity);
 
-        const filterPanel = document.getElementById('parts-filter-panel');
-        if (filterPanel) {
-            if (entity === 'stock_balances') {
-                filterPanel.style.display = 'flex';
-                loadWarehousesForFilter(); 
-                loadMolsForFilter();      
-            } else {
-                filterPanel.style.display = 'none';
-            }
-        }
-
-        const movementFilterPanel = document.getElementById('movement-filter-panel');
-        if (movementFilterPanel) {
-            if (entity === 'stock_movement') {
-                movementFilterPanel.style.display = 'flex';
-                loadWarehousesForMovement(); 
-                loadMolsForMovement();      
-            } else {
-                movementFilterPanel.style.display = 'none';
-            }
-        }
-
-        const btnAdd = document.getElementById('btn-add');
-        const btnEdit = document.getElementById('btn-edit');
-        const btnDelete = document.getElementById('btn-delete');
-
-        if (btnAdd && btnEdit && btnDelete) {
-            if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement' ) {
-                btnAdd.style.display = 'none';
-                btnEdit.style.display = 'none';
-                btnDelete.style.display = 'none';
-            } else if (entity === 'expenses_by_receipts') {
-                // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
-                btnAdd.style.display = 'inline-block';
-                btnEdit.style.display = 'none';
-                btnDelete.style.display = 'none';
-            } else {
-                btnAdd.style.display = 'inline-block';
-                btnEdit.style.display = 'inline-block';
-                btnDelete.style.display = 'inline-block';
-            }
-        }
-
-        const detailContainer = document.getElementById('detail-container');
-        // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
-        const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-
-        if (detailContainer) {
-            // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
-            // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
-            detailContainer.style.display = 'none'; 
-
-            if (detailToolbar) {
-                detailToolbar.style.display = 'none';
-            }
-        }
-
-        try {
-            let url = `/api/${entity}`;
-            const params = new URLSearchParams();
-
-            for (const [key, value] of Object.entries(customParams)) {
-                if (value !== undefined && value !== '') {
-                    params.append(key, value);
-                }
-            }
-
-            if (entity === 'stock_balances') {
-                const startDateVal = document.getElementById('filter-start-date')?.value || document.getElementById('filter-date')?.value || '';
-                const endDateVal = document.getElementById('filter-end-date')?.value || '';
-                const warehouseId = document.getElementById('filter-warehouse')?.value || '';
-                const molId = document.getElementById('filter-mol')?.value || '';
-
-                if (startDateVal) params.append('start_date', startDateVal);
-                if (endDateVal) params.append('end_date', endDateVal);
-                if (warehouseId) params.append('warehouse_id', warehouseId);
-                if (molId) params.append('mol_id', molId);
-            } else if (entity === 'stock_movement') {
-                const startDateVal = document.getElementById('movement-start-date')?.value || '';
-                const endDateVal = document.getElementById('movement-end-date')?.value || '';
-                const warehouseId = document.getElementById('movement-warehouse')?.value || '';
-                const molId = document.getElementById('movement-mol')?.value || '';
-
-                if (startDateVal) params.append('start_date', startDateVal);
-                if (endDateVal) params.append('end_date', endDateVal);
-                if (warehouseId) params.append('warehouse_id', warehouseId);
-                if (molId) params.append('mol_id', molId);
-            }
-
-            if (params.toString()) {
-                url += `?${params.toString()}`;
-            }
-
-            console.log(`🌐 [loadData] Отправляем запрос на fetch: ${url}`);
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error('Ошибка сервера');
-
-            currentItems = await response.json();
-            console.log(`📦 [loadData] Данные получены для ${entity}. Количество строк: ${currentItems.length}`, currentItems);
-
-            const headerTr = document.getElementById('table-headers');
-            const tbody = document.getElementById('table-body');
-
-            tbody.innerHTML = '';
-
-            const thead = headerTr.closest('thead');
-            let filterRow = document.getElementById('table-filter-row');
-
-            if (entity === 'car_cards') {
-                if (filterRow) {
-                    filterRow.remove();
-                }
-            } else {
-                if (!filterRow) {
-                    filterRow = document.createElement('tr');
-                    filterRow.id = 'table-filter-row';
-                    thead.insertBefore(filterRow, headerTr);
-                } else {
-                    thead.insertBefore(filterRow, headerTr);
-                }
-
-                const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
-
-                filterRow.innerHTML = visibleColumnsForFilter.map(col => {
-                    let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-                    if (col.style && col.style.includes('display: none')) {
-                        return `<th style="display: none; padding: 4px;"></th>`;
-                    }
-                    return `
-                        <th ${styleAttr}>
-                            <input type="text" 
-                                data-column="${col.field}" 
-                                oninput="filterTable()" 
-                                placeholder="Фильтр..."
-                                style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                        </th>
-                    `;
-                }).join('');
-            }
-
-            const visibleColumns = config.columns.filter(col => col.table !== false);
-
-            let headersHtml = visibleColumns.map(col => {
-                let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
-                let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
-                return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.label}</th>`;
-            }).join('');
-
-            headerTr.innerHTML = headersHtml;
-
-            currentItems.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.dataset.id = item.id || item.postavhik_id || '';
-                tr.style.cursor = 'pointer';
-                tr.innerHTML = config.render(item);
-
-                tr.onclick = () => {
-                    selectedItem = item;
-                    console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: ${entity}`, { selectedItem, customParams });
-
-                    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
-                    tr.classList.add('selected-row');
-
-                    const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
-                    if (!entitiesWithDetails.includes(entity)) {
-                        return;
-                    }
-
-                    // При клике на строку активируем и показываем нижнюю таблицу деталей
-                    const detailContainerTarget = document.getElementById('detail-container');
-                    const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-                    
-                    if (detailContainerTarget) {
-                        detailContainerTarget.style.display = 'flex';
-                    }
-                    
-                    if (detailToolbarTarget) {
-                        if (entity === 'stock_movement') {
-                            detailToolbarTarget.style.display = 'none';
-                        } else if (entity === 'car_cards' || entity === 'stock_balances') {
-                            // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
-                            detailToolbarTarget.style.display = 'none';
-                        } else {
-                            detailToolbarTarget.style.display = 'flex';
-                        }
-                    }
-
-                    if (entity === 'stock_balances') {
-                        const zId = item.zaphasti_id || item.id;
-                        const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
-
-                        loadDetailData('stock_batches', { 
-                            zaphasti_id: zId, 
-                            warehouse_id: wId 
-                        });
-                    } else if (entity === 'stock_movement') {
-                        loadDetailData('part_movement_details', item);
-                    } else if (entity === 'receipts') {
-                        loadDetailData('receipt_items', item.id);
-                    } else if (entity === 'moves') {
-                        loadDetailData('move_items', item.id);
-                    } else if (entity === 'realizations') {
-                        const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
-                        const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
-                        loadDetailData(detailEntity, item.id);
-                    } else if (entity === 'cars') {
-                        loadDetailData('car_details', item.id);
-                    } else if (entity === 'postavhik') {
-                        loadDetailData('postavhik_contacts', item.id);
-                    } else if (entity === 'counterparties') {
-                        loadDetailData('counterparty_contacts', item.id);
-                    } else if (entity === 'customers') {
-                        const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
-                        loadDetailData(activeSubTab, item.id);
-                    }
-                };
-
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('row-count').innerText = `Раздел: ${title} | Всего строк: ${currentItems.length}`;
-
-            const carTabsBar = document.getElementById('car-tabs-bar');
-            const tabsForCars = document.getElementById('tabs-for-cars');
-            const tabsForAccidents = document.getElementById('tabs-for-accidents');
-            const tabsForRepairs = document.getElementById('tabs-for-repairs');
-            const tabsForCustomers = document.getElementById('tabs-for-customers');
-            const tabsForRealizations = document.getElementById('tabs-for-realizations');
-
-            if (carTabsBar) {
-                if (tabsForCars) tabsForCars.style.display = 'none';
-                if (tabsForAccidents) tabsForAccidents.style.display = 'none';
-                if (tabsForRepairs) tabsForRepairs.style.display = 'none';
-                if (tabsForCustomers) tabsForCustomers.style.display = 'none';
-                if (tabsForRealizations) tabsForRealizations.style.display = 'none';
-
-                if (entity === 'car_cards') {
-                    carTabsBar.style.display = 'flex';
-                    if (tabsForCars) tabsForCars.style.display = 'flex';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                } else if (entity === 'accidents') {
-                    carTabsBar.style.display = 'flex';
-                    if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                } else if (entity === 'repairs') {
-                    carTabsBar.style.display = 'flex';
-                    if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                } else if (entity === 'realizations') {
-                    carTabsBar.style.display = 'flex';
-                    if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                } else if (entity === 'customers') {
-                    carTabsBar.style.display = 'flex';
-                    if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                } else {
-                    carTabsBar.style.display = 'none';
-                    selectedItem = null;
-                    if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
-                }
-            }
-
-        } catch (err) {
-            console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
-            currentItems = [];
-            document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
+    const filterPanel = document.getElementById('parts-filter-panel');
+    if (filterPanel) {
+        if (entity === 'stock_balances') {
+            filterPanel.style.display = 'flex';
+            loadWarehousesForFilter(); 
+            loadMolsForFilter();      
+        } else {
+            filterPanel.style.display = 'none';
         }
     }
 
+    const movementFilterPanel = document.getElementById('movement-filter-panel');
+    if (movementFilterPanel) {
+        if (entity === 'stock_movement') {
+            movementFilterPanel.style.display = 'flex';
+            loadWarehousesForMovement(); 
+            loadMolsForMovement();      
+        } else {
+            movementFilterPanel.style.display = 'none';
+        }
+    }
 
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
 
-    async function openPaymentHistory(receiptId, docNumber) {
+    if (btnAdd && btnEdit && btnDelete) {
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
+            btnAdd.style.display = 'none';
+            btnEdit.style.display = 'none';
+            btnDelete.style.display = 'none';
+        } else if (entity === 'expenses_by_receipts') {
+            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
+            btnAdd.style.display = 'inline-block';
+            btnEdit.style.display = 'none';
+            btnDelete.style.display = 'none';
+        } else {
+            btnAdd.style.display = 'inline-block';
+            btnEdit.style.display = 'inline-block';
+            btnDelete.style.display = 'inline-block';
+        }
+    }
+
+    const detailContainer = document.getElementById('detail-container');
+    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+
+    if (detailContainer) {
+        // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
+        // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
+        detailContainer.style.display = 'none'; 
+
+        if (detailToolbar) {
+            detailToolbar.style.display = 'none';
+        }
+    }
+
+    try {
+        let url = `/api/${entity}`;
+        const params = new URLSearchParams();
+
+        for (const [key, value] of Object.entries(customParams)) {
+            if (value !== undefined && value !== '') {
+                params.append(key, value);
+            }
+        }
+
+        if (entity === 'stock_balances') {
+            const startDateVal = document.getElementById('filter-start-date')?.value || document.getElementById('filter-date')?.value || '';
+            const endDateVal = document.getElementById('filter-end-date')?.value || '';
+            const warehouseId = document.getElementById('filter-warehouse')?.value || '';
+            const molId = document.getElementById('filter-mol')?.value || '';
+
+            if (startDateVal) params.append('start_date', startDateVal);
+            if (endDateVal) params.append('end_date', endDateVal);
+            if (warehouseId) params.append('warehouse_id', warehouseId);
+            if (molId) params.append('mol_id', molId);
+        } else if (entity === 'stock_movement') {
+            const startDateVal = document.getElementById('movement-start-date')?.value || '';
+            const endDateVal = document.getElementById('movement-end-date')?.value || '';
+            const warehouseId = document.getElementById('movement-warehouse')?.value || '';
+            const molId = document.getElementById('movement-mol')?.value || '';
+
+            if (startDateVal) params.append('start_date', startDateVal);
+            if (endDateVal) params.append('end_date', endDateVal);
+            if (warehouseId) params.append('warehouse_id', warehouseId);
+            if (molId) params.append('mol_id', molId);
+        }
+
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+
+        console.log(`🌐 [loadData] Отправляем запрос на fetch: ${url}`);
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) throw new Error('Ошибка сервера');
+
+        currentItems = await response.json();
+        console.log(`📦 [loadData] Данные получены для ${entity}. Количество строк: ${currentItems.length}`, currentItems);
+
+        const headerTr = document.getElementById('table-headers');
+        const tbody = document.getElementById('table-body');
+
+        tbody.innerHTML = '';
+
+        const thead = headerTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (entity === 'car_cards') {
+            if (filterRow) {
+                filterRow.remove();
+            }
+        } else {
+            if (!filterRow) {
+                filterRow = document.createElement('tr');
+                filterRow.id = 'table-filter-row';
+                thead.insertBefore(filterRow, headerTr);
+            } else {
+                thead.insertBefore(filterRow, headerTr);
+            }
+
+            const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
+
+            filterRow.innerHTML = visibleColumnsForFilter.map(col => {
+                let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+                if (col.style && col.style.includes('display: none')) {
+                    return `<th style="display: none; padding: 4px;"></th>`;
+                }
+                return `
+                    <th ${styleAttr}>
+                        <input type="text" 
+                               data-column="${col.field}" 
+                               oninput="filterTable()" 
+                               placeholder="Фильтр..."
+                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                    </th>
+                `;
+            }).join('');
+        }
+
+        const visibleColumns = config.columns.filter(col => col.table !== false);
+
+        let headersHtml = visibleColumns.map(col => {
+            let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
+            let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
+            return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.label}</th>`;
+        }).join('');
+
+        headerTr.innerHTML = headersHtml;
+
+        currentItems.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = item.id || item.postavhik_id || '';
+            tr.style.cursor = 'pointer';
+            tr.innerHTML = config.render(item);
+
+            tr.onclick = () => {
+                selectedItem = item;
+                console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: ${entity}`, { selectedItem, customParams });
+
+                tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
+                tr.classList.add('selected-row');
+
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
+                if (!entitiesWithDetails.includes(entity)) {
+                    return;
+                }
+
+                // При клике на строку активируем и показываем нижнюю таблицу деталей
+                const detailContainerTarget = document.getElementById('detail-container');
+                const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+                
+                if (detailContainerTarget) {
+                    detailContainerTarget.style.display = 'flex';
+                }
+                
+                if (detailToolbarTarget) {
+                    if (entity === 'stock_movement') {
+                        detailToolbarTarget.style.display = 'none';
+                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
+                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
+                        detailToolbarTarget.style.display = 'none';
+                    } else {
+                        detailToolbarTarget.style.display = 'flex';
+                    }
+                }
+
+                if (entity === 'stock_balances') {
+                    const zId = item.zaphasti_id || item.id;
+                    const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
+
+                    loadDetailData('stock_batches', { 
+                        zaphasti_id: zId, 
+                        warehouse_id: wId 
+                    });
+                } else if (entity === 'stock_movement') {
+                    loadDetailData('part_movement_details', item);
+                } else if (entity === 'receipts') {
+                    loadDetailData('receipt_items', item.id);
+                } else if (entity === 'moves') {
+                    loadDetailData('move_items', item.id);
+                } else if (entity === 'realizations') {
+                    const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                    const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+                    loadDetailData(detailEntity, item.id);
+                } else if (entity === 'cars') {
+                    loadDetailData('car_details', item.id);
+                } else if (entity === 'postavhik') {
+                    loadDetailData('postavhik_contacts', item.id);
+                } else if (entity === 'counterparties') {
+                    loadDetailData('counterparty_contacts', item.id);
+                } else if (entity === 'customers') {
+                    const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
+                    loadDetailData(activeSubTab, item.id);
+                }
+            };
+
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('row-count').innerText = `Раздел: ${title} | Всего строк: ${currentItems.length}`;
+
+        const carTabsBar = document.getElementById('car-tabs-bar');
+        const tabsForCars = document.getElementById('tabs-for-cars');
+        const tabsForAccidents = document.getElementById('tabs-for-accidents');
+        const tabsForRepairs = document.getElementById('tabs-for-repairs');
+        const tabsForCustomers = document.getElementById('tabs-for-customers');
+        const tabsForRealizations = document.getElementById('tabs-for-realizations');
+
+        if (carTabsBar) {
+            if (tabsForCars) tabsForCars.style.display = 'none';
+            if (tabsForAccidents) tabsForAccidents.style.display = 'none';
+            if (tabsForRepairs) tabsForRepairs.style.display = 'none';
+            if (tabsForCustomers) tabsForCustomers.style.display = 'none';
+            if (tabsForRealizations) tabsForRealizations.style.display = 'none';
+
+            if (entity === 'car_cards') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForCars) tabsForCars.style.display = 'flex';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            } else if (entity === 'accidents') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            } else if (entity === 'repairs') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForRepairs) tabsForRepairs.style.display = 'flex';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            } else if (entity === 'realizations') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForRealizations) tabsForRealizations.style.display = 'flex';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            } else if (entity === 'customers') {
+                carTabsBar.style.display = 'flex';
+                if (tabsForCustomers) tabsForCustomers.style.display = 'flex';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            } else {
+                carTabsBar.style.display = 'none';
+                selectedItem = null;
+                if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            }
+        }
+
+    } catch (err) {
+        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
+        currentItems = [];
+        document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
+    }
+}
+async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
     // Показываем прелоадер в шторке пока грузим данные
@@ -6359,9 +6356,9 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] СТАРТ. entity="${entity}", parentId:`, parentId);
-    console.trace(`📍 [loadReceiptMainData TRACE] Откуда вызвана loadReceiptMainData:`);
+    console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -6379,20 +6376,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
-    // Находим кнопку «Назад» на панели инструментов
+    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
     const btnBackExpense = document.getElementById('btn-back-expense');
-
-    console.log(`🔎 [loadReceiptMainData] Элементы кнопок найдены в DOM:`, {
-        btnAdd: !!btnAdd,
-        btnEdit: !!btnEdit,
-        btnDelete: !!btnDelete,
-        btnBackExpense: !!btnBackExpense,
-        receiptsFilterPanel: !!receiptsFilterPanel
-    });
 
     // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
-        console.log(`🗂️ [loadReceiptMainData] Ветка: 1 уровень (money_receipts_by_sklad)`);
         window.currentSkladId = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
@@ -6404,29 +6392,18 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Скрываем панель дат на уровне складов
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
 
-        if (btnAdd) {
-            btnAdd.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-add СРЫТ для money_receipts_by_sklad`);
-        }
-        if (btnEdit) {
-            btnEdit.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-edit СКРЫТ для money_receipts_by_sklad`);
-        }
-        if (btnDelete) {
-            btnDelete.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-delete СКРЫТ для money_receipts_by_sklad`);
-        }
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
 
         // Скрываем кнопку «Назад» на уровне складов
         if (btnBackExpense) {
             btnBackExpense.style.display = 'none';
             btnBackExpense.onclick = null;
-            console.log(`🔙 [КНОПКИ] btn-back-expense СКРЫТ для money_receipts_by_sklad`);
         }
     } 
     // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
-        console.log(`🗂️ [loadReceiptMainData] Ветка: 2 уровень (money_receipts)`);
         let skladId = '';
         if (parentId && typeof parentId === 'object') {
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
@@ -6438,7 +6415,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         if (skladId) {
             window.currentSkladId = skladId;
-            console.log(`🏢 [loadReceiptMainData] Установлен currentSkladId = ${window.currentSkladId}`);
         }
         
         window.currentCustomerId = null;
@@ -6464,32 +6440,20 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
 
-        if (btnAdd) {
-            btnAdd.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-add СКРЫТ для money_receipts`);
-        }
-        if (btnEdit) {
-            btnEdit.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-edit СКРЫТ для money_receipts`);
-        }
-        if (btnDelete) {
-            btnDelete.style.display = 'none';
-            console.log(`🔒 [КНОПКИ] btn-delete СКРЫТ для money_receipts`);
-        }
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
 
         // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block';
+            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
             btnBackExpense.onclick = () => {
-                console.log(`🔙 [КНОПКИ] Клик по btn-back-expense -> возврат к money_receipts_by_sklad`);
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
-            console.log(`🔓 [КНОПКИ] btn-back-expense ПОКАЗАН для money_receipts`);
         }
     }
 
     currentEntity = currentReceiptView;
-    console.log(`📌 [loadReceiptMainData] Итоговый currentEntity установлен в: "${currentEntity}"`);
 
     const config = getConfig(currentEntity);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
@@ -6531,6 +6495,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 
     try {
+        console.dg = console.log;
         console.log(`🌐 [loadReceiptMainData] Отправка запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
@@ -6619,7 +6584,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             };
 
             const groupedByMonth = {};
-            currentItems.forEach((item) => {
+            currentItems.forEach((item, index) => {
                 const m = getMonthData(item.date);
                 if (!groupedByMonth[m.key]) {
                     groupedByMonth[m.key] = {
@@ -6691,7 +6656,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.innerHTML = config.render(item);
 
                     tr.addEventListener('click', () => {
-                        console.log('🖱️ [Клик на строку документов money_receipts]:', item);
+                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
@@ -6708,7 +6673,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                             const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
                             actionButtons.forEach(btn => {
                                 btn.style.display = 'none';
-                                console.log(`🔒 [КНОПКИ В КЛИКЕ] Кнопка #${btn.id} принудительно СКРЫТА при клике на строку документа`);
                             });
                         }
 
@@ -6768,14 +6732,13 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.innerHTML = config.render(item);
 
                 tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку складов money_receipts_by_sklad]:', item);
+                    console.log('🖱️ [Клик на строку складов]:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
                     window.selectedItem = item;
 
                     if (currentEntity === 'money_receipts_by_sklad') {
-                        console.log(`➡️ [ПЕРЕХОД] Вызов loadReceiptMainData('money_receipts', item) для склада ID:`, item.sklad_id || item.id);
                         loadReceiptMainData('money_receipts', item);
                     }
                 });
@@ -6797,9 +6760,7 @@ let currentDetailController = null;
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
-    console.trace(`📍 [loadReceiptDetailTable TRACE] Стек вызовов (откуда вызвана функция):`);
-    
-    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные на момент вызова:`, {
+    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
         currentDocType: window.currentDocType,
         currentRealizationId: window.currentRealizationId,
         currentCustomerId: window.currentCustomerId,
@@ -6809,43 +6770,23 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
-        console.log(`🛑 [loadReceiptDetailTable] Обнаружен предыдущий незавершенный запрос. Вызываю abort()...`);
         currentDetailController.abort();
-    } else {
-        console.log(`✨ [loadReceiptDetailTable] Предыдущих активных запросов для отмены нет.`);
     }
-    
     currentDetailController = new AbortController();
-    console.log(`🚀 [loadReceiptDetailTable] Создан новый AbortController.`);
     
     // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
         const separator = fetchUrl.includes('?') ? '&' : '?';
         fetchUrl = `${fetchUrl}${separator}doc_type=${window.currentDocType}`;
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
-    } else {
-        console.log(`🔍 [loadReceiptDetailTable] Коррекция URL по doc_type пропущена (doc_type нет или он уже есть в URL). fetchUrl: ${fetchUrl}`);
     }
     
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    console.log(`🔎 [loadReceiptDetailTable] Состояние DOM-элементов таблицы детализации:`, {
-        detailBody: detailBody ? found = true : null,
-        detailTitle: detailTitle ? found = true : null,
-        detailHeaderTr: detailHeaderTr ? found = true : null
-    });
-    
     const config = getConfig('money_receipts_detail');
-    console.log(`⚙️ [loadReceiptDetailTable] Результат getConfig('money_receipts_detail'):`, config);
-
-    if (detailTitle && config) {
-        detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
-        console.log(`🏷️ [loadReceiptDetailTable] Заголовок таблички успешно изменен.`);
-    } else {
-        console.warn(`⚠️ [loadReceiptDetailTable] Не удалось установить заголовок: detailTitle=${!!detailTitle}, config=${!!config}`);
-    }
+    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
 
     if (detailHeaderTr && config && config.columns) {
         detailHeaderTr.innerHTML = config.columns.map(col => {
@@ -6853,85 +6794,51 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
-        console.log(`📊 [loadReceiptDetailTable] Заголовки таблицы успешно перерисованы по конфигурации. Колонок: ${config.columns.length}`);
-    } else {
-        console.warn(`⚠️ [loadReceiptDetailTable] Заголовки таблицы не перерисованы: detailHeaderTr=${!!detailHeaderTr}, config.columns=${!!(config && config.columns)}`);
     }
 
     const colCount = config && config.columns ? config.columns.length : 8;
-    if (detailBody) {
-        detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
-        console.log(`⏳ [loadReceiptDetailTable] В тело таблицы выведено сообщение о загрузке (colspan: ${colCount})`);
-    } else {
-        console.error(`❌ [loadReceiptDetailTable] Критическая ошибка: элемент #detail-body не найден в DOM!`);
-    }
+    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
 
     try {
-        console.log(`🌐 [loadReceiptDetailTable] Выполняется fetch-запрос... URL: ${fetchUrl}`);
+        console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, { signal: currentDetailController.signal });
-        console.log(`📥 [loadReceiptDetailTable] Получен ответ от сервера. Статус: ${response.status} ${response.statusText}`);
-
         const responseText = await response.text();
-        console.log(`📦 [loadReceiptDetailTable] Сырой ответ сервера (первые 300 символов):`, responseText.substring(0, 300));
+        console.log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
 
-        if (!response.ok) {
-            console.error(`❌ [loadReceiptDetailTable] Сервер вернул ошибку HTTP статуса: ${response.status}`);
-            throw new Error('Ошибка загрузки данных');
-        }
-
-        let data;
-        try {
-            data = JSON.parse(responseText);
-            console.log(`🧩 [loadReceiptDetailTable] JSON успешно распарсен:`, data);
-        } catch (jsonErr) {
-            console.error(`❌ [loadReceiptDetailTable] Ошибка парсинга JSON из ответа сервера:`, jsonErr);
-            throw jsonErr;
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
+        const data = JSON.parse(responseText);
 
         const items = Array.isArray(data) ? data : (data.items || []);
-        console.log(`📋 [loadReceiptDetailTable] Итоговое количество элементов для отрисовки: ${items.length}`, items);
 
-        if (!detailBody) {
-            console.warn(`⚠️ [loadReceiptDetailTable] #detail-body отсутствует в DOM перед вставкой элементов.`);
-            return;
-        }
-
+        if (!detailBody) return;
         if (items.length === 0) {
-            console.warn(`⚠️ [loadReceiptDetailTable] Список элементов пуст. Вывожу сообщение "Нет запчастей и услуг".`);
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
 
         detailBody.innerHTML = '';
-        items.forEach((item, index) => {
+        items.forEach(item => {
             const tr = document.createElement('tr');
             
             if (item.item_type === 'work' || item.is_work) {
                 tr.style.backgroundColor = '#f8fafc';
             }
             
-            if (config && typeof config.render === 'function') {
-                tr.innerHTML = config.render(item);
-            } else {
-                console.error(`❌ [loadReceiptDetailTable] Ошибка: config.render не является функцией!`, config);
-            }
-            
+            tr.innerHTML = config.render(item);
             detailBody.appendChild(tr);
         });
-        
-        console.log(`✅ [loadReceiptDetailTable] Успешно отрисовано строк в таблице спецификации: ${items.length}`);
-
     } catch (err) {
         if (err.name === 'AbortError') {
-            console.log(`🚫 [loadReceiptDetailTable] Запрос был штатно отменен через AbortController (AbortError).`);
+            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен.`);
             return;
         }
-        console.error('❌ [loadReceiptDetailTable] Перехвачена ошибка в блоке catch:', err);
+        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
         }
     }
 }
+
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
@@ -8171,25 +8078,14 @@ async function loadDetailData(entity, parentId) {
             'part_movement_details', 
             'stock_batches', 
             'stock_balances', 
-            'car_general', 'money_receipts_detail', 'expense_items',
-            'receipts' // Добавили приходы в список «только чтение», чтобы протестировать скрытие
+            'car_general','money_receipts_detail','expense_items'
         ];
 
-        const isReadOnly = readOnlyEntities.includes(entity);
-        console.log(`🔍 [DEBUG КНОПОК] Проверка сущности "${entity}" для панели кнопок. Входит ли в readOnlyEntities? -> ${isReadOnly}`);
-        
-        // Выводим стек вызовов, чтобы увидеть, КТО именно вызвал эту функцию для этой сущности
-        console.trace(`📍 [TRACE КНОПОК] Откуда вызвалось loadDetailData для "${entity}":`);
-
-        if (isReadOnly) {
+        if (readOnlyEntities.includes(entity)) {
             actionButtonsBar.style.display = 'none';
-            console.log(`🔒 [DEBUG КНОПОК] Панель кнопок СКРЫТА для "${entity}"`);
         } else {
             actionButtonsBar.style.display = 'flex';
-            console.log(`🔓 [DEBUG КНОПОК] Панель кнопок ПОКАЗАНА для "${entity}"`);
         }
-    } else {
-        console.warn(`⚠️ [DEBUG КНОПОК] Элемент .action-buttons / #action-buttons-bar не найден в DOM!`);
     }
 
     let activeEntity = entity;
