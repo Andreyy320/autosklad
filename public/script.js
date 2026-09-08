@@ -8101,11 +8101,36 @@ async function loadDetailData(entity, parentId) {
     let checkEntity = entity;
 
     // Универсальный поиск контейнера тела таблицы деталей
-    const getDetailTbody = () => document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
-    const getDetailHeaderTr = () => document.getElementById('detail-headers') || document.querySelector('#detail-table thead tr, #detailTable thead tr, .detail-table thead tr');
+    const getDetailTbody = () => {
+        return document.getElementById('detail-body') || 
+               document.getElementById('detail-table-body') || 
+               document.querySelector('#detailTable tbody') || 
+               document.querySelector('.detail-table tbody') ||
+               document.querySelector('table[id*="detail"] tbody') ||
+               document.querySelector('div[id*="detail"] tbody') ||
+               document.querySelector('#details-container tbody');
+    };
+
+    const getDetailHeaderTr = () => {
+        return document.getElementById('detail-headers') || 
+               document.querySelector('#detail-table thead tr') || 
+               document.querySelector('#detailTable thead tr') || 
+               document.querySelector('.detail-table thead tr') ||
+               document.querySelector('table[id*="detail"] thead tr');
+    };
+
+    // Функция ожидания появления контейнера в DOM (на случай если страница только рендерится)
+    async function waitForDetailTbody(maxAttempts = 10, interval = 50) {
+        for (let i = 0; i < maxAttempts; i++) {
+            let tbody = getDetailTbody();
+            if (tbody) return tbody;
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        return getDetailTbody();
+    }
 
     const configCheck = typeof getConfig === 'function' ? getConfig(checkEntity) : null; 
-    const tbodyCheck = getDetailTbody();
+    const tbodyCheck = await waitForDetailTbody();
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
@@ -8121,8 +8146,6 @@ async function loadDetailData(entity, parentId) {
     }
 
     const config = typeof getConfig === 'function' ? getConfig(activeEntity) : null; 
-    const tbody = getDetailTbody();
-    const headerTr = getDetailHeaderTr(); 
     
     let queryParamName = 'receipt_id';
     let fetchUrl = '';
@@ -8189,23 +8212,20 @@ async function loadDetailData(entity, parentId) {
     
     console.log(`🌐 [loadDetailData] Сформированный fetchUrl: ${fetchUrl}`);
 
+    const headerTr = getDetailHeaderTr();
     const thead = headerTr ? headerTr.closest('thead') : null;
     
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
-        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
         existingFilterRow.remove();
     }
 
-    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
-    console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
-
     if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
         if (thead && visibleColumns.length > 0) {
-            filterRow = document.createElement('tr');
+            let filterRow = document.createElement('tr');
             filterRow.id = 'detail-filter-row';
             filterRow.innerHTML = visibleColumns.map(col => {
                 let widthStyle = col.width ? `width: ${col.width};` : '';
@@ -8219,7 +8239,6 @@ async function loadDetailData(entity, parentId) {
                 `;
             }).join('');
             thead.insertBefore(filterRow, headerTr);
-            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
         }
     }
 
@@ -8290,10 +8309,10 @@ async function loadDetailData(entity, parentId) {
             }
         }
         
-        // Получаем актуальный tbody прямо перед рендерингом (на случай если он появился динамически)
-        const currentTbody = getDetailTbody();
+        // Ждем появления tbody гарантированно после получения данных с сервера
+        const currentTbody = await waitForDetailTbody();
         if (!currentTbody) {
-            console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей (#detail-body / #detail-table-body) не найден в DOM!`);
+            console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей так и не появился в DOM!`);
             return;
         }
 
@@ -8345,7 +8364,7 @@ async function loadDetailData(entity, parentId) {
 
     } catch (err) {
         console.error('❌ [loadDetailData ОШИБКА]:', err);
-        const errorTbody = getDetailTbody();
+        const errorTbody = await waitForDetailTbody();
         if (errorTbody) {
             errorTbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
         }
