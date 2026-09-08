@@ -5526,7 +5526,10 @@ async function loadData(entity, title, customParams = {}) {
                     }
                     
                     if (detailToolbarTarget) {
-                        if (entity === 'stock_movement' || entity === 'car_cards' || entity === 'stock_balances' || entity === 'money_receipts') {
+                        if (entity === 'stock_movement') {
+                            detailToolbarTarget.style.display = 'none';
+                        } else if (entity === 'car_cards' || entity === 'stock_balances') {
+                            // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
                             detailToolbarTarget.style.display = 'none';
                         } else {
                             detailToolbarTarget.style.display = 'flex';
@@ -5547,8 +5550,6 @@ async function loadData(entity, title, customParams = {}) {
                         loadDetailData('receipt_items', item.id);
                     } else if (entity === 'moves') {
                         loadDetailData('move_items', item.id);
-                    } else if (entity === 'money_receipts') {
-                        loadDetailData('money_receipt_items', item.id);
                     } else if (entity === 'realizations') {
                         const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                         const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
@@ -5621,8 +5622,11 @@ async function loadData(entity, title, customParams = {}) {
             currentItems = [];
             document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
         }
-}
- async function openPaymentHistory(receiptId, docNumber) {
+    }
+
+
+
+    async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
     // Показываем прелоадер в шторке пока грузим данные
@@ -6355,7 +6359,6 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] СТАРТ. entity="${entity}", parentId:`, parentId);
     console.trace(`📍 [loadReceiptMainData TRACE] Откуда вызвана loadReceiptMainData:`);
@@ -6804,18 +6807,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         subTabName
     });
     
-    // Принудительно и гарантированно скрываем кнопки управления спецификацией для приходов денег
-    const detailToolbar = document.getElementById('detail-toolbar');
-    if (detailToolbar) {
-        const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
-        actionButtons.forEach(btn => {
-            btn.style.display = 'none';
-            console.log(`🔒 [loadReceiptDetailTable КНОПКИ] Кнопка #${btn.id} принудительно СКРЫТА`);
-        });
-    } else {
-        console.warn(`⚠️ [loadReceiptDetailTable КНОПКИ] Элемент #detail-toolbar не найден в DOM!`);
-    }
-    
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
         console.log(`🛑 [loadReceiptDetailTable] Обнаружен предыдущий незавершенный запрос. Вызываю abort()...`);
@@ -6841,9 +6832,9 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
     console.log(`🔎 [loadReceiptDetailTable] Состояние DOM-элементов таблицы детализации:`, {
-        detailBody: !!detailBody,
-        detailTitle: !!detailTitle,
-        detailHeaderTr: !!detailHeaderTr
+        detailBody: detailBody ? found = true : null,
+        detailTitle: detailTitle ? found = true : null,
+        detailHeaderTr: detailHeaderTr ? found = true : null
     });
     
     const config = getConfig('money_receipts_detail');
@@ -6912,7 +6903,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
 
         detailBody.innerHTML = '';
-        items.forEach((item) => {
+        items.forEach((item, index) => {
             const tr = document.createElement('tr');
             
             if (item.item_type === 'work' || item.is_work) {
@@ -7189,8 +7180,6 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
-
-
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
