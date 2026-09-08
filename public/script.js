@@ -7336,10 +7336,21 @@ function openDetailForm(mode) {
     const detailEntity = getCurrentDetailEntity();
     console.log(`🔍 [openDetailForm] Определена детальная сущность (detailEntity): "${detailEntity}"`);
 
-    // 1. Проверяем жестко заблокированные сущности-истории
-    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
+    // 1. Проверяем жестко заблокированные сущности-истории и спецификации приходов/расходов
+    const readOnlyDetailEntities = [
+        'car_general', 
+        'repair_history', 
+        'receipts_history', 
+        'dtp_history', 
+        'car_accidents',
+        'money_receipts_detail',
+        'receipt_items',
+        'expense_items'
+    ];
+    
     if (readOnlyDetailEntities.includes(detailEntity)) {
         console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" находится в списке readOnlyDetailEntities и доступна только для просмотра.`);
+        showAppNotification('Этот раздел доступен только для просмотра. Редактирование строк спецификации отключено.', 'warning');
         return;
     }
 
