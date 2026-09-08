@@ -5365,48 +5365,26 @@ async function loadData(entity, title, customParams = {}) {
         }
     }
 
-    // ==========================================
-    // УПРАВЛЕНИЕ КНОПКАМИ ДОБАВЛЕНИЯ / РЕДАКТИРОВАНИЯ / УДАЛЕНИЯ
-    // ==========================================
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        // Сущности, для которых главные кнопки управления должны быть полностью скрыты
-        const readOnlyEntities = [
-            'car_cards', 
-            'cars_summary', 
-            'stock_balances', 
-            'stock_movement', 
-            'money_receipts', 
-            'money_receipts_by_sklad', 
-            'money_receipts_detail', 
-            'expenses_by_sklad',
-            'expenses_by_suppliers',
-            'expenses_by_receipts',
-            'expense_items',
-            'расходы',
-            'expenses'
-        ];
-
-        if (readOnlyEntities.includes(entity)) {
-            btnAdd.style.setProperty('display', 'none', 'important');
-            btnEdit.style.setProperty('display', 'none', 'important');
-            btnDelete.style.setProperty('display', 'none', 'important');
-            console.log(`🔒 [loadData] Кнопки скрыты для read-only сущности: ${entity}`);
+        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
+            btnAdd.style.display = 'none';
+            btnEdit.style.display = 'none';
+            btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
             // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
-            btnAdd.style.setProperty('display', 'inline-block', 'important');
-            btnEdit.style.setProperty('display', 'none', 'important');
-            btnDelete.style.setProperty('display', 'none', 'important');
+            btnAdd.style.display = 'inline-block';
+            btnEdit.style.display = 'none';
+            btnDelete.style.display = 'none';
         } else {
-            btnAdd.style.setProperty('display', 'inline-block', 'important');
-            btnEdit.style.setProperty('display', 'inline-block', 'important');
-            btnDelete.style.setProperty('display', 'inline-block', 'important');
+            btnAdd.style.display = 'inline-block';
+            btnEdit.style.display = 'inline-block';
+            btnDelete.style.display = 'inline-block';
         }
     }
-    // ==========================================
 
     const detailContainer = document.getElementById('detail-container');
     // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
@@ -5548,7 +5526,7 @@ async function loadData(entity, title, customParams = {}) {
                 }
                 
                 if (detailToolbarTarget) {
-                    if (entity === 'stock_movement' || entity === 'money_receipts_detail') {
+                    if (entity === 'stock_movement') {
                         detailToolbarTarget.style.display = 'none';
                     } else if (entity === 'car_cards' || entity === 'stock_balances') {
                         // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
@@ -6380,16 +6358,6 @@ async function submitIncomePayment(event, docId, skladId) {
 }
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-    if (actionButtonsBar) {
-        if (
-            entity === 'money_receipts' || 
-            entity === 'money_receipts_by_sklad'
-        ) {
-            actionButtonsBar.style.setProperty('display', 'none', 'important');
-        }
-    }
-
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
@@ -6408,7 +6376,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
-    // Находим кнопку «Назад» на панели инструментов
+    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
     const btnBackExpense = document.getElementById('btn-back-expense');
 
     // 1 уровень: Склады (отображаем все)
@@ -6424,9 +6392,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Скрываем панель дат на уровне складов
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
 
-        if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
-        if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
-        if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
 
         // Скрываем кнопку «Назад» на уровне складов
         if (btnBackExpense) {
@@ -6472,13 +6440,13 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
 
-        if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
-        if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
-        if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
 
         // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block';
+            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
             btnBackExpense.onclick = () => {
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
@@ -6704,7 +6672,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         if (detailToolbar) {
                             const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
                             actionButtons.forEach(btn => {
-                                btn.style.setProperty('display', 'none', 'important');
+                                btn.style.display = 'none';
                             });
                         }
 
@@ -6786,6 +6754,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
 // Глобальный контроллер для отмены предыдущего запроса детальной таблицы
 let currentDetailController = null;
 
@@ -6799,14 +6768,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         subTabName
     });
     
-    // Принудительно скрываем кнопки управления спецификацией (документ Read-Only)
-    const btnAdd = document.getElementById('btn-add');
-    const btnEdit = document.getElementById('btn-edit');
-    const btnDelete = document.getElementById('btn-delete');
-    if (btnAdd) btnAdd.style.setProperty('display', 'none', 'important');
-    if (btnEdit) btnEdit.style.setProperty('display', 'none', 'important');
-    if (btnDelete) btnDelete.style.setProperty('display', 'none', 'important');
-
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
         currentDetailController.abort();
@@ -6877,6 +6838,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
     }
 }
+
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
@@ -7000,7 +6962,7 @@ if (tableBodyForReceipts) {
                 const docNumFromItem = String(selectedItem.doc_number || '');
                 const rowText = String(tr.innerText || '');
 
-                if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || docNumFromItem.startsWith('ПМ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
+                if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
                     window.currentDocType = 'move';
                 } else {
                     window.currentDocType = 'realization';
@@ -7355,10 +7317,6 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
-
-
-
 function openDetailForm(mode) {
     console.log(`🚀 [openDetailForm] Вызов функции с режимом (mode): "${mode}"`);
     console.log(`📋 [openDetailForm] Текущий выбор: selectedItem =`, selectedItem, `, selectedDetailItem =`, selectedDetailItem);
@@ -7378,19 +7336,10 @@ function openDetailForm(mode) {
     const detailEntity = getCurrentDetailEntity();
     console.log(`🔍 [openDetailForm] Определена детальная сущность (detailEntity): "${detailEntity}"`);
 
-    // 1. Проверяем жестко заблокированные сущности-истории и спецификации приходов/расходов
-    const readOnlyDetailEntities = [
-        'car_general', 
-        'repair_history', 
-        'receipts_history', 
-        'dtp_history', 
-        'car_accidents',
-      
-    ];
-    
+    // 1. Проверяем жестко заблокированные сущности-истории
+    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
     if (readOnlyDetailEntities.includes(detailEntity)) {
         console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" находится в списке readOnlyDetailEntities и доступна только для просмотра.`);
-        showAppNotification('Этот раздел доступен только для просмотра. Редактирование строк спецификации отключено.', 'warning');
         return;
     }
 
@@ -7421,8 +7370,6 @@ function openDetailForm(mode) {
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
     }
 }
-
-
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
@@ -7640,6 +7587,7 @@ if (tableBody) {
         }
 
         // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
+       // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -7648,7 +7596,7 @@ if (tableBody) {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', // <--- Вернули сюда, чтобы клики обрабатывались
+            'money_receipts', // <--- Уберите отсюда 'money_receipts', если эта таблица не должна управляться этим кодом
             'stock_movement', 
             'postavhik', 
             'counterparties', 
@@ -7666,8 +7614,8 @@ if (tableBody) {
             'expenses',
             'parts',
             'nomenclature',
-            'goods'
-            // <--- Удалили отсюда 'money_receipts', чтобы старая логика не блокировалась
+            'goods',
+            'money_receipts' // <--- Добавьте 'money_receipts' сюда, чтобы клики по ней обрабатывались вашей старой логикой без вмешательства нового кода
         ];
 
         const shouldLoadDetails = entitiesWithDetails.includes(currentEntity) && !summaryEntitiesWithoutDetails.includes(currentEntity);
@@ -7722,9 +7670,7 @@ if (tableBody) {
                 currentEntity === 'stock_batches' ||
                 currentEntity === 'part_movement_details' ||
                 currentEntity === 'car_general' ||
-                currentEntity === 'car_cards' || 
-                currentEntity === 'money_receipts' || // <--- Добавили сюда
-                currentEntity === 'money_receipts_by_sklad' // <--- И сюда на всякий случай
+                currentEntity === 'car_cards'
             ) {
                 console.log(`🔒 [tableBody click] Скрытие панели основных кнопок действий для сущности: "${currentEntity}"`);
                 actionButtonsBar.style.display = 'none';
@@ -7837,11 +7783,7 @@ if (tableBody) {
                 } else if (currentEntity === 'moves') {
                     console.log(`📦 [tableBody click] Загрузка 'move_items' для moves`);
                     loadDetailData('move_items', itemId);
-              } else if (currentEntity === 'money_receipts') {
-    console.log(`💰 [tableBody click] Загрузка 'money_receipts_detail' для money_receipts`);
-    loadDetailData('money_receipts_detail', itemId);
-            }
-                 else if (currentEntity === 'postavhik') {
+                } else if (currentEntity === 'postavhik') {
                     console.log(`📦 [tableBody click] Загрузка 'postavhik_contacts' для postavhik`);
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
@@ -8123,7 +8065,7 @@ async function loadDetailData(entity, parentId) {
             'part_movement_details', 
             'stock_batches', 
             'stock_balances', 
-            'car_general','money_receipts_detail','expense_items'
+            'car_general'
         ];
 
         if (readOnlyEntities.includes(entity)) {
@@ -8173,8 +8115,6 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
         queryParamName = 'receipt_id';
-    } else if (entity === 'money_receipts_detail') {
-        queryParamName = 'realization_id';
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
@@ -8237,13 +8177,35 @@ async function loadDetailData(entity, parentId) {
     
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
+        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
         existingFilterRow.remove();
     }
 
+    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
+
+    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
+        if (thead && visibleColumns.length > 0) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'detail-filter-row';
+            filterRow.innerHTML = visibleColumns.map(col => {
+                let widthStyle = col.width ? `width: ${col.width};` : '';
+                return `
+                    <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
+                        <input type="text" 
+                               data-column="${col.field}" 
+                               oninput="filterDetailTable()" 
+                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                    </th>
+                `;
+            }).join('');
+            thead.insertBefore(filterRow, headerTr);
+            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
+        }
+    }
 
     if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
@@ -8357,6 +8319,43 @@ async function loadDetailData(entity, parentId) {
     }
 }
 
+function filterDetailTable() {
+    const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
+    const rows = document.querySelectorAll('#detail-body tr');
+
+    rows.forEach(row => {
+        // Пропускаем служебные строки (например, "Нет данных" или "Загрузка...")
+        if (row.cells.length <= 1) return;
+
+        let isVisible = true;
+
+        filterInputs.forEach(input => {
+            const searchText = input.value.trim().toLowerCase();
+            if (!searchText) return;
+
+            // Ищем ячейку по индексу колонки из шапки таблицы
+            let targetCell = null;
+            const th = input.closest('th');
+            if (th) {
+                const ths = Array.from(th.parentElement.children);
+                const colIndex = ths.indexOf(th);
+                if (colIndex !== -1 && row.cells[colIndex]) {
+                    targetCell = row.cells[colIndex];
+                }
+            }
+
+            if (targetCell) {
+                const cellText = targetCell.textContent.toLowerCase();
+                if (!cellText.includes(searchText)) {
+                    isVisible = false;
+                }
+            }
+        });
+
+        row.style.display = isVisible ? '' : 'none';
+    });
+}
+
 const navMap = {
     'Пользователи': 'users',
     'Бренды': 'brands',
@@ -8428,8 +8427,6 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
-
-
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
@@ -8636,27 +8633,16 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
         
-        // Если выбрали Расходы, принудительно гасим нижнюю панель и запускаем изолированную функцию
+        // Если выбрали Расходы, запускаем изолированную функцию
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
-            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
-            if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
-            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
-            if (detailActionButtons) detailActionButtons.style.setProperty('display', 'none', 'important');
-
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
-        // Если выбрали Приходы, принудительно гасим нижнюю панель и запускаем изолированную функцию
+        // Если выбрали Приходы, запускаем изолированную функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
-            
-            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
-            if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
-            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
-            if (detailActionButtons) detailActionButtons.style.setProperty('display', 'none', 'important');
-
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
@@ -8677,6 +8663,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
