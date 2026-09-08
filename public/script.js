@@ -6975,7 +6975,8 @@ if (tableBodyForReceipts) {
                 
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'block';
-
+                 const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+                if (detailToolbarEl) detailToolbarEl.style.display = 'none';
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
                 
                 const detailUrl = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId || ''}&sklad_id=${window.currentSkladId || ''}`;
