@@ -6794,9 +6794,9 @@ let currentDetailController = null;
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
-    console.trace(`📍 [loadReceiptDetailTable TRACE] Откуда вызвана loadReceiptDetailTable:`);
+    console.trace(`📍 [loadReceiptDetailTable TRACE] Стек вызовов (откуда вызвана функция):`);
     
-    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
+    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные на момент вызова:`, {
         currentDocType: window.currentDocType,
         currentRealizationId: window.currentRealizationId,
         currentCustomerId: window.currentCustomerId,
@@ -6806,11 +6806,14 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
-        console.log(`🛑 [loadReceiptDetailTable] Вызов abort() для предыдущего текущего запроса`);
+        console.log(`🛑 [loadReceiptDetailTable] Обнаружен предыдущий незавершенный запрос. Вызываю abort()...`);
         currentDetailController.abort();
+    } else {
+        console.log(`✨ [loadReceiptDetailTable] Предыдущих активных запросов для отмены нет.`);
     }
+    
     currentDetailController = new AbortController();
-    console.log(`✨ [loadReceiptDetailTable] Создан новый AbortController для текущего запроса`);
+    console.log(`🚀 [loadReceiptDetailTable] Создан новый AbortController.`);
     
     // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
@@ -6818,25 +6821,27 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         fetchUrl = `${fetchUrl}${separator}doc_type=${window.currentDocType}`;
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
     } else {
-        console.log(`🔍 [loadReceiptDetailTable] Коррекция URL по doc_type не требуется или отсутствует currentDocType`);
+        console.log(`🔍 [loadReceiptDetailTable] Коррекция URL по doc_type пропущена (doc_type нет или он уже есть в URL). fetchUrl: ${fetchUrl}`);
     }
     
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
-    console.log(`🔎 [loadReceiptDetailTable] Элементы детализации найдены в DOM:`, {
-        detailBody: !!detailBody,
-        detailTitle: !!detailTitle,
-        detailHeaderTr: !!detailHeaderTr
+    console.log(`🔎 [loadReceiptDetailTable] Состояние DOM-элементов таблицы детализации:`, {
+        detailBody: detailBody ? found = true : null,
+        detailTitle: detailTitle ? found = true : null,
+        detailHeaderTr: detailHeaderTr ? found = true : null
     });
     
     const config = getConfig('money_receipts_detail');
-    console.log(`⚙️ [loadReceiptDetailTable] Конфигурация для "money_receipts_detail":`, config);
+    console.log(`⚙️ [loadReceiptDetailTable] Результат getConfig('money_receipts_detail'):`, config);
 
     if (detailTitle && config) {
         detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
-        console.log(`🏷️ [loadReceiptDetailTable] Установлен заголовок детализации`);
+        console.log(`🏷️ [loadReceiptDetailTable] Заголовок таблички успешно изменен.`);
+    } else {
+        console.warn(`⚠️ [loadReceiptDetailTable] Не удалось установить заголовок: detailTitle=${!!detailTitle}, config=${!!config}`);
     }
 
     if (detailHeaderTr && config && config.columns) {
@@ -6845,46 +6850,51 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
-        console.log(`📊 [loadReceiptDetailTable] Заголовки детализации успешно отрисованы. Колонок: ${config.columns.length}`);
+        console.log(`📊 [loadReceiptDetailTable] Заголовки таблицы успешно перерисованы по конфигурации. Колонок: ${config.columns.length}`);
+    } else {
+        console.warn(`⚠️ [loadReceiptDetailTable] Заголовки таблицы не перерисованы: detailHeaderTr=${!!detailHeaderTr}, config.columns=${!!(config && config.columns)}`);
     }
 
     const colCount = config && config.columns ? config.columns.length : 8;
     if (detailBody) {
         detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
-        console.log(`⏳ [loadReceiptDetailTable] В таблицу детализации выведен статус загрузки`);
+        console.log(`⏳ [loadReceiptDetailTable] В тело таблицы выведено сообщение о загрузке (colspan: ${colCount})`);
+    } else {
+        console.error(`❌ [loadReceiptDetailTable] Критическая ошибка: элемент #detail-body не найден в DOM!`);
     }
 
     try {
-        console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
+        console.log(`🌐 [loadReceiptDetailTable] Выполняется fetch-запрос... URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, { signal: currentDetailController.signal });
-        console.log(`📥 [loadReceiptDetailTable] Получен ответ от сервера. Статус: ${response.status} (${response.statusText})`);
+        console.log(`📥 [loadReceiptDetailTable] Получен ответ от сервера. Статус: ${response.status} ${response.statusText}`);
 
         const responseText = await response.text();
-        console.log(`📦 [loadReceiptDetailTable] Текст ответа (первые 200 символов):`, responseText.substring(0, 200));
+        console.log(`📦 [loadReceiptDetailTable] Сырой ответ сервера (первые 300 символов):`, responseText.substring(0, 300));
 
         if (!response.ok) {
-            console.error(`❌ [loadReceiptDetailTable] Сервер вернул неуспешный статус: ${response.status}`);
+            console.error(`❌ [loadReceiptDetailTable] Сервер вернул ошибку HTTP статуса: ${response.status}`);
             throw new Error('Ошибка загрузки данных');
         }
 
         let data;
         try {
             data = JSON.parse(responseText);
+            console.log(`🧩 [loadReceiptDetailTable] JSON успешно распарсен:`, data);
         } catch (jsonErr) {
-            console.error(`❌ [loadReceiptDetailTable] Ошибка парсинга JSON ответа:`, jsonErr);
+            console.error(`❌ [loadReceiptDetailTable] Ошибка парсинга JSON из ответа сервера:`, jsonErr);
             throw jsonErr;
         }
 
         const items = Array.isArray(data) ? data : (data.items || []);
-        console.log(`📋 [loadReceiptDetailTable] Распарсено элементов спецификации: ${items.length}`, items);
+        console.log(`📋 [loadReceiptDetailTable] Итоговое количество элементов для отрисовки: ${items.length}`, items);
 
         if (!detailBody) {
-            console.warn(`⚠️ [loadReceiptDetailTable] Элемент #detail-body не найден в DOM при попытке вставить данные`);
+            console.warn(`⚠️ [loadReceiptDetailTable] #detail-body отсутствует в DOM перед вставкой элементов.`);
             return;
         }
 
         if (items.length === 0) {
-            console.warn(`⚠️ [loadReceiptDetailTable] Массив элементов пуст.`);
+            console.warn(`⚠️ [loadReceiptDetailTable] Список элементов пуст. Вывожу сообщение "Нет запчастей и услуг".`);
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
@@ -6897,17 +6907,23 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
                 tr.style.backgroundColor = '#f8fafc';
             }
             
-            tr.innerHTML = config.render(item);
+            if (config && typeof config.render === 'function') {
+                tr.innerHTML = config.render(item);
+            } else {
+                console.error(`❌ [loadReceiptDetailTable] Ошибка: config.render не является функцией!`, config);
+            }
+            
             detailBody.appendChild(tr);
         });
-        console.log(`✅ [loadReceiptDetailTable] Успешно отрендерено строк спецификации: ${items.length}`);
+        
+        console.log(`✅ [loadReceiptDetailTable] Успешно отрисовано строк в таблице спецификации: ${items.length}`);
 
     } catch (err) {
         if (err.name === 'AbortError') {
-            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен штатно (AbortError).`);
+            console.log(`🚫 [loadReceiptDetailTable] Запрос был штатно отменен через AbortController (AbortError).`);
             return;
         }
-        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
+        console.error('❌ [loadReceiptDetailTable] Перехвачена ошибка в блоке catch:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
         }
