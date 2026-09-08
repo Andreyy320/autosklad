@@ -8173,6 +8173,8 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'move_id';
     } else if (entity === 'expense_items') {
         queryParamName = 'receipt_id';
+    } else if (entity === 'money_receipts_detail') {
+        queryParamName = 'realization_id';
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
         queryParamName = 'realization_id';
     } else if (entity === 'repair_items' || entity === 'repair_works') {
@@ -8354,7 +8356,6 @@ async function loadDetailData(entity, parentId) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
-
 
 const navMap = {
     'Пользователи': 'users',
