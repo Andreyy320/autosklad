@@ -8100,27 +8100,22 @@ async function loadDetailData(entity, parentId) {
 
     let checkEntity = entity;
 
-    // Универсальный поиск контейнера тела таблицы деталей
+    // Функция точного поиска вашего тега tbody для деталей
     const getDetailTbody = () => {
         return document.getElementById('detail-body') || 
                document.getElementById('detail-table-body') || 
-               document.querySelector('#detailTable tbody') || 
-               document.querySelector('.detail-table tbody') ||
-               document.querySelector('table[id*="detail"] tbody') ||
-               document.querySelector('div[id*="detail"] tbody') ||
-               document.querySelector('#details-container tbody');
+               document.querySelector('#detail-table tbody') || 
+               document.querySelector('#detailTable tbody');
     };
 
     const getDetailHeaderTr = () => {
         return document.getElementById('detail-headers') || 
                document.querySelector('#detail-table thead tr') || 
-               document.querySelector('#detailTable thead tr') || 
-               document.querySelector('.detail-table thead tr') ||
-               document.querySelector('table[id*="detail"] thead tr');
+               document.querySelector('#detailTable thead tr');
     };
 
-    // Функция ожидания появления контейнера в DOM (на случай если страница только рендерится)
-    async function waitForDetailTbody(maxAttempts = 10, interval = 50) {
+    // Ожидание появления контейнера в DOM (исправляет проблему с гонкой потоков при автоклике)
+    async function waitForDetailTbody(maxAttempts = 20, interval = 50) {
         for (let i = 0; i < maxAttempts; i++) {
             let tbody = getDetailTbody();
             if (tbody) return tbody;
@@ -8309,7 +8304,7 @@ async function loadDetailData(entity, parentId) {
             }
         }
         
-        // Ждем появления tbody гарантированно после получения данных с сервера
+        // Гарантированно дожидаемся появления #detail-body в DOM после завершения запроса
         const currentTbody = await waitForDetailTbody();
         if (!currentTbody) {
             console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей так и не появился в DOM!`);
