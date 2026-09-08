@@ -7359,15 +7359,29 @@ function openDetailForm(mode) {
     const itemToEdit = mode === 'edit' ? selectedDetailItem : null;
     console.log(`📦 [openDetailForm] Объект для передачи в форму (itemToEdit):`, itemToEdit);
 
-    if (detailEntity === 'car_details') {
-        console.log(`⚙️ [openDetailForm] Вызов openCarDetailsForm для сущности "car_details" с ID родителя:`, selectedItem.id);
-        openCarDetailsForm(detailEntity, itemToEdit, selectedItem.id);
-    } else if (detailEntity === 'accident_images') {
-        console.log(`⚙️ [openDetailForm] Вызов openAccidentImageForm для сущности "accident_images" с ID родителя:`, selectedItem.id);
-        openAccidentImageForm(detailEntity, itemToEdit, selectedItem.id);
+    // =========================================================================
+    // Динамическое определение родительского ID (учитываем текущую активную сущность)
+    // =========================================================================
+    let parentId = selectedItem.id;
+    const currentActiveEntity = typeof activeEntity !== 'undefined' ? activeEntity : window.currentMainEntity;
+
+    if (currentActiveEntity === 'money_receipts' && typeof currentRealizationId !== 'undefined' && currentRealizationId) {
+        parentId = currentRealizationId;
+        console.log(`🔄 [openDetailForm] Обнаружен контекст money_receipts, в качестве ID родителя используется currentRealizationId:`, parentId);
     } else {
-        console.log(`⚙️ [openDetailForm] Вызов дефолтной функции openEntityForm для сущности "${detailEntity}" с ID родителя:`, selectedItem.id);
-        openEntityForm(detailEntity, itemToEdit, selectedItem.id);
+        console.log(`📌 [openDetailForm] Используется ID выбранной строки selectedItem.id:`, parentId);
+    }
+    // =========================================================================
+
+    if (detailEntity === 'car_details') {
+        console.log(`⚙️ [openDetailForm] Вызов openCarDetailsForm для сущности "car_details" с ID родителя:`, parentId);
+        openCarDetailsForm(detailEntity, itemToEdit, parentId);
+    } else if (detailEntity === 'accident_images') {
+        console.log(`⚙️ [openDetailForm] Вызов openAccidentImageForm для сущности "accident_images" с ID родителя:`, parentId);
+        openAccidentImageForm(detailEntity, itemToEdit, parentId);
+    } else {
+        console.log(`⚙️ [openDetailForm] Вызов дефолтной функции openEntityForm для сущности "${detailEntity}" с ID родителя:`, parentId);
+        openEntityForm(detailEntity, itemToEdit, parentId);
     }
 }
 async function deleteDetailItem() {
