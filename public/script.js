@@ -5375,6 +5375,7 @@ async function loadData(entity, title, customParams = {}) {
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
+            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -5386,10 +5387,14 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     const detailContainer = document.getElementById('detail-container');
+    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
     const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
 
     if (detailContainer) {
+        // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
+        // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
         detailContainer.style.display = 'none'; 
+
         if (detailToolbar) {
             detailToolbar.style.display = 'none';
         }
@@ -5512,6 +5517,7 @@ async function loadData(entity, title, customParams = {}) {
                     return;
                 }
 
+                // При клике на строку активируем и показываем нижнюю таблицу деталей
                 const detailContainerTarget = document.getElementById('detail-container');
                 const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
                 
@@ -5519,20 +5525,11 @@ async function loadData(entity, title, customParams = {}) {
                     detailContainerTarget.style.display = 'flex';
                 }
                 
-                // Четкое разделение: где нужно скрывать нижние кнопки тулбара деталей
                 if (detailToolbarTarget) {
-                    const entitiesWithoutToolbar = [
-                        'stock_movement', 
-                        'car_cards', 
-                        'stock_balances', 
-                        'money_receipts', 
-                        'expenses_by_receipts',
-                        'receipts',       // Приходы (просмотр спецификации без кнопок редактирования/удаления строк)
-                        'moves',          // Перемещения
-                        'realizations'    // Реализации
-                    ];
-
-                    if (entitiesWithoutToolbar.includes(entity)) {
+                    if (entity === 'stock_movement') {
+                        detailToolbarTarget.style.display = 'none';
+                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
+                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
@@ -5566,9 +5563,6 @@ async function loadData(entity, title, customParams = {}) {
                 } else if (entity === 'customers') {
                     const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
                     loadDetailData(activeSubTab, item.id);
-                } else if (entity === 'accidents') {
-                    // Для ДТП оставляем тулбар с вкладками/кнопками счетов, если нужно
-                    loadDetailData('accident_invoices', item.id);
                 }
             };
 
@@ -8196,35 +8190,13 @@ async function loadDetailData(entity, parentId) {
     
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
-        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
         existingFilterRow.remove();
     }
 
-    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
-
-    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
-        if (thead && visibleColumns.length > 0) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'detail-filter-row';
-            filterRow.innerHTML = visibleColumns.map(col => {
-                let widthStyle = col.width ? `width: ${col.width};` : '';
-                return `
-                    <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
-                        <input type="text" 
-                               data-column="${col.field}" 
-                               oninput="filterDetailTable()" 
-                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                    </th>
-                `;
-            }).join('');
-            thead.insertBefore(filterRow, headerTr);
-            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
-        }
-    }
 
     if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
@@ -8338,42 +8310,6 @@ async function loadDetailData(entity, parentId) {
     }
 }
 
-function filterDetailTable() {
-    const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
-    const rows = document.querySelectorAll('#detail-body tr');
-
-    rows.forEach(row => {
-        // Пропускаем служебные строки (например, "Нет данных" или "Загрузка...")
-        if (row.cells.length <= 1) return;
-
-        let isVisible = true;
-
-        filterInputs.forEach(input => {
-            const searchText = input.value.trim().toLowerCase();
-            if (!searchText) return;
-
-            // Ищем ячейку по индексу колонки из шапки таблицы
-            let targetCell = null;
-            const th = input.closest('th');
-            if (th) {
-                const ths = Array.from(th.parentElement.children);
-                const colIndex = ths.indexOf(th);
-                if (colIndex !== -1 && row.cells[colIndex]) {
-                    targetCell = row.cells[colIndex];
-                }
-            }
-
-            if (targetCell) {
-                const cellText = targetCell.textContent.toLowerCase();
-                if (!cellText.includes(searchText)) {
-                    isVisible = false;
-                }
-            }
-        });
-
-        row.style.display = isVisible ? '' : 'none';
-    });
-}
 
 const navMap = {
     'Пользователи': 'users',
