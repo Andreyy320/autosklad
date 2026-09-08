@@ -6777,6 +6777,10 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
     }
     
+const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+if (detailToolbarEl) detailToolbarEl.style.display = 'none';
+
+
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
