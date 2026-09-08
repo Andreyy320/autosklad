@@ -5526,8 +5526,10 @@ async function loadData(entity, title, customParams = {}) {
                 }
                 
                 if (detailToolbarTarget) {
-                    if (entity === 'stock_movement' || entity === 'car_cards' || entity === 'stock_balances' || entity === 'money_receipts' || entity === 'expenses_by_receipts') {
-                        // Скрываем кнопки тулбара детализации для указанных сущностей (включая money_receipts_detail / money_receipts и expense_items / expenses_by_receipts)
+                    if (entity === 'stock_movement') {
+                        detailToolbarTarget.style.display = 'none';
+                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
+                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
