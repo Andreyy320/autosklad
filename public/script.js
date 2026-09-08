@@ -7000,7 +7000,7 @@ if (tableBodyForReceipts) {
                 const docNumFromItem = String(selectedItem.doc_number || '');
                 const rowText = String(tr.innerText || '');
 
-                if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
+                if (docNumFromItem.includes('ПЕРЕМЕЩЕНИЕ') || docNumFromItem.startsWith('ПМ') || rowText.includes('ПЕРЕМЕЩЕНИЕ')) {
                     window.currentDocType = 'move';
                 } else {
                     window.currentDocType = 'realization';
