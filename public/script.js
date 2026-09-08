@@ -7837,10 +7837,11 @@ if (tableBody) {
                 } else if (currentEntity === 'moves') {
                     console.log(`📦 [tableBody click] Загрузка 'move_items' для moves`);
                     loadDetailData('move_items', itemId);
-                } else if (currentEntity === 'money_receipts') {
-                    console.log(`💰 [tableBody click] Загрузка 'money_receipts_detail' для money_receipts`);
-                    loadDetailData('money_receipts_detail', itemId);
-                } else if (currentEntity === 'postavhik') {
+              } else if (currentEntity === 'money_receipts') {
+    console.log(`💰 [tableBody click] Загрузка 'money_receipts_detail' для money_receipts`);
+    loadDetailData('money_receipts_detail', itemId);
+            }
+                 else if (currentEntity === 'postavhik') {
                     console.log(`📦 [tableBody click] Загрузка 'postavhik_contacts' для postavhik`);
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
