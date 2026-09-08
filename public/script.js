@@ -5365,26 +5365,48 @@ async function loadData(entity, title, customParams = {}) {
         }
     }
 
+    // ==========================================
+    // УПРАВЛЕНИЕ КНОПКАМИ ДОБАВЛЕНИЯ / РЕДАКТИРОВАНИЯ / УДАЛЕНИЯ
+    // ==========================================
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
 
     if (btnAdd && btnEdit && btnDelete) {
-        if (entity === 'car_cards' || entity === 'cars_summary' || entity === 'stock_balances' || entity === 'stock_movement') {
-            btnAdd.style.display = 'none';
-            btnEdit.style.display = 'none';
-            btnDelete.style.display = 'none';
+        // Сущности, для которых главные кнопки управления должны быть полностью скрыты
+        const readOnlyEntities = [
+            'car_cards', 
+            'cars_summary', 
+            'stock_balances', 
+            'stock_movement', 
+            'money_receipts', 
+            'money_receipts_by_sklad', 
+            'money_receipts_detail', 
+            'expenses_by_sklad',
+            'expenses_by_suppliers',
+            'expenses_by_receipts',
+            'expense_items',
+            'расходы',
+            'expenses'
+        ];
+
+        if (readOnlyEntities.includes(entity)) {
+            btnAdd.style.setProperty('display', 'none', 'important');
+            btnEdit.style.setProperty('display', 'none', 'important');
+            btnDelete.style.setProperty('display', 'none', 'important');
+            console.log(`🔒 [loadData] Кнопки скрыты для read-only сущности: ${entity}`);
         } else if (entity === 'expenses_by_receipts') {
             // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
-            btnAdd.style.display = 'inline-block';
-            btnEdit.style.display = 'none';
-            btnDelete.style.display = 'none';
+            btnAdd.style.setProperty('display', 'inline-block', 'important');
+            btnEdit.style.setProperty('display', 'none', 'important');
+            btnDelete.style.setProperty('display', 'none', 'important');
         } else {
-            btnAdd.style.display = 'inline-block';
-            btnEdit.style.display = 'inline-block';
-            btnDelete.style.display = 'inline-block';
+            btnAdd.style.setProperty('display', 'inline-block', 'important');
+            btnEdit.style.setProperty('display', 'inline-block', 'important');
+            btnDelete.style.setProperty('display', 'inline-block', 'important');
         }
     }
+    // ==========================================
 
     const detailContainer = document.getElementById('detail-container');
     // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
@@ -5526,7 +5548,7 @@ async function loadData(entity, title, customParams = {}) {
                 }
                 
                 if (detailToolbarTarget) {
-                    if (entity === 'stock_movement') {
+                    if (entity === 'stock_movement' || entity === 'money_receipts_detail') {
                         detailToolbarTarget.style.display = 'none';
                     } else if (entity === 'car_cards' || entity === 'stock_balances') {
                         // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
@@ -8380,6 +8402,8 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
+
+
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
