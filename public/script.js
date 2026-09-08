@@ -5755,6 +5755,9 @@ async function submitPayment(event, receiptId) {
 }
 
 async function loadExpenseDetailTable(fetchUrl) {
+  const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbarEl) detailToolbarEl.style.display = 'none';
+  
     console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
@@ -6669,9 +6672,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
 
                        const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-if (detailToolbar) {
+    if (detailToolbar) {
     detailToolbar.style.display = 'none';
-}
+    }
                         let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
                         
                         let realizationId = window.currentRealizationId || '';
@@ -6777,8 +6780,8 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
     }
     
-const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-if (detailToolbarEl) detailToolbarEl.style.display = 'none';
+    const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbarEl) detailToolbarEl.style.display = 'none';
 
 
     const detailBody = document.getElementById('detail-body');
