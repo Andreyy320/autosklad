@@ -8197,31 +8197,10 @@ async function loadDetailData(entity, parentId) {
         existingFilterRow.remove();
     }
 
-    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
-
-    if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
-        if (thead && visibleColumns.length > 0) {
-            filterRow = document.createElement('tr');
-            filterRow.id = 'detail-filter-row';
-            filterRow.innerHTML = visibleColumns.map(col => {
-                let widthStyle = col.width ? `width: ${col.width};` : '';
-                return `
-                    <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
-                        <input type="text" 
-                               data-column="${col.field}" 
-                               oninput="filterDetailTable()" 
-                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                    </th>
-                `;
-            }).join('');
-            thead.insertBefore(filterRow, headerTr);
-            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
-        }
-    }
 
     if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
@@ -8335,42 +8314,6 @@ async function loadDetailData(entity, parentId) {
     }
 }
 
-function filterDetailTable() {
-    const filterInputs = document.querySelectorAll('#detail-filter-row input[data-column]');
-    const rows = document.querySelectorAll('#detail-body tr');
-
-    rows.forEach(row => {
-        // Пропускаем служебные строки (например, "Нет данных" или "Загрузка...")
-        if (row.cells.length <= 1) return;
-
-        let isVisible = true;
-
-        filterInputs.forEach(input => {
-            const searchText = input.value.trim().toLowerCase();
-            if (!searchText) return;
-
-            // Ищем ячейку по индексу колонки из шапки таблицы
-            let targetCell = null;
-            const th = input.closest('th');
-            if (th) {
-                const ths = Array.from(th.parentElement.children);
-                const colIndex = ths.indexOf(th);
-                if (colIndex !== -1 && row.cells[colIndex]) {
-                    targetCell = row.cells[colIndex];
-                }
-            }
-
-            if (targetCell) {
-                const cellText = targetCell.textContent.toLowerCase();
-                if (!cellText.includes(searchText)) {
-                    isVisible = false;
-                }
-            }
-        });
-
-        row.style.display = isVisible ? '' : 'none';
-    });
-}
 
 const navMap = {
     'Пользователи': 'users',
