@@ -5623,6 +5623,7 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
+
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -6904,10 +6905,11 @@ if (tableBodyForReceipts) {
 
             document.querySelectorAll('#table-body tr').forEach(row => {
                 if (!row.querySelector('[id^="icon-"]')) {
+                    row.classList.remove('selected-row');
                     row.style.background = '';
                 }
             });
-            tr.style.background = '#e2e8f0';
+            tr.classList.add('selected-row');
 
             let itemsSource = typeof currentItems !== 'undefined' ? currentItems : window.currentItems;
             let selectedItem = null;
