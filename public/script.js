@@ -8067,7 +8067,6 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         }
     });
 }
-
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -8101,8 +8100,8 @@ async function loadDetailData(entity, parentId) {
 
     let checkEntity = entity;
 
-    const configCheck = getConfig(checkEntity); 
-    const tbodyCheck = document.getElementById('detail-body');
+    const configCheck = typeof getConfig === 'function' ? getConfig(checkEntity) : null; 
+    const tbodyCheck = document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
@@ -8117,9 +8116,9 @@ async function loadDetailData(entity, parentId) {
         return;
     }
 
-    const config = getConfig(activeEntity); 
-    const tbody = document.getElementById('detail-body');
-    const headerTr = document.getElementById('detail-headers'); 
+    const config = typeof getConfig === 'function' ? getConfig(activeEntity) : null; 
+    const tbody = document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
+    const headerTr = document.getElementById('detail-headers') || document.querySelector('#detail-table thead tr, #detailTable thead tr, .detail-table thead tr'); 
     
     let queryParamName = 'receipt_id';
     let fetchUrl = '';
@@ -8210,7 +8209,7 @@ async function loadDetailData(entity, parentId) {
                     <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
                         <input type="text" 
                                data-column="${col.field}" 
-                               oninput="filterDetailTable()" 
+                               oninput="if(typeof filterDetailTable === 'function') filterDetailTable()" 
                                style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
                     </th>
                 `;
@@ -8241,8 +8240,8 @@ async function loadDetailData(entity, parentId) {
         const items = await response.json();
         console.log(`📦 [loadDetailData] Получены детальные данные для "${activeEntity}". Строк: ${items.length}`, items);
         
-        currentDetailItems = items; 
-        selectedDetailItem = null;  
+        if (typeof currentDetailItems !== 'undefined') currentDetailItems = items; 
+        if (typeof selectedDetailItem !== 'undefined') selectedDetailItem = null;  
         
         const entityTitles = {
             accident_invoices: 'Счета / Расходы',
@@ -8264,7 +8263,7 @@ async function loadDetailData(entity, parentId) {
             customer_cars: 'Автомобили клиента',
             car_details: 'Детали автомобиля'
         };
-        const prettyEntityName = entityTitles[activeEntity] || entityTitles[entity] || config.title || activeEntity;
+        const prettyEntityName = entityTitles[activeEntity] || entityTitles[entity] || (config ? config.title : null) || activeEntity;
 
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
@@ -8287,12 +8286,17 @@ async function loadDetailData(entity, parentId) {
             }
         }
         
+        if (!tbody) {
+            console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей (#detail-body / #detail-table-body) не найден в DOM!`);
+            return;
+        }
+
         if (items.length === 0) {
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
-        if ((activeEntity === 'repair_history' || activeEntity === 'car_general'|| activeEntity === 'receipts_history') && typeof config.render === 'function') {
+        if (config && (activeEntity === 'repair_history' || activeEntity === 'car_general' || activeEntity === 'receipts_history') && typeof config.render === 'function') {
             tbody.innerHTML = config.render(items);
         } else {
             tbody.innerHTML = '';
@@ -8301,8 +8305,15 @@ async function loadDetailData(entity, parentId) {
                 tr.dataset.id = item.id || '';
                 tr.style.cursor = 'pointer';
                 
-                if (typeof config.render === 'function') {
+                if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
+                } else if (visibleColumns.length > 0) {
+                    tr.innerHTML = visibleColumns.map(col => {
+                        let val = item[col.field];
+                        if (val === null || val === undefined) val = '';
+                        let alignStyle = col.align ? `text-align: ${col.align};` : '';
+                        return `<td style="${alignStyle}">${val}</td>`;
+                    }).join('');
                 } else {
                     const priceVal = item.price ? Number(item.price).toFixed(2) : '0.00';
                     const workNameText = item.vidy_rabot_name || item.work_name || item.vidy_rabot_id || item.work_id || '—';
@@ -8328,7 +8339,9 @@ async function loadDetailData(entity, parentId) {
 
     } catch (err) {
         console.error('❌ [loadDetailData ОШИБКА]:', err);
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
+        }
     }
 }
 
