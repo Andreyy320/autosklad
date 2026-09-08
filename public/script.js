@@ -2349,27 +2349,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
 
             if (val) {
-                // Парсим строку даты вручную (регуляркой), НЕ через new Date(),
-                // потому что new Date("YYYY-MM-DD") интерпретируется как UTC-полночь,
-                // а .getFullYear()/.getDate()/.getHours() возвращают локальное время —
-                // из-за этого при отрицательном/положительном смещении часового пояса
-                // дата "уезжала" на день назад или вперед.
-                const strVal = String(val);
-                const match = strVal.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
-                if (match) {
-                    const [, y, mo, da, h, mi] = match;
-                    formattedVal = `${y}-${mo}-${da}T${h || '00'}:${mi || '00'}`;
-                } else {
-                    // Фолбэк на случай нестандартного формата строки
-                    const d = new Date(strVal);
-                    if (!isNaN(d)) {
-                        const fy = d.getFullYear();
-                        const fm = String(d.getMonth() + 1).padStart(2, '0');
-                        const fd = String(d.getDate()).padStart(2, '0');
-                        const fh = String(d.getHours()).padStart(2, '0');
-                        const fmin = String(d.getMinutes()).padStart(2, '0');
-                        formattedVal = `${fy}-${fm}-${fd}T${fh}:${fmin}`;
-                    }
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const minutes = String(d.getMinutes()).padStart(2, '0');
+                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
             }
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
@@ -2792,6 +2779,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
+
 
 async function openRealizationWorksForm(item = null, parentId = null) {
     console.log("🚀 openRealizationWorksForm вызвана. item:", item, "parentId:", parentId);
