@@ -8078,14 +8078,25 @@ async function loadDetailData(entity, parentId) {
             'part_movement_details', 
             'stock_batches', 
             'stock_balances', 
-            'car_general','money_receipts_detail','expense_items'
+            'car_general', 'money_receipts_detail', 'expense_items',
+            'receipts' // Добавили приходы в список «только чтение», чтобы протестировать скрытие
         ];
 
-        if (readOnlyEntities.includes(entity)) {
+        const isReadOnly = readOnlyEntities.includes(entity);
+        console.log(`🔍 [DEBUG КНОПОК] Проверка сущности "${entity}" для панели кнопок. Входит ли в readOnlyEntities? -> ${isReadOnly}`);
+        
+        // Выводим стек вызовов, чтобы увидеть, КТО именно вызвал эту функцию для этой сущности
+        console.trace(`📍 [TRACE КНОПОК] Откуда вызвалось loadDetailData для "${entity}":`);
+
+        if (isReadOnly) {
             actionButtonsBar.style.display = 'none';
+            console.log(`🔒 [DEBUG КНОПОК] Панель кнопок СКРЫТА для "${entity}"`);
         } else {
             actionButtonsBar.style.display = 'flex';
+            console.log(`🔓 [DEBUG КНОПОК] Панель кнопок ПОКАЗАНА для "${entity}"`);
         }
+    } else {
+        console.warn(`⚠️ [DEBUG КНОПОК] Элемент .action-buttons / #action-buttons-bar не найден в DOM!`);
     }
 
     let activeEntity = entity;
