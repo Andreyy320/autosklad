@@ -2124,9 +2124,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     if (!item || item.id === null || item.id === undefined || item.id === '') {
         let nextId = 1;
         let prefix = 'Р-';
-        if (entity === 'accidents') {
-            prefix = 'ДТП-';
-        } else if (entity === 'realizations' || entity === 'realization_works') {
+        if (entity === 'realizations' || entity === 'realization_works') {
             prefix = 'РЛ-';
         } else if (entity === 'moves') {
             prefix = 'ПМ-';
@@ -2729,9 +2727,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         else if (entity === 'repair_works' && parentId) {
             data.repair_id = parentId;
         }
-       else if ((entity === 'accident_invoices' || entity === 'accident_payments' || entity === 'accident_events' || entity === 'accident_items') && parentId) {
-            data.dtp_id = parentId;
-        } else if (entity === 'counterparty_contacts' && parentId) {
+      else if (entity === 'counterparty_contacts' && parentId) {
             data.counterparty_id = parentId;
         } else if (entity === 'postavhik_contacts' && parentId) {
             data.postavhik_id = parentId;
@@ -2775,8 +2771,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
 
                 const detailEntities = [
-                    'realization_works', 'repair_works', 'accident_invoices', 
-                    'accident_payments', 'accident_events', 'accident_items', 
+                    'realization_works', 'repair_works', 
                     'entity_contacts', 
                     'counterparty_contacts', 'postavhik_contacts', 'customer_contacts',
                     'car_details', 'customer_cars'
@@ -3103,7 +3098,480 @@ async function openReceiptItemsForm(item = null, parentId = null) {
         }
     });
 }
+async function openAccidentForm(entity, item = null, parentId = null) {
+    console.log('[openAccidentForm] СТАРТ:', entity, { item, parentId });
 
+    const drawer = getOrCreateDrawer();
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const currentDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    // ==========================================================
+    // 1. ГЛАВНАЯ КАРТОЧКА ДТП (entity === 'accidents')
+    // ==========================================================
+    if (entity === 'accidents') {
+        const config = getConfig('accidents');
+
+        if (!item || !item.id) {
+            let nextId = 1;
+            const prefix = 'ДТП-';
+
+            try {
+                const response = await fetch('/api/accidents');
+                if (response.ok) {
+                    const records = await response.json();
+                    if (records.length > 0) {
+                        const maxId = Math.max(...records.map(r => r.id || 0));
+                        nextId = maxId + 1;
+                    }
+                } else {
+                    console.warn(`Сервер вернул не OK при автонумерации ДТП: ${response.status}`);
+                }
+            } catch (e) {
+                console.error('Не удалось получить список ДТП для автонумерации', e);
+            }
+
+            item = { doc_number: `${prefix}${nextId}` };
+
+            config.columns.forEach(col => {
+                if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                    if (!item[col.field]) item[col.field] = currentDateTime;
+                }
+            });
+        }
+
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
+                <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+            </div>
+            <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="accidents" data-item-id="${item && item.id ? item.id : ''}">
+        `;
+
+        async function renderAccidentField(col) {
+            if (col.field === 'id') return '';
+            if (col.insert === false && (!item || !item.id)) return '';
+            if ((col.update === false || col.edit === false) && item && item.id) return '';
+
+            let val = '';
+            if (item) {
+                const possibleKeys = [col.field, col.field.replace('_id', ''), col.field + '_id', col.ref];
+                for (const k of possibleKeys) {
+                    if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
+                        val = item[k];
+                        break;
+                    }
+                }
+                if (val && typeof val === 'object' && val.id !== undefined) val = val.id;
+            }
+
+            let inputHtml = '';
+            const fieldReadonly = col.readonly;
+            const controlStyle = fieldReadonly
+                ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;'
+                : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+            if (col.ref) {
+                const refItems = await fetchReferenceData(col.ref);
+                let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+
+                refItems.forEach(refItem => {
+                    let displayName = '';
+                    if (col.ref === 'cars') {
+                        const gos = refItem.gos_number || refItem.car_number || '';
+                        const mdl = refItem.model || refItem.car_model || '';
+                        displayName = gos ? `${gos}${mdl ? ' (' + mdl + ')' : ''}` : `Авто #${refItem.id}`;
+                    } else {
+                        displayName = refItem.name || refItem.title || `Запись #${refItem.id}`;
+                    }
+                    const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                    optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
+                });
+
+                const extraAttributes = (col.field === 'car_id') ? 'id="accident-car-select"' : '';
+                inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                let formattedVal = '';
+                if (val) {
+                    const d = new Date(val);
+                    if (!isNaN(d)) {
+                        formattedVal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    }
+                }
+                inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+            } else if (col.field === 'description') {
+                inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+            } else if (col.field === 'damage_amount' || col.field === 'account_number' || col.field === 'paid_amount') {
+                inputHtml = `<input type="number" step="0.01" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+            } else {
+                inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+            }
+
+            return `
+                <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                    ${col.label}:
+                    ${inputHtml}
+                </label>
+            `;
+        }
+
+        for (const col of config.columns) {
+            html += await renderAccidentField(col);
+        }
+
+        html += `
+                    <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                        <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+                        ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+                        <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                    </div>
+                </form>
+        `;
+
+        drawer.innerHTML = html;
+        drawer.style.right = '0';
+
+        let rawFormElement = drawer.querySelector('#entity-form');
+        const formElement = rawFormElement.cloneNode(true);
+        rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+        const deleteBtn = drawer.querySelector('#delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async () => {
+                showConfirmModal('Подтверждение удаления', 'Вы уверены, что хотите удалить это ДТП?', async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
+                    try {
+                        const response = await fetch(`/api/accidents/${item.id}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId }
+                        });
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('ДТП успешно удалено', 'success');
+                            refreshData();
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении ДТП', 'error');
+                        }
+                    } catch (err) {
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                });
+            });
+        }
+
+        let isSubmitting = false;
+        formElement.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (isSubmitting) return;
+            isSubmitting = true;
+
+            const saveButton = formElement.querySelector('#save-btn');
+            if (saveButton) saveButton.disabled = true;
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const isEdit = item && item.id;
+                const url = isEdit ? `/api/accidents/${item.id}` : `/api/accidents`;
+                const method = isEdit ? 'PUT' : 'POST';
+                const currentUserId = localStorage.getItem('currentUserId') || '';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    closeDrawer();
+                    showAppNotification('ДТП успешно сохранено', 'success');
+                    refreshData();
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    showAppNotification(errData.error || 'Ошибка при сохранении ДТП', 'error');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                }
+            } catch (err) {
+                showAppNotification('Ошибка соединения с сервером', 'error');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+            }
+        });
+
+        return; // конец ветки accidents
+    }
+
+    // ==========================================================
+    // 2. ИЗОБРАЖЕНИЯ ДТП (entity === 'accident_images')
+    // ==========================================================
+    if (entity === 'accident_images') {
+        if (!item) item = {};
+
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Изображение ДТП</h3>
+                <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+            </div>
+            <form id="accident-image-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
+        `;
+
+        if (parentId) {
+            html += `<input type="hidden" name="accident_id" value="${parentId}">`;
+        }
+
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                Дата загрузки:
+                <input type="datetime-local" name="created_at" value="${item.created_at ? item.created_at.slice(0, 16) : currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+            </label>
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                Изображение:
+                ${item.image_url ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Текущий файл: <a href="${item.image_url}" target="_blank">посмотреть</a></div>` : ''}
+                <input type="file" name="image_url" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+            </label>
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                Описание:
+                <textarea name="description" rows="4" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;">${item.description || ''}</textarea>
+            </label>
+            <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                <button type="submit" id="save-accident-img-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+                ${item.id ? `<button type="button" id="delete-accident-img-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+                <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+            </div>
+        </form>
+        `;
+
+        drawer.innerHTML = html;
+        drawer.style.right = '0';
+
+        const formElement = drawer.querySelector('#accident-image-form');
+
+        const deleteBtn = drawer.querySelector('#delete-accident-img-btn');
+        if (deleteBtn && item.id) {
+            deleteBtn.addEventListener('click', async () => {
+                showConfirmModal('Удаление', 'Удалить это изображение?', async () => {
+                    const res = await fetch(`/api/accident_images/${item.id}`, {
+                        method: 'DELETE',
+                        headers: { 'x-user-id': localStorage.getItem('currentUserId') || '' }
+                    });
+                    if (res.ok) {
+                        closeDrawer();
+                        showAppNotification('Успешно удалено', 'success');
+                        if (parentId) loadDetailData('accident_images', parentId);
+                    } else {
+                        showAppNotification('Ошибка удаления', 'error');
+                    }
+                });
+            });
+        }
+
+        formElement.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const saveBtn = formElement.querySelector('#save-accident-img-btn');
+            if (saveBtn) saveBtn.disabled = true;
+
+            const formData = new FormData(e.target);
+            if (parentId && !formData.get('accident_id')) {
+                formData.set('accident_id', parentId);
+            }
+
+            try {
+                const isEdit = item && item.id;
+                const url = isEdit ? `/api/accident_images/${item.id}` : `/api/accident_images`;
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'x-user-id': localStorage.getItem('currentUserId') || '' },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    closeDrawer();
+                    showAppNotification('Сохранено успешно', 'success');
+                    if (parentId) loadDetailData('accident_images', parentId);
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    showAppNotification(errData.error || 'Ошибка сохранения', 'error');
+                    if (saveBtn) saveBtn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                showAppNotification('Ошибка соединения с сервером', 'error');
+                if (saveBtn) saveBtn.disabled = false;
+            }
+        });
+
+        return; // конец ветки accident_images
+    }
+
+    // ==========================================================
+    // 3. СЧЕТА / ОПЛАТЫ / СОБЫТИЯ ДТП
+    //    (accident_invoices, accident_payments, accident_events, accident_items)
+    // ==========================================================
+    const config = getConfig(entity);
+
+    // Описание полей формы для каждой под-сущности ДТП
+    const fieldSets = {
+        accident_invoices: [
+            { field: 'invoice_date', label: 'Дата', type: 'datetime-local' },
+            { field: 'debtor', label: 'Должник', type: 'text' },
+            { field: 'amount', label: 'Сумма', type: 'number' },
+            { field: 'description', label: 'Описание', type: 'textarea' }
+        ],
+        accident_payments: [
+            { field: 'payment_date', label: 'Дата', type: 'datetime-local' },
+            { field: 'payer', label: 'Плательщик', type: 'text' },
+            { field: 'amount', label: 'Сумма', type: 'number' },
+            { field: 'description', label: 'Описание', type: 'textarea' }
+        ],
+        accident_events: [
+            { field: 'event_date', label: 'Дата', type: 'datetime-local' },
+            { field: 'event_text', label: 'Событие', type: 'textarea' }
+        ]
+    };
+
+    const fields = fieldSets[entity] || (config.columns || []).map(c => ({
+        field: c.field, label: c.label, type: c.type || 'text'
+    }));
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
+    `;
+
+    if (parentId) {
+        html += `<input type="hidden" name="dtp_id" value="${parentId}">`;
+    }
+
+    const controlStyle = 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+
+    fields.forEach(f => {
+        let val = item ? (item[f.field] !== undefined && item[f.field] !== null ? item[f.field] : '') : '';
+        let inputHtml = '';
+
+        if (f.type === 'datetime-local') {
+            let formattedVal = '';
+            if (val) {
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    formattedVal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                }
+            } else {
+                formattedVal = currentDateTime;
+            }
+            inputHtml = `<input type="datetime-local" name="${f.field}" value="${formattedVal}" style="${controlStyle}">`;
+        } else if (f.type === 'textarea') {
+            inputHtml = `<textarea name="${f.field}" rows="4" style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else if (f.type === 'number') {
+            inputHtml = `<input type="number" step="0.01" name="${f.field}" value="${val}" style="${controlStyle}">`;
+        } else {
+            inputHtml = `<input type="text" name="${f.field}" value="${val}" style="${controlStyle}">`;
+        }
+
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${f.label}:
+                ${inputHtml}
+            </label>
+        `;
+    });
+
+    html += `
+                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+                </div>
+            </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    let rawFormElement = drawer.querySelector('#entity-form');
+    const formElement = rawFormElement.cloneNode(true);
+    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal('Подтверждение удаления', 'Вы уверены, что хотите удалить эту запись?', async () => {
+                const currentUserId = localStorage.getItem('currentUserId') || '';
+                try {
+                    const response = await fetch(`/api/${entity}/${item.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId }
+                    });
+                    if (response.ok) {
+                        closeDrawer();
+                        showAppNotification('Запись успешно удалена', 'success');
+                        if (parentId) loadDetailData(entity, parentId);
+                        else refreshData();
+                    } else {
+                        const errData = await response.json().catch(() => ({}));
+                        showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                    }
+                } catch (err) {
+                    showAppNotification('Ошибка соединения с сервером', 'error');
+                }
+            });
+        });
+    }
+
+    let isSubmitting = false;
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        const saveButton = formElement.querySelector('#save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        if (parentId) {
+            data.dtp_id = parentId;
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Данные успешно сохранены', 'success');
+                if (parentId) loadDetailData(entity, parentId);
+                else refreshData();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+            }
+        } catch (err) {
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+        }
+    });
+}
 
 async function openMoveItemsForm(item = null, parentId = null) {
     console.log("🚀 openMoveItemsForm вызвана. item:", item, "parentId:", parentId);
@@ -5895,124 +6363,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 }
 
 
-function openAccidentImageForm(entity, item = null, parentId = null) {
-    const drawer = getOrCreateDrawer();
-    
-    const now = new Date();
-    const currentDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-    if (!item) item = {};
-
-    let html = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Изображение ДТП</h3>
-            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
-        </div>
-        <form id="accident-image-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
-    `;
-
-    if (parentId) {
-        html += `<input type="hidden" name="accident_id" value="${parentId}">`;
-    }
-
-    html += `
-        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-            Дата загрузки:
-            <input type="datetime-local" name="created_at" value="${item.created_at ? item.created_at.slice(0, 16) : currentDateTime}" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
-        </label>
-    `;
-
-    html += `
-        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-            Изображение:
-            ${item.image_url ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Текущий файл: <a href="${item.image_url}" target="_blank">посмотреть</a></div>` : ''}
-            <input type="file" name="image_url" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
-        </label>
-    `;
-
-    html += `
-        <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-            Описание:
-            <textarea name="description" rows="4" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;">${item.description || ''}</textarea>
-        </label>
-    `;
-
-    html += `
-        <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-            <button type="submit" id="save-accident-img-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
-            ${item.id ? `<button type="button" id="delete-accident-img-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
-            <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
-        </div>
-    </form>
-    `;
-
-    drawer.innerHTML = html;
-    drawer.style.right = '0';
-
-    const formElement = drawer.querySelector('#accident-image-form');
-
-    const deleteBtn = drawer.querySelector('#delete-accident-img-btn');
-    if (deleteBtn && item.id) {
-        deleteBtn.addEventListener('click', async () => {
-            showConfirmModal('Удаление', 'Удалить это изображение?', async () => {
-                const res = await fetch(`/api/accident_images/${item.id}`, {
-                    method: 'DELETE',
-                    headers: { 'x-user-id': localStorage.getItem('currentUserId') || '' }
-                });
-                if (res.ok) {
-                    closeDrawer();
-                    showAppNotification('Успешно удалено', 'success');
-                    if (parentId) loadDetailData('accident_images', parentId);
-                } else {
-                    showAppNotification('Ошибка удаления', 'error');
-                }
-            });
-        });
-    }
-
-    formElement.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const saveBtn = formElement.querySelector('#save-accident-img-btn');
-        if (saveBtn) saveBtn.disabled = true;
-
-        const formData = new FormData(e.target);
-        if (parentId && !formData.get('accident_id')) {
-            formData.set('accident_id', parentId);
-        }
-
-        try {
-            const isEdit = item && item.id;
-            const url = isEdit ? `/api/accident_images/${item.id}` : `/api/accident_images`;
-            const method = isEdit ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method: method,
-                headers: {
-                    'x-user-id': localStorage.getItem('currentUserId') || ''
-                },
-                body: formData
-            });
-
-            if (response.ok) {
-                closeDrawer();
-                showAppNotification('Сохранено успешно', 'success');
-                if (parentId) {
-                    loadDetailData('accident_images', parentId);
-                }
-            } else {
-                const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.error || 'Ошибка сохранения', 'error');
-                if (saveBtn) saveBtn.disabled = false;
-            }
-        } catch (err) {
-            console.error(err);
-            showAppNotification('Ошибка соединения с сервером', 'error');
-            if (saveBtn) saveBtn.disabled = false;
-        }
-    });
-}
-
-
 
 // Функция удаления выбранной сущности
 function deleteSelectedEntity() {
@@ -6077,8 +6427,11 @@ function editSelectedEntity() {
     } else if (currentEntity === 'realizations' && typeof openRealizationForm === 'function') {
         openRealizationForm(currentEntity, selectedItem);
     } else if (currentEntity === 'repairs' && typeof openRepairForm === 'function') {
-        openRepairForm(selectedItem);
-    } else {
+        openRepairForm(selectedItem); 
+    } else if (currentEntity === 'accidents' && typeof openAccidentForm === 'function') {
+    openAccidentForm('accidents', selectedItem);
+    }
+    else {
         openEntityForm(currentEntity, selectedItem);
     }
 }
@@ -6124,7 +6477,16 @@ function openActiveEntityForm(action, item = null) {
                 openEntityForm(entity, actualItem);
             }
             break;
-            
+         case 'ДТП':
+        case 'accidents':
+    if (typeof openAccidentForm === 'function') {
+        openAccidentForm('accidents', actualItem);
+    } else {
+        openEntityForm(entity, actualItem);
+    }
+    break;
+    
+    
         default:
             if (typeof openEntityForm === 'function') {
                 openEntityForm(entity, actualItem);
@@ -8543,6 +8905,7 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
+
 function openDetailForm(mode) {
     console.log(`🚀 [openDetailForm] Вызов функции с режимом (mode): "${mode}"`);
     console.log(`📋 [openDetailForm] Текущий выбор: selectedItem =`, selectedItem, `, selectedDetailItem =`, selectedDetailItem);
@@ -8564,7 +8927,7 @@ function openDetailForm(mode) {
 
     // 1. Проверяем жестко заблокированные сущности-истории
     const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
-    if (readOnlyDetailEntities.includes(detailEntity)) {а
+    if (readOnlyDetailEntities.includes(detailEntity)) {
         console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" находится в списке readOnlyDetailEntities и доступна только для просмотра.`);
         return;
     }
@@ -8599,11 +8962,16 @@ function openDetailForm(mode) {
     }
     // =========================================================================
 
-       if (detailEntity === 'car_details') {
-        openCarDetailsForm(detailEntity, itemToEdit, parentId);
-    } else if (detailEntity === 'accident_images') {
-        openAccidentImageForm(detailEntity, itemToEdit, parentId);
-    } else if (detailEntity === 'receipt_items') {
+      if (detailEntity === 'car_details') {
+    openCarDetailsForm(detailEntity, itemToEdit, parentId);
+} else if (
+    detailEntity === 'accident_images' ||
+    detailEntity === 'accident_invoices' ||
+    detailEntity === 'accident_payments' ||
+    detailEntity === 'accident_events'
+) {
+    openAccidentForm(detailEntity, itemToEdit, parentId);
+} else if (detailEntity === 'receipt_items') {
         openReceiptItemsForm(itemToEdit, parentId);
     } else if (detailEntity === 'move_items') {
         openMoveItemsForm(itemToEdit, parentId);
@@ -9131,8 +9499,12 @@ if (tableBodyForDblClick) {
             if (currentEntity === 'realizations') {
                 openRealizationForm(currentEntity, item);
             } else if (currentEntity === 'repairs') {
-                openRepairForm(currentEntity, item);
-            } else if (currentEntity === 'receipts') {
+                openRepairForm(currentEntity, item); 
+            } else if (currentEntity === 'accidents') {
+    openAccidentForm('accidents', item);
+            }
+            
+            else if (currentEntity === 'receipts') {
                 openReceiptForm(currentEntity, item);
             } else if (currentEntity === 'moves') {
                 openMoveForm(currentEntity, item);
