@@ -8068,6 +8068,13 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
     });
 }
 async function loadDetailData(entity, parentId) {
+    // Сразу принудительно показываем контейнер деталей, чтобы его элементы появились в DOM
+    const detailContainer = document.getElementById('detail-container');
+    if (detailContainer) {
+        detailContainer.style.display = 'flex';
+    }
+    
+    // ... дальше идет ваш код функции loadDetailData ...
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
