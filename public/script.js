@@ -7346,6 +7346,10 @@ function getCurrentDetailEntity() {
     console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
+
+
+
+
 function openDetailForm(mode) {
     console.log(`🚀 [openDetailForm] Вызов функции с режимом (mode): "${mode}"`);
     console.log(`📋 [openDetailForm] Текущий выбор: selectedItem =`, selectedItem, `, selectedDetailItem =`, selectedDetailItem);
@@ -7627,7 +7631,6 @@ if (tableBody) {
         }
 
         // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
-       // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -7636,7 +7639,7 @@ if (tableBody) {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', // <--- Уберите отсюда 'money_receipts', если эта таблица не должна управляться этим кодом
+            'money_receipts', // <--- Вернули сюда, чтобы клики обрабатывались
             'stock_movement', 
             'postavhik', 
             'counterparties', 
@@ -7654,8 +7657,8 @@ if (tableBody) {
             'expenses',
             'parts',
             'nomenclature',
-            'goods',
-            'money_receipts' // <--- Добавьте 'money_receipts' сюда, чтобы клики по ней обрабатывались вашей старой логикой без вмешательства нового кода
+            'goods'
+            // <--- Удалили отсюда 'money_receipts', чтобы старая логика не блокировалась
         ];
 
         const shouldLoadDetails = entitiesWithDetails.includes(currentEntity) && !summaryEntitiesWithoutDetails.includes(currentEntity);
@@ -7823,6 +7826,9 @@ if (tableBody) {
                 } else if (currentEntity === 'moves') {
                     console.log(`📦 [tableBody click] Загрузка 'move_items' для moves`);
                     loadDetailData('move_items', itemId);
+                } else if (currentEntity === 'money_receipts') {
+                    console.log(`💰 [tableBody click] Загрузка 'money_receipts_detail' для money_receipts`);
+                    loadDetailData('money_receipts_detail', itemId);
                 } else if (currentEntity === 'postavhik') {
                     console.log(`📦 [tableBody click] Загрузка 'postavhik_contacts' для postavhik`);
                     loadDetailData('postavhik_contacts', itemId);
