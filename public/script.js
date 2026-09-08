@@ -33,7 +33,7 @@ async function fetchReferenceData(refEntity) {
 }
 
 const tableConfig = {
-    users: {
+     users: {
         title: 'Пользователи',
         columns: [
             { field: 'login', label: 'Логин', width: '150px' },
@@ -47,7 +47,7 @@ const tableConfig = {
             <td>${item.name || ''}</td>
             <td>${item.description || ''}</td>
         `
-    },
+       },
     brands: {
         title: 'Бренды',
         columns: [
@@ -140,8 +140,8 @@ const tableConfig = {
         <td><span style="color: #334155;">${item.part_discount_name || '—'}</span></td>
         <td><span style="color: #64748b; font-size: 13px;">${item.description || ''}</span></td>
     `
-},
-customer_contacts: {
+        },
+    customer_contacts: {
         title: 'Контакты покупателей',
         columns: [
             { field: 'name', label: 'Имя', width: '180px' },
@@ -227,7 +227,7 @@ customer_contacts: {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-},
+    },
     type_sklad: {
         title: 'Тип склада',
         columns: [
@@ -253,7 +253,7 @@ customer_contacts: {
         `
     },
 
-part_discounts: {
+    part_discounts: {
         title: 'Скидки на запчасти',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
@@ -307,7 +307,7 @@ part_discounts: {
             <td><b>${item.sklad_name || '—'}</b></td>
         `
     },
-car_details: {
+    car_details: {
         title: 'Детали и фото автомобиля',
         columns: [
             { field: 'date', label: 'Дата', type: 'date' },
@@ -323,7 +323,7 @@ car_details: {
                 ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" />` : '—'}
             </td>
         `
-    },
+        },
  
     ispolnitel: {
         title: 'Исполнители',
@@ -422,7 +422,7 @@ car_details: {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-},
+    },
   toplivo: {
     title: 'Топливо',
     columns: [
@@ -6356,9 +6356,9 @@ async function submitIncomePayment(event, docId, skladId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
+    console.log(`📥 [loadReceiptMainData] СТАРТ. entity="${entity}", parentId:`, parentId);
+    console.trace(`📍 [loadReceiptMainData TRACE] Откуда вызвана loadReceiptMainData:`);
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -6376,11 +6376,20 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
-    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
+    // Находим кнопку «Назад» на панели инструментов
     const btnBackExpense = document.getElementById('btn-back-expense');
+
+    console.log(`🔎 [loadReceiptMainData] Элементы кнопок найдены в DOM:`, {
+        btnAdd: !!btnAdd,
+        btnEdit: !!btnEdit,
+        btnDelete: !!btnDelete,
+        btnBackExpense: !!btnBackExpense,
+        receiptsFilterPanel: !!receiptsFilterPanel
+    });
 
     // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
+        console.log(`🗂️ [loadReceiptMainData] Ветка: 1 уровень (money_receipts_by_sklad)`);
         window.currentSkladId = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
@@ -6392,18 +6401,29 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         // Скрываем панель дат на уровне складов
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
 
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
+        if (btnAdd) {
+            btnAdd.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-add СРЫТ для money_receipts_by_sklad`);
+        }
+        if (btnEdit) {
+            btnEdit.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-edit СКРЫТ для money_receipts_by_sklad`);
+        }
+        if (btnDelete) {
+            btnDelete.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-delete СКРЫТ для money_receipts_by_sklad`);
+        }
 
         // Скрываем кнопку «Назад» на уровне складов
         if (btnBackExpense) {
             btnBackExpense.style.display = 'none';
             btnBackExpense.onclick = null;
+            console.log(`🔙 [КНОПКИ] btn-back-expense СКРЫТ для money_receipts_by_sklad`);
         }
     } 
     // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
+        console.log(`🗂️ [loadReceiptMainData] Ветка: 2 уровень (money_receipts)`);
         let skladId = '';
         if (parentId && typeof parentId === 'object') {
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
@@ -6415,6 +6435,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         if (skladId) {
             window.currentSkladId = skladId;
+            console.log(`🏢 [loadReceiptMainData] Установлен currentSkladId = ${window.currentSkladId}`);
         }
         
         window.currentCustomerId = null;
@@ -6440,20 +6461,32 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         
         if (detailContainer) detailContainer.style.display = 'block';
 
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
+        if (btnAdd) {
+            btnAdd.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-add СКРЫТ для money_receipts`);
+        }
+        if (btnEdit) {
+            btnEdit.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-edit СКРЫТ для money_receipts`);
+        }
+        if (btnDelete) {
+            btnDelete.style.display = 'none';
+            console.log(`🔒 [КНОПКИ] btn-delete СКРЫТ для money_receipts`);
+        }
 
         // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
+            btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
+                console.log(`🔙 [КНОПКИ] Клик по btn-back-expense -> возврат к money_receipts_by_sklad`);
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
+            console.log(`🔓 [КНОПКИ] btn-back-expense ПОКАЗАН для money_receipts`);
         }
     }
 
     currentEntity = currentReceiptView;
+    console.log(`📌 [loadReceiptMainData] Итоговый currentEntity установлен в: "${currentEntity}"`);
 
     const config = getConfig(currentEntity);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
@@ -6495,7 +6528,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 
     try {
-        console.dg = console.log;
         console.log(`🌐 [loadReceiptMainData] Отправка запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
@@ -6584,7 +6616,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             };
 
             const groupedByMonth = {};
-            currentItems.forEach((item, index) => {
+            currentItems.forEach((item) => {
                 const m = getMonthData(item.date);
                 if (!groupedByMonth[m.key]) {
                     groupedByMonth[m.key] = {
@@ -6656,7 +6688,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.innerHTML = config.render(item);
 
                     tr.addEventListener('click', () => {
-                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
+                        console.log('🖱️ [Клик на строку документов money_receipts]:', item);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
@@ -6673,6 +6705,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                             const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
                             actionButtons.forEach(btn => {
                                 btn.style.display = 'none';
+                                console.log(`🔒 [КНОПКИ В КЛИКЕ] Кнопка #${btn.id} принудительно СКРЫТА при клике на строку документа`);
                             });
                         }
 
@@ -6732,13 +6765,14 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.innerHTML = config.render(item);
 
                 tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку складов]:', item);
+                    console.log('🖱️ [Клик на строку складов money_receipts_by_sklad]:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
                     window.selectedItem = item;
 
                     if (currentEntity === 'money_receipts_by_sklad') {
+                        console.log(`➡️ [ПЕРЕХОД] Вызов loadReceiptMainData('money_receipts', item) для склада ID:`, item.sklad_id || item.id);
                         loadReceiptMainData('money_receipts', item);
                     }
                 });
@@ -6760,6 +6794,8 @@ let currentDetailController = null;
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
     console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
+    console.trace(`📍 [loadReceiptDetailTable TRACE] Откуда вызвана loadReceiptDetailTable:`);
+    
     console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
         currentDocType: window.currentDocType,
         currentRealizationId: window.currentRealizationId,
@@ -6770,23 +6806,38 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     
     // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
+        console.log(`🛑 [loadReceiptDetailTable] Вызов abort() для предыдущего текущего запроса`);
         currentDetailController.abort();
     }
     currentDetailController = new AbortController();
+    console.log(`✨ [loadReceiptDetailTable] Создан новый AbortController для текущего запроса`);
     
     // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
         const separator = fetchUrl.includes('?') ? '&' : '?';
         fetchUrl = `${fetchUrl}${separator}doc_type=${window.currentDocType}`;
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
+    } else {
+        console.log(`🔍 [loadReceiptDetailTable] Коррекция URL по doc_type не требуется или отсутствует currentDocType`);
     }
     
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
+    console.log(`🔎 [loadReceiptDetailTable] Элементы детализации найдены в DOM:`, {
+        detailBody: !!detailBody,
+        detailTitle: !!detailTitle,
+        detailHeaderTr: !!detailHeaderTr
+    });
+    
     const config = getConfig('money_receipts_detail');
-    if (detailTitle && config) detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
+    console.log(`⚙️ [loadReceiptDetailTable] Конфигурация для "money_receipts_detail":`, config);
+
+    if (detailTitle && config) {
+        detailTitle.innerText = "Спецификация (Запчасти и Услуги)";
+        console.log(`🏷️ [loadReceiptDetailTable] Установлен заголовок детализации`);
+    }
 
     if (detailHeaderTr && config && config.columns) {
         detailHeaderTr.innerHTML = config.columns.map(col => {
@@ -6794,30 +6845,52 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
+        console.log(`📊 [loadReceiptDetailTable] Заголовки детализации успешно отрисованы. Колонок: ${config.columns.length}`);
     }
 
     const colCount = config && config.columns ? config.columns.length : 8;
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
+    if (detailBody) {
+        detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
+        console.log(`⏳ [loadReceiptDetailTable] В таблицу детализации выведен статус загрузки`);
+    }
 
     try {
         console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, { signal: currentDetailController.signal });
-        const responseText = await response.text();
-        console.log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
+        console.log(`📥 [loadReceiptDetailTable] Получен ответ от сервера. Статус: ${response.status} (${response.statusText})`);
 
-        if (!response.ok) throw new Error('Ошибка загрузки данных');
-        const data = JSON.parse(responseText);
+        const responseText = await response.text();
+        console.log(`📦 [loadReceiptDetailTable] Текст ответа (первые 200 символов):`, responseText.substring(0, 200));
+
+        if (!response.ok) {
+            console.error(`❌ [loadReceiptDetailTable] Сервер вернул неуспешный статус: ${response.status}`);
+            throw new Error('Ошибка загрузки данных');
+        }
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (jsonErr) {
+            console.error(`❌ [loadReceiptDetailTable] Ошибка парсинга JSON ответа:`, jsonErr);
+            throw jsonErr;
+        }
 
         const items = Array.isArray(data) ? data : (data.items || []);
+        console.log(`📋 [loadReceiptDetailTable] Распарсено элементов спецификации: ${items.length}`, items);
 
-        if (!detailBody) return;
+        if (!detailBody) {
+            console.warn(`⚠️ [loadReceiptDetailTable] Элемент #detail-body не найден в DOM при попытке вставить данные`);
+            return;
+        }
+
         if (items.length === 0) {
+            console.warn(`⚠️ [loadReceiptDetailTable] Массив элементов пуст.`);
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей и услуг в выбранном документе</td></tr>`;
             return;
         }
 
         detailBody.innerHTML = '';
-        items.forEach(item => {
+        items.forEach((item, index) => {
             const tr = document.createElement('tr');
             
             if (item.item_type === 'work' || item.is_work) {
@@ -6827,9 +6900,11 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
             tr.innerHTML = config.render(item);
             detailBody.appendChild(tr);
         });
+        console.log(`✅ [loadReceiptDetailTable] Успешно отрендерено строк спецификации: ${items.length}`);
+
     } catch (err) {
         if (err.name === 'AbortError') {
-            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен.`);
+            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен штатно (AbortError).`);
             return;
         }
         console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
@@ -6838,7 +6913,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
     }
 }
-
 // ==========================================
 // КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
 // ==========================================
