@@ -8485,10 +8485,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
         let entity = navMap[text] || text.toLowerCase();
         console.log(`🧭 [nav-link] Определена сущность (entity):`, entity);
         
-        // Если кликнули на Приходы (money_receipts), подменяем на уровень складов
-        if (entity === 'money_receipts') {
+        // Если кликнули на Приходы, сразу жестко переводим в режим складов
+        if (entity === 'money_receipts' || text === 'Приходы') {
             entity = 'money_receipts_by_sklad';
-            console.log(`🔄 [nav-link] Сущность 'money_receipts' подменена на 'money_receipts_by_sklad'`);
+            console.log(`🔄 [nav-link] Сущность приведена к уровню складов: 'money_receipts_by_sklad'`);
         }
         
         // ==========================================
@@ -8496,29 +8496,25 @@ document.querySelectorAll('.nav-link').forEach(link => {
         // ==========================================
         const btnBackExpense = document.getElementById('btn-back-expense');
         if (btnBackExpense) {
-            // Проверяем, является ли выбранный раздел приходами или расходами денег
             const isMoneySection = (
                 text === 'Приходы' || text === 'Расходы' || 
-                entity === 'money_receipts' || entity === 'money_receipts_by_sklad' || 
+                entity === 'money_receipts_by_sklad' || 
                 entity === 'расходы' || entity === 'expenses' ||
                 entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts'
             );
 
             if (isMoneySection) {
-                // На верхнем уровне списков (склады приходов/расходов) кнопка «Назад» пока не нужна,
-                // она появляется внутри, когда проваливаешься в конкретный склад. Скрываем её по умолчанию:
                 btnBackExpense.style.setProperty('display', 'none', 'important');
                 btnBackExpense.onclick = null;
                 console.log(`🔙 [nav-link] Кнопка «Назад» скрыта на главном экране раздела: ${text}`);
             } else {
-                // На всех остальных экранах (Приход запчастей, Справочники и т.д.) кнопка гарантированно скрыта
                 btnBackExpense.style.setProperty('display', 'none', 'important');
                 btnBackExpense.onclick = null;
             }
         }
         // ==========================================
 
-        // Корректно обновляем панели фильтров (скрываем ненужные, показываем нужную)
+        // Корректно обновляем панели фильтров
         if (typeof updateFilterPanels === 'function') {
             console.log(`🎛️ [nav-link] Вызов updateFilterPanels для entity:`, entity);
             updateFilterPanels(entity);
@@ -8533,13 +8529,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
 
-        // Управляем ТОЛЬКО главным баром кнопок верхней таблицы
+        // Управляем главным баром кнопок верхней таблицы
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
             const readOnlyMainEntities = [
                 'stock_balances', 
                 'stock_movement', 
-                'money_receipts', 
                 'money_receipts_by_sklad', 
                 'money_receipts_detail',
                 'expenses_by_sklad',
@@ -8557,7 +8552,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов
+        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов (убран 'money_receipts')
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -8566,7 +8561,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', 
             'stock_movement', 
             'postavhik', 
             'counterparties', 
@@ -8582,12 +8576,11 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          // Справочник запчастей/товаров
-            'nomenclature',   // Номенклатура
+            'parts',           
+            'nomenclature',   
             'goods'
         ];
 
-        // ЖЕСТКАЯ ПРОВЕРКА с подробными логами в консоль, чтобы сразу видеть причину
         const isInEntitiesWithDetails = entitiesWithDetails.includes(entity);
         const isInSummaryWithoutDetails = summaryEntitiesWithoutDetails.includes(entity);
         const shouldShowDetails = isInEntitiesWithDetails && !isInSummaryWithoutDetails;
@@ -8608,21 +8601,20 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
 
             if (carTabsBar) {
-                if (['car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts'].includes(entity)) {
+                if (['car_cards', 'accidents', 'repairs', 'realizations'].includes(entity)) {
                     carTabsBar.style.display = 'flex';
                 } else {
                     carTabsBar.style.display = 'none';
                 }
             }
 
-            // Переключатели табов
             if (tabsForCars) tabsForCars.style.display = (entity === 'car_cards') ? 'flex' : 'none';
             if (tabsForAccidents) tabsForAccidents.style.display = (entity === 'accidents') ? 'flex' : 'none';
             if (tabsForRepairs) tabsForRepairs.style.display = (entity === 'repairs') ? 'flex' : 'none';
             if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
 
         } else {
-            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity} (Причина: ${!isInEntitiesWithDetails ? 'нет в списке entitiesWithDetails' : 'исключена in summaryEntitiesWithoutDetails'})`);
+            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
@@ -8632,32 +8624,30 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
         
-        // Если выбрали Расходы, запускаем изолированную функцию
+        // Роутинг по разделам
         if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
             console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
-        // Если выбрали Приходы, запускаем изолированную функцию уровней складов
-        if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
+        if (entity === 'money_receipts_by_sklad') {
             console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
 
-        // Для всех остальных разделов вызываем стандартный loadData
-        console.log(`📂 [nav-link] Запуск стандартной загрузки loadData для entity: "${entity}", text: "${text}"`);
+        // Стандартная загрузка для остальных
+        console.log(`📂 [nav-link] Запуск стандартной загрузки loadData для entity: "${entity}"`);
         loadData(entity, text, () => {
-            // Авто-клик делаем ТОЛЬКО если у сущности реально есть детали и контейнер открыт!
             if (shouldShowDetails) {
                 const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
                 if ($firstRow.length) {
-                    console.log(`👉 [nav-link] Автоматический клик по первой строке загруженной таблицы`);
+                    console.log(`👉 [nav-link] Автоматический клик по первой строке`);
                     $firstRow.trigger('click');
                 }
             } else {
-                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены: у "${entity}" нет нижней таблицы деталей.`);
+                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены.`);
             }
         });
     });
