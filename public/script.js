@@ -6832,9 +6832,9 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
     
     console.log(`🔎 [loadReceiptDetailTable] Состояние DOM-элементов таблицы детализации:`, {
-        detailBody: detailBody ? found = true : null,
-        detailTitle: detailTitle ? found = true : null,
-        detailHeaderTr: detailHeaderTr ? found = true : null
+        detailBody: !!detailBody,
+        detailTitle: !!detailTitle,
+        detailHeaderTr: !!detailHeaderTr
     });
     
     const config = getConfig('money_receipts_detail');
@@ -6903,7 +6903,7 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         }
 
         detailBody.innerHTML = '';
-        items.forEach((item, index) => {
+        items.forEach((item) => {
             const tr = document.createElement('tr');
             
             if (item.item_type === 'work' || item.is_work) {
