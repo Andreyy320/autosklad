@@ -6655,25 +6655,8 @@ router.post('/:entity', async (req, res) => {
         }
 
         const processedValues = values.map(val => val === '' ? null : val);
-
-        // Регулярка для "наивных" datetime-local значений без часового пояса,
-        // например "2026-09-09T00:35" или "2026-09-09T00:35:00".
-        // Если такое значение просто вставить в колонку типа timestamptz,
-        // Postgres интерпретирует его в часовом поясе текущей сессии сервера,
-        // из-за чего при отображении в другом часовом поясе дата "уезжает"
-        // на день вперед/назад. Кастуем такие значения к "::timestamp"
-        // (без временной зоны), чтобы значение сохранялось буквально как есть,
-        // без какой-либо неявной конвертации.
-        const naiveDateTimeRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$/;
-
         const columns = keys.map(k => `"${k}"`).join(', ');
-        const placeholders = keys.map((_, i) => {
-            const val = processedValues[i];
-            if (typeof val === 'string' && naiveDateTimeRegex.test(val)) {
-                return `$${i + 1}::timestamp`;
-            }
-            return `$${i + 1}`;
-        }).join(', ');
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
         const result = await pool.query(query, processedValues);
@@ -6726,6 +6709,7 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
+
 
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
