@@ -7343,9 +7343,7 @@ function openDetailForm(mode) {
         'receipts_history', 
         'dtp_history', 
         'car_accidents',
-        'money_receipts_detail',
-        'receipt_items',
-        'expense_items'
+      
     ];
     
     if (readOnlyDetailEntities.includes(detailEntity)) {
