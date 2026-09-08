@@ -1531,7 +1531,7 @@ router.get('/receipts_history', async (req, res) => {
     }
 });
 
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ПО НОВОЙ ТАБЛИЦЕ warehouse_batches) ====================
+// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ИСТОРИЧЕСКИЙ СРЕЗ НА ДАТУ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1546,7 +1546,7 @@ router.get('/stock_balances', async (req, res) => {
         let molFilterClause = '';
         let dateFilterClause = '';
 
-        // 1. Фильтр по дате: срез остатков на конец выбранного дня (все движения до указанной даты включительно)
+        // 1. Фильтр по дате: берем срез на конец выбранного дня (все партии до указанной даты включительно)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
             queryParams.push(date);
             dateFilterClause = ` AND wb.created_at <= $${paramIndex}::timestamp`;
@@ -1576,7 +1576,7 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Суммируем количество в партиях на выбранную дату (все, что было создано до этой даты)
+                -- Суммируем остатки партий на выбранную историческую дату
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
@@ -1626,7 +1626,7 @@ router.get('/stock_balances', async (req, res) => {
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
 
-        console.log(`[SUCCESS] Получены остатки по складам. Записей: ${result.rows.length}`);
+        console.log(`[SUCCESS] Получены остатки на дату. Записей: ${result.rows.length}`);
 
     } catch (err) {
         console.error("❌ [ERROR] Ошибка в /stock_balances:", err.message);
