@@ -2852,59 +2852,113 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-async function openReceiptForm(entity, item = null) {
-    console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
 
-    if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
-        item = entity;
-    } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
-        if (entity && typeof entity === 'object') {
-            item = entity;
-        }
+
+
+// 1. Конфигураторы и специфичные правила для каждой крупной сущности
+function getReceiptSpecifics(entity, item, currentDateTime) {
+    if (entity === 'receipts' || entity === 'receipt_items') {
+        if (!item.currency) item.currency = 'Рубль ПМР';
+        return { prefix: 'ПР-', allowedFields: ['receipt_id', 'zaphasti_id', 'quantity', 'price', 'currency', 'description'] };
     }
+    return null;
+}
 
-    const config = getConfig('receipts');
+function getRealizationSpecifics(entity, item, currentDateTime) {
+    if (entity === 'realizations' || entity === 'realization_items' || entity === 'realization_works') {
+        if (!item.currency) item.currency = 'Рубль ПМР';
+        let prefix = 'РЛ-';
+        let allowedFields = null;
+        if (entity === 'realization_items') allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+        if (entity === 'realization_works') allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
+        return { prefix, allowedFields };
+    }
+    return null;
+}
+
+function getMoveSpecifics(entity, item, currentDateTime) {
+    if (entity === 'moves' || entity === 'move_items') {
+        let prefix = 'ПМ-';
+        let allowedFields = entity === 'move_items' ? ['zaphasti_id', 'quantity', 'description'] : null;
+        return { prefix, allowedFields };
+    }
+    return null;
+}
+
+function getRepairSpecifics(entity, item, currentDateTime) {
+    if (entity === 'repairs' || entity === 'repair_items' || entity === 'repair_works') {
+        let prefix = 'РП-';
+        let allowedFields = null;
+        if (entity === 'repair_items') allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
+        if (entity === 'repair_works') allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
+        return { prefix, allowedFields };
+    }
+    return null;
+}
+
+// Общий определитель префикса и настроек
+function getEntitySpecificConfig(entity, item, currentDateTime) {
+    let prefix = 'Р-';
+    if (entity === 'accidents') prefix = 'ДТП-';
+
+    const receipt = getReceiptSpecifics(entity, item, currentDateTime);
+    if (receipt) return { prefix, allowedFields: receipt.allowedFields };
+
+    const realization = getRealizationSpecifics(entity, item, currentDateTime);
+    if (realization) return { prefix: realization.prefix, allowedFields: realization.allowedFields };
+
+    const move = getMoveSpecifics(entity, item, currentDateTime);
+    if (move) return { prefix: move.prefix, allowedFields: move.allowedFields };
+
+    const repair = getRepairSpecifics(entity, item, currentDateTime);
+    if (repair) return { prefix: repair.prefix, allowedFields: repair.allowedFields };
+
+    return { prefix, allowedFields: null };
+}
+
+// 2. Главная функция openEntityForm
+async function openEntityForm(entity, item = null, parentId = null) {
+    console.log("🚀 openEntityForm вызвана для сущности:", entity, "item:", item);
+    const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
-    
+
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    const currentDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    if (!item || !item.id) {
+    const entitySpecific = getEntitySpecificConfig(entity, item, currentDateTime);
+
+    if (!item || item.id === null || item.id === undefined || item.id === '') {
         let nextId = 1;
-        const prefix = 'ПР-';
-
         try {
-            const response = await fetch('/api/receipts');
+            const response = await fetch(`/api/${entity}`);
             if (response.ok) {
                 const records = await response.json();
                 if (records.length > 0) {
-                    const maxId = Math.max(...records.map(r => r.id || 0));
-                    nextId = maxId + 1;
+                    nextId = Math.max(...records.map(r => r.id || 0)) + 1;
                 }
-            } else {
-                console.warn(`Сервер вернул не OK при автонумерации приходов: ${response.status}`);
             }
         } catch (e) {
-            console.error('Не удалось получить список приходов для автонумерации', e);
+            console.error('Не удалось получить список для автонумерации', e);
         }
 
         item = { 
-            doc_number: `${prefix}${nextId}`,
-            is_posted: false,
-            date: currentDateTime,     /* Подставляем в обычное поле даты */
-            fact_date: currentDateTime /* И в поле даты факт */
+            id: null,
+            doc_number: `${entitySpecific.prefix}${nextId}`,
+            is_posted: false 
         };
-    } else {
-        if (!item.date) {
-            item.date = currentDateTime;
+
+        if (entity === 'realization_items' || entity === 'receipt_items') {
+            item.currency = 'Рубль ПМР';
         }
-        if (!item.fact_date) {
-            item.fact_date = currentDateTime;
+
+        config.columns.forEach(col => {
+            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                item[col.field] = currentDateTime;
+            }
+        });
+    } else {
+        if ((entity === 'realization_items' || entity === 'receipt_items') && !item.currency) {
+            item.currency = 'Рубль ПМР';
         }
     }
 
@@ -2912,279 +2966,176 @@ async function openReceiptForm(entity, item = null) {
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать приход' : 'Добавить приход'} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="receipts" data-item-id="${item && item.id ? item.id : ''}">
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
     `;
 
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.insert === false) continue;
-        if ((col.update === false || col.edit === false) && item && item.id) continue;
+    // Скрытые поля для связей
+    const parentFieldMap = {
+        'postavhik_contacts': 'postavhik_id',
+        'customer_contacts': 'customer_id',
+        'car_details': 'car_id',
+        'move_items': 'move_id',
+        'repair_items': 'repair_id',
+        'repair_works': 'repair_id',
+        'receipt_items': 'receipt_id',
+        'realization_id': 'realization_id'
+    };
+    if (parentId && parentFieldMap[entity]) {
+        html += `<input type="hidden" name="${parentFieldMap[entity]}" value="${parentId}">`;
+    }
+
+    async function renderField(col) {
+        if (['id', 'dtp_id', 'counterparty_id', 'postavhik_id', 'realization_id', 'move_id', 'repair_id', 'receipt_id'].includes(col.field)) return '';
+        if (col.field === 'car_id' && parentId) return '';
+        if (col.insert === false) return '';
+        if ((col.update === false || col.edit === false) && item && item.id) return '';
+        if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
+
+        // Фильтрация разрешенных полей через наши новые конфигураторы
+        if (entitySpecific.allowedFields && !entitySpecific.allowedFields.includes(col.field)) {
+            return '';
+        }
 
         let val = '';
         if (item) {
-            const possibleKeys = [col.field, col.field.replace('_id', ''), col.field + '_id', col.ref];
+            const possibleKeys = [col.field, col.field.replace('_id', ''), col.field + '_id', col.ref, col.ref ? col.ref.slice(0, -1) : ''];
             for (const k of possibleKeys) {
                 if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
                     val = item[k];
                     break;
                 }
             }
-            if (val && typeof val === 'object' && val.id !== undefined) {
-                val = val.id;
-            }
+            if (val && typeof val === 'object' && val.id !== undefined) val = val.id;
+        }
+
+        if ((entity === 'realization_items' || entity === 'receipt_items') && col.field === 'currency' && !val) {
+            val = 'Рубль ПМР';
         }
 
         let inputHtml = '';
         let fieldReadonly = col.readonly;
-        
-        // Если документ проведен, ВСЕ поля (кроме снятия с проведения, если разрешено) блокируются
-        if (isPosted) {
+        if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {
             fieldReadonly = true;
         }
 
         const controlStyle = fieldReadonly 
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
-            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
+            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;';
 
         if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-            
             statusItems.forEach(st => {
                 const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
-
-            // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
-            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
-            const refItems = await fetchReferenceData(col.ref);
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-            
-            refItems.forEach(refItem => {
-                let displayName = '';
-                if (col.ref === 'cars') {
-                    const gos = refItem.gos_number || refItem.car_number || '';
-                    const mdl = refItem.model || refItem.car_model || '';
-                    displayName = (gos && mdl) ? `${gos} (${mdl})` : (gos || mdl || `Запись #${refItem.id}`);
-                } else {
-                    displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
-                }
+            let refItems = await fetchReferenceData(col.ref);
+            let extraAttributes = '';
+            if (col.field === 'car_id') extraAttributes = 'id="car-select"';
+            else if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
+            else if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
+            else if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
+            else if (['warehouse_from_id', 'warehouse_id', 'skald_id'].includes(col.field)) extraAttributes = `id="${col.field}" class="warehouse-select"`;
+            else if (col.field === 'warehouse_to_id') extraAttributes = 'id="warehouse_to_id" class="warehouse-select"';
+            else if (['mol_from_id', 'mol_to_id', 'mol_id'].includes(col.field)) extraAttributes = `id="${col.field}" class="mol-select"`;
 
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+            refItems.forEach(refItem => {
+                const displayName = refItem.user_fio || refItem.name || refItem.login || refItem.title || refItem.doc_number || refItem.gos_number || `Запись #${refItem.id}`;
                 const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
-
-            inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
-            if ((col.field === 'fact_date' || col.field === 'date') && !val && (isPosted || !item.id)) {
-                val = currentDateTime;
-            }
-
+            if (col.field === 'fact_date' && !val && isPosted) val = currentDateTime;
             if (val) {
                 const d = new Date(val);
-                if (!isNaN(d)) {
-                    const year = d.getFullYear();
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const hours = String(d.getHours()).padStart(2, '0');
-                    const minutes = String(d.getMinutes()).padStart(2, '0');
-                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
-                }
+                if (!isNaN(d)) formattedVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
             }
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
-            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical;">${val}</textarea>`;
         } else {
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        html += `
-            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-                ${col.label}:
-                ${inputHtml}
-            </label>
-        `;
+        return `<label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">${col.label}:${inputHtml}</label>`;
     }
 
-    // Если документ проведен, скрываем кнопку сохранения или делаем предупреждение
+    // Рендер полей формы
+    for (const col of config.columns) {
+        if (col.field === 'car_id') continue;
+        html += await renderField(col);
+    }
+
     html += `
-                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
-                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
-                </div>
-            </form>
+            <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>
+                ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+                <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
+            </div>
+        </form>
     `;
 
     drawer.innerHTML = html;
     drawer.style.right = '0';
 
-    let rawFormElement = drawer.querySelector('#entity-form');
-    const formElement = rawFormElement.cloneNode(true);
-    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+    const formElement = drawer.querySelector('#entity-form');
 
-    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
-    const factDateInput = formElement.querySelector('[name="fact_date"]');
-    
-    if (isPostedSelect && factDateInput) {
-        isPostedSelect.addEventListener('change', () => {
-            if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
-                factDateInput.value = currentDateTime;
-            } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
-                factDateInput.value = '';
-            }
-        });
-    }
-
-    if (formElement && !isPosted) {
-        const pairs = [
-            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
-        ];
-
-        pairs.forEach(({ warehouse, mol }) => {
-            if (!warehouse || !mol) return;
-
-            async function filterMols(isUserChange = false) {
-                const selectedWarehouseId = warehouse.value;
-                const currentMolValue = mol.value;
-
-                try {
-                    const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol'),
-                        fetch('/api/mol_users')
-                    ]);
-
-                    if (!molRes.ok) return;
-                    const mols = await molRes.json();
-                    const users = usersRes.ok ? await usersRes.json() : [];
-
-                    const usersMap = {};
-                    users.forEach(u => {
-                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                    });
-
-                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
-                    let isCurrentStillValid = false;
-
-                    mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
-                            const option = document.createElement('option');
-                            option.value = m.id;
-                            option.textContent = m.user_fio || usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-
-                            if (String(m.id) === String(currentMolValue)) {
-                                option.selected = true;
-                                isCurrentStillValid = true;
-                            }
-                            mol.appendChild(option);
-                        }
-                    });
-
-                    if (isUserChange && !isCurrentStillValid) {
-                        mol.value = '';
-                    }
-                } catch (err) {
-                    console.error('Ошибка при фильтрации МОЛ:', err);
+    // Автозаполнение цен для приходов / реализаций / услуг
+    const zaphastiSelect = formElement.querySelector('#zaphasti-select');
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', async () => {
+            if (!zaphastiSelect.value) return;
+            try {
+                const res = await fetch(`/api/zaphasti/${zaphastiSelect.value}`);
+                if (res.ok) {
+                    const itemData = await res.json();
+                    const priceInput = formElement.querySelector('[name="price"]');
+                    const targetPrice = itemData.price ?? itemData.sale_price ?? itemData.retail_price;
+                    if (priceInput && targetPrice !== undefined && !priceInput.value) priceInput.value = targetPrice;
                 }
-            }
-
-            warehouse.addEventListener('change', () => {
-                filterMols(true);
-            });
-
-            if (warehouse.value) {
-                filterMols(false);
-            }
+            } catch (err) { console.error(err); }
         });
     }
 
-    const deleteBtn = drawer.querySelector('#delete-btn');
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', async () => {
-            showConfirmModal(
-                'Подтверждение удаления',
-                'Вы уверены, что хотите удалить этот приход?',
-                async () => {
-                    const currentUserId = localStorage.getItem('currentUserId') || '';
-                    try {
-                        const response = await fetch(`/api/receipts/${item.id}`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'x-user-id': currentUserId
-                            }
-                        });
-
-                        if (response.ok) {
-                            closeDrawer();
-                            showAppNotification('Приход успешно удален', 'success');
-                            refreshData();
-                        } else {
-                            const errData = await response.json().catch(() => ({}));
-                            showAppNotification(errData.error || 'Ошибка при удалении прихода', 'error');
-                        }
-                    } catch (err) {
-                        showAppNotification('Ошибка соединения с сервером', 'error');
-                    }
-                }
-            );
-        });
-    }
-
-    let isSubmitting = false;
-
+    // Обработка отправки формы
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
-        if (isSubmitting) return;
-        isSubmitting = true;
-
-        const saveButton = formElement.querySelector('#save-btn');
-        if (saveButton) saveButton.disabled = true;
-
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        if (data.is_posted !== undefined && data.is_posted !== '') {
+        if (data.is_posted !== undefined) {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+        if (parentId && parentFieldMap[entity]) {
+            data[parentFieldMap[entity]] = parentId;
         }
 
         try {
             const isEdit = item && item.id;
-            const url = isEdit ? `/api/receipts/${item.id}` : `/api/receipts`;
-            const method = isEdit ? 'PUT' : 'POST';
-            const currentUserId = localStorage.getItem('currentUserId') || '';
-
-            const response = await fetch(url, {
-                method: method,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'x-user-id': currentUserId
-                },
+            const response = await fetch(isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`, {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('currentUserId') || '' },
                 body: JSON.stringify(data)
             });
 
             if (response.ok) {
                 closeDrawer();
-                showAppNotification('Приход успешно сохранен', 'success');
-                refreshData();
+                showAppNotification('Успешно сохранено', 'success');
+                parentId ? loadDetailData(entity, parentId) : refreshData();
             } else {
-                const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.error || 'Ошибка при сохранении прихода', 'error');
-                isSubmitting = false; 
-                if (saveButton) saveButton.disabled = false;
+                const err = await response.json().catch(() => ({}));
+                showAppNotification(err.error || 'Ошибка сохранения', 'error');
             }
         } catch (err) {
-            showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
-            if (saveButton) saveButton.disabled = false;
+            showAppNotification('Ошибка соединения', 'error');
         }
     });
 }
