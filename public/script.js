@@ -8694,6 +8694,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
