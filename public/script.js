@@ -7024,9 +7024,6 @@ if (tableBodyForReceipts) {
         });
     }
 }
-
-
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -7381,6 +7378,8 @@ function openDetailForm(mode) {
         openEntityForm(detailEntity, itemToEdit, selectedItem.id);
     }
 }
+
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
