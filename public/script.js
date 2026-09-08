@@ -7596,7 +7596,6 @@ if (tableBody) {
             'accidents', 
             'repairs', 
             'realizations', 
-            'money_receipts', // <--- Уберите отсюда 'money_receipts', если эта таблица не должна управляться этим кодом
             'stock_movement', 
             'postavhik', 
             'counterparties', 
