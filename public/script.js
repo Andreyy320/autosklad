@@ -8100,8 +8100,12 @@ async function loadDetailData(entity, parentId) {
 
     let checkEntity = entity;
 
+    // Универсальный поиск контейнера тела таблицы деталей
+    const getDetailTbody = () => document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
+    const getDetailHeaderTr = () => document.getElementById('detail-headers') || document.querySelector('#detail-table thead tr, #detailTable thead tr, .detail-table thead tr');
+
     const configCheck = typeof getConfig === 'function' ? getConfig(checkEntity) : null; 
-    const tbodyCheck = document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
+    const tbodyCheck = getDetailTbody();
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
@@ -8117,8 +8121,8 @@ async function loadDetailData(entity, parentId) {
     }
 
     const config = typeof getConfig === 'function' ? getConfig(activeEntity) : null; 
-    const tbody = document.getElementById('detail-body') || document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
-    const headerTr = document.getElementById('detail-headers') || document.querySelector('#detail-table thead tr, #detailTable thead tr, .detail-table thead tr'); 
+    const tbody = getDetailTbody();
+    const headerTr = getDetailHeaderTr(); 
     
     let queryParamName = 'receipt_id';
     let fetchUrl = '';
@@ -8286,20 +8290,22 @@ async function loadDetailData(entity, parentId) {
             }
         }
         
-        if (!tbody) {
+        // Получаем актуальный tbody прямо перед рендерингом (на случай если он появился динамически)
+        const currentTbody = getDetailTbody();
+        if (!currentTbody) {
             console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей (#detail-body / #detail-table-body) не найден в DOM!`);
             return;
         }
 
         if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            currentTbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
         if (config && (activeEntity === 'repair_history' || activeEntity === 'car_general' || activeEntity === 'receipts_history') && typeof config.render === 'function') {
-            tbody.innerHTML = config.render(items);
+            currentTbody.innerHTML = config.render(items);
         } else {
-            tbody.innerHTML = '';
+            currentTbody.innerHTML = '';
             items.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || '';
@@ -8329,18 +8335,19 @@ async function loadDetailData(entity, parentId) {
                     selectedDetailItem = item;
                     console.log(`👆 [КЛИК В ДЕТАЛЯХ] Выбрана строка детали:`, selectedDetailItem);
 
-                    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
+                    currentTbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
                 };
 
-                tbody.appendChild(tr);
+                currentTbody.appendChild(tr);
             });
         }
 
     } catch (err) {
         console.error('❌ [loadDetailData ОШИБКА]:', err);
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
+        const errorTbody = getDetailTbody();
+        if (errorTbody) {
+            errorTbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
         }
     }
 }
