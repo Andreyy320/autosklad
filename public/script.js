@@ -6380,6 +6380,16 @@ async function submitIncomePayment(event, docId, skladId) {
 }
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
+    const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+    if (actionButtonsBar) {
+        if (
+            entity === 'money_receipts' || 
+            entity === 'money_receipts_by_sklad'
+        ) {
+            actionButtonsBar.style.setProperty('display', 'none', 'important');
+        }
+    }
+
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
 
     let fetchUrl = '';
@@ -6776,7 +6786,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
-
 // Глобальный контроллер для отмены предыдущего запроса детальной таблицы
 let currentDetailController = null;
 
