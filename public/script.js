@@ -8065,7 +8065,7 @@ async function loadDetailData(entity, parentId) {
             'part_movement_details', 
             'stock_batches', 
             'stock_balances', 
-            'car_general'
+            'car_general','money_receipts_detail','expense_items'
         ];
 
         if (readOnlyEntities.includes(entity)) {
