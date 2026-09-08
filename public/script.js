@@ -3188,6 +3188,7 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
+
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
