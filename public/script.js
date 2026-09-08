@@ -5375,7 +5375,6 @@ async function loadData(entity, title, customParams = {}) {
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
-            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -5387,14 +5386,10 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     const detailContainer = document.getElementById('detail-container');
-    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
     const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
 
     if (detailContainer) {
-        // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
-        // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
         detailContainer.style.display = 'none'; 
-
         if (detailToolbar) {
             detailToolbar.style.display = 'none';
         }
@@ -5517,7 +5512,6 @@ async function loadData(entity, title, customParams = {}) {
                     return;
                 }
 
-                // При клике на строку активируем и показываем нижнюю таблицу деталей
                 const detailContainerTarget = document.getElementById('detail-container');
                 const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
                 
@@ -5525,11 +5519,20 @@ async function loadData(entity, title, customParams = {}) {
                     detailContainerTarget.style.display = 'flex';
                 }
                 
+                // Четкое разделение: где нужно скрывать нижние кнопки тулбара деталей
                 if (detailToolbarTarget) {
-                    if (entity === 'stock_movement') {
-                        detailToolbarTarget.style.display = 'none';
-                    } else if (entity === 'car_cards' || entity === 'stock_balances') {
-                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
+                    const entitiesWithoutToolbar = [
+                        'stock_movement', 
+                        'car_cards', 
+                        'stock_balances', 
+                        'money_receipts', 
+                        'expenses_by_receipts',
+                        'receipts',       // Приходы (просмотр спецификации без кнопок редактирования/удаления строк)
+                        'moves',          // Перемещения
+                        'realizations'    // Реализации
+                    ];
+
+                    if (entitiesWithoutToolbar.includes(entity)) {
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
@@ -5563,6 +5566,9 @@ async function loadData(entity, title, customParams = {}) {
                 } else if (entity === 'customers') {
                     const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
                     loadDetailData(activeSubTab, item.id);
+                } else if (entity === 'accidents') {
+                    // Для ДТП оставляем тулбар с вкладками/кнопками счетов, если нужно
+                    loadDetailData('accident_invoices', item.id);
                 }
             };
 
