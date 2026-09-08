@@ -8645,6 +8645,13 @@ document.querySelectorAll('.nav-link').forEach(link => {
         // Если выбрали Приходы, запускаем изолированную функцию уровней складов
         if (text === 'Приходы' || entity === 'money_receipts' || entity === 'money_receipts_by_sklad') {
             console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
+            
+            // Принудительно гасим нижнюю панель и сопутствующие элементы перед выходом
+            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
+            if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
+            const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
+            if (detailActionButtons) detailActionButtons.style.setProperty('display', 'none', 'important');
+
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
@@ -8665,7 +8672,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         });
     });
 });
-
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
