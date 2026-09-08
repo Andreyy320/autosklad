@@ -6668,14 +6668,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         
                         window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
 
-                        const detailToolbar = document.getElementById('detail-toolbar');
-                        if (detailToolbar) {
-                            const actionButtons = detailToolbar.querySelectorAll('#btn-add, #btn-edit, #btn-delete');
-                            actionButtons.forEach(btn => {
-                                btn.style.display = 'none';
-                            });
-                        }
-
+                       const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+if (detailToolbar) {
+    detailToolbar.style.display = 'none';
+}
                         let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
                         
                         let realizationId = window.currentRealizationId || '';
@@ -8067,14 +8063,8 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         }
     });
 }
+
 async function loadDetailData(entity, parentId) {
-    // Сразу принудительно показываем контейнер деталей, чтобы его элементы появились в DOM
-    const detailContainer = document.getElementById('detail-container');
-    if (detailContainer) {
-        detailContainer.style.display = 'flex';
-    }
-    
-    // ... дальше идет ваш код функции loadDetailData ...
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -8107,32 +8097,8 @@ async function loadDetailData(entity, parentId) {
 
     let checkEntity = entity;
 
-    // Функция точного поиска вашего тега tbody для деталей
-    const getDetailTbody = () => {
-        return document.getElementById('detail-body') || 
-               document.getElementById('detail-table-body') || 
-               document.querySelector('#detail-table tbody') || 
-               document.querySelector('#detailTable tbody');
-    };
-
-    const getDetailHeaderTr = () => {
-        return document.getElementById('detail-headers') || 
-               document.querySelector('#detail-table thead tr') || 
-               document.querySelector('#detailTable thead tr');
-    };
-
-    // Ожидание появления контейнера в DOM (исправляет проблему с гонкой потоков при автоклике)
-    async function waitForDetailTbody(maxAttempts = 20, interval = 50) {
-        for (let i = 0; i < maxAttempts; i++) {
-            let tbody = getDetailTbody();
-            if (tbody) return tbody;
-            await new Promise(resolve => setTimeout(resolve, interval));
-        }
-        return getDetailTbody();
-    }
-
-    const configCheck = typeof getConfig === 'function' ? getConfig(checkEntity) : null; 
-    const tbodyCheck = await waitForDetailTbody();
+    const configCheck = getConfig(checkEntity); 
+    const tbodyCheck = document.getElementById('detail-body');
     const visibleColsCheck = configCheck && configCheck.columns ? configCheck.columns.filter(col => col.table !== false) : [];
     const colCountCheck = visibleColsCheck.length > 0 ? visibleColsCheck.length : 1;
 
@@ -8147,7 +8113,9 @@ async function loadDetailData(entity, parentId) {
         return;
     }
 
-    const config = typeof getConfig === 'function' ? getConfig(activeEntity) : null; 
+    const config = getConfig(activeEntity); 
+    const tbody = document.getElementById('detail-body');
+    const headerTr = document.getElementById('detail-headers'); 
     
     let queryParamName = 'receipt_id';
     let fetchUrl = '';
@@ -8214,20 +8182,23 @@ async function loadDetailData(entity, parentId) {
     
     console.log(`🌐 [loadDetailData] Сформированный fetchUrl: ${fetchUrl}`);
 
-    const headerTr = getDetailHeaderTr();
     const thead = headerTr ? headerTr.closest('thead') : null;
     
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
+        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
         existingFilterRow.remove();
     }
 
+    let filterRow = null;
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
+    console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
+
     if (['car_id', 'dtp_id', 'repair_id', 'accident_id'].includes(queryParamName) && activeEntity !== 'accident_images') {
         if (thead && visibleColumns.length > 0) {
-            let filterRow = document.createElement('tr');
+            filterRow = document.createElement('tr');
             filterRow.id = 'detail-filter-row';
             filterRow.innerHTML = visibleColumns.map(col => {
                 let widthStyle = col.width ? `width: ${col.width};` : '';
@@ -8235,12 +8206,13 @@ async function loadDetailData(entity, parentId) {
                     <th style="padding: 4px; border-bottom: 1px solid #ddd; ${widthStyle}">
                         <input type="text" 
                                data-column="${col.field}" 
-                               oninput="if(typeof filterDetailTable === 'function') filterDetailTable()" 
+                               oninput="filterDetailTable()" 
                                style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
                     </th>
                 `;
             }).join('');
             thead.insertBefore(filterRow, headerTr);
+            console.log(`✅ [loadDetailData] Создан новый #detail-filter-row с ${visibleColumns.length} инпутами.`);
         }
     }
 
@@ -8265,8 +8237,8 @@ async function loadDetailData(entity, parentId) {
         const items = await response.json();
         console.log(`📦 [loadDetailData] Получены детальные данные для "${activeEntity}". Строк: ${items.length}`, items);
         
-        if (typeof currentDetailItems !== 'undefined') currentDetailItems = items; 
-        if (typeof selectedDetailItem !== 'undefined') selectedDetailItem = null;  
+        currentDetailItems = items; 
+        selectedDetailItem = null;  
         
         const entityTitles = {
             accident_invoices: 'Счета / Расходы',
@@ -8288,7 +8260,7 @@ async function loadDetailData(entity, parentId) {
             customer_cars: 'Автомобили клиента',
             car_details: 'Детали автомобиля'
         };
-        const prettyEntityName = entityTitles[activeEntity] || entityTitles[entity] || (config ? config.title : null) || activeEntity;
+        const prettyEntityName = entityTitles[activeEntity] || entityTitles[entity] || config.title || activeEntity;
 
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
@@ -8311,36 +8283,22 @@ async function loadDetailData(entity, parentId) {
             }
         }
         
-        // Гарантированно дожидаемся появления #detail-body в DOM после завершения запроса
-        const currentTbody = await waitForDetailTbody();
-        if (!currentTbody) {
-            console.error(`❌ [loadDetailData ОШИБКА]: Контейнер таблицы деталей так и не появился в DOM!`);
-            return;
-        }
-
         if (items.length === 0) {
-            currentTbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
-        if (config && (activeEntity === 'repair_history' || activeEntity === 'car_general' || activeEntity === 'receipts_history') && typeof config.render === 'function') {
-            currentTbody.innerHTML = config.render(items);
+        if ((activeEntity === 'repair_history' || activeEntity === 'car_general'|| activeEntity === 'receipts_history') && typeof config.render === 'function') {
+            tbody.innerHTML = config.render(items);
         } else {
-            currentTbody.innerHTML = '';
+            tbody.innerHTML = '';
             items.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = item.id || '';
                 tr.style.cursor = 'pointer';
                 
-                if (config && typeof config.render === 'function') {
+                if (typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
-                } else if (visibleColumns.length > 0) {
-                    tr.innerHTML = visibleColumns.map(col => {
-                        let val = item[col.field];
-                        if (val === null || val === undefined) val = '';
-                        let alignStyle = col.align ? `text-align: ${col.align};` : '';
-                        return `<td style="${alignStyle}">${val}</td>`;
-                    }).join('');
                 } else {
                     const priceVal = item.price ? Number(item.price).toFixed(2) : '0.00';
                     const workNameText = item.vidy_rabot_name || item.work_name || item.vidy_rabot_id || item.work_id || '—';
@@ -8356,20 +8314,17 @@ async function loadDetailData(entity, parentId) {
                     selectedDetailItem = item;
                     console.log(`👆 [КЛИК В ДЕТАЛЯХ] Выбрана строка детали:`, selectedDetailItem);
 
-                    currentTbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
+                    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
                 };
 
-                currentTbody.appendChild(tr);
+                tbody.appendChild(tr);
             });
         }
 
     } catch (err) {
         console.error('❌ [loadDetailData ОШИБКА]:', err);
-        const errorTbody = await waitForDetailTbody();
-        if (errorTbody) {
-            errorTbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
-        }
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
 
@@ -8526,35 +8481,10 @@ function updateFilterPanels(entity) {
         console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
-        
-        // ==========================================
-        // ТОТАЛЬНЫЙ СБРОС ВСЕХ СОСТОЯНИЙ И ХВОСТОВ ДАННЫХ
-        // ==========================================
-        if (typeof selectedItem !== 'undefined') selectedItem = null;
-        if (typeof selectedDetailItem !== 'undefined') selectedDetailItem = null;
-        if (typeof currentRealizationId !== 'undefined') currentRealizationId = null;
-        if (typeof currentCustomerId !== 'undefined') currentCustomerId = null;
-        if (typeof currentSkladId !== 'undefined') currentSkladId = null;
-        if (typeof currentDocType !== 'undefined') currentDocType = null;
-        if (typeof window.currentMainEntity !== 'undefined') window.currentMainEntity = null;
-
-        // Очищаем таблицы на экране от старых данных
-        const mainTableBody = document.querySelector('#mainTable tbody, .data-table tbody, table tbody');
-        if (mainTableBody) mainTableBody.innerHTML = '';
-
-        const detailTableBody = document.querySelector('#detail-table-body, #detailTable tbody, .detail-table tbody');
-        if (detailTableBody) detailTableBody.innerHTML = '';
-
-        const detailContainer = document.getElementById('detail-container');
-        if (detailContainer) {
-            detailContainer.style.setProperty('display', 'none', 'important');
-            detailContainer.innerHTML = '';
-        }
-        console.log(`🧹 [nav-link] Произведен полный сброс всех переменных, таблиц и контейнеров.`);
-        // ==========================================
         
         const text = link.innerText.trim();
         console.log(`🔗 [nav-link] Клик по навигационной ссылке: "${text}"`);
@@ -8602,6 +8532,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             console.log(`⚠️ [nav-link] Функция updateFilterPanels не найдена`);
         }
 
+        const detailContainer = document.getElementById('detail-container');
         const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel'); 
         const tabsForCars = document.getElementById('tabs-for-cars');
         const tabsForAccidents = document.getElementById('tabs-for-accidents');
@@ -8631,7 +8562,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
 
-        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов
+        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов (убран 'money_receipts')
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -8656,7 +8587,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          
+            'parts',           
             'nomenclature',   
             'goods'
         ];
@@ -8695,10 +8626,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         } else {
             console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
-            if (detailContainer) {
-                detailContainer.style.setProperty('display', 'none', 'important');
-                detailContainer.innerHTML = '';
-            }
+            if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
@@ -8755,7 +8683,12 @@ document.querySelectorAll('.accordion-header').forEach(header => {
 
 
 
-
+function setDetailToolbarVisible(visible) {
+    const el = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (el) {
+        el.style.setProperty('display', visible ? 'flex' : 'none', 'important');
+    }
+}
 
 
 
