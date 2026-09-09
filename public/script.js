@@ -8087,12 +8087,23 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
+    // Автоматически добавляем или находим кнопку печати интерфейса расходов
+    let btnPrintExpense = document.getElementById('btn-print-expense');
+    if (!btnPrintExpense && btnAdd && btnAdd.parentNode) {
+        btnPrintExpense = document.createElement('button');
+        btnPrintExpense.id = 'btn-print-expense';
+        btnPrintExpense.className = btnAdd.className || 'btn btn-secondary';
+        btnPrintExpense.innerHTML = '🖨️ Печать отчета';
+        btnPrintExpense.style.marginLeft = '8px';
+        btnPrintExpense.type = 'button';
+        btnAdd.parentNode.insertBefore(btnPrintExpense, btnAdd.nextSibling);
+    }
+    if (btnPrintExpense) {
+        btnPrintExpense.onclick = () => printMainTable();
+    }
+    
     // Управление кнопкой «Назад» для разных уровней
     let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
-    if (!backBtn) {
-        // Если кнопки в DOM нет, можем найти место или создать её динамически, но для примера предполагаем её наличие или контейнер
-        // Давайте сделаем безопасную проверку: если кнопка есть, управляем её видимостью и обработчиком
-    }
 
     // Элементы панели фильтров по датам (показываем только на уровне expenses_by_receipts)
     const receiptsFilterPanel = document.getElementById('expenses-filter-panel') || document.getElementById('receipts-filter-panel');
@@ -8115,7 +8126,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На складах кнопки «Назад» не будет
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) backBtnElement.style.display = 'none';
     } 
@@ -8134,7 +8144,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На поставщиках (уровень после складов) показываем стрелку назад -> ведет на склады (expenses_by_sklad)
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8151,7 +8160,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
         
-        // Добавление параметров дат из инпутов фильтра, если они заполнены
         const startDateInput = document.getElementById('expenses-start-date');
         const endDateInput = document.getElementById('expenses-end-date');
         if (startDateInput && startDateInput.value) {
@@ -8169,7 +8177,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На накладных (expenses_by_receipts) показываем стрелку назад -> ведет на поставщиков (expenses_by_suppliers) с текущим skladId
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8196,7 +8203,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На деталях накладной (товарах) кнопка назад тоже должна работать -> ведет к списку накладных (expenses_by_receipts)
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8207,7 +8213,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         return; 
     }
 
-    // Защита глобального контекста уже выполнена в начале функции, но оставляем для синхронизации currentEntity
     if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
@@ -8240,8 +8245,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             thead.insertBefore(filterRow, mainHeaderTr);
         }
 
-        // Заменяем вызов старой filterTable() на безопасную локальную функцию фильтрации, 
-        // которая учитывает шапки месяцев и индексы колонок, не ломая общую логику приложения
         window.applyExpenseTableFilter = function() {
             const inputs = filterRow.querySelectorAll('input[data-column-index]');
             const tbody = document.getElementById('table-body');
@@ -8272,7 +8275,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                         if (showRow) visibleChildrenCount++;
                     });
 
-                    // Автоматически скрываем или показываем строку месяца в зависимости от совпадений в его записях
                     headerTr.style.display = visibleChildrenCount > 0 ? '' : 'none';
                 });
             } else {
@@ -8404,8 +8406,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-${currentGIdx}`;
                     
-                    console.log(`    └─ [Group Item #${itemIdx}] Рендеринг строки накладной ID: ${rowId}`, item);
-
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
                     } else {
@@ -8419,7 +8419,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 headerTr.addEventListener('click', () => {
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
-                    console.log(`🖱️ [Group Click] Клик по группе "${group.title}". Переключение видимости: ${isHidden ? 'развернуть' : 'свернуть'}`);
                     
                     childRows.forEach(tr => {
                         tr.style.display = isHidden ? '' : 'none';
@@ -8437,8 +8436,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
-                
-                console.log(`🛠️ [Render Row #${index + 1}] ID: ${rowId}`, item);
 
                 if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
@@ -8458,7 +8455,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 function applyExpensesFilters() {
     const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
     const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
