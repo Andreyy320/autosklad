@@ -11197,9 +11197,8 @@ function setDetailToolbarVisible(visible) {
 
 
 
-
-(function() {
-    // 1. Внедряем стили для ресайзера
+(function () {
+    // ==================== СТИЛИ ====================
     if (!document.getElementById('auto-table-resizer-style')) {
         const style = document.createElement('style');
         style.id = 'auto-table-resizer-style';
@@ -11209,8 +11208,12 @@ function setDetailToolbarVisible(visible) {
             th .resizer, td .resizer {
                 position: absolute;
                 top: 0;
-                right: 0;
-                width: 6px;
+                /* right: -5px вместо right: 0 — зона захвата (10px) теперь центрируется
+                   ровно на линии границы между колонками: 5px уходит в текущую
+                   колонку, 5px — в соседнюю. Так курсор проще "поймать" саму линию,
+                   а не только тонкую полоску с одного края. */
+                right: -5px;
+                width: 10px;
                 height: 100%;
                 cursor: col-resize;
                 user-select: none;
@@ -11225,115 +11228,175 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
     }
 
-    // 2. Функция применения ресайзеров с сохранением в localStorage
-    function applyTableResizers() {
-        // Узнаем текущий раздел (например, по активной ссылке в меню), чтобы сохранять размеры для каждой таблицы отдельно
+    // ==================== НАХОЖДЕНИЕ СТРОКИ-ЗАГОЛОВКА ====================
+    // Строка фильтров (#table-filter-row) явно исключается по id — раньше это
+    // определялось эвристикой "есть текст и нет input", что не всегда надёжно.
+    function findHeaderRowIndex(rows) {
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].id === 'table-filter-row') continue;
+            const cells = rows[i].querySelectorAll('th, td');
+            const hasRealText = Array.from(cells).some(
+                cell => cell.textContent.trim().length > 0 && !cell.querySelector('input')
+            );
+            if (hasRealText) return i;
+        }
+        return -1;
+    }
+
+    // ==================== УНИКАЛЬНЫЙ КЛЮЧ ДЛЯ ТАБЛИЦЫ ====================
+    // Раньше ключ строился только из активного пункта меню — если на экране
+    // одновременно две таблицы (например, "Приход" и "Спецификация прихода"),
+    // они получали ОДИН И ТОТ ЖЕ ключ и затирали ширины друг друга.
+    // Теперь ключ дополнительно включает текст заголовков самой таблицы —
+    // у разных по смыслу таблиц он неизбежно разный, поэтому конфликтов больше нет,
+    // а сама таблица может быть даже полностью пересоздана в DOM (innerHTML) —
+    // ключ всё равно останется прежним, т.к. считается от содержимого, а не от узла.
+    function buildStorageKey(table, headerCells) {
         const activeLink = document.querySelector('.nav-link.active');
-        const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
-        const storageKey = `col_widths_${sectionKey}`;
+        const sectionKey = activeLink ? activeLink.innerText.trim() : 'global';
 
-        document.querySelectorAll('table').forEach(table => {
-            const rows = Array.from(table.querySelectorAll('tr'));
-            let textRowIndex = -1;
+        const headerFingerprint = Array.from(headerCells)
+            .map(cell => cell.textContent.trim())
+            .join('|');
 
-            // Находим строку с текстом заголовков
-            for (let i = 0; i < rows.length; i++) {
-                const cells = rows[i].querySelectorAll('th, td');
-                const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
-                if (hasText) {
-                    textRowIndex = i;
-                    break;
-                }
+        return `col_widths::${sectionKey}::${headerFingerprint}`;
+    }
+
+    // ==================== ВОССТАНОВЛЕНИЕ СОХРАНЁННЫХ ШИРИН ====================
+    function restoreWidths(rows, headerRowIndex, headerCells, storageKey) {
+        const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+        headerCells.forEach((cell, colIndex) => {
+            if (savedWidths[colIndex]) {
+                cell.style.width = savedWidths[colIndex];
+                applyWidthToUpperRows(rows, headerRowIndex, colIndex, savedWidths[colIndex]);
+            } else if (!cell.style.width || cell.style.width === 'auto') {
+                const w = cell.offsetWidth;
+                if (w > 0) cell.style.width = `${w}px`;
             }
-
-            if (textRowIndex === -1) return;
-
-            const textRow = rows[textRowIndex];
-            const textCells = textRow.querySelectorAll('th, td');
-
-            // Загружаем сохраненные размеры для этого раздела
-            const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
-
-            textCells.forEach((th, colIndex) => {
-                // Восстанавливаем сохраненную ширину, если она есть
-                if (savedWidths[colIndex]) {
-                    th.style.width = savedWidths[colIndex];
-                    for (let i = 0; i < textRowIndex; i++) {
-                        const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                        if (upperCell) upperCell.style.width = savedWidths[colIndex];
-                    }
-                } else if (!th.style.width || th.style.width === 'auto') {
-                    const w = th.offsetWidth;
-                    if (w > 0) th.style.width = `${w}px`;
-                }
-
-                if (th.querySelector('.resizer')) return;
-
-                const resizer = document.createElement('div');
-                resizer.classList.add('resizer');
-                th.appendChild(resizer);
-
-                let startX = 0;
-                let startWidth = 0;
-
-                resizer.addEventListener('mousedown', function (e) {
-                    startX = e.clientX;
-                    startWidth = th.offsetWidth;
-                    resizer.classList.add('resizing');
-                    document.body.style.cursor = 'col-resize';
-
-                    function onMouseMove(e) {
-                        const dx = e.clientX - startX;
-                        const newWidth = Math.max(10, startWidth + dx); // Позволяем сжимать до 10px
-                        
-                        th.style.width = `${newWidth}px`;
-
-                        // Синхронно меняем верхние строки с фильтрами
-                        for (let i = 0; i < textRowIndex; i++) {
-                            const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                            if (upperCell) {
-                                upperCell.style.width = `${newWidth}px`;
-                            }
-                        }
-                    }
-
-                    function onMouseUp() {
-                        resizer.classList.remove('resizing');
-                        document.body.style.cursor = '';
-                        window.removeEventListener('mousemove', onMouseMove);
-                        window.removeEventListener('mouseup', onMouseUp);
-
-                        // Сохраняем все ширины колонок текущей таблицы в localStorage при отпускании мыши
-                        const currentWidths = {};
-                        textRow.querySelectorAll('th, td').forEach((cell, idx) => {
-                            currentWidths[idx] = cell.style.width;
-                        });
-                        localStorage.setItem(storageKey, JSON.stringify(currentWidths));
-                    }
-
-                    window.addEventListener('mousemove', onMouseMove);
-                    window.addEventListener('mouseup', onMouseUp);
-
-                    e.preventDefault();
-                    e.stopPropagation();
-                });
-            });
         });
     }
 
-    // 3. Перехватываем клики по меню (.nav-link), чтобы после загрузки данных применились сохраненные размеры
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', () => {
-            setTimeout(applyTableResizers, 200);
+    // Синхронизирует ширину колонки со строками НАД строкой заголовка
+    // (например, со строкой пер-колоночных фильтров, если она есть).
+    function applyWidthToUpperRows(rows, headerRowIndex, colIndex, width) {
+        for (let i = 0; i < headerRowIndex; i++) {
+            const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
+            if (upperCell) upperCell.style.width = width;
+        }
+    }
+
+    // ==================== СОЗДАНИЕ РЕСАЙЗЕРОВ (один раз на ячейку) ====================
+    function ensureResizer(cell, rows, headerRowIndex, colIndex, headerRow, storageKey) {
+        if (cell.querySelector('.resizer')) return; // уже есть — не дублируем
+
+        const resizer = document.createElement('div');
+        resizer.classList.add('resizer');
+        cell.appendChild(resizer);
+
+        let startX = 0;
+        let startWidth = 0;
+        let rafId = null;
+        let pendingWidth = null;
+
+        function applyPendingWidth() {
+            if (pendingWidth === null) return;
+            cell.style.width = `${pendingWidth}px`;
+            applyWidthToUpperRows(rows, headerRowIndex, colIndex, `${pendingWidth}px`);
+            pendingWidth = null;
+            rafId = null;
+        }
+
+        function onMouseMove(e) {
+            const dx = e.clientX - startX;
+            // Минимального ограничения по ширине больше нет — колонку можно
+            // сжимать сколько угодно. Math.max(0, ...) только не даёт уйти
+            // в отрицательную ширину (это некорректное значение для CSS).
+            pendingWidth = Math.max(0, startWidth + dx);
+
+            // requestAnimationFrame вместо мгновенного применения на каждый pixel-мув —
+            // тянущиеся таблицы с большим числом колонок двигаются плавнее.
+            if (rafId === null) {
+                rafId = requestAnimationFrame(applyPendingWidth);
+            }
+        }
+
+        function onMouseUp() {
+            resizer.classList.remove('resizing');
+            document.body.style.cursor = '';
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                applyPendingWidth();
+            }
+
+            // Сохраняем итоговые ширины всех колонок этой конкретной таблицы
+            const currentWidths = {};
+            headerRow.querySelectorAll('th, td').forEach((c, idx) => {
+                currentWidths[idx] = c.style.width;
+            });
+            localStorage.setItem(storageKey, JSON.stringify(currentWidths));
+        }
+
+        resizer.addEventListener('mousedown', function (e) {
+            startX = e.clientX;
+            startWidth = cell.offsetWidth;
+            resizer.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+
+            e.preventDefault();
+            e.stopPropagation();
         });
+    }
+
+    // ==================== ОБРАБОТКА ОДНОЙ ТАБЛИЦЫ ====================
+    function processTable(table) {
+        const rows = Array.from(table.querySelectorAll('tr'));
+        const headerRowIndex = findHeaderRowIndex(rows);
+        if (headerRowIndex === -1) return;
+
+        const headerRow = rows[headerRowIndex];
+        const headerCells = headerRow.querySelectorAll('th, td');
+        if (headerCells.length === 0) return;
+
+        const storageKey = buildStorageKey(table, headerCells);
+
+        restoreWidths(rows, headerRowIndex, headerCells, storageKey);
+
+        headerCells.forEach((cell, colIndex) => {
+            ensureResizer(cell, rows, headerRowIndex, colIndex, headerRow, storageKey);
+        });
+    }
+
+    // ==================== ПРИМЕНЕНИЕ КО ВСЕМ ТАБЛИЦАМ ====================
+    function applyTableResizers() {
+        document.querySelectorAll('table').forEach(processTable);
+    }
+
+    // ==================== DEBOUNCE ДЛЯ MUTATIONOBSERVER ====================
+    // Раньше applyTableResizers вызывалась на КАЖДОЕ изменение DOM где угодно
+    // на странице — это могло срабатывать десятки раз подряд во время
+    // перерисовки таблицы. Теперь несколько изменений подряд схлопываются
+    // в один вызов через небольшую паузу.
+    let debounceTimer = null;
+    function scheduleApply(delay = 150) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(applyTableResizers, delay);
+    }
+
+    // ==================== ПОДПИСКИ ====================
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => scheduleApply(200));
     });
 
-    // 4. Наблюдатель за изменениями DOM на случай динамической перерисовки таблиц
-    const observer = new MutationObserver(() => {
-        applyTableResizers();
-    });
+    const observer = new MutationObserver(() => scheduleApply());
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 5. Первичный запуск
-    setTimeout(applyTableResizers, 300);
+    // Первичный запуск
+    scheduleApply(300);
 })();
