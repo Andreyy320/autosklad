@@ -7752,7 +7752,6 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
-
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -9844,7 +9843,6 @@ if (tableBody) {
             return;
         }
 
-        // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
        // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
         const entitiesWithDetails = [
             'receipts', 
