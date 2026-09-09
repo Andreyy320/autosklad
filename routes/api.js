@@ -953,24 +953,37 @@ router.put('/moves/:id', async (req, res) => {
             boolIsPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1';
         }
 
-// 3. Фактическая дата
-        let factDate = oldDoc.fact_date;
-        if (boolIsPosted) {
-            if (!oldDoc.is_posted || !oldDoc.fact_date) {
-                factDate = new Date();
-            }
-        } else {
-            factDate = null;
-        }
+        // 3. Фактическая дата
+    let factDate = oldDoc.fact_date;
+    if (boolIsPosted) {
+    if (!oldDoc.is_posted || !oldDoc.fact_date) {
+        factDate = new Date();
+    }
+} else {
+    factDate = null;
+}
 
-        // 4. Защита от стирания данных
-        const finalDocNumber = doc_number !== undefined && doc_number !== '' ? doc_number : oldDoc.doc_number;
-        const finalDate = date || oldDoc.date;
-        const finalWhFrom = warehouse_from_id ? parseInt(warehouse_from_id, 10) : oldDoc.warehouse_from_id;
-        const finalMolFrom = mol_from_id ? parseInt(mol_from_id, 10) : oldDoc.mol_from_id;
-        const finalWhTo = warehouse_to_id ? parseInt(warehouse_to_id, 10) : oldDoc.warehouse_to_id;
-        const finalMolTo = mol_to_id ? parseInt(mol_to_id, 10) : oldDoc.mol_to_id;
-        const finalDescription = description !== undefined ? description : oldDoc.description;
+// 4. Защита от стирания данных
+const finalDocNumber = doc_number !== undefined && doc_number !== '' ? doc_number : oldDoc.doc_number;
+
+// Явно превращаем Date-объекты в "голую" строку без смещения таймзоны,
+// чтобы избежать повторной UTC-конвертации драйвером pg при обратной записи
+function toSafeTimestampString(val) {
+    if (!val) return null;
+    if (typeof val === 'string') return val;
+    if (val instanceof Date) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`;
+    }
+    return val;
+}
+
+const finalDate = toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date);
+const finalWhFrom = warehouse_from_id ? parseInt(warehouse_from_id, 10) : oldDoc.warehouse_from_id;
+const finalMolFrom = mol_from_id ? parseInt(mol_from_id, 10) : oldDoc.mol_from_id;
+const finalWhTo = warehouse_to_id ? parseInt(warehouse_to_id, 10) : oldDoc.warehouse_to_id;
+const finalMolTo = mol_to_id ? parseInt(mol_to_id, 10) : oldDoc.mol_to_id;
+const finalDescription = description !== undefined ? description : oldDoc.description;
 
         // 5. Запрос в БД
         const updateQuery = `
@@ -998,6 +1011,8 @@ router.put('/moves/:id', async (req, res) => {
             finalDescription,
             boolIsPosted,
             factDate,
+                toSafeTimestampString(factDate),  // <-- тоже оборачиваем
+
             id
         ];
 

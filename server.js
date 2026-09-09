@@ -6,6 +6,16 @@ const path = require('path');
 const multer = require('multer');
 require('dotenv').config();
 
+
+
+types.setTypeParser(1114, (val) => val); // timestamp without time zone
+types.setTypeParser(1082, (val) => val); // date
+
+
+
+
+
+
 const app = express();
 
 app.use(helmet({

@@ -2014,16 +2014,6 @@ const tableConfig = {
 }
 
 
-
-
-
-
-
-
-
-
-
-
 function getConfig(entity) {
     if (!entity || entity === 'undefined') {
         console.warn('⚠️ [getConfig] Внимание! Попытка получить конфиг для пустой сущности (undefined). Вызов из:', new Error().stack);
@@ -2076,9 +2066,6 @@ function getOrCreateDrawer() {
 
     return drawer;
 }
-
-
-
 
 
 function openDrawer() {
@@ -8312,7 +8299,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-// Вспомогательная функция для кнопки «Применить» на панели фильтров расходов
+
 function applyExpensesFilters() {
     const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
     const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
@@ -8330,7 +8317,6 @@ function applyExpensesFilters() {
     }
 }
 
-// Вспомогательная функция для кнопки «Применить» на панели фильтров (приходы)
 function applyReceiptsFilters() {
     const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
     
@@ -8343,7 +8329,6 @@ function applyReceiptsFilters() {
         loadReceiptMainData('money_receipts_by_sklad');
     }
 } 
-
 
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
@@ -8915,7 +8900,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 }
 
-// Глобальный контроллер для отмены предыдущего запроса детальной таблицы
 let currentDetailController = null;
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
@@ -9003,9 +8987,6 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
-// ==========================================
-// КЛИКЕР ДЛЯ ТАБЛИЦЫ (ПРИХОДЫ И РАСХОДЫ)
-// ==========================================
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
     if (!tableBodyForReceipts.dataset.listenerAttached) {
@@ -9191,8 +9172,6 @@ if (tableBodyForReceipts) {
     }
 }
 
-
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
@@ -9253,6 +9232,7 @@ function filterTable() {
 
 let selectedDetailItem = null;
 let currentDetailItems = []; 
+
 function getCurrentDetailEntity() {
     console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
 
@@ -9542,29 +9522,30 @@ function openDetailForm(mode) {
 
       if (detailEntity === 'car_details') {
     openCarDetailsForm(detailEntity, itemToEdit, parentId);
-} else if (
+    } else if (
     detailEntity === 'accident_images' ||
     detailEntity === 'accident_invoices' ||
     detailEntity === 'accident_payments' ||
     detailEntity === 'accident_events'
-) {
+    ) {
     openAccidentForm(detailEntity, itemToEdit, parentId);
-} else if (detailEntity === 'receipt_items') {
+    } else if (detailEntity === 'receipt_items') {
         openReceiptItemsForm(itemToEdit, parentId);
     } else if (detailEntity === 'move_items') {
         openMoveItemsForm(itemToEdit, parentId);
    } else if (detailEntity === 'repair_items') {
     openRepairItemsForm(itemToEdit, parentId);
-} else if (detailEntity === 'repair_works') {
+    } else if (detailEntity === 'repair_works') {
     openRepairWorksForm(itemToEdit, parentId);
-} else if (detailEntity === 'realization_items') {
+    } else if (detailEntity === 'realization_items') {
     openRealizationItemsForm(itemToEdit, parentId);
-} else if (detailEntity === 'realization_works') {
+    } else if (detailEntity === 'realization_works') {
     openRealizationWorksForm(itemToEdit, parentId);
-} else {
+    } else {
         openEntityForm(detailEntity, itemToEdit, parentId);
     }
 }
+
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
@@ -9639,10 +9620,6 @@ function showPostConfirmModal(title, text, onConfirm) {
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 }
 
-
-
-
-
 async function postMove(moveId) {
     showPostConfirmModal(
         'Проведение документа',
@@ -9694,7 +9671,6 @@ async function postReceipt(receiptId) {
         }
     );
 }
-
 
 
 async function postRepair(repairId) {
@@ -9749,7 +9725,6 @@ async function postRealization(realizationId) {
         }
     );
 }
-
 
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
@@ -10098,6 +10073,7 @@ if (tableBodyForDblClick) {
         }
     });
 }
+
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
@@ -10223,11 +10199,7 @@ function switchRepairTab(tabName, btnElement) {
 }
 
 let currentMoneyReceiptSubTab = 'money_receipts_detail';
-
-
-
     const detailBody = document.getElementById('detail-body');
-
     if (detailBody) {
         detailBody.addEventListener('click', (e) => {
             const tr = e.target.closest('tr');
@@ -10496,7 +10468,6 @@ async function loadDetailData(entity, parentId) {
     }
 }
 
-
 const navMap = {
     'Пользователи': 'users',
     'Бренды': 'brands',
@@ -10568,6 +10539,7 @@ const navMap = {
     'Спецификация расходов': 'expense_items',
     'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
 };
+
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
@@ -10965,7 +10937,3 @@ function setDetailToolbarVisible(visible) {
     // 5. Первичный запуск
     setTimeout(applyTableResizers, 300);
 })();
-
-
-
-
