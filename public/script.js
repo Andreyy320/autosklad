@@ -7094,6 +7094,7 @@ function logout() {
     localStorage.clear(); 
     location.reload();
 }
+
 async function refreshData() {
     console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
     
@@ -7110,12 +7111,12 @@ async function refreshData() {
     const lockedRepairId = window.currentRepairId;
     const lockedCustomerId = window.currentCustomerId;
 
-    // 2. Специальная ветка для приходов денег
+    // Специальная ветка для приходов денег
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
         const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
         await loadReceiptMainData(previousEntity, parentParam);
     } 
-    // 3. Специальная ветка для расходов денег
+    // Специальная ветка для расходов денег
     else if (
         previousEntity === 'expenses_by_sklad' || 
         previousEntity === 'expenses_by_suppliers' || 
@@ -7132,14 +7133,13 @@ async function refreshData() {
         }
         await loadExpenseMainData(previousEntity, parentParam);
     } 
-    // 4. Стандартная ветка для остальных экранов
     else {
         const activeLink = document.querySelector('.nav-link.active');
         const title = activeLink ? activeLink.innerText : 'Данные';
         await loadData(previousEntity, title);
     }
 
-    // 5. Восстанавливаем подсветку строки и детализацию, используя зафиксированные locked-переменные
+    // Восстанавливаем подсветку строки, используя зафиксированные locked-переменные
     if (savedSelectedItem && savedId) {
         const rows = document.querySelectorAll('#table-body tr');
         let foundRow = null;
@@ -7180,7 +7180,7 @@ async function refreshData() {
         }
     }
     
-    console.log('✅ [refreshData] Обновление завершено успешно.');
+    // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
 }
 
 function showAppNotification(message, type = 'info') {
@@ -7760,7 +7760,7 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'stock_balances'];
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
                 }
@@ -10880,18 +10880,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
-        // ==========================================
-        // ПОЛНЫЙ СБРОС СОСТОЯНИЯ ПРИ СМЕНЕ ВКЛАДКИ
-        // ==========================================
-        selectedItem = null;
-        window.currentSkladId = null;
-        window.currentPostavhikId = null;
-        window.currentReceiptId = null;
-        window.currentRealizationId = null;
-        window.currentRepairId = null;
-        window.currentCustomerId = null;
-        // ==========================================
-
         const text = link.innerText.trim();
         console.log(`🔗 [nav-link] Клик по навигационной ссылке: "${text}"`);
         
@@ -10993,7 +10981,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',          
+            'parts',           
             'nomenclature',   
             'goods'
         ];
