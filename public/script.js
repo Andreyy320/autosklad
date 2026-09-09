@@ -7182,6 +7182,7 @@ async function refreshData() {
     
     console.log('✅ [refreshData] Обновление завершено успешно.');
 }
+
 function showAppNotification(message, type = 'info') {
     let container = document.getElementById('app-notifications-container');
     if (!container) {
@@ -10879,6 +10880,18 @@ document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
+        // ==========================================
+        // ПОЛНЫЙ СБРОС СОСТОЯНИЯ ПРИ СМЕНЕ ВКЛАДКИ
+        // ==========================================
+        selectedItem = null;
+        window.currentSkladId = null;
+        window.currentPostavhikId = null;
+        window.currentReceiptId = null;
+        window.currentRealizationId = null;
+        window.currentRepairId = null;
+        window.currentCustomerId = null;
+        // ==========================================
+
         const text = link.innerText.trim();
         console.log(`🔗 [nav-link] Клик по навигационной ссылке: "${text}"`);
         
@@ -10980,7 +10993,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'stock_balances',
             'расходы',
             'expenses',
-            'parts',           
+            'parts',          
             'nomenclature',   
             'goods'
         ];
