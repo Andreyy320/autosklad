@@ -1861,7 +1861,7 @@ router.get('/stock_movement', async (req, res) => {
 
         const query = `
             WITH all_operations AS (
-                -- 1. Приходы
+                -- 1. Приходы от поставщиков
                 SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
                 FROM receipt_items ri 
                 JOIN receipts r ON ri.receipt_id = r.id 
@@ -1869,19 +1869,19 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход) — считаем по цене из строки перемещения
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
-                FROM move_items mi 
-                JOIN moves m ON mi.move_id = m.id 
-                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
-                
-                UNION ALL
-                
-                -- 3. Перемещения (расход) — считаем по цене из строки перемещения
+                -- 2. Перемещения: РАСХОД со склада-отправителя
                 SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                
+                UNION ALL
+                
+                -- 3. Перемещения: ПРИХОД на склад-получатель (строго по той же цене!)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
                 
