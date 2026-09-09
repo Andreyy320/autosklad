@@ -7525,10 +7525,6 @@ function printMainTable() {
                         font-weight: bold;
                         text-align: center;
                     }
-                    /* Сохраняем подсветку строк/ячеек (например, красную заливку просрочки) */
-                    td[style*="background"], tr[style*="background"] {
-                        /* Стили подтягиваются из инлайн-стилей строки/ячейки */
-                    }
                 </style>
             </head>
             <body>
@@ -7559,7 +7555,6 @@ async function loadData(entity, title, customParams = {}) {
     selectedItem = null;
     const config = getConfig(entity);
 
-    // Сохраняем текущие данные и заголовок на уровне window, чтобы функция печати могла к ним обратиться
     window.currentEntityName = entity;
     window.currentEntityTitle = title;
 
@@ -7673,7 +7668,6 @@ async function loadData(entity, title, customParams = {}) {
         const thead = headerTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
 
-        // Создаем строку фильтров для ВСЕХ сущностей (включая car_cards)
         if (!filterRow) {
             filterRow = document.createElement('tr');
             filterRow.id = 'table-filter-row';
