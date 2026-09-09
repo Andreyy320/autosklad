@@ -1641,7 +1641,7 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(s.name, 'Основной склад') AS sklad,
                 COALESCE(u.name, 'Не назначен') AS mol,
                 COALESCE(st.total_qty, 0) AS qty,
-                COALESCE(ei.name, ei.title, z.unit, 'шт') AS unit
+                COALESCE(ei.name, z.unit, 'шт') AS unit
             FROM zaphasti z
             CROSS JOIN skladi s
             LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
