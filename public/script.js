@@ -9196,9 +9196,15 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
     }
     
-    const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+       const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbarEl) detailToolbarEl.style.display = 'none';
 
+    // Удаляем строку фильтров, если она осталась от другой таблицы (например, от loadDetailData)
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+
+    const existingAlternativeRow = document.getElementById('detail-table-filter-row');
+    if (existingAlternativeRow) existingAlternativeRow.remove();
 
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
