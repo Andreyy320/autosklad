@@ -1885,7 +1885,7 @@ router.get('/stock_movement', async (req, res) => {
                     'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                LEFT JOIN warehouse_batches wb_in ON wb_in.receipt_id = mi.receipt_id AND wb_in.zaphasti_id = mi.zaphasti_id AND wb_in.warehouse_id = m.warehouse_to_id
+                LEFT JOIN warehouse_batches wb_in ON wb_in.zaphasti_id = mi.zaphasti_id AND wb_in.warehouse_id = m.warehouse_to_id
                 WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
@@ -1900,7 +1900,7 @@ router.get('/stock_movement', async (req, res) => {
                     'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                LEFT JOIN warehouse_batches wb_out ON wb_out.receipt_id = mi.receipt_id AND wb_out.zaphasti_id = mi.zaphasti_id AND wb_out.warehouse_id = m.warehouse_from_id
+                LEFT JOIN warehouse_batches wb_out ON wb_out.zaphasti_id = mi.zaphasti_id AND wb_out.warehouse_id = m.warehouse_from_id
                 WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
@@ -1915,7 +1915,7 @@ router.get('/stock_movement', async (req, res) => {
                     'out' as op_type
                 FROM repair_items rep_i 
                 JOIN repairs rep ON rep_i.repair_id = rep.id 
-                LEFT JOIN warehouse_batches wb_rep ON wb_rep.receipt_id = rep_i.receipt_id AND wb_rep.zaphasti_id = rep_i.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
+                LEFT JOIN warehouse_batches wb_rep ON wb_rep.zaphasti_id = rep_i.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
                 WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
                 
                 UNION ALL
@@ -1930,7 +1930,7 @@ router.get('/stock_movement', async (req, res) => {
                     'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
-                LEFT JOIN warehouse_batches wb_rel ON wb_rel.receipt_id = ri_rel.receipt_id AND wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
+                LEFT JOIN warehouse_batches wb_rel ON wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             -- Последний склад для каждой запчасти
@@ -2015,7 +2015,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 
 // ==================== ДЕТАЛИЗАЦИЯ ДВИЖЕНИЯ ЗАПЧАСТИ ====================
