@@ -74,7 +74,9 @@ module.exports = (pool) => {
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                 if (match) {
-                    return res.json({ success: true, user: user });
+                    // Никогда не отправляем хеш пароля на клиент
+                    const { password_hash, ...safeUser } = user;
+                    return res.json({ success: true, user: safeUser });
                 } else {
                     return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
                 }
@@ -97,7 +99,8 @@ router.get('/logs', (req, res) => {
 // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
 router.get('/users', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
+        // Никогда не выбираем password_hash в списке пользователей
+        const result = await pool.query('SELECT id, login, name, description FROM users ORDER BY id ASC');
         return res.json(result.rows);
     } catch (err) {
         console.error('>>> [API ОШИБКА] в /users:', err.message);
@@ -130,7 +133,7 @@ router.get('/users', async (req, res) => {
             }
 
             const newRecord = await pool.query(
-                'INSERT INTO users (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING *',
+                'INSERT INTO users (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING id, login, name, description',
                 [login, finalPasswordHash, name, description]
             );
 
@@ -7147,6 +7150,12 @@ router.put('/:entity/:id', async (req, res) => {
         // ============================================================================
 
         await client.query('COMMIT');
+
+        // Никогда не отправляем хеш пароля на клиент, даже для таблицы users
+        if (entity === 'users' && updatedDoc) {
+            const { password_hash, ...safeDoc } = updatedDoc;
+            return res.json(safeDoc);
+        }
         res.json(updatedDoc);
 
     } catch (err) {
@@ -7246,6 +7255,10 @@ router.delete('/:entity/:id', async (req, res) => {
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const deletedData = result.rows[0];
+            // Никогда не сохраняем хеш пароля в логах аудита
+            if (entity === 'users' && deletedData && deletedData.password_hash !== undefined) {
+                delete deletedData.password_hash;
+            }
             const userId = currentUserId || deletedData.user_id || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 

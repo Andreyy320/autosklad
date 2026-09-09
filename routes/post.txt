@@ -1,229 +1,91 @@
-// Атомарно выдаёт следующий номер документа для указанного типа.
-// Обязательно вызывать внутри транзакции (передавая client, а не pool!),
-// иначе гарантия от гонки пропадает.
-async function getNextDocNumber(client, entityType, prefix) {
-    const result = await client.query(
-        `UPDATE document_sequences 
-         SET current_value = current_value + 1 
-         WHERE entity_type = $1 
-         RETURNING current_value`,
-        [entityType]
-    );
+Хорошо, я реально прочитал все три файла (не по памяти из чата, а построчно) и нашёл конкретные вещи. Разложу честно: что реально плохо, что terpimo, а что сделано хорошо.
 
-    if (result.rows.length === 0) {
-        // Если строки счётчика ещё нет (например, для нового типа документа) — создаём её на лету
-        const insertResult = await client.query(
-            `INSERT INTO document_sequences (entity_type, current_value) 
-             VALUES ($1, 1) 
-             ON CONFLICT (entity_type) DO UPDATE SET current_value = document_sequences.current_value + 1
-             RETURNING current_value`,
-            [entityType]
-        );
-        return `${prefix}${insertResult.rows[0].current_value}`;
-    }
+## 🔴 Нашёл новый серьёзный баг — пароли уходят в браузер
 
-    return `${prefix}${result.rows[0].current_value}`;
-}
+Проверил конкретно:
 
-// Соответствие типа сущности и его префикса номера документа
-const DOC_NUMBER_CONFIG = {
-    receipts: 'ПР-',
-    moves: 'ПМ-',
-    repairs: 'РЕМ-',
-    accidents: 'ДТП-',
-    realizations: 'РЛ-'
-};
+```js
+// строка 70
+const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
+...
+return res.json({ success: true, user: user });   // весь объект user, включая password_hash!
 
-// ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
-router.post('/:entity', async (req, res) => {
-    const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
-    const browserLog = (msg) => {
-        console.log(msg);
-        logsBuffer.push(msg);
-    };
+// строка 100
+router.get('/users', ... 'SELECT * FROM users ORDER BY id ASC');  // тоже весь объект
+```
 
-    browserLog(`\n----------------------------------------`);
-    browserLog(`[POST REQUEST] Сущность: ${req.params.entity}`);
-    browserLog(`[BODY]: ${JSON.stringify(req.body)}`);
+Это значит: bcrypt-хеш пароля **каждого пользователя** реально прилетает в браузер каждый раз, когда:
+- кто-то логинится (ответ на `/login`),
+- открывается справочник "Пользователи",
+- заполняется любой выпадающий список, где используется `/api/users` как источник.
 
-    try {
-        let { entity } = req.params;
+Во фронтенде хеш просто визуально скрыт (`style="display:none"`), но это не защита — он виден в Network-вкладке DevTools у любого пользователя системы. Хеш можно унести и брутфорсить офлайн.
 
-        if (entity === 'brands') { entity = 'car_brands'; }
-        if (entity === 'models') { entity = 'car_models'; }
-        if (entity === 'bodies') { entity = 'kyzov_type'; }
-        
-        // Обработка для поставщиков
-        if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
-            entity = 'postavhik_contacts'; 
-        }
+**Исправление простое:**
+```js
+'SELECT id, login, name, description FROM users WHERE login = $1'
+```
+Никогда не выбирайте `password_hash` в ответах, кроме внутренней проверки в `/login` (и даже там — выберите его отдельно, не возвращайте наружу).
 
-        // Обработка для покупателей
-        if (entity === 'customer-contacts' || entity === 'customer_ contacts') { 
-            entity = 'customer_contacts'; 
-        }
+## 🔴 Смена пароля пользователя тихо ломается
 
-        const allowedTables = [
-            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
-            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
-            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 
-            'autoservices', 'payment_types', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
-        ];
+Я проверил: специального `PUT /api/users/:id` нет — редактирование пользователя идёт через универсальный `router.put('/:entity/:id')`, который **не хеширует** `password_hash` — просто пишет то, что пришло, как есть.
 
-        if (!allowedTables.includes(entity)) {
-            browserLog(`[ERROR] Недопустимая таблица: ${entity}`);
-            return res.status(400).json({ 
-                error: `Недопустимая таблица: ${entity}`,
-                serverLogs: logsBuffer 
-            });
-        }
+Сейчас это не стреляет только потому, что фронтенд физически скрывает поле пароля при редактировании (`if (entity === 'users' && col.field === 'password_hash' && item.id) return '';`). То есть это не баг, который сработал, а мина: если кто-то потом добавит форму "сменить пароль" через этот же путь, или отправит `PUT /api/users/5 {"password_hash":"1234"}` вручную через curl — пароль сохранится в БД открытым текстом, и следующий логин сломается (bcrypt.compare не совпадёт с "1234").
 
-        if (entity === 'repairs') {
-            if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
-                req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
-            }
-            delete req.body.repair_type;
+Заодно это значит: **сейчас пользователи вообще не могут сменить себе пароль** через интерфейс — это баг продукта, не только безопасности.
 
-            if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
-                req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
-            }
-            delete req.body.doc_type;
-        }
+## 🔴 Подтверждаю: авторизации на API нет вообще
 
-        // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
-        if (entity === 'repair_works') {
-            if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
-                req.body.vidy_rabot_id = req.body.work_id;
-            }
-            delete req.body.work_id;
+Проверил все 122 роута — ни один (кроме самого `/login`) не проверяет ни токен, ни сессию. `x-user-id` — это просто число, которое браузер сам вписывает в заголовок и присылает добровольно:
+```js
+const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+```
+Любой человек с `curl` может читать/писать/удалять что угодно без пароля, а заодно вписать в лог аудита любой `user_id`, какой захочет (то есть логи аудита нельзя доверять — их легко подделать).
 
-            const { repair_id } = req.body;
-            
-            if (repair_id) {
-                const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
-                if (repairCheck.rows.length > 0) {
-                    const isPostedVal = repairCheck.rows[0].is_posted;
-                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
-                        browserLog(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
-                        return res.status(400).json({ 
-                            error: 'Нельзя добавлять работы в уже проведенный ремонт!',
-                            serverLogs: logsBuffer 
-                        });
-                    }
-                }
-            }
-        }
+## 🔴 Universal POST/PUT — нет вайтлиста полей
 
-        if (req.body.is_posted !== undefined) {
-            if (req.body.is_posted === '' || req.body.is_posted === null) {
-                delete req.body.is_posted; 
-            } else {
-                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
-            }
-        }
+Проверил напрямую:
+```js
+const keys = Object.keys(req.body);
+...
+const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders})`;
+```
+Имя таблицы проверяется (`allowedTables`) — это хорошо. Но **колонки — нет**. В тело запроса можно вписать любое поле любой разрешённой таблицы, включая то, что не должно задаваться руками (например, `is_posted` при создании нового документа в обход бизнес-логики).
 
-        // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и realizations
-        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-        if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs' || entity === 'realizations')) {
-            req.body.user_id = currentUserId;
-        }
+## 🟠 Реальное дублирование кода в api.js — подтверждено построчно
 
-        // Проверка уникальности для запчастей при добавлении (код и связка артикул+производитель)
-        if (entity === 'zaphasti') {
-            const { code, article, proizvoditel_id } = req.body;
+Не "как будто", а буквально одинаковые функции объявлены по несколько раз:
+- `writeMoveLog` — 3 раза
+- `writeRepairLog` — 4 раза
+- `writeRealizationLog` — 3 раза
 
-            if (code) {
-                const codeCheck = await pool.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
-                if (codeCheck.rows.length > 0) {
-                    browserLog(`[ERROR] Запчасть с кодом ${code} уже существует`);
-                    return res.status(400).json({ 
-                        error: 'Запчасть с таким кодом уже существует!', 
-                        serverLogs: logsBuffer 
-                    });
-                }
-            }
+Я сверил содержимое — копии идентичны (не разошлись), так что прямо сейчас багов от этого нет. Но это мина: если через полгода понадобится поправить логику логирования ремонта, есть 4 места, и легко забыть одно — тогда поведение будет непредсказуемо зависеть от того, какое объявление "выиграло" (последнее по файлу, из-за hoisting).
 
-            if (article && proizvoditel_id) {
-                const artProvCheck = await pool.query(
-                    'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2', 
-                    [article, proizvoditel_id]
-                );
-                if (artProvCheck.rows.length > 0) {
-                    browserLog(`[ERROR] Запчасть с таким артикулом и производителем уже существует`);
-                    return res.status(400).json({ 
-                        error: 'Запчасть с таким артикулом для этого производителя уже существует!', 
-                        serverLogs: logsBuffer 
-                    });
-                }
-            }
-        }
+## 🟠 Загрузка файлов всё ещё без ограничений
 
-        const keys = Object.keys(req.body);
-        const values = Object.values(req.body);
+```js
+const upload = multer({ dest: path.join(__dirname, '../uploads/') });
+```
+Нет `limits.fileSize`, нет `fileFilter` по типу. Можно залить файл любого размера и любого типа в папку `/uploads`, которая раздаётся статически — то есть потенциально можно закинуть что угодно и получить прямую ссылку на него.
 
-        if (keys.length === 0) {
-            browserLog(`[ERROR] Пустое тело запроса`);
-            return res.status(400).json({ error: 'Нет данных для сохранения', serverLogs: logsBuffer });
-        }
+## ✅ Что реально сделано хорошо (без преувеличений)
 
-        const processedValues = values.map(val => val === '' ? null : val);
-        const columns = keys.map(k => `"${k}"`).join(', ');
-        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+Проверил и это правда так:
+- **SQL-инъекций нет** — вообще все запросы параметризованы (`$1, $2...`), ни разу не встретил конкатенацию значений в SQL-строку.
+- **Имена таблиц** в динамических роутах жёстко сверяются со списком `allowedTables` — правильный подход.
+- **FIFO-логика склада** (списание партий, откат при удалении/редактировании) реализована аккуратно и с блокировками (`FOR UPDATE`), это сложная и важная часть, и она не наляпана на коленке.
+- **Транзакции сбалансированы**: 25 `pool.connect()` и ровно 25 `client.release()` — утечек соединений в пуле нет.
+- **Защита проведённых документов**: генерические PUT/DELETE проверяют `is_posted` и не дают редактировать/удалять то, что уже проведено — это правильная бизнес-логика, реализована последовательно по всем сущностям.
+- **Дубликатов маршрутов** (одинаковый путь+метод дважды) не нашёл ни одного — с роутингом порядок.
+- Хардкодных паролей/секретов в этих трёх файлах нет.
 
-        const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
-        const result = await pool.query(query, processedValues);
-        const newRecord = result.rows[0];
+## Что делать в первую очередь (по приоритету)
 
-        // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
-        try {
-            const userId = currentUserId || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-            
-            let detailsJson = '{}';
-            try {
-                detailsJson = req.body ? JSON.stringify(req.body) : '{}';
-            } catch (e) {
-                detailsJson = '{}';
-            }
+1. Убрать `password_hash` из всех `SELECT *` на таблице `users` (5 минут работы, закрывает самую опасную дыру).
+2. Добавить `PUT /users/:id`-специфичный роут, который хеширует пароль, если он передан, и полностью исключить `users` из общего PUT/DELETE без такой проверки.
+3. Добавить middleware, который проверяет реальный токен/сессию на всех `/api/*`, кроме `/login`.
+4. Добавить вайтлист разрешённых полей на запись для каждой таблицы в universal POST/PUT.
+5. Ограничить multer (`limits.fileSize`, `fileFilter`).
 
-            await pool.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-                [
-                    userId,
-                    'INSERT',
-                    entity,
-                    newRecord.id || null,
-                    detailsJson,
-                    clientIp,
-                    entity
-                ]
-            );
-        } catch (logErr) {
-            console.error('❌ [AUDIT ERROR] Не удалось записать лог:', logErr.message);
-        }
-        // ======================================================================================
-
-        browserLog(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
-        
-        // Возвращаем запись и логи для браузера
-        res.status(201).json({
-            ...newRecord,
-            serverLogs: logsBuffer
-        });
-
-    } catch (err) {
-        console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
-        console.error(err.stack);
-        res.status(500).json({ 
-            error: 'Ошибка сервера при добавлении: ' + err.message,
-            serverLogs: logsBuffer 
-        });
-    }
-});
+Если хочешь, можем взять пункт 1 прямо сейчас и я подготовлю точный патч под твой `api.js` — это самое быстрое и самое критичное исправление.
