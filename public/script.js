@@ -123,7 +123,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
- customers: {
+    customers: {
     title: 'Покупатели',
     columns: [
         { field: 'type_id', label: 'Тип', width: '130px', ref: 'counterparty_types' },
@@ -140,8 +140,8 @@ const tableConfig = {
         <td><span style="color: #334155;">${item.part_discount_name || '—'}</span></td>
         <td><span style="color: #64748b; font-size: 13px;">${item.description || ''}</span></td>
     `
-},
-customer_contacts: {
+    },
+    customer_contacts: {
         title: 'Контакты покупателей',
         columns: [
             { field: 'name', label: 'Имя', width: '180px' },
@@ -227,7 +227,7 @@ customer_contacts: {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-},
+    },
     type_sklad: {
         title: 'Тип склада',
         columns: [
@@ -253,7 +253,7 @@ customer_contacts: {
         `
     },
 
-part_discounts: {
+    part_discounts: {
         title: 'Скидки на запчасти',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
@@ -307,7 +307,7 @@ part_discounts: {
             <td><b>${item.sklad_name || '—'}</b></td>
         `
     },
-car_details: {
+    car_details: {
         title: 'Детали и фото автомобиля',
         columns: [
             { field: 'date', label: 'Дата', type: 'date' },
@@ -347,7 +347,7 @@ car_details: {
             <td>${item.description || ''}</td>
         `
     },
-   mol: {
+     mol: {
         title: 'МОЛ',
         columns: [
             { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
@@ -378,7 +378,7 @@ car_details: {
             `;
         }
     },
-    zaphasti: {
+        zaphasti: {
         title: 'Запчасти',
         columns: [
             { field: 'article', label: 'Артикул' },
@@ -422,7 +422,7 @@ car_details: {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-},
+    },
   toplivo: {
     title: 'Топливо',
     columns: [
@@ -433,7 +433,7 @@ car_details: {
         <td><b>${item.name || ''}</b></td>
         <td>${item.description || ''}</td>
     `
-},
+    },
     gruppa_tsen: {
         title: 'Группа цен',
         columns: [
@@ -478,7 +478,7 @@ car_details: {
         `
     },
 
-receipts: {
+    receipts: {
     title: 'Документ прихода',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '120px' },
@@ -529,9 +529,9 @@ receipts: {
             </td>
         `;
     }
-},
+    },
 
-receipt_items: {
+    receipt_items: {
     title: 'Спецификация документа',
     columns: [
         { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', width: '250px', insert: true, table: false },
@@ -562,8 +562,8 @@ receipt_items: {
             <td>${item.description || ''}</td>
         `;
     }
-},
-moves: {
+    },
+    moves: {
     title: 'Документ перемещения',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '120px' },
@@ -610,8 +610,8 @@ moves: {
             <td>${isPostedHtml}</td>
         `;
     }
-},
-move_items: {
+    },
+    move_items: {
     title: 'Спецификация перемещения',
     columns: [
         { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', width: '250px', insert: true, table: false },
@@ -658,8 +658,8 @@ move_items: {
             <td style="color: #000000; font-style: normal;">${incomeDocText}</td>
         `;
     }
-},
-car_cards: {
+    },
+    car_cards: {
     title: 'Карточка авто',
     readonly: true, 
     columns: [
@@ -684,11 +684,11 @@ car_cards: {
             <td>${item.description || ''}</td>
         `;
     }
-},
+    },
 
 
 
-stock_balances: {
+    stock_balances: {
     title: 'Остатки запчастей',
     columns: [
         { field: 'artikul', label: 'Артикул', width: '110px' },
@@ -721,9 +721,9 @@ stock_balances: {
             <td style="text-align: center;">${item.unit || 'шт'}</td>
         `;
     }
-},
+    },
 
-part_movement_details: {
+    part_movement_details: {
     title: 'Детали движения',
     columns: [
         { field: 'op_date', label: 'Дата', width: '140px' },
@@ -752,8 +752,8 @@ part_movement_details: {
             <td>${item.description || ''}</td>
         `;
     }
-},
-stock_batches: {
+    },
+    stock_batches: {
     title: 'Партии товара',
     columns: [
         { field: 'artikul', label: 'Артикул', width: '110px' },
@@ -790,8 +790,8 @@ stock_batches: {
             <td style="text-align: center;">${item.currency || ''}</td>
         `;
     }
-},
-stock_movement: {
+    },
+    stock_movement: {
     title: 'Движение запчастей',
     columns: [
         { field: 'artikul', label: 'Артикул', width: '110px' },
@@ -835,9 +835,9 @@ stock_movement: {
             <td>${item.description || ''}</td>
         `;
     }
-},
+    },
 
-accidents: {
+    accidents: {
     title: 'ДТП',
     columns: [
         { label: "№", field: "doc_number", width: "120px" },
@@ -906,8 +906,8 @@ accidents: {
             <td><b>${item.status_name || 'На контроле'}</b></td>
         `;
     }
-},
-dtp_history: {
+    },
+    dtp_history: {
     title: 'ДТП машины',
     columns: [
         { field: 'fact_date', label: 'Факт', width: '110px' },
@@ -947,8 +947,8 @@ dtp_history: {
             <td><b><b>${docDisplay}</b></b></td>
         `;
     }
-},
-accident_invoices: {
+    },
+    accident_invoices: {
     title: 'Выставленные счета по ДТП',
     columns: [
         { field: 'invoice_date', label: 'Дата', width: '150px' },
@@ -972,8 +972,8 @@ accident_invoices: {
             <td>${item.description || ''}</td>
         `;
     }
-},
-accident_payments: {
+    },
+    accident_payments: {
     title: 'Оплаченные счета по ДТП',
     columns: [
         { field: 'payment_date', label: 'Дата', width: '150px', type: 'datetime-local' },
@@ -997,8 +997,8 @@ accident_payments: {
             <td>${item.description || ''}</td>
         `;
     }
-},
-accident_events: {
+    },
+    accident_events: {
     title: 'События ДТП',
     columns: [
         { field: 'event_date', label: 'Дата', width: '160px' },
@@ -1016,7 +1016,8 @@ accident_events: {
             <td><b>${item.event_text || ''}</b></td>
         `;
     }
-},accident_images: {
+    },
+    accident_images: {
     title: 'Изображения ДТП',
     columns: [
         { field: 'created_at', label: 'Дата загрузки', width: '160px' },
@@ -1038,9 +1039,9 @@ accident_events: {
             <td>${item.description || ''}</td>
         `;
     }
-},
+    },
 
-repairs: {
+    repairs: {
     title: 'Ремонт',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '110px' },
@@ -1110,8 +1111,8 @@ repairs: {
             </td>
         `;
     }
-},
-repair_items: {
+    },
+    repair_items: {
     title: 'Список запчастей в ремонте',
     columns: [
         { field: 'zaphast_id', label: 'Запчасть', width: '0px', ref: 'zaphasti', insert: true, table: false },
@@ -1146,8 +1147,8 @@ repair_items: {
             <td style="color: #000000; font-style: normal;">${incomeDocText}</td>
         `;
     }
-},
-repair_works: {
+    },
+    repair_works: {
     title: 'Выполненные работы',
     columns: [
         { field: 'ispolnitel_id', label: 'Исполнитель', width: '180px', ref: 'ispolnitel', insert: true, table: true },
@@ -1165,9 +1166,9 @@ repair_works: {
             <td>${item.description || ''}</td>
         `;
     }
-},
+    },
 
-repair_history: {
+    repair_history: {
     title: 'Ремонт машины',
     columns: [
         { field: 'article', label: 'Артикул', width: '100px' },
@@ -1273,8 +1274,8 @@ repair_history: {
 
         return html;
     }
-},
-receipts_history: {
+    },
+    receipts_history: {
     title: 'Запчасти по ремонту',
     columns: [
         { field: 'article', label: 'Артикул', width: '100px' },
@@ -1380,9 +1381,9 @@ receipts_history: {
 
         return html;
     }
-},
+    },
 
-car_general: {
+    car_general: {
     title: 'Общая',
     columns: [
         { field: 'date', label: 'Дата', width: '100px', align: 'center' },
@@ -1483,8 +1484,8 @@ car_general: {
 
         return html;
     }
-},
-realizations: {
+    },
+    realizations: {
     title: 'Реализация',
     columns: [
         { field: 'doc_number', label: '№ документа', width: '110px' },
@@ -1561,8 +1562,8 @@ realizations: {
             </td>
         `;
     }
-},
-realization_items: {
+    },
+    realization_items: {
     title: 'Спецификация реализации',
     columns: [
         // Добавляем поле выбора запчасти со ссылкой на справочник
@@ -1617,8 +1618,8 @@ realization_items: {
             <td>${incomeDoc}</td>
         `;
     }
-},
-realization_works: {
+    ,
+    realization_works: {
     title: 'Спецификация услуг',
     columns: [
         // Поле выбора услуги со ссылкой на справочник vidy_rabot (в самой таблице не выводится, нужно для модалки добавления)
@@ -1654,8 +1655,8 @@ realization_works: {
             <td>${item.description || ''}</td>
         `;
     }
-},
-money_receipts_by_sklad: {
+    },
+    money_receipts_by_sklad: {
     title: 'Аналитика продаж по складам',
     columns: [
         { field: 'sklad_name', label: 'Склад', width: '220px' },
@@ -1688,8 +1689,8 @@ money_receipts_by_sklad: {
             <td style="text-align: right; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">${debtSum}</td>
         `;
     }
-},
-money_receipts: {
+    },
+    money_receipts: {
     title: 'Список документов (продажи и ремонты)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
@@ -1756,9 +1757,9 @@ money_receipts: {
             </td>
         `;
     }
-},
+    },
 
-income_payments: {
+    income_payments: {
     title: 'История всех поступлений',
     columns: [
         { field: 'payment_date', label: 'Дата оплаты', width: '130px' },
@@ -1779,8 +1780,8 @@ income_payments: {
             <td style="color: #6b7280; font-size: 13px;">${item.comment || '—'}</td>
         `;
     }
-},
-money_receipts_detail: {
+    },
+    money_receipts_detail: {
     title: 'Детализация: купленные товары и услуги',
     columns: [
         { field: 'doc_number', label: 'Документ', width: '100px' },
@@ -1816,8 +1817,8 @@ money_receipts_detail: {
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${total}</td>
         `;
     }
-},
-money_receipts_works_detail: {
+    },
+    money_receipts_works_detail: {
     title: 'Детализация: оказанные услуги и работы',
     columns: [
         { field: 'doc_number', label: 'Документ', width: '100px' },
@@ -1848,11 +1849,11 @@ money_receipts_works_detail: {
             <td style="color: #64748b; font-style: italic; font-size: 12px;">${desc}</td>
         `;
     }
-},
+    },
 
 
 
-expenses_by_sklad: {
+    expenses_by_sklad: {
     title: 'Аналитика расходов (закупок) по складам',
     columns: [
         { field: 'sklad_name', label: 'Склад', width: '200px' },
@@ -1880,8 +1881,8 @@ expenses_by_sklad: {
             </td>
         `;
     }
-},
-expenses_by_suppliers: {
+    },
+    expenses_by_suppliers: {
     title: 'Аналитика закупленных товаров по поставщикам',
     columns: [
         { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
@@ -1911,8 +1912,8 @@ expenses_by_suppliers: {
             </td>
         `;
     }
-},
-expense_items: {
+    },
+    expense_items: {
     title: 'Детали закупленных позиций',
     columns: [
         { field: 'part_name', label: 'Наименование запчасти', width: '250px' },
@@ -1934,9 +1935,9 @@ expense_items: {
             <td style="text-align: right; font-weight: bold; color: #dc2626;">${total} </td>
         `;
     }
-},
+    },
 
-expenses_by_receipts: {
+    expenses_by_receipts: {
     title: 'Список накладных (документов прихода)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '120px' },
@@ -1988,8 +1989,8 @@ expenses_by_receipts: {
             </td>
         `;
     }
-},
-expense_payments: {
+    },
+    expense_payments: {
     title: 'История всех оплат',
     columns: [
         { field: 'payment_date', label: 'Дата оплаты', width: '130px' },
@@ -2013,7 +2014,7 @@ expense_payments: {
 }
 
 }
-
+}
 
 
 
