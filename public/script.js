@@ -7580,7 +7580,83 @@ function printMainTable() {
     }, 250);
 }
 
+function printDetailTable() {
+    // Заголовок берём из активной вкладки (Общая/Запчасти/Ремонт/ДТП и т.д.), иначе — из detail-title
+    const activeTabBtn = document.querySelector(
+        '.car-tab-btn.active, .accident-tab-btn.active, .repair-tab-btn.active, .customer-tab-btn.active, .realization-tab-btn.active'
+    );
+    const detailTitleEl = document.getElementById('detail-title');
+    const title = (activeTabBtn ? activeTabBtn.innerText.trim() : '') || (detailTitleEl ? detailTitleEl.innerText.trim() : 'Отчет');
 
+    const thead = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    const tbody = document.getElementById('detail-body');
+
+    if (!tbody || !thead) {
+        alert('Нечего печатать: таблица не найдена.');
+        return;
+    }
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+    const printWindow = window.open('', '_blank');
+
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>${title}</title>
+                <style>
+                    @page { size: A4 landscape; margin: 10mm; }
+                    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 0; background: #fff; }
+                    .print-header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; padding-bottom: 6px; margin-bottom: 12px; }
+                    .print-header h2 { margin: 0; font-size: 15px; color: #111; }
+                    .print-header .print-date { font-size: 11px; color: #555; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #bbb; padding: 5px 6px; vertical-align: middle; }
+                    th { background-color: #f2f2f2 !important; color: #000; font-weight: bold; text-align: center; font-size: 11px; }
+                    button, .btn, input { display: none !important; }
+                    tr { page-break-inside: avoid; }
+                </style>
+            </head>
+            <body>
+                <div class="print-header">
+                    <h2>Отчет: ${title}</h2>
+                    <div class="print-date">Дата печати: ${formattedDate}</div>
+                </div>
+                <table>
+                    <thead><tr>${thead.innerHTML}</tr></thead>
+                    <tbody>${tbody.innerHTML}</tbody>
+                </table>
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+}
+
+// Создаёт кнопку "Печать" рядом с заголовком нижней таблицы, если её ещё нет в DOM
+function ensureDetailPrintButton() {
+    let btn = document.getElementById('detail-print-btn');
+    if (btn) return btn;
+
+    const detailTitle = document.getElementById('detail-title');
+    if (!detailTitle || !detailTitle.parentElement) return null;
+
+    btn = document.createElement('button');
+    btn.id = 'detail-print-btn';
+    btn.type = 'button';
+    btn.innerText = '🖨️ Печать';
+    btn.onclick = printDetailTable;
+    btn.style.cssText = 'margin-left: auto; padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer; font-size: 13px;';
+
+    // Если родитель не flex — не ломаем вёрстку, просто добавляем кнопку рядом с заголовком
+    const parentDisplay = getComputedStyle(detailTitle.parentElement).display;
+    if (parentDisplay !== 'flex') {
+        detailTitle.parentElement.style.display = 'flex';
+        detailTitle.parentElement.style.alignItems = 'center';
+    }
 
 
 
@@ -10575,6 +10651,7 @@ function filterDetailTable() {
 
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
+    ensureDetailPrintButton();   // 👈 добавили: гарантируем наличие кнопки "Печать" у нижней таблицы
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
