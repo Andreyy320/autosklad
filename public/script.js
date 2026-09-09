@@ -7642,15 +7642,12 @@ function ensureDetailPrintButton() {
     const oldBtn = document.getElementById('detail-print-btn');
     if (oldBtn) oldBtn.remove();
 
-    // Список всех возможных панелей вкладок нижней таблицы
+      // Кнопка "Печать" нужна ТОЛЬКО для Карточки авто и для ДТП — остальные вкладки не трогаем
     const possibleTabBars = [
         document.getElementById('car-tabs-bar'),
         document.getElementById('car-tabs-panel'),
         document.getElementById('tabs-for-cars'),
-        document.getElementById('tabs-for-accidents'),
-        document.getElementById('tabs-for-repairs'),
-        document.getElementById('tabs-for-customers'),
-        document.getElementById('tabs-for-realizations')
+        document.getElementById('tabs-for-accidents')
     ].filter(Boolean);
 
     // Ищем ту панель, которая реально видна на экране прямо сейчас
