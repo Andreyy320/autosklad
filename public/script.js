@@ -8122,7 +8122,64 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             thead.insertBefore(filterRow, mainHeaderTr);
         }
 
-        filterRow.innerHTML = visibleColumns.map(col => {
+        // Заменяем вызов старой filterTable() на безопасную локальную функцию фильтрации, 
+        // которая учитывает шапки месяцев и индексы колонок, не ломая общую логику приложения
+        window.applyExpenseTableFilter = function() {
+            const inputs = filterRow.querySelectorAll('input[data-column-index]');
+            const tbody = document.getElementById('table-body');
+            const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"]');
+            
+            if (groupHeaders.length > 0) {
+                groupHeaders.forEach((headerTr, gIndex) => {
+                    const childRows = tbody.querySelectorAll(`.group-row-${gIndex}`);
+                    let visibleChildrenCount = 0;
+
+                    childRows.forEach(row => {
+                        let showRow = true;
+                        inputs.forEach(input => {
+                            const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                            const filterVal = input.value.toLowerCase().trim();
+                            if (!filterVal) return;
+
+                            const cell = row.children[colIdx];
+                            if (cell) {
+                                const cellText = cell.textContent.toLowerCase();
+                                if (!cellText.includes(filterVal)) {
+                                    showRow = false;
+                                }
+                            }
+                        });
+
+                        row.style.display = showRow ? '' : 'none';
+                        if (showRow) visibleChildrenCount++;
+                    });
+
+                    // Автоматически скрываем или показываем строку месяца в зависимости от совпадений в его записях
+                    headerTr.style.display = visibleChildrenCount > 0 ? '' : 'none';
+                });
+            } else {
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    let showRow = true;
+                    inputs.forEach(input => {
+                        const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                        const filterVal = input.value.toLowerCase().trim();
+                        if (!filterVal) return;
+
+                        const cell = row.children[colIdx];
+                        if (cell) {
+                            const cellText = cell.textContent.toLowerCase();
+                            if (!cellText.includes(filterVal)) {
+                                showRow = false;
+                            }
+                        }
+                    });
+                    row.style.display = showRow ? '' : 'none';
+                });
+            }
+        };
+
+        filterRow.innerHTML = visibleColumns.map((col, idx) => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
             if (col.style && col.style.includes('display: none')) {
                 return `<th style="display: none; padding: 4px;"></th>`;
@@ -8130,8 +8187,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             return `
                 <th ${styleAttr}>
                     <input type="text" 
+                           data-column-index="${idx}" 
                            data-column="${col.field}" 
-                           oninput="filterTable()" 
+                           oninput="applyExpenseTableFilter()" 
                            placeholder="Фильтр..."
                            style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
                 </th>
@@ -8205,6 +8263,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 console.log(`📁 [Group #${currentGIdx}] Название: "${group.title}", элементов: ${group.items.length}`);
 
                 const headerTr = document.createElement('tr');
+                headerTr.id = `group-header-${currentGIdx}`;
                 headerTr.style.background = '#f1f5f9';
                 headerTr.style.cursor = 'pointer';
                 headerTr.style.fontWeight = 'bold';
