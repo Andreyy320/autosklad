@@ -7504,7 +7504,6 @@ async function loadData(entity, title, customParams = {}) {
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else if (entity === 'expenses_by_receipts') {
-            // Для расходов по поставщикам (накладных): показываем Добавить, скрываем Изменить и Удалить
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
@@ -7583,38 +7582,33 @@ async function loadData(entity, title, customParams = {}) {
         const thead = headerTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
 
-        if (entity === 'car_cards') {
-            if (filterRow) {
-                filterRow.remove();
-            }
+        // Создаем строку фильтров для ВСЕХ сущностей (включая car_cards)
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, headerTr);
         } else {
-            if (!filterRow) {
-                filterRow = document.createElement('tr');
-                filterRow.id = 'table-filter-row';
-                thead.insertBefore(filterRow, headerTr);
-            } else {
-                thead.insertBefore(filterRow, headerTr);
-            }
-
-            const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
-
-            filterRow.innerHTML = visibleColumnsForFilter.map((col, index) => {
-                let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
-                if (col.style && col.style.includes('display: none')) {
-                    return `<th style="display: none; padding: 4px;"></th>`;
-                }
-                return `
-                    <th ${styleAttr}>
-                        <input type="text" 
-                               data-column-index="${index}" 
-                               data-column="${col.field}" 
-                               oninput="filterTable()" 
-                               placeholder="Фильтр..."
-                               style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
-                    </th>
-                `;
-            }).join('');
+            thead.insertBefore(filterRow, headerTr);
         }
+
+        const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
+
+        filterRow.innerHTML = visibleColumnsForFilter.map((col, index) => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text" 
+                           data-column-index="${index}" 
+                           data-column="${col.field}" 
+                           oninput="filterTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
 
         const visibleColumns = config.columns.filter(col => col.table !== false);
 
