@@ -7635,14 +7635,12 @@ function printDetailTable() {
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
 }
-// Создаёт (или переносит) кнопку "Печать" рядом с панелью вкладок нижней таблицы —
-// работает одинаково для Карточки авто, ДТП, Ремонта, Реализаций, Покупателей и т.д.
 function ensureDetailPrintButton() {
     // Убираем старую кнопку, если она осталась от предыдущего открытого экрана
     const oldBtn = document.getElementById('detail-print-btn');
     if (oldBtn) oldBtn.remove();
 
-      // Кнопка "Печать" нужна ТОЛЬКО для Карточки авто и для ДТП — остальные вкладки не трогаем
+    // Кнопка "Печать" нужна ТОЛЬКО для Карточки авто и для ДТП — остальные экраны не трогаем
     const possibleTabBars = [
         document.getElementById('car-tabs-bar'),
         document.getElementById('car-tabs-panel'),
@@ -7650,9 +7648,8 @@ function ensureDetailPrintButton() {
         document.getElementById('tabs-for-accidents')
     ].filter(Boolean);
 
-    // Ищем ту панель, которая реально видна на экране прямо сейчас
     const targetBar = possibleTabBars.find(el => el.offsetParent !== null);
-    if (!targetBar) return; // сейчас не открыт ни один экран с вкладками — печатать нечего
+    if (!targetBar) return; // сейчас открыт Приход/Перемещение/Ремонт/др. — кнопку не создаём
 
     const btn = document.createElement('button');
     btn.id = 'detail-print-btn';
@@ -7661,7 +7658,6 @@ function ensureDetailPrintButton() {
     btn.onclick = printDetailTable;
     btn.style.cssText = 'margin-left: auto; padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer; font-size: 13px; white-space: nowrap;';
 
-    // Гарантируем, что панель вкладок — flex-строка, чтобы кнопка встала в конец справа
     const computedDisplay = getComputedStyle(targetBar).display;
     if (computedDisplay !== 'flex') {
         targetBar.style.display = 'flex';
