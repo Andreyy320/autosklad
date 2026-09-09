@@ -1,140 +1,409 @@
+async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
+    // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
+    let entity, item, parentId;
 
-(function() {
-    // 1. Внедряем стили для ресайзера
-    if (!document.getElementById('auto-table-resizer-style')) {
-        const style = document.createElement('style');
-        style.id = 'auto-table-resizer-style';
-        style.textContent = `
-            table { table-layout: auto !important; }
-            th, td { position: relative !important; }
-            th .resizer, td .resizer {
-                position: absolute;
-                top: 0;
-                right: 0;
-                width: 6px;
-                height: 100%;
-                cursor: col-resize;
-                user-select: none;
-                z-index: 50;
-                background-color: transparent;
-            }
-            th .resizer:hover, th .resizer.resizing,
-            td .resizer:hover, td .resizer.resizing {
-                background-color: var(--primary, #2563eb) !important;
-            }
-        `;
-        document.head.appendChild(style);
+    if (typeof entityOrItem === 'object' && entityOrItem !== null) {
+        // Если первым аргументом передали объект (например, item из editSelectedEntity)
+        item = entityOrItem;
+        entity = typeof currentEntity !== 'undefined' ? currentEntity : 'moves';
+        parentId = itemArg; // Второй аргумент в таком случае может быть parentId
+    } else {
+        // Стандартный вызов: (entity, item, parentId)
+        entity = entityOrItem || (typeof currentEntity !== 'undefined' ? currentEntity : 'moves');
+        item = itemArg;
+        parentId = parentIdArg;
     }
 
-    // 2. Функция применения ресайзеров с сохранением в localStorage
-    function applyTableResizers() {
-        // Узнаем текущий раздел (например, по активной ссылке в меню), чтобы сохранять размеры для каждой таблицы отдельно
-        const activeLink = document.querySelector('.nav-link.active');
-        const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
-        const storageKey = `col_widths_${sectionKey}`;
+    console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
-        document.querySelectorAll('table').forEach(table => {
-            const rows = Array.from(table.querySelectorAll('tr'));
-            let textRowIndex = -1;
+    const config = getConfig(entity);
+    const drawer = getOrCreateDrawer();
 
-            // Находим строку с текстом заголовков
-            for (let i = 0; i < rows.length; i++) {
-                const cells = rows[i].querySelectorAll('th, td');
-                const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
-                if (hasText) {
-                    textRowIndex = i;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+        if (!item || !item.id) {
+        let docNumberValue = '';
+
+        if (entity === 'moves') {
+            // Номер документа для 'moves' теперь атомарно генерирует бэкенд
+            // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
+            docNumberValue = '(будет присвоен автоматически)';
+        } else {
+            // Для остальных сущностей (например, move_items) поведение не меняем
+            let nextId = 1;
+            const prefix = 'ПМ-';
+
+            try {
+                const response = await fetch(`/api/${entity}`);
+                if (response.ok) {
+                    const records = await response.json();
+                    if (records.length > 0) {
+                        const maxId = Math.max(...records.map(r => r.id || 0));
+                        nextId = maxId + 1;
+                    }
+                } else {
+                    console.warn(`Сервер вернул не OK при автонумерации: ${response.status}`);
+                }
+            } catch (e) {
+                console.error('Не удалось получить список для автонумерации', e);
+            }
+
+            docNumberValue = `${prefix}${nextId}`;
+        }
+
+        item = { 
+            doc_number: docNumberValue,
+            is_posted: false 
+        };
+
+        if (entity === 'move_items') {
+            item.currency = 'Рубль ПМР';
+            if (parentId) {
+                item.move_id = parentId;
+            }
+        }
+
+        config.columns.forEach(col => {
+            if (col.field === 'fact_date') return; // не трогаем при создании
+            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                item[col.field] = currentDateTime;
+            }
+        });
+    } else {
+        if (entity === 'move_items') {
+            if (!item.currency) {
+                item.currency = 'Рубль ПМР';
+            }
+            if (parentId && !item.move_id) {
+                item.move_id = parentId;
+            }
+        }
+    }
+
+    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
+    `;
+
+    if (entity === 'move_items') {
+        const activeMoveId = parentId || (item ? item.move_id : '');
+        html += `<input type="hidden" name="move_id" value="${activeMoveId}">`;
+        html += `<input type="hidden" name="currency" value="Рубль ПМР">`;
+    }
+
+    for (const col of config.columns) {
+        if (col.field === 'id' || col.field === 'move_id' || col.field === 'currency') continue;
+        if (col.insert === false) continue;
+        if ((col.update === false || col.edit === false) && item && item.id) continue;
+
+        if (entity === 'move_items') {
+            const allowedFields = ['zaphasti_id', 'quantity', 'description'];
+            if (!allowedFields.includes(col.field)) {
+                continue;
+            }
+        }
+
+        let val = '';
+        if (item) {
+            const possibleKeys = [
+                col.field, 
+                col.field.replace('_id', ''), 
+                col.field + '_id',
+                col.ref,
+                col.ref ? col.ref.slice(0, -1) : ''
+            ];
+
+            for (const k of possibleKeys) {
+                if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
+                    val = item[k];
                     break;
                 }
             }
 
-            if (textRowIndex === -1) return;
+            if (val && typeof val === 'object' && val.id !== undefined) {
+                val = val.id;
+            }
+        }
 
-            const textRow = rows[textRowIndex];
-            const textCells = textRow.querySelectorAll('th, td');
+        let inputHtml = '';
+        let fieldReadonly = col.readonly;
+        
+        // Разрешаем менять только поле is_posted (снятие с проведения), если документ проведен
+        if (isPosted && col.field !== 'is_posted') {
+            fieldReadonly = true;
+        }
 
-            // Загружаем сохраненные размеры для этого раздела
-            const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        const controlStyle = fieldReadonly 
+            ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
+            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-            textCells.forEach((th, colIndex) => {
-                // Восстанавливаем сохраненную ширину, если она есть
-                if (savedWidths[colIndex]) {
-                    th.style.width = savedWidths[colIndex];
-                    for (let i = 0; i < textRowIndex; i++) {
-                        const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                        if (upperCell) upperCell.style.width = savedWidths[colIndex];
-                    }
-                } else if (!th.style.width || th.style.width === 'auto') {
-                    const w = th.offsetWidth;
-                    if (w > 0) th.style.width = `${w}px`;
+        if (col.field === 'is_posted') {
+            const isCurrentPosted = val === true || val === 'true' || val === 1 || val === '1';
+            inputHtml = `
+                <select name="${col.field}" style="${controlStyle}">
+                    <option value="false" ${!isCurrentPosted ? 'selected' : ''}>Не проведен</option>
+                    <option value="true" ${isCurrentPosted ? 'selected' : ''}>Проведен</option>
+                </select>
+            `;
+        } else if (col.ref) {
+            const referenceName = col.ref;
+            let refItems = await fetchReferenceData(referenceName);
+
+            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
+
+            refItems.forEach(refItem => {
+                let displayName = '';
+                if (referenceName === 'zaphasti') {
+                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const nm = refItem.name || refItem.title || '';
+                    displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                } else {
+                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
 
-                if (th.querySelector('.resizer')) return;
-
-                const resizer = document.createElement('div');
-                resizer.classList.add('resizer');
-                th.appendChild(resizer);
-
-                let startX = 0;
-                let startWidth = 0;
-
-                resizer.addEventListener('mousedown', function (e) {
-                    startX = e.clientX;
-                    startWidth = th.offsetWidth;
-                    resizer.classList.add('resizing');
-                    document.body.style.cursor = 'col-resize';
-
-                    function onMouseMove(e) {
-                        const dx = e.clientX - startX;
-                        const newWidth = Math.max(10, startWidth + dx); // Позволяем сжимать до 10px
-                        
-                        th.style.width = `${newWidth}px`;
-
-                        // Синхронно меняем верхние строки с фильтрами
-                        for (let i = 0; i < textRowIndex; i++) {
-                            const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                            if (upperCell) {
-                                upperCell.style.width = `${newWidth}px`;
-                            }
-                        }
-                    }
-
-                    function onMouseUp() {
-                        resizer.classList.remove('resizing');
-                        document.body.style.cursor = '';
-                        window.removeEventListener('mousemove', onMouseMove);
-                        window.removeEventListener('mouseup', onMouseUp);
-
-                        // Сохраняем все ширины колонок текущей таблицы в localStorage при отпускании мыши
-                        const currentWidths = {};
-                        textRow.querySelectorAll('th, td').forEach((cell, idx) => {
-                            currentWidths[idx] = cell.style.width;
-                        });
-                        localStorage.setItem(storageKey, JSON.stringify(currentWidths));
-                    }
-
-                    window.addEventListener('mousemove', onMouseMove);
-                    window.addEventListener('mouseup', onMouseUp);
-
-                    e.preventDefault();
-                    e.stopPropagation();
-                });
+                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
+                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
+
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
+            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+            let formattedVal = '';
+            if (col.field === 'fact_date' && !val && isPosted) {
+                val = currentDateTime;
+            }
+
+            if (val) {
+                const d = new Date(val);
+                if (!isNaN(d)) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const minutes = String(d.getMinutes()).padStart(2, '0');
+                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        } else if (col.field === 'description') {
+            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else {
+            inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
+        }
+
+        html += `
+            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                ${col.label}:
+                ${inputHtml}
+            </label>
+        `;
+    }
+
+    html += `
+                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
+                </div>
+            </form>
+    `;
+
+    drawer.innerHTML = html;
+    drawer.style.right = '0';
+
+    let rawFormElement = drawer.querySelector('#entity-form');
+    const formElement = rawFormElement.cloneNode(true);
+    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
+    const factDateInput = formElement.querySelector('[name="fact_date"]');
+
+    if (isPostedSelect && factDateInput) {
+        isPostedSelect.addEventListener('change', () => {
+            if (isPostedSelect.value === 'true' && !factDateInput.value) {
+                factDateInput.value = currentDateTime;
+            } else if (isPostedSelect.value === 'false') {
+                factDateInput.value = '';
+            }
         });
     }
 
-    // 3. Перехватываем клики по меню (.nav-link), чтобы после загрузки данных применились сохраненные размеры
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', () => {
-            setTimeout(applyTableResizers, 200);
+    if (formElement) {
+        const pairs = [
+            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
+            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
+            { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        ];
+
+        pairs.forEach(({ warehouse, mol }) => {
+            if (!warehouse || !mol) return;
+
+            async function filterMols() {
+                const selectedWarehouseId = warehouse.value;
+                const currentMolValue = mol.value;
+
+                try {
+                    const [molRes, usersRes] = await Promise.all([
+                        fetch('/api/mol'),
+                        fetch('/api/mol_users')
+                    ]);
+
+                    if (!molRes.ok) return;
+                    const mols = await molRes.json();
+                    const users = usersRes.ok ? await usersRes.json() : [];
+
+                    const usersMap = {};
+                    users.forEach(u => {
+                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
+                    });
+
+                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
+
+                    mols.forEach(m => {
+                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
+                            option.textContent = userName;
+
+                            if (String(m.id) === String(currentMolValue)) {
+                                option.selected = true;
+                            }
+                            mol.appendChild(option);
+                        }
+                    });
+                } catch (err) {
+                    console.error('Ошибка при фильтрации МОЛ:', err);
+                }
+            }
+
+            warehouse.addEventListener('change', () => {
+                mol.value = '';
+                filterMols();
+            });
+
+            if (warehouse.value) {
+                filterMols();
+            }
         });
-    });
+    }
 
-    // 4. Наблюдатель за изменениями DOM на случай динамической перерисовки таблиц
-    const observer = new MutationObserver(() => {
-        applyTableResizers();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить эту запись?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
 
-    // 5. Первичный запуск
-    setTimeout(applyTableResizers, 300);
-})();
+                    try {
+                        const response = await fetch(`/api/${entity}/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
+
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Запись успешно удалена', 'success');
+
+                            if (entity === 'move_items' && parentId) {
+                                loadDetailData(entity, parentId);
+                            } else {
+                                refreshData();
+                            }
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
+                        }
+                    } catch (err) {
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                }
+            );
+        });
+    }
+
+    let isSubmitting = false;
+
+    formElement.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (isSubmitting) return; 
+        isSubmitting = true;
+
+        const saveButton = formElement.querySelector('#save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        if (data.is_posted !== undefined && data.is_posted !== '') {
+            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+
+        if (entity === 'move_items') {
+            const currentParentId = parentId || formElement.getAttribute('data-parent-id');
+            if (currentParentId) {
+                data.move_id = currentParentId;
+            }
+            if (data.zaphasti && !data.zaphasti_id) {
+                data.zaphasti_id = data.zaphasti;
+            }
+            data.currency = 'Рубль ПМР';
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-user-id': currentUserId
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Данные успешно сохранены', 'success');
+
+                if (entity === 'move_items' && parentId) {
+                    loadDetailData(entity, parentId);
+                } else {
+                    refreshData();
+                }
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                console.error(`[SUBMIT ERROR] Сервер вернул ошибку ${response.status}:`, errData);
+                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
+                isSubmitting = false; 
+                if (saveButton) saveButton.disabled = false;
+            }
+        } catch (err) {
+            console.error('[SUBMIT EXCEPTION] Сетевая или программная ошибка при отправке:', err);
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+        }
+    });
+}
