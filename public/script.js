@@ -8820,7 +8820,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 </th>
             `;
         }).join('');
-    }
+    
 
     try {
         console.dg = console.log;
