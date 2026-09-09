@@ -1618,7 +1618,7 @@ const tableConfig = {
             <td>${incomeDoc}</td>
         `;
     }
-    ,
+    },
     realization_works: {
     title: 'Спецификация услуг',
     columns: [
@@ -1851,8 +1851,6 @@ const tableConfig = {
     }
     },
 
-
-
     expenses_by_sklad: {
     title: 'Аналитика расходов (закупок) по складам',
     columns: [
@@ -2011,10 +2009,10 @@ const tableConfig = {
             <td style="color: #64748b; font-size: 13px; font-style: italic;">${item.comment || '—'}</td>
         `;
     }
-}
+    }
 
 }
-}
+
 
 
 
