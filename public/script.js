@@ -8100,10 +8100,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
     if (btnPrintExpense) {
         btnPrintExpense.onclick = () => printMainTable();
-        // Управляем видимостью: кнопка видна ТОЛЬКО на вкладке expense_items
+        // Жестко управляем видимостью: кнопка видна СТРОГО на вкладке expense_items
         btnPrintExpense.style.display = (currentExpenseView === 'expense_items') ? 'inline-block' : 'none';
     }
-    
     // Управление кнопкой «Назад» для разных уровней
     let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
 
