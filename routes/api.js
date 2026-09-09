@@ -1865,19 +1865,13 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
                 FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE r.warehouse_id IS NOT NULL
                 UNION ALL
-                -- 2. Перемещения (приход) — считаем по базовой закупочной цене z.price
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.price, mi.price, 0)) AS sum, 'in' as op_type
-                FROM move_items mi 
-                JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
-                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
+                -- 2. Перемещения (приход)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
+                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
-                -- 3. Перемещения (расход) — считаем по базовой закупочной цене z.price
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.price, mi.price, 0)) AS sum, 'out' as op_type
-                FROM move_items mi 
-                JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
-                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                -- 3. Перемещения (расход)
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
+                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
                 -- 4. Списания в ремонт
                 SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
@@ -1936,7 +1930,6 @@ router.get('/stock_movement', async (req, res) => {
                 z.name,
                 p.name AS manufacturer,
                 COALESCE(z.unit, 'шт') AS unit,
-                -- Сохраняем старые поля для совместимости с фронтендом
                 COALESCE(ob.start_qty, 0) AS start_qty,
                 COALESCE(ob.start_sum, 0) AS start_sum,
                 COALESCE(tp.income_qty, 0) AS income_qty,
@@ -1945,17 +1938,6 @@ router.get('/stock_movement', async (req, res) => {
                 COALESCE(tp.outcome_sum, 0) AS outcome_sum,
                 (COALESCE(ob.start_qty, 0) + COALESCE(tp.income_qty, 0) - COALESCE(tp.outcome_qty, 0)) AS end_qty,
                 (COALESCE(ob.start_sum, 0) + COALESCE(tp.income_sum, 0) - COALESCE(tp.outcome_sum, 0)) AS end_sum,
-                
-                -- Дополнительные понятные алиасы (Остаток на начало, приход, расход, остаток на конец)
-                COALESCE(ob.start_qty, 0) AS ostatok_na_nachalo_kolvo,
-                COALESCE(ob.start_sum, 0) AS ostatok_na_nachalo_summa,
-                COALESCE(tp.income_qty, 0) AS prishlo_kolvo,
-                COALESCE(tp.income_sum, 0) AS prishlo_summa,
-                COALESCE(tp.outcome_qty, 1) AS ushlo_kolvo, -- сохранено оригинальное написание/структура
-                COALESCE(tp.outcome_sum, 0) AS ushlo_summa,
-                (COALESCE(ob.start_qty, 0) + COALESCE(tp.income_qty, 0) - COALESCE(tp.outcome_qty, 0)) AS ostatok_na_konec_kolvo,
-                (COALESCE(ob.start_sum, 0) + COALESCE(tp.income_sum, 0) - COALESCE(tp.outcome_sum, 0)) AS ostatok_na_konec_summa,
-
                 z.description,
                 curr_s.name AS current_sklad
             FROM combined_keys ck
