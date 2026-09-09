@@ -6752,7 +6752,6 @@ router.post('/:entity', async (req, res) => {
  
         if (!allowedTables.includes(entity)) {
             browserLog(`[ERROR] Недопустимая таблица: ${entity}`);
-            client.release();
             return res.status(400).json({ 
                 error: `Недопустимая таблица: ${entity}`,
                 serverLogs: logsBuffer 
@@ -6791,7 +6790,6 @@ router.post('/:entity', async (req, res) => {
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
                         await client.query('ROLLBACK');
                         browserLog(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
-                        client.release();
                         return res.status(400).json({ 
                             error: 'Нельзя добавлять работы в уже проведенный ремонт!',
                             serverLogs: logsBuffer 
@@ -6834,7 +6832,6 @@ router.post('/:entity', async (req, res) => {
                 if (codeCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
                     browserLog(`[ERROR] Запчасть с кодом ${code} уже существует`);
-                    client.release();
                     return res.status(400).json({ 
                         error: 'Запчасть с таким кодом уже существует!', 
                         serverLogs: logsBuffer 
@@ -6850,7 +6847,6 @@ router.post('/:entity', async (req, res) => {
                 if (artProvCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
                     browserLog(`[ERROR] Запчасть с таким артикулом и производителем уже существует`);
-                    client.release();
                     return res.status(400).json({ 
                         error: 'Запчасть с таким артикулом для этого производителя уже существует!', 
                         serverLogs: logsBuffer 
@@ -6865,7 +6861,6 @@ router.post('/:entity', async (req, res) => {
         if (keys.length === 0) {
             await client.query('ROLLBACK');
             browserLog(`[ERROR] Пустое тело запроса`);
-            client.release();
             return res.status(400).json({ error: 'Нет данных для сохранения', serverLogs: logsBuffer });
         }
  
@@ -6917,7 +6912,7 @@ router.post('/:entity', async (req, res) => {
             serverLogs: logsBuffer
         });
  
-    } catch (err) {
+        } catch (err) {
         await client.query('ROLLBACK');
         console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
         console.error(err.stack);
@@ -6929,6 +6924,7 @@ router.post('/:entity', async (req, res) => {
         client.release();
     }
 });
+
 
 
 // ==========================================
@@ -6991,6 +6987,16 @@ router.put('/:entity/:id', async (req, res) => {
             }
             delete req.body.work_id;
         }
+
+        // ==================== ЗАЩИТА НОМЕРА ДОКУМЕНТА ОТ ИЗМЕНЕНИЯ ====================
+        // Для документных сущностей номер присваивается один раз при создании
+        // (см. DOC_NUMBER_CONFIG и getNextDocNumber в POST). Что бы фронтенд ни прислал
+        // в doc_number при редактировании — игнорируем, чтобы не словить конфликт
+        // с UNIQUE-индексом и не потерять гарантию уникальности номера задним числом.
+        if (DOC_NUMBER_CONFIG[entity] && req.body.doc_number !== undefined) {
+            delete req.body.doc_number;
+        }
+        // ================================================================================
 
         await client.query('BEGIN');
 
@@ -7186,7 +7192,10 @@ router.delete('/:entity/:id', async (req, res) => {
         await client.query('BEGIN');
 
         if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs') {
-            const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1`, [id]);
+            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
+            // одного и того же документа прилетят одновременно, второй дождётся коммита первого
+            // и увидит уже актуальный статус, а не устаревший "не проведён".
+            const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
             if (docCheck.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Запись с таким ID не найдена' });
