@@ -7635,31 +7635,43 @@ function printDetailTable() {
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
 }
-
-// Создаёт кнопку "Печать" рядом с заголовком нижней таблицы, если её ещё нет в DOM
+// Создаёт (или переносит) кнопку "Печать" рядом с панелью вкладок нижней таблицы —
+// работает одинаково для Карточки авто, ДТП, Ремонта, Реализаций, Покупателей и т.д.
 function ensureDetailPrintButton() {
-    let btn = document.getElementById('detail-print-btn');
-    if (btn) return btn;
+    // Убираем старую кнопку, если она осталась от предыдущего открытого экрана
+    const oldBtn = document.getElementById('detail-print-btn');
+    if (oldBtn) oldBtn.remove();
 
-    const detailTitle = document.getElementById('detail-title');
-    if (!detailTitle || !detailTitle.parentElement) return null;
+    // Список всех возможных панелей вкладок нижней таблицы
+    const possibleTabBars = [
+        document.getElementById('car-tabs-bar'),
+        document.getElementById('car-tabs-panel'),
+        document.getElementById('tabs-for-cars'),
+        document.getElementById('tabs-for-accidents'),
+        document.getElementById('tabs-for-repairs'),
+        document.getElementById('tabs-for-customers'),
+        document.getElementById('tabs-for-realizations')
+    ].filter(Boolean);
 
-    btn = document.createElement('button');
+    // Ищем ту панель, которая реально видна на экране прямо сейчас
+    const targetBar = possibleTabBars.find(el => el.offsetParent !== null);
+    if (!targetBar) return; // сейчас не открыт ни один экран с вкладками — печатать нечего
+
+    const btn = document.createElement('button');
     btn.id = 'detail-print-btn';
     btn.type = 'button';
     btn.innerText = '🖨️ Печать';
     btn.onclick = printDetailTable;
-    btn.style.cssText = 'margin-left: auto; padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer; font-size: 13px;';
+    btn.style.cssText = 'margin-left: auto; padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer; font-size: 13px; white-space: nowrap;';
 
-    // Если родитель не flex — не ломаем вёрстку, просто добавляем кнопку рядом с заголовком
-    const parentDisplay = getComputedStyle(detailTitle.parentElement).display;
-    if (parentDisplay !== 'flex') {
-        detailTitle.parentElement.style.display = 'flex';
-        detailTitle.parentElement.style.alignItems = 'center';
+    // Гарантируем, что панель вкладок — flex-строка, чтобы кнопка встала в конец справа
+    const computedDisplay = getComputedStyle(targetBar).display;
+    if (computedDisplay !== 'flex') {
+        targetBar.style.display = 'flex';
+        targetBar.style.alignItems = 'center';
     }
 
-    detailTitle.parentElement.appendChild(btn);
-    return btn;
+    targetBar.appendChild(btn);
 }
 
 
