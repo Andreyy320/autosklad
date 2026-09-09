@@ -1825,7 +1825,6 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1973,7 +1972,7 @@ router.get('/stock_movement', async (req, res) => {
                 z.code,
                 z.name,
                 p.name AS manufacturer,
-                COALESCE(z.unit, 'шт') AS unit,
+                COALESCE(ei.short_name, z.unit, 'шт') AS unit,
                 COALESCE(ob.start_qty, 0) AS start_qty,
                 COALESCE(ob.start_sum, 0) AS start_sum,
                 COALESCE(tp.income_qty, 0) AS income_qty,
@@ -1988,6 +1987,7 @@ router.get('/stock_movement', async (req, res) => {
             JOIN zaphasti z ON ck.zaphasti_id = z.id
             LEFT JOIN skladi s ON ck.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
+            LEFT JOIN ed_izmereniya ei ON z.ed_izmereniya_id = ei.id
             LEFT JOIN latest_warehouse lw ON z.id = lw.zaphasti_id
             LEFT JOIN skladi curr_s ON lw.warehouse_id = curr_s.id
             LEFT JOIN opening_balance ob ON ck.zaphasti_id = ob.zaphasti_id AND ck.warehouse_id = ob.warehouse_id
@@ -2007,7 +2007,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
