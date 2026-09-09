@@ -1648,7 +1648,7 @@ router.get('/stock_balances', async (req, res) => {
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
-            LEFT JOIN ed_izmereniya ei ON z.ed_izmereniya_id = ei.id OR z.unit_id = ei.id
+            LEFT JOIN ed_izmereniya ei ON z.ed_izmereniya_id = ei.id
             WHERE 1=1
             ${warehouseFilterForSkladi}
             ${molFilterClause}
