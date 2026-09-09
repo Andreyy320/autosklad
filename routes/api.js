@@ -7004,7 +7004,8 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
-        // Удаляем ключи со значением undefined, чтобы они не ломали параметры запроса
+        // Удаляем id и поля со значением undefined, чтобы они не дублировались в параметрах запроса
+        delete req.body.id;
         Object.keys(req.body).forEach(key => {
             if (req.body[key] === undefined) {
                 delete req.body[key];
