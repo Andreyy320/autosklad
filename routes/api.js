@@ -1863,29 +1863,43 @@ router.get('/stock_movement', async (req, res) => {
             WITH all_operations AS (
                 -- 1. Приходы
                 SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
-                FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE r.warehouse_id IS NOT NULL
+                FROM receipt_items ri 
+                JOIN receipts r ON ri.receipt_id = r.id 
+                WHERE r.warehouse_id IS NOT NULL
+                
                 UNION ALL
-                -- 2. Перемещения (приход) — считаем по базовой закупочной цене из карточки запчасти (без наценки)
+                
+                -- 2. Перемещения (приход) — строго по базовой закупочной цене из карточки запчасти (без наценки)
                 SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
+                
                 UNION ALL
-                -- 3. Перемещения (расход) — считаем по базовой закупочной цене из карточки запчасти (без наценки)
+                
+                -- 3. Перемещения (расход) — строго по базовой закупочной цене из карточки запчасти (без наценки)
                 SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                
                 UNION ALL
+                
                 -- 4. Списания в ремонт
                 SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
-                FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
+                FROM repair_items rep_i 
+                JOIN repairs rep ON rep_i.repair_id = rep.id 
+                WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
+                
                 UNION ALL
+                
                 -- 5. Реализации (продажи)
                 SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum, 'out' as op_type
-                FROM realization_items ri_rel JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
+                FROM realization_items ri_rel 
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
+                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             -- Последний склад для каждой запчасти
             latest_warehouse AS (

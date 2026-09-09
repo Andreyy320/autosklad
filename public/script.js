@@ -796,21 +796,16 @@ const tableConfig = {
         columns: [
             { field: 'artikul', label: 'Артикул', width: '110px' },
             { field: 'code', label: 'Код', width: '90px', align: 'center' },
-            { field: 'name', label: 'Наименование', width: '280px' },
-            { field: 'manufacturer', label: 'Производитель', width: '130px' },
+            { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'manufacturer', label: 'Производитель', width: '120px' },
+            { field: 'sklad', label: 'Склад', width: '120px' },
             { field: 'unit', label: 'Ед.изм', width: '60px', align: 'center' },
-            // Остаток на начало
-            { field: 'start_qty', label: 'Нач. кол-во', width: '60px', align: 'right' },
-            { field: 'start_sum', label: 'Нач. сумма', width: '80px', align: 'right' },
-            // Приход
-            { field: 'income_qty', label: 'Прих. кол-во', width: '60px', align: 'right' },
-            { field: 'income_sum', label: 'Прих. сумма', width: '80px', align: 'right' },
-            // Расход
-            { field: 'outcome_qty', label: 'Расход кол-во', width: '60px', align: 'right' },
-            { field: 'outcome_sum', label: 'Расход сумма', width: '80px', align: 'right' },
-            // Остаток на конец
-            { field: 'end_qty', label: 'Кон. кол-во', width: '60px', align: 'right' },
-            { field: 'end_sum', label: 'Кон. сумма', width: '80px', align: 'right' },
+            { field: 'income_qty', label: 'Кол-во', width: '60px', align: 'right' },
+            { field: 'income_sum', label: 'Сумма', width: '80px', align: 'right' },
+            { field: 'outcome_qty', label: 'Кол-во', width: '60px', align: 'right' },
+            { field: 'outcome_sum', label: 'Сумма', width: '80px', align: 'right' },
+            { field: 'end_qty', label: 'Кол-во', width: '60px', align: 'right' },
+            { field: 'end_sum', label: 'Сумма', width: '80px', align: 'right' },
             { field: 'description', label: 'Описание' }
         ],
         rowAttributes: (item) => {
@@ -824,19 +819,16 @@ const tableConfig = {
                 <td style="text-align: center;">${item.code || ''}</td>
                 <td><b>${item.name || ''}</b></td>
                 <td>${item.manufacturer || ''}</td>
+                <td>${item.sklad || ''}</td>
                 <td style="text-align: center;">${item.unit || 'шт'}</td>
                 
-                <!-- Остаток на начало -->
-                <td style="text-align: right; color: #555555;">${item.start_qty !== undefined ? item.start_qty : 0}</td>
-                <td style="text-align: right; color: #555555;">${item.start_sum !== undefined ? Number(item.start_sum).toFixed(2) : '0.00'}</td>
-                
                 <!-- Приход -->
-                <td style="text-align: right; color: #006600;">${item.income_qty || 0}</td>
-                <td style="text-align: right; color: #006600;">${item.income_sum ? Number(item.income_sum).toFixed(2) : '0.00'}</td>
+                <td style="text-align: right; color: #006600;">${item.income_qty || ''}</td>
+                <td style="text-align: right; color: #006600;">${item.income_sum ? Number(item.income_sum).toFixed(2) : ''}</td>
                 
                 <!-- Расход -->
-                <td style="text-align: right; color: #b30000;">${item.outcome_qty || 0}</td>
-                <td style="text-align: right; color: #b30000;">${item.outcome_sum ? Number(item.outcome_sum).toFixed(2) : '0.00'}</td>
+                <td style="text-align: right; color: #b30000;">${item.outcome_qty || ''}</td>
+                <td style="text-align: right; color: #b30000;">${item.outcome_sum ? Number(item.outcome_sum).toFixed(2) : ''}</td>
                 
                 <!-- Остаток на конец -->
                 <td style="text-align: right; font-weight: bold;">${item.end_qty !== undefined ? item.end_qty : 0}</td>
