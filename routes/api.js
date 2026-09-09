@@ -1675,6 +1675,7 @@ router.get('/stock_balances', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
@@ -1830,7 +1831,6 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1958,6 +1958,14 @@ router.get('/stock_movement', async (req, res) => {
                     SUM(sum_out) AS outcome_sum
                 FROM filtered_ops
                 GROUP BY zaphasti_id, warehouse_id
+            ),
+            latest_warehouse_op AS (
+                SELECT DISTINCT ON (zaphasti_id)
+                    zaphasti_id,
+                    warehouse_id,
+                    date
+                FROM all_operations
+                ORDER BY zaphasti_id, date DESC, qty_in DESC, qty_out DESC
             )
             SELECT 
                 z.id AS zaphasti_id,
@@ -1974,11 +1982,15 @@ router.get('/stock_movement', async (req, res) => {
                 COALESCE(t.outcome_sum, 0) AS outcome_sum,
                 (COALESCE(t.income_qty, 0) - COALESCE(t.outcome_qty, 0)) AS end_qty,
                 (COALESCE(t.income_sum, 0) - COALESCE(t.outcome_sum, 0)) AS end_sum,
-                z.description
+                z.description,
+                curr_s.name AS current_sklad,
+                lwo.warehouse_id AS current_warehouse_id
             FROM calculated_turnover t
             JOIN zaphasti z ON t.zaphasti_id = z.id
             LEFT JOIN skladi s ON t.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
+            LEFT JOIN latest_warehouse_op lwo ON z.id = lwo.zaphasti_id
+            LEFT JOIN skladi curr_s ON lwo.warehouse_id = curr_s.id
             WHERE (COALESCE(t.income_qty, 0) <> 0 OR COALESCE(t.outcome_qty, 0) <> 0)
             ORDER BY z.name ASC, s.name ASC;
         `;
