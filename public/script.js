@@ -7504,12 +7504,12 @@ function printMainTable() {
                         justify-content: space-between;
                         align-items: baseline;
                         border-bottom: 2px solid #333;
-                        padding-bottom: 8px;
-                        margin-bottom: 15px;
+                        padding-bottom: 6px;
+                        margin-bottom: 12px;
                     }
                     .print-header h2 {
                         margin: 0;
-                        font-size: 16px;
+                        font-size: 15px;
                         color: #111;
                     }
                     .print-header .print-date {
@@ -7519,14 +7519,11 @@ function printMainTable() {
                     table {
                         width: 100%;
                         border-collapse: collapse;
-                        table-layout: fixed;
                     }
                     th, td {
                         border: 1px solid #bbb;
-                        padding: 6px 8px;
-                        text-align: left;
+                        padding: 5px 6px;
                         vertical-align: middle;
-                        word-wrap: break-word;
                     }
                     th {
                         background-color: #f2f2f2 !important;
@@ -7535,17 +7532,24 @@ function printMainTable() {
                         text-align: center;
                         font-size: 11px;
                     }
-                    /* Скрываем интерактивные кнопки и элементы управления внутри таблицы */
+                    
+                    /* Точечная ширина для колонок, чтобы текст не ломался и не растягивался лишне */
+                    th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Артикул */
+                    th:nth-child(2), td:nth-child(2) { width: 60px; text-align: center; } /* Код */
+                    th:nth-child(3), td:nth-child(3) { width: auto; }                      /* Наименование (тянется сколько нужно) */
+                    th:nth-child(4), td:nth-child(4) { width: 75px; text-align: center; } /* Производитель */
+                    th:nth-child(5), td:nth-child(5) { width: 75px; text-align: center; } /* Группа цены */
+                    th:nth-child(6), td:nth-child(6) { width: auto; }                      /* Описание */
+                    th:nth-child(7), td:nth-child(7) { width: 90px; text-align: center; } /* Склад */
+                    th:nth-child(8), td:nth-child(8) { width: 140px; }                     /* МОЛ */
+                    th:nth-child(9), td:nth-child(9) { width: 65px; text-align: right; }  /* Кол-во */
+                    th:nth-child(10), td:nth-child(10) { width: 50px; text-align: center; } /* Ед. изм. */
+
+                    /* Скрываем всё лишнее интерактивное */
                     button, .btn, input {
                         display: none !important;
                     }
-                    /* Правое выравнивание для числовых колонок и сумм */
-                    td:nth-child(n+5) {
-                        text-align: right;
-                    }
-                    th:nth-child(n+5) {
-                        text-align: right;
-                    }
+                    
                     tr {
                         page-break-inside: avoid;
                     }
