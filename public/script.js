@@ -8100,6 +8100,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
     if (btnPrintExpense) {
         btnPrintExpense.onclick = () => printMainTable();
+        // Управляем видимостью: кнопка видна ТОЛЬКО на вкладке expense_items
+        btnPrintExpense.style.display = (currentExpenseView === 'expense_items') ? 'inline-block' : 'none';
     }
     
     // Управление кнопкой «Назад» для разных уровней
@@ -8125,9 +8127,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        
-        // УПРАВЛЕНИЕ КНОПКОЙ ПЕЧАТИ: скрываем на складах
-        if (btnPrintExpense) btnPrintExpense.style.display = 'none';
 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) backBtnElement.style.display = 'none';
@@ -8146,9 +8145,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        
-        // УПРАВЛЕНИЕ КНОПКОЙ ПЕЧАТИ: скрываем на поставщиках
-        if (btnPrintExpense) btnPrintExpense.style.display = 'none';
 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
@@ -8182,9 +8178,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        
-        // УПРАВЛЕНИЕ КНОПКОЙ ПЕЧАТИ: показываем ТОЛЬКО на уровне документов (expenses_by_receipts)
-        if (btnPrintExpense) btnPrintExpense.style.display = 'inline-block';
 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
@@ -8211,9 +8204,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
-        
-        // УПРАВЛЕНИЕ КНОПКОЙ ПЕЧАТИ: скрываем внутри позиций документа
-        if (btnPrintExpense) btnPrintExpense.style.display = 'none';
 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
