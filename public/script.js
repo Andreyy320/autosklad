@@ -2139,11 +2139,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
             is_posted: false 
         };
 
-        config.columns.forEach(col => {
-            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-                item[col.field] = currentDateTime;
-            }
-        });
+     config.columns.forEach(col => {
+    if (col.field === 'fact_date') return; // не трогаем при создании
+    if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+        item[col.field] = currentDateTime;
+    }
+    });
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
@@ -5067,7 +5068,6 @@ async function openReceiptForm(entity, item = null) {
             doc_number: `${prefix}${nextId}`,
             is_posted: false,
             date: currentDateTime,     /* Подставляем в обычное поле даты */
-            fact_date: currentDateTime /* И в поле даты факт */
         };
     } else {
         if (!item.date) {
@@ -5420,10 +5420,11 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
 
         config.columns.forEach(col => {
-            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-                item[col.field] = currentDateTime;
-            }
-        });
+    if (col.field === 'fact_date') return; // не трогаем при создании
+    if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+        item[col.field] = currentDateTime;
+    }
+    });
     } else {
         if (entity === 'move_items') {
             if (!item.currency) {
@@ -5833,11 +5834,12 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         }
 
-        config.columns.forEach(col => {
-            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-                item[col.field] = currentDateTime;
-            }
-        });
+       config.columns.forEach(col => {
+    if (col.field === 'fact_date') return; // не трогаем при создании
+    if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+        item[col.field] = currentDateTime;
+    }
+    });
     } else {
         if (entity === 'repair_items') {
             if (parentId && !item.repair_id) {
@@ -6317,7 +6319,6 @@ async function openRealizationForm(entity, item = null) {
             doc_number: `${prefix}${nextId}`,
             doc_date: currentDateTime,
             is_posted: false,
-            fact_date: currentDateTime
         };
         console.log("✨ Сформирован новый item по умолчанию:", item);
     } else {
@@ -9652,7 +9653,7 @@ async function postReceipt(receiptId) {
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
-                const response = await fetch(`/api/receipts/${receiptId}`, {
+                const response = await fetch(`/api/receipts/${receiptId}/post`, {   // 👈 добавили /post
                     method: 'PUT',
                     headers: { 
                         'Content-Type': 'application/json'
@@ -9679,7 +9680,7 @@ async function postRepair(repairId) {
         'Вы действительно хотите провести этот документ ремонта?',
         async () => {
             try {
-                const response = await fetch(`/api/repairs/${repairId}`, {
+                const response = await fetch(`/api/repairs/${repairId}/post`, {
                     method: 'PUT',
                     headers: { 
                         'Content-Type': 'application/json'
@@ -9706,7 +9707,7 @@ async function postRealization(realizationId) {
         'Вы действительно хотите провести этот документ реализации?',
         async () => {
             try {
-                const response = await fetch(`/api/realizations/${realizationId}`, {
+                const response = await fetch(`/api/realizations/${realizationId}/post`, {
                     method: 'PUT',
                     headers: { 
                         'Content-Type': 'application/json'

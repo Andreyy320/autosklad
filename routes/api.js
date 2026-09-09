@@ -6,6 +6,14 @@ const multer = require('multer'); // <--- 1. Подключаем multer
 
 
 const upload = multer({ dest: path.join(__dirname, '../uploads/') });
+
+
+function getServerNowString() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 module.exports = (pool) => {
     
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
@@ -957,7 +965,7 @@ router.put('/moves/:id', async (req, res) => {
     let factDate = oldDoc.fact_date;
     if (boolIsPosted) {
     if (!oldDoc.is_posted || !oldDoc.fact_date) {
-        factDate = new Date();
+        factDate = getServerNowString();
     }
 } else {
     factDate = null;
@@ -977,6 +985,9 @@ function toSafeTimestampString(val) {
     }
     return val;
 }
+
+
+
 
 const finalDate = toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date);
 const finalWhFrom = warehouse_from_id ? parseInt(warehouse_from_id, 10) : oldDoc.warehouse_from_id;
@@ -2311,8 +2322,8 @@ router.put('/moves/:id/post', async (req, res) => {
 
         let factDate = oldDoc.fact_date;
         if (!oldDoc.is_posted || !oldDoc.fact_date) {
-            factDate = new Date();
-        }
+    factDate = getServerNowString();       
+ }
 
         const updateQuery = `
             UPDATE moves 
@@ -2329,6 +2340,85 @@ router.put('/moves/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
+
+// ==================== БЫСТРОЕ ПРОВЕДЕНИЕ ПРИХОДА ====================
+router.put('/receipts/:id/post', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM receipts WHERE id = $1', [id]);
+        if (oldDocRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Документ не найден' });
+        }
+
+        const factDate = getServerNowString();
+
+        const result = await pool.query(
+            'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            [factDate, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка при проведении прихода:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    }
+});
+
+// ==================== БЫСТРОЕ ПРОВЕДЕНИЕ РЕМОНТА ====================
+router.put('/repairs/:id/post', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM repairs WHERE id = $1', [id]);
+        if (oldDocRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Документ не найден' });
+        }
+
+        const factDate = getServerNowString();
+
+        const result = await pool.query(
+            'UPDATE repairs SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            [factDate, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка при проведении ремонта:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    }
+});
+
+// ==================== БЫСТРОЕ ПРОВЕДЕНИЕ РЕАЛИЗАЦИИ ====================
+router.put('/realizations/:id/post', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM realizations WHERE id = $1', [id]);
+        if (oldDocRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Документ не найден' });
+        }
+
+        const factDate = getServerNowString();
+
+        const result = await pool.query(
+            'UPDATE realizations SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            [factDate, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка при проведении реализации:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // 2. Запись лога (POST)
