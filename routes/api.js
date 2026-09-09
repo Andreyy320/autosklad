@@ -1832,6 +1832,7 @@ router.get('/stock_batches', async (req, res) => {
     }
 });
 
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1981,8 +1982,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 
 router.get('/part_movement_details', async (req, res) => {
     try {
