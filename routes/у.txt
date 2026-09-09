@@ -1,409 +1,358 @@
-async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
-    // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
-    let entity, item, parentId;
+// ==========================================
+// УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
+// ==========================================
+router.put('/:entity/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        let { entity, id } = req.params;
 
-    if (typeof entityOrItem === 'object' && entityOrItem !== null) {
-        // Если первым аргументом передали объект (например, item из editSelectedEntity)
-        item = entityOrItem;
-        entity = typeof currentEntity !== 'undefined' ? currentEntity : 'moves';
-        parentId = itemArg; // Второй аргумент в таком случае может быть parentId
-    } else {
-        // Стандартный вызов: (entity, item, parentId)
-        entity = entityOrItem || (typeof currentEntity !== 'undefined' ? currentEntity : 'moves');
-        item = itemArg;
-        parentId = parentIdArg;
-    }
+        if (entity === 'brands') entity = 'car_brands';
+        if (entity === 'models') entity = 'car_models';
+        if (entity === 'bodies') entity = 'kyzov_type';
 
-    console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
-
-    const config = getConfig(entity);
-    const drawer = getOrCreateDrawer();
-
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-        if (!item || !item.id) {
-        let docNumberValue = '';
-
-        if (entity === 'moves') {
-            // Номер документа для 'moves' теперь атомарно генерирует бэкенд
-            // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
-            docNumberValue = '(будет присвоен автоматически)';
-        } else {
-            // Для остальных сущностей (например, move_items) поведение не меняем
-            let nextId = 1;
-            const prefix = 'ПМ-';
-
-            try {
-                const response = await fetch(`/api/${entity}`);
-                if (response.ok) {
-                    const records = await response.json();
-                    if (records.length > 0) {
-                        const maxId = Math.max(...records.map(r => r.id || 0));
-                        nextId = maxId + 1;
-                    }
-                } else {
-                    console.warn(`Сервер вернул не OK при автонумерации: ${response.status}`);
-                }
-            } catch (e) {
-                console.error('Не удалось получить список для автонумерации', e);
-            }
-
-            docNumberValue = `${prefix}${nextId}`;
-        }
-
-        item = { 
-            doc_number: docNumberValue,
-            is_posted: false 
-        };
-
-        if (entity === 'move_items') {
-            item.currency = 'Рубль ПМР';
-            if (parentId) {
-                item.move_id = parentId;
-            }
-        }
-
-        config.columns.forEach(col => {
-            if (col.field === 'fact_date') return; // не трогаем при создании
-            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-                item[col.field] = currentDateTime;
-            }
-        });
-    } else {
-        if (entity === 'move_items') {
-            if (!item.currency) {
-                item.currency = 'Рубль ПМР';
-            }
-            if (parentId && !item.move_id) {
-                item.move_id = parentId;
-            }
-        }
-    }
-
-    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
-
-    let html = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title} ${isPosted ? '<span style="color: green; font-size: 12px; margin-left: 8px;">(Проведен)</span>' : ''}</h3>
-            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
-        </div>
-        <form id="entity-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}" data-item-id="${item && item.id ? item.id : ''}">
-    `;
-
-    if (entity === 'move_items') {
-        const activeMoveId = parentId || (item ? item.move_id : '');
-        html += `<input type="hidden" name="move_id" value="${activeMoveId}">`;
-        html += `<input type="hidden" name="currency" value="Рубль ПМР">`;
-    }
-
-    for (const col of config.columns) {
-        if (col.field === 'id' || col.field === 'move_id' || col.field === 'currency') continue;
-        if (col.insert === false) continue;
-        if ((col.update === false || col.edit === false) && item && item.id) continue;
-
-        if (entity === 'move_items') {
-            const allowedFields = ['zaphasti_id', 'quantity', 'description'];
-            if (!allowedFields.includes(col.field)) {
-                continue;
-            }
-        }
-
-        let val = '';
-        if (item) {
-            const possibleKeys = [
-                col.field, 
-                col.field.replace('_id', ''), 
-                col.field + '_id',
-                col.ref,
-                col.ref ? col.ref.slice(0, -1) : ''
-            ];
-
-            for (const k of possibleKeys) {
-                if (k && item[k] !== undefined && item[k] !== null && item[k] !== '') {
-                    val = item[k];
-                    break;
-                }
-            }
-
-            if (val && typeof val === 'object' && val.id !== undefined) {
-                val = val.id;
-            }
-        }
-
-        let inputHtml = '';
-        let fieldReadonly = col.readonly;
-        
-        // Разрешаем менять только поле is_posted (снятие с проведения), если документ проведен
-        if (isPosted && col.field !== 'is_posted') {
-            fieldReadonly = true;
-        }
-
-        const controlStyle = fieldReadonly 
-            ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
-            : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
-
-        if (col.field === 'is_posted') {
-            const isCurrentPosted = val === true || val === 'true' || val === 1 || val === '1';
-            inputHtml = `
-                <select name="${col.field}" style="${controlStyle}">
-                    <option value="false" ${!isCurrentPosted ? 'selected' : ''}>Не проведен</option>
-                    <option value="true" ${isCurrentPosted ? 'selected' : ''}>Проведен</option>
-                </select>
-            `;
-        } else if (col.ref) {
-            const referenceName = col.ref;
-            let refItems = await fetchReferenceData(referenceName);
-
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-
-            refItems.forEach(refItem => {
-                let displayName = '';
-                if (referenceName === 'zaphasti') {
-                    const art = refItem.article ? `[${refItem.article}] ` : '';
-                    const nm = refItem.name || refItem.title || '';
-                    displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
-                } else {
-                    displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
-                }
-
-                const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
-                optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
-            });
-
-            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
-            inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-        } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-            let formattedVal = '';
-            if (col.field === 'fact_date' && !val && isPosted) {
-                val = currentDateTime;
-            }
-
-            if (val) {
-                const d = new Date(val);
-                if (!isNaN(d)) {
-                    const year = d.getFullYear();
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const hours = String(d.getHours()).padStart(2, '0');
-                    const minutes = String(d.getMinutes()).padStart(2, '0');
-                    formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
-                }
-            }
-            inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
-        } else if (col.field === 'description') {
-            inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
-        } else {
-            inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
-        }
-
-        html += `
-            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
-                ${col.label}:
-                ${inputHtml}
-            </label>
-        `;
-    }
-
-    html += `
-                <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
-                    <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
-                </div>
-            </form>
-    `;
-
-    drawer.innerHTML = html;
-    drawer.style.right = '0';
-
-    let rawFormElement = drawer.querySelector('#entity-form');
-    const formElement = rawFormElement.cloneNode(true);
-    rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
-
-    const isPostedSelect = formElement.querySelector('[name="is_posted"]');
-    const factDateInput = formElement.querySelector('[name="fact_date"]');
-
-    if (isPostedSelect && factDateInput) {
-        isPostedSelect.addEventListener('change', () => {
-            if (isPostedSelect.value === 'true' && !factDateInput.value) {
-                factDateInput.value = currentDateTime;
-            } else if (isPostedSelect.value === 'false') {
-                factDateInput.value = '';
-            }
-        });
-    }
-
-    if (formElement) {
-        const pairs = [
-            { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
-            { warehouse: formElement.querySelector('[name="warehouse_id"]'), mol: formElement.querySelector('[name="mol_id"]') },
-            { warehouse: formElement.querySelector('[name="sklad_id"]'), mol: formElement.querySelector('[name="mol_id"]') }
+        const allowedTables = [
+            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
+            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
+            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
+            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
+            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
+            'moves', 'statuses', 
+            'autoservices', 'payment_types', 'accidents',
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
 
-        pairs.forEach(({ warehouse, mol }) => {
-            if (!warehouse || !mol) return;
+        if (!allowedTables.includes(entity)) {
+            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        }
 
-            async function filterMols() {
-                const selectedWarehouseId = warehouse.value;
-                const currentMolValue = mol.value;
+        if (entity === 'accidents' && req.body.car_model !== undefined) {
+            delete req.body.car_model;
+        }
 
-                try {
-                    const [molRes, usersRes] = await Promise.all([
-                        fetch('/api/mol'),
-                        fetch('/api/mol_users')
-                    ]);
-
-                    if (!molRes.ok) return;
-                    const mols = await molRes.json();
-                    const users = usersRes.ok ? await usersRes.json() : [];
-
-                    const usersMap = {};
-                    users.forEach(u => {
-                        usersMap[u.id] = u.name || u.login || u.description || `Пользователь #${u.id}`;
-                    });
-
-                    mol.innerHTML = '<option value="">-- Не выбрано --</option>';
-
-                    mols.forEach(m => {
-                        if (!selectedWarehouseId || String(m.warehouse_id) === String(selectedWarehouseId)) {
-                            const option = document.createElement('option');
-                            option.value = m.id;
-                            const userName = usersMap[m.user_id] || m.description || `МОЛ #${m.id}`;
-                            option.textContent = userName;
-
-                            if (String(m.id) === String(currentMolValue)) {
-                                option.selected = true;
-                            }
-                            mol.appendChild(option);
-                        }
-                    });
-                } catch (err) {
-                    console.error('Ошибка при фильтрации МОЛ:', err);
-                }
+        if (entity === 'repairs') {
+            if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
+                req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
             }
+            delete req.body.repair_type;
 
-            warehouse.addEventListener('change', () => {
-                mol.value = '';
-                filterMols();
-            });
-
-            if (warehouse.value) {
-                filterMols();
+            if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
+                req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
             }
-        });
-    }
+            delete req.body.doc_type;
+        }
 
-    const deleteBtn = drawer.querySelector('#delete-btn');
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', async () => {
-            showConfirmModal(
-                'Подтверждение удаления',
-                'Вы уверены, что хотите удалить эту запись?',
-                async () => {
-                    const currentUserId = localStorage.getItem('currentUserId') || '';
+        if (req.body.is_posted !== undefined) {
+            if (req.body.is_posted === '' || req.body.is_posted === null) {
+                delete req.body.is_posted;
+            } else {
+                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
+            }
+        }
 
-                    try {
-                        const response = await fetch(`/api/${entity}/${item.id}`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'x-user-id': currentUserId
-                            }
-                        });
+        // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
+        if (entity === 'repair_works') {
+            if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
+                req.body.vidy_rabot_id = req.body.work_id;
+            }
+            delete req.body.work_id;
+        }
 
-                        if (response.ok) {
-                            closeDrawer();
-                            showAppNotification('Запись успешно удалена', 'success');
+        // ==================== ЗАЩИТА НОМЕРА ДОКУМЕНТА ОТ ИЗМЕНЕНИЯ ====================
+        // Для документных сущностей номер присваивается один раз при создании
+        // (см. DOC_NUMBER_CONFIG и getNextDocNumber в POST). Что бы фронтенд ни прислал
+        // в doc_number при редактировании — игнорируем, чтобы не словить конфликт
+        // с UNIQUE-индексом и не потерять гарантию уникальности номера задним числом.
+        if (DOC_NUMBER_CONFIG[entity] && req.body.doc_number !== undefined) {
+            delete req.body.doc_number;
+        }
+        // ================================================================================
 
-                            if (entity === 'move_items' && parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
-                                refreshData();
-                            }
-                        } else {
-                            const errData = await response.json().catch(() => ({}));
-                            showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
-                        }
-                    } catch (err) {
-                        showAppNotification('Ошибка соединения с сервером', 'error');
+        await client.query('BEGIN');
+
+        // Получаем старую запись для сравнения изменений (что на что поменялось)
+        const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
+        if (currentDocRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+        const oldDoc = currentDocRes.rows[0];
+
+        const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations'];
+        if (docWithStatusTables.includes(entity)) {
+            const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
+
+            if (oldIsPosted) {
+                const allowedKeysForPosted = ['is_posted', 'fact_date'];
+                const incomingKeys = Object.keys(req.body);
+
+                for (const key of incomingKeys) {
+                    if (!allowedKeysForPosted.includes(key)) {
+                        delete req.body[key];
                     }
                 }
-            );
-        });
-    }
-
-    let isSubmitting = false;
-
-    formElement.addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        if (isSubmitting) return; 
-        isSubmitting = true;
-
-        const saveButton = formElement.querySelector('#save-btn');
-        if (saveButton) saveButton.disabled = true;
-
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-
-        if (data.is_posted !== undefined && data.is_posted !== '') {
-            data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+            }
         }
 
-        if (entity === 'move_items') {
-            const currentParentId = parentId || formElement.getAttribute('data-parent-id');
-            if (currentParentId) {
-                data.move_id = currentParentId;
-            }
-            if (data.zaphasti && !data.zaphasti_id) {
-                data.zaphasti_id = data.zaphasti;
-            }
-            data.currency = 'Рубль ПМР';
-        }
+        if (entity === 'repair_works') {
+            const targetRepairId = req.body.repair_id || oldDoc.repair_id;
 
-        try {
-            const isEdit = item && item.id;
-            const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
-            const method = isEdit ? 'PUT' : 'POST';
-            const currentUserId = localStorage.getItem('currentUserId') || '';
-
-            const response = await fetch(url, {
-                method: method,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'x-user-id': currentUserId
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (response.ok) {
-                closeDrawer();
-                showAppNotification('Данные успешно сохранены', 'success');
-
-                if (entity === 'move_items' && parentId) {
-                    loadDetailData(entity, parentId);
-                } else {
-                    refreshData();
+            if (targetRepairId) {
+                const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [targetRepairId]);
+                if (repairCheck.rows.length > 0) {
+                    const isPostedVal = repairCheck.rows[0].is_posted;
+                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ error: 'Нельзя изменять работы в уже проведенном ремонте!' });
+                    }
                 }
-            } else {
-                const errData = await response.json().catch(() => ({}));
-                console.error(`[SUBMIT ERROR] Сервер вернул ошибку ${response.status}:`, errData);
-                showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
-                isSubmitting = false; 
-                if (saveButton) saveButton.disabled = false;
             }
-        } catch (err) {
-            console.error('[SUBMIT EXCEPTION] Сетевая или программная ошибка при отправке:', err);
-            showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
-            if (saveButton) saveButton.disabled = false;
         }
-    });
-}
+
+        // Проверка уникальности при обновлении запчастей (код и связка артикул+производитель исключая текущий ID)
+        if (entity === 'zaphasti') {
+            const { code, article, proizvoditel_id } = req.body;
+
+            if (code !== undefined && code !== null && code !== '') {
+                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1 AND id <> $2', [code, id]);
+                if (codeCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Запчасть с таким кодом уже существует!' });
+                }
+            }
+
+            // Если артикул или производитель меняются, проверяем связку
+            const targetArticle = article !== undefined ? article : oldDoc.article;
+            const targetProvId = proizvoditel_id !== undefined ? proizvoditel_id : oldDoc.proizvoditel_id;
+
+            if (targetArticle && targetProvId) {
+                const artProvCheck = await client.query(
+                    'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2 AND id <> $3', 
+                    [targetArticle, targetProvId, id]
+                );
+                if (artProvCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Запчасть с таким артикулом для этого производителя уже существует!' });
+                }
+            }
+        }
+
+        // Удаляем id и поля со значением undefined, чтобы они не дублировались в параметрах запроса
+        delete req.body.id;
+        Object.keys(req.body).forEach(key => {
+            if (req.body[key] === undefined) {
+                delete req.body[key];
+            }
+        });
+
+        const keys = Object.keys(req.body);
+        const values = Object.values(req.body);
+
+        if (keys.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нет данных для обновления или документ защищен от изменений' });
+        }
+
+        const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
+        const processedValues = values.map(val => (val === '' || val === undefined ? null : val));
+
+        const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
+        const result = await client.query(query, [...processedValues, id]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+
+        const updatedDoc = result.rows[0];
+
+        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE с детализацией изменений) ====================
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const userId = currentUserId || req.body.user_id || oldDoc.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            // Сравниваем старые и новые значения по измененным полям
+            const changes = {};
+            for (const key of keys) {
+                const oldValue = oldDoc[key];
+                const newValue = updatedDoc[key];
+                if (String(oldValue) !== String(newValue)) {
+                    changes[key] = {
+                        from: oldValue,
+                        to: newValue
+                    };
+                }
+            }
+
+            const detailsObj = {
+                updated_fields: req.body,
+                changes: changes
+            };
+
+            let detailsJson = '{}';
+            try {
+                detailsJson = JSON.stringify(detailsObj);
+            } catch (e) {
+                detailsJson = '{}';
+            }
+
+            // Проверяем структуру таблицы audit_logs и записываем лог через тот же client с явным приведением к jsonb
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                [
+                    userId,
+                    'UPDATE',
+                    entity,
+                    id,
+                    detailsJson,
+                    clientIp,
+                    entity
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога (не критично):', logErr.message);
+        }
+        // ============================================================================
+
+        await client.query('COMMIT');
+        res.json(updatedDoc);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при обновлении в БД:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера при обновлении: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
+// ==========================================
+// УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
+// ==========================================
+router.delete('/:entity/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        let { entity, id } = req.params;
+
+        if (entity === 'brands') entity = 'car_brands';
+        if (entity === 'models') entity = 'car_models';
+        if (entity === 'bodies') entity = 'kyzov_type';
+
+        const allowedTables = [
+            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
+            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
+            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
+            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
+            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
+            'moves', 'statuses', 
+            'autoservices', 'payment_types', 'accidents',
+            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
+            'customer_cars','part_discounts','service_discounts','realizations'
+        ];
+
+        if (!allowedTables.includes(entity)) {
+            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        }
+
+        await client.query('BEGIN');
+
+        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs') {
+            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
+            // одного и того же документа прилетят одновременно, второй дождётся коммита первого
+            // и увидит уже актуальный статус, а не устаревший "не проведён".
+            const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
+            if (docCheck.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Запись с таким ID не найдена' });
+            }
+            const isPosted = docCheck.rows[0].is_posted;
+            if (isPosted === true || isPosted === 'true' || isPosted === 2 || isPosted === 1) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя удалить уже проведенный документ!' });
+            }
+        }
+
+        if (entity === 'repair_works') {
+            const itemRes = await client.query('SELECT repair_id FROM repair_works WHERE id = $1', [id]);
+            if (itemRes.rows.length > 0 && itemRes.rows[0].repair_id) {
+                const parentCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [itemRes.rows[0].repair_id]);
+                if (parentCheck.rows.length > 0) {
+                    const pVal = parentCheck.rows[0].is_posted;
+                    if (pVal === true || pVal === 'true' || pVal === 2 || pVal === 1) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({ error: 'Нельзя удалять работы из проведенного ремонта!' });
+                    }
+                }
+            }
+        }
+
+        if (entity === 'receipts') {
+            await client.query('DELETE FROM receipt_items WHERE receipt_id = $1', [id]);
+        } else if (entity === 'moves') {
+            await client.query('DELETE FROM move_items WHERE move_id = $1', [id]);
+        } else if (entity === 'repairs') {
+            await client.query('DELETE FROM repair_items WHERE repair_id = $1', [id]);
+            await client.query('DELETE FROM repair_works WHERE repair_id = $1', [id]);
+        } else if (entity === 'accidents') {
+            await client.query('DELETE FROM accident_invoices WHERE dtp_id = $1', [id]);
+            await client.query('DELETE FROM accident_payments WHERE dtp_id = $1', [id]);
+            await client.query('DELETE FROM accident_events WHERE dtp_id = $1', [id]);
+        }
+
+        const query = `DELETE FROM "${entity}" WHERE id = $1 RETURNING *;`;
+        const result = await client.query(query, [id]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись с таким ID не найдена' });
+        }
+
+        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (DELETE) ====================
+        try {
+            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+            const deletedData = result.rows[0];
+            const userId = currentUserId || deletedData.user_id || req.body.user_id || null;
+            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            let detailsJson = '{}';
+            try {
+                detailsJson = JSON.stringify(deletedData);
+            } catch (e) {
+                detailsJson = '{}';
+            }
+
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                [
+                    userId,
+                    'DELETE',
+                    entity,
+                    id,
+                    detailsJson,
+                    clientIp,
+                    entity
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога удаления (не критично):', logErr.message);
+        }
+        // ============================================================================
+
+        await client.query('COMMIT');
+        res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при удалении из БД:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера при удалении: ' + err.message });
+    } finally {
+        client.release();
+    }
+});

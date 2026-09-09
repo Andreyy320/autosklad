@@ -7107,6 +7107,8 @@ router.put('/:entity/:id', async (req, res) => {
             // Сравниваем старые и новые значения по измененным полям
             const changes = {};
             for (const key of keys) {
+                // Хеш пароля никогда не попадает в лог изменений
+                if (entity === 'users' && key === 'password_hash') continue;
                 const oldValue = oldDoc[key];
                 const newValue = updatedDoc[key];
                 if (String(oldValue) !== String(newValue)) {
@@ -7117,8 +7119,14 @@ router.put('/:entity/:id', async (req, res) => {
                 }
             }
 
+            // Хеш пароля никогда не попадает в лог отправленных полей
+            const safeUpdatedFields = { ...req.body };
+            if (entity === 'users' && safeUpdatedFields.password_hash !== undefined) {
+                delete safeUpdatedFields.password_hash;
+            }
+
             const detailsObj = {
-                updated_fields: req.body,
+                updated_fields: safeUpdatedFields,
                 changes: changes
             };
 
@@ -7149,6 +7157,12 @@ router.put('/:entity/:id', async (req, res) => {
         // ============================================================================
 
         await client.query('COMMIT');
+
+        // Никогда не отправляем хеш пароля на клиент, даже для таблицы users
+        if (entity === 'users' && updatedDoc && updatedDoc.password_hash !== undefined) {
+            const { password_hash, ...safeDoc } = updatedDoc;
+            return res.json(safeDoc);
+        }
         res.json(updatedDoc);
 
     } catch (err) {
@@ -7248,6 +7262,10 @@ router.delete('/:entity/:id', async (req, res) => {
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const deletedData = result.rows[0];
+            // Никогда не сохраняем хеш пароля в логах аудита и не отдаём его в ответе
+            if (entity === 'users' && deletedData && deletedData.password_hash !== undefined) {
+                delete deletedData.password_hash;
+            }
             const userId = currentUserId || deletedData.user_id || req.body.user_id || null;
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
