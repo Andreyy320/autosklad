@@ -1861,42 +1861,76 @@ router.get('/stock_movement', async (req, res) => {
 
         const query = `
             WITH all_operations AS (
-                -- 1. Приходы от поставщиков
-                SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
-                FROM receipt_items ri 
-                JOIN receipts r ON ri.receipt_id = r.id 
-                WHERE r.warehouse_id IS NOT NULL
-                
+                -- 1. Приходы (берем реальную закупочную цену из warehouse_batches по приходу)
+                SELECT 
+                    wb.zaphasti_id, 
+                    wb.warehouse_id, 
+                    r.date, 
+                    wb.quantity AS qty, 
+                    (wb.quantity * wb.price_rub) AS sum, 
+                    'in' as op_type
+                FROM warehouse_batches wb
+                JOIN receipts r ON wb.receipt_id = r.id 
+                WHERE wb.warehouse_id IS NOT NULL AND wb.receipt_id IS NOT NULL
+
                 UNION ALL
                 
-                -- 2. Перемещения: РАСХОД со склада-отправителя
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
+                -- 2. Перемещения (приход) — строго по партии или последней закупочной цене без наценки
+                SELECT 
+                    mi.zaphasti_id, 
+                    m.warehouse_to_id AS warehouse_id, 
+                    m.date, 
+                    mi.quantity AS qty, 
+                    (mi.quantity * COALESCE(wb_in.price_rub, mi.price, 0)) AS sum, 
+                    'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
-                
-                UNION ALL
-                
-                -- 3. Перемещения: ПРИХОД на склад-получатель (строго по той же цене!)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
-                FROM move_items mi 
-                JOIN moves m ON mi.move_id = m.id 
+                LEFT JOIN warehouse_batches wb_in ON wb_in.receipt_id = mi.receipt_id AND wb_in.zaphasti_id = mi.zaphasti_id AND wb_in.warehouse_id = m.warehouse_to_id
                 WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
                 
+                -- 3. Перемещения (расход) — по закупочной цене списанной партии
+                SELECT 
+                    mi.zaphasti_id, 
+                    m.warehouse_from_id AS warehouse_id, 
+                    m.date, 
+                    mi.quantity AS qty, 
+                    (mi.quantity * COALESCE(wb_out.price_rub, mi.price, 0)) AS sum, 
+                    'out' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                LEFT JOIN warehouse_batches wb_out ON wb_out.receipt_id = mi.receipt_id AND wb_out.zaphasti_id = mi.zaphasti_id AND wb_out.warehouse_id = m.warehouse_from_id
+                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                
+                UNION ALL
+                
                 -- 4. Списания в ремонт
-                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
+                SELECT 
+                    rep_i.zaphast_id AS zaphasti_id, 
+                    rep.warehouse_id, 
+                    rep.doc_date AS date, 
+                    rep_i.quantity AS qty, 
+                    (rep_i.quantity * COALESCE(wb_rep.price_rub, rep_i.price, 0)) AS sum, 
+                    'out' as op_type
                 FROM repair_items rep_i 
                 JOIN repairs rep ON rep_i.repair_id = rep.id 
+                LEFT JOIN warehouse_batches wb_rep ON wb_rep.receipt_id = rep_i.receipt_id AND wb_rep.zaphasti_id = rep_i.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
                 WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
                 
                 UNION ALL
                 
-                -- 5. Реализации (продажи)
-                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum, 'out' as op_type
+                -- 5. Реализации (продажи) — строго по закупочной цене партии, без розничной наценки
+                SELECT 
+                    ri_rel.zaphasti_id, 
+                    r_rel.sklad_id AS warehouse_id, 
+                    COALESCE(r_rel.doc_date, NOW()) AS date, 
+                    ri_rel.quantity AS qty, 
+                    (ri_rel.quantity * COALESCE(wb_rel.price_rub, ri_rel.purchase_price, 0)) AS sum, 
+                    'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
+                LEFT JOIN warehouse_batches wb_rel ON wb_rel.receipt_id = ri_rel.receipt_id AND wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             -- Последний склад для каждой запчасти
@@ -1982,6 +2016,9 @@ router.get('/stock_movement', async (req, res) => {
     }
 });
 
+
+
+// ==================== ДЕТАЛИЗАЦИЯ ДВИЖЕНИЯ ЗАПЧАСТИ ====================
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
@@ -1993,10 +2030,13 @@ router.get('/part_movement_details', async (req, res) => {
         const queryParams = [zaphasti_id];
         let paramIndex = 2;
 
+        let currentWarehouseId = null;
         let warehouseCondition = '';
+
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
-            queryParams.push(parseInt(warehouse_id, 10));
-            warehouseCondition = ` AND (warehouse_from_id = $${paramIndex} OR warehouse_to_id = $${paramIndex} OR sklad_id = $${paramIndex})`;
+            currentWarehouseId = parseInt(warehouse_id, 10);
+            queryParams.push(currentWarehouseId);
+            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
             paramIndex++;
         }
 
@@ -2012,76 +2052,62 @@ router.get('/part_movement_details', async (req, res) => {
             paramIndex++;
         }
 
+        if (currentWarehouseId !== null) {
+            queryParams.push(currentWarehouseId);
+        }
+        const whParamIndex = currentWarehouseId !== null ? paramIndex++ : null;
+
         const query = `
             WITH all_ops AS (
-                -- 1. Приходы (Поставщик -> Склад) [ИН]
+                -- 1. Приходы (Поставщик -> Склад) с ценой из warehouse_batches
                 SELECT 
                     r.date AS op_date,
                     r.doc_number AS doc_num,
                     'Приход запчастей' AS doc_type,
                     COALESCE(p.name, 'Поставщик не указан') AS source_info,
                     CONCAT(COALESCE(s.name, 'Склад #' || r.warehouse_id), ' | МОЛ: ', COALESCE(u.name, 'не назначен')) AS dest_info,
-                    ri.quantity AS qty,
-                    COALESCE(ri.price_rub, ri.price, 0) AS price,
-                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum,
+                    wb.quantity AS qty,
+                    COALESCE(wb.price_rub, ri.price, 0) AS price,
+                    (wb.quantity * COALESCE(wb.price_rub, ri.price, 0)) AS sum,
                     ri.description,
                     NULL::int AS warehouse_from_id,
                     r.warehouse_id AS warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
+                JOIN warehouse_batches wb ON wb.receipt_id = ri.receipt_id AND wb.zaphasti_id = ri.zaphasti_id AND wb.warehouse_id = r.warehouse_id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
                 LEFT JOIN users u ON m_mol.user_id = u.id
-                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
+                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL
 
                 UNION ALL
 
-                -- 2. Перемещения: РАСХОД со склада-отправителя [РАСХОД (-)]
+                -- 2. Перемещения (Склад-источник -> Склад-получатель) по исходной закупочной цене партии
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
-                    'Перемещение (расход)' AS doc_type,
+                    'Перемещение' AS doc_type,
                     CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
                     CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
-                    (-1 * mi.quantity) AS qty,
-                    COALESCE(mi.price, 0) AS price,
-                    (-1 * mi.quantity * COALESCE(mi.price, 0)) AS sum,
+                    CASE 
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
+                        ELSE mi.quantity
+                    END AS qty,
+                    COALESCE(wb_m.price_rub, mi.price, 0) AS price,
+                    CASE 
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(wb_m.price_rub, mi.price, 0))
+                        ELSE (mi.quantity * COALESCE(wb_m.price_rub, mi.price, 0))
+                    END AS sum,
                     mi.description,
                     m.warehouse_from_id,
-                    NULL::int AS warehouse_to_id,
-                    NULL::int AS sklad_id
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
-                LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
-                LEFT JOIN users u_from ON mol_from.user_id = u_from.id
-                LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
-                LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
-                LEFT JOIN users u_to ON mol_to.user_id = u_to.id
-                WHERE mi.zaphasti_id = $1 
-                  AND m.warehouse_from_id IS NOT NULL 
-                  AND (m.is_posted::text IN ('true', '1', '2'))
-
-                UNION ALL
-
-                -- 3. Перемещения: ПРИХОД на склад-получатель [ИН (+)]
-                SELECT 
-                    m.date AS op_date,
-                    m.doc_number AS doc_num,
-                    'Перемещение (приход)' AS doc_type,
-                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
-                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
-                    mi.quantity AS qty,
-                    COALESCE(mi.price, 0) AS price,
-                    (mi.quantity * COALESCE(mi.price, 0)) AS sum,
-                    mi.description,
-                    NULL::int AS warehouse_from_id,
                     m.warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN warehouse_batches wb_m ON wb_m.receipt_id = mi.receipt_id AND wb_m.zaphasti_id = mi.zaphasti_id 
+                    AND wb_m.warehouse_id = CASE WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN m.warehouse_from_id ELSE m.warehouse_to_id END
                 LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
                 LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
                 LEFT JOIN users u_from ON mol_from.user_id = u_from.id
@@ -2089,12 +2115,12 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
                 LEFT JOIN users u_to ON mol_to.user_id = u_to.id
                 WHERE mi.zaphasti_id = $1 
-                  AND m.warehouse_to_id IS NOT NULL 
+                  AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
                   AND (m.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
-                -- 4. Списания в ремонт [РАСХОД (-)]
+                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт)
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2102,14 +2128,15 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
                     CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
                     (-1 * ri_rep.quantity) AS qty,
-                    COALESCE(ri_rep.price, 0) AS price,
-                    (-1 * ri_rep.quantity * COALESCE(ri_rep.price, 0)) AS sum,
+                    COALESCE(wb_rep.price_rub, ri_rep.price, 0) AS price,
+                    (-1 * ri_rep.quantity * COALESCE(wb_rep.price_rub, ri_rep.price, 0)) AS sum,
                     ri_rep.description,
                     rep.warehouse_id AS warehouse_from_id,
                     NULL::int AS warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM repair_items ri_rep
                 JOIN repairs rep ON ri_rep.repair_id = rep.id
+                LEFT JOIN warehouse_batches wb_rep ON wb_rep.receipt_id = ri_rep.receipt_id AND wb_rep.zaphasti_id = ri_rep.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
                 LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
                 LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
                 LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
@@ -2120,22 +2147,23 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 5. Реализации / Продажи [РАСХОД (-)]
+                -- 4. Реализации / Продажи (Склад -> Покупатель) по чистой закупочной цене партии
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
-                    CAST(r_rel.id AS VARCHAR) AS doc_number,
+                    CAST(r_rel.id AS VARCHAR) AS doc_num,
                     'Реализация (продажа)' AS doc_type,
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(ri_rel.purchase_price, ri_rel.price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
+                    COALESCE(wb_rel.price_rub, ri_rel.purchase_price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(wb_rel.price_rub, ri_rel.purchase_price, 0)) AS sum,
                     ri_rel.description,
-                    r_rel.sklad_id AS warehouse_from_id,
+                    r_rel.sklad_id AS warehouse_id,
                     NULL::int AS warehouse_to_id,
                     r_rel.sklad_id AS sklad_id
                 FROM realization_items ri_rel
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                LEFT JOIN warehouse_batches wb_rel ON wb_rel.receipt_id = ri_rel.receipt_id AND wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
                 LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
@@ -2158,8 +2186,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
