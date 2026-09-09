@@ -7880,7 +7880,11 @@ function resetSharedUiForEntity(entity) {
     // 1. Кнопка "Печать" — по умолчанию скрыта, показываем только явно перечисленным
     const printBtn = document.querySelector('button[onclick="printMainTable()"]');
     if (printBtn) {
-        const printableEntities = ['car_cards', 'realizations', 'stock_balances', 'stock_movement'];
+        const printableEntities = [
+            'car_cards', 'realizations', 'stock_balances', 'stock_movement',
+            'money_receipts_by_sklad', 'money_receipts',
+            'expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts'
+        ];
         printBtn.style.display = printableEntities.includes(entity) ? 'inline-block' : 'none';
     }
 
