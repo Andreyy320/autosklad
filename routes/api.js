@@ -1936,6 +1936,7 @@ router.get('/stock_movement', async (req, res) => {
                 z.name,
                 p.name AS manufacturer,
                 COALESCE(z.unit, 'шт') AS unit,
+                -- Сохраняем старые поля для совместимости с фронтендом
                 COALESCE(ob.start_qty, 0) AS start_qty,
                 COALESCE(ob.start_sum, 0) AS start_sum,
                 COALESCE(tp.income_qty, 0) AS income_qty,
@@ -1944,6 +1945,17 @@ router.get('/stock_movement', async (req, res) => {
                 COALESCE(tp.outcome_sum, 0) AS outcome_sum,
                 (COALESCE(ob.start_qty, 0) + COALESCE(tp.income_qty, 0) - COALESCE(tp.outcome_qty, 0)) AS end_qty,
                 (COALESCE(ob.start_sum, 0) + COALESCE(tp.income_sum, 0) - COALESCE(tp.outcome_sum, 0)) AS end_sum,
+                
+                -- Дополнительные понятные алиасы (Остаток на начало, приход, расход, остаток на конец)
+                COALESCE(ob.start_qty, 0) AS ostatok_na_nachalo_kolvo,
+                COALESCE(ob.start_sum, 0) AS ostatok_na_nachalo_summa,
+                COALESCE(tp.income_qty, 0) AS prishlo_kolvo,
+                COALESCE(tp.income_sum, 0) AS prishlo_summa,
+                COALESCE(tp.outcome_qty, 1) AS ushlo_kolvo, -- сохранено оригинальное написание/структура
+                COALESCE(tp.outcome_sum, 0) AS ushlo_summa,
+                (COALESCE(ob.start_qty, 0) + COALESCE(tp.income_qty, 0) - COALESCE(tp.outcome_qty, 0)) AS ostatok_na_konec_kolvo,
+                (COALESCE(ob.start_sum, 0) + COALESCE(tp.income_sum, 0) - COALESCE(tp.outcome_sum, 0)) AS ostatok_na_konec_summa,
+
                 z.description,
                 curr_s.name AS current_sklad
             FROM combined_keys ck
@@ -1969,6 +1981,9 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
