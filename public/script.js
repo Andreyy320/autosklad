@@ -7640,15 +7640,16 @@ function ensureDetailPrintButton() {
     const oldBtn = document.getElementById('detail-print-btn');
     if (oldBtn) oldBtn.remove();
 
-      // Проверяем видимость КОНКРЕТНЫХ блоков вкладок (не общей обёртки car-tabs-bar,
-    // так как она одна на всех и включается даже для receipts/moves/customers/repairs)
-    const possibleTabBars = [
-        document.getElementById('tabs-for-cars'),
-        document.getElementById('tabs-for-accidents')
-    ].filter(Boolean);
+    // Определяем, какая ИМЕННО группа вкладок сейчас видна: авто или ДТП
+    const tabsForCars = document.getElementById('tabs-for-cars');
+    const tabsForAccidents = document.getElementById('tabs-for-accidents');
+    const activeGroup = [tabsForCars, tabsForAccidents].filter(Boolean).find(el => el.offsetParent !== null);
+    if (!activeGroup) return; // сейчас открыт Приход/Перемещение/Ремонт/др. — кнопку не создаём
 
-    const targetBar = possibleTabBars.find(el => el.offsetParent !== null);
-    if (!targetBar) return; // сейчас открыт Приход/Перемещение/Ремонт/др. — кнопку не создаём
+    // Вставляем кнопку в ОБЩУЮ широкую полосу (car-tabs-bar), а не во внутренний блок вкладок —
+    // так margin-left: auto реально утащит её в самый правый край строки
+    const outerBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel') || activeGroup.parentElement;
+    if (!outerBar) return;
 
     const btn = document.createElement('button');
     btn.id = 'detail-print-btn';
@@ -7657,13 +7658,13 @@ function ensureDetailPrintButton() {
     btn.onclick = printDetailTable;
     btn.style.cssText = 'margin-left: auto; padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer; font-size: 13px; white-space: nowrap;';
 
-    const computedDisplay = getComputedStyle(targetBar).display;
+    const computedDisplay = getComputedStyle(outerBar).display;
     if (computedDisplay !== 'flex') {
-        targetBar.style.display = 'flex';
-        targetBar.style.alignItems = 'center';
+        outerBar.style.display = 'flex';
+        outerBar.style.alignItems = 'center';
     }
 
-    targetBar.appendChild(btn);
+    outerBar.appendChild(btn);
 }
 
 
