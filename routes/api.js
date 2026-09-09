@@ -1869,20 +1869,18 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход) — строго по базовой закупочной цене из карточки запчасти (без наценки)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'in' as op_type
+                -- 2. Перемещения (приход) — считаем по цене из строки перемещения
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход) — строго по базовой закупочной цене из карточки запчасти (без наценки)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'out' as op_type
+                -- 3. Перемещения (расход) — считаем по цене из строки перемещения
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
