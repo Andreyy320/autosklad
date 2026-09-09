@@ -20,7 +20,6 @@ async function fetchReferenceData(refEntity) {
         
         if (response.ok) {
             const data = await response.json();
-            // На случай, если бэкенд оборачивает массив в объект { data: [...] }
             return Array.isArray(data) ? data : (data.data || data.items || []);
         } else {
             const errorText = await response.text();
@@ -2108,37 +2107,44 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
+    // Сущности, для которых номер документа теперь атомарно генерирует бэкенд
+    // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем,
+    // чтобы не тратить лишний fetch на то, что сервер всё равно перезапишет.
+    const serverGeneratesDocNumber = ['receipts', 'moves', 'realizations'];
+
     if (!item || item.id === null || item.id === undefined || item.id === '') {
-        let nextId = 1;
-        let prefix = 'Р-';
-        if (entity === 'realizations') {
-            prefix = 'РЛ-';
-        } else if (entity === 'moves') {
-            prefix = 'ПМ-';
-        } else if (entity === 'receipts') {
-            prefix = 'ПР-';
-        }
+        if (serverGeneratesDocNumber.includes(entity)) {
+            // Номер присвоится на сервере при сохранении — тут просто placeholder для формы
+            item = {
+                id: null,
+                doc_number: '(будет присвоен автоматически)',
+                is_posted: false
+            };
+        } else {
+            let nextId = 1;
+            let prefix = 'Р-';
 
-        try {
-            const response = await fetch(`/api/${entity}`);
-            if (response.ok) {
-                const records = await response.json();
-                if (records.length > 0) {
-                    const maxId = Math.max(...records.map(r => r.id || 0));
-                    nextId = maxId + 1;
+            try {
+                const response = await fetch(`/api/${entity}`);
+                if (response.ok) {
+                    const records = await response.json();
+                    if (records.length > 0) {
+                        const maxId = Math.max(...records.map(r => r.id || 0));
+                        nextId = maxId + 1;
+                    }
+                } else {
+                    console.warn(`Сервер вернул не OK при автонумерации: ${response.status}`);
                 }
-            } else {
-                console.warn(`Сервер вернул не OK при автонумерации: ${response.status}`);
+            } catch (e) {
+                console.error('Не удалось получить список для автонумерации', e);
             }
-        } catch (e) {
-            console.error('Не удалось получить список для автонумерации', e);
-        }
 
-        item = { 
-            id: null,
-            doc_number: `${prefix}${nextId}`,
-            is_posted: false 
-        };
+            item = { 
+                id: null,
+                doc_number: `${prefix}${nextId}`,
+                is_posted: false 
+            };
+        }
 
      config.columns.forEach(col => {
     if (col.field === 'fact_date') return; // не трогаем при создании
