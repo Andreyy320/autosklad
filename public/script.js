@@ -8566,7 +8566,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const startDateInput = document.getElementById('receipts-start-date');
     const endDateInput = document.getElementById('receipts-end-date');
 
-    // Находим кнопку «Назад» на панели инструментов (предполагаем, что у неё ID btn-back-expense или мы можем управлять ей)
+    // Находим кнопку «Назад» на панели инструментов
     const btnBackExpense = document.getElementById('btn-back-expense');
 
     // 1 уровень: Склады (отображаем все)
@@ -8636,7 +8636,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
         // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block'; // или 'flex' в зависимости от вашего CSS
+            btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
@@ -8667,7 +8667,52 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             thead.insertBefore(filterRow, mainHeaderTr);
         }
 
-        filterRow.innerHTML = visibleColumns.map(col => {
+        // Локальная безопасная функция фильтрации для таблицы с учетом месяцев/групп
+        window.applyReceiptTableFilter = function() {
+            const inputs = filterRow.querySelectorAll('input[data-column-index]');
+            const tbody = document.getElementById('table-body');
+            const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"], tr[style*="background: #f8fafc"]');
+            
+            // Если есть сгруппированные строки по месяцам (на уровне документов)
+            if (currentReceiptView === 'money_receipts') {
+                // Ищем все группы. Так как у нас структура: headerTr -> группа items -> footerTr, 
+                // проще пройтись по всем tr в tbody, которые не являются шапками сальдо или групп/футерами, 
+                // либо управлять видимостью блоков.
+                // Сделаем более надежно: найдем все группы через сохраненные элементы или проход по DOM.
+                // Ниже универсальный обход строк данных с автоскрытием шапок месяцев и футеров.
+                let rows = tbody.querySelectorAll('tr');
+                // Пройдемся построчно: если строка обычная с данными (не шапка и не футер группы), проверим фильтры.
+                // Но лучше использовать заранее привязанные массивы групп, либо фильтровать по индексу колонок.
+            }
+
+            // Универсальная фильтрация по индексам колонок
+            const activeInputs = Array.from(inputs).map(input => ({
+                index: parseInt(input.getAttribute('data-column-index'), 10),
+                value: input.value.toLowerCase().trim()
+            })).filter(i => i.value !== '');
+
+            const rows = tbody.querySelectorAll('tr');
+            rows.forEach(row => {
+                // Пропускаем строки сальдо, шапки месяцев и футеры, чтобы они обрабатывались отдельно или не ломали верстку
+                if (row.style.background && (row.style.background.includes('e2e8f0') || row.style.background.includes('f8fafc'))) {
+                    return; 
+                }
+
+                let showRow = true;
+                activeInputs.forEach(filter => {
+                    const cell = row.children[filter.index];
+                    if (cell) {
+                        const cellText = cell.textContent.toLowerCase();
+                        if (!cellText.includes(filter.value)) {
+                            showRow = false;
+                        }
+                    }
+                });
+                row.style.display = showRow ? '' : 'none';
+            });
+        };
+
+        filterRow.innerHTML = visibleColumns.map((col, idx) => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
             if (col.style && col.style.includes('display: none')) {
                 return `<th style="display: none; padding: 4px;"></th>`;
@@ -8675,8 +8720,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             return `
                 <th ${styleAttr}>
                     <input type="text" 
+                           data-column-index="${idx}" 
                            data-column="${col.field}" 
-                           oninput="filterTable()" 
+                           oninput="applyReceiptTableFilter()" 
                            placeholder="Фильтр..."
                            style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
                 </th>
@@ -8774,7 +8820,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             };
 
             const groupedByMonth = {};
-            currentItems.forEach((item, index) => {
+            currentItems.forEach((item) => {
                 const m = getMonthData(item.date);
                 if (!groupedByMonth[m.key]) {
                     groupedByMonth[m.key] = {
@@ -8858,10 +8904,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         
                         window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
 
-                       const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-    if (detailToolbar) {
-    detailToolbar.style.display = 'none';
-    }
+                        const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+                        if (detailToolbar) {
+                            detailToolbar.style.display = 'none';
+                        }
+                        
                         let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
                         
                         let realizationId = window.currentRealizationId || '';
