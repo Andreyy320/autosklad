@@ -1982,8 +1982,6 @@ router.get('/stock_movement', async (req, res) => {
     }
 });
 
-
-
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
@@ -1995,13 +1993,10 @@ router.get('/part_movement_details', async (req, res) => {
         const queryParams = [zaphasti_id];
         let paramIndex = 2;
 
-        let currentWarehouseId = null;
         let warehouseCondition = '';
-
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
-            currentWarehouseId = parseInt(warehouse_id, 10);
-            queryParams.push(currentWarehouseId);
-            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
+            queryParams.push(parseInt(warehouse_id, 10));
+            warehouseCondition = ` AND (warehouse_from_id = $${paramIndex} OR warehouse_to_id = $${paramIndex} OR sklad_id = $${paramIndex})`;
             paramIndex++;
         }
 
@@ -2017,15 +2012,9 @@ router.get('/part_movement_details', async (req, res) => {
             paramIndex++;
         }
 
-        // Передаем currentWarehouseId параметром в запрос, чтобы не хардкодить его при старте сервера
-        if (currentWarehouseId !== null) {
-            queryParams.push(currentWarehouseId);
-        }
-        const whParamIndex = currentWarehouseId !== null ? paramIndex++ : null;
-
         const query = `
             WITH all_ops AS (
-                -- 1. Приходы (Поставщик -> Склад)
+                -- 1. Приходы (Поставщик -> Склад) [ИН]
                 SELECT 
                     r.date AS op_date,
                     r.doc_number AS doc_num,
@@ -2045,28 +2034,50 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
                 LEFT JOIN users u ON m_mol.user_id = u.id
-                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL
+                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад-источник -> Склад-получатель)
+                -- 2. Перемещения: РАСХОД со склада-отправителя [РАСХОД (-)]
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
-                    'Перемещение' AS doc_type,
+                    'Перемещение (расход)' AS doc_type,
                     CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
                     CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
-                    CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
-                        ELSE mi.quantity
-                    END AS qty,
+                    (-1 * mi.quantity) AS qty,
                     COALESCE(mi.price, 0) AS price,
-                    CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, 0))
-                        ELSE (mi.quantity * COALESCE(mi.price, 0))
-                    END AS sum,
+                    (-1 * mi.quantity * COALESCE(mi.price, 0)) AS sum,
                     mi.description,
                     m.warehouse_from_id,
+                    NULL::int AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
+                LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
+                LEFT JOIN users u_from ON mol_from.user_id = u_from.id
+                LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
+                LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
+                LEFT JOIN users u_to ON mol_to.user_id = u_to.id
+                WHERE mi.zaphasti_id = $1 
+                  AND m.warehouse_from_id IS NOT NULL 
+                  AND (m.is_posted::text IN ('true', '1', '2'))
+
+                UNION ALL
+
+                -- 3. Перемещения: ПРИХОД на склад-получатель [ИН (+)]
+                SELECT 
+                    m.date AS op_date,
+                    m.doc_number AS doc_num,
+                    'Перемещение (приход)' AS doc_type,
+                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
+                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
+                    mi.quantity AS qty,
+                    COALESCE(mi.price, 0) AS price,
+                    (mi.quantity * COALESCE(mi.price, 0)) AS sum,
+                    mi.description,
+                    NULL::int AS warehouse_from_id,
                     m.warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM move_items mi
@@ -2078,12 +2089,12 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
                 LEFT JOIN users u_to ON mol_to.user_id = u_to.id
                 WHERE mi.zaphasti_id = $1 
-                  AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
+                  AND m.warehouse_to_id IS NOT NULL 
                   AND (m.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
-                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт)
+                -- 4. Списания в ремонт [РАСХОД (-)]
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2109,10 +2120,10 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель)
+                -- 5. Реализации / Продажи [РАСХОД (-)]
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
-                    CAST(r_rel.id AS VARCHAR) AS doc_num,
+                    CAST(r_rel.id AS VARCHAR) AS doc_number,
                     'Реализация (продажа)' AS doc_type,
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
@@ -2147,6 +2158,8 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
