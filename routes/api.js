@@ -6802,6 +6802,27 @@ router.post('/:entity', async (req, res) => {
             }
         }
 
+        // ==================== НОВОЕ: ЗАЩИТА НОМЕРА ДОКУМЕНТА ОТ ГОНКИ ПРИ ОДНОВРЕМЕННОМ СОЗДАНИИ ====================
+        // Список сущностей-документов, для которых номер генерирует СЕРВЕР, а не клиент.
+        // Раньше клиент сам вычислял "макс id + 1" и мог выдать одинаковый номер двум пользователям,
+        // если оба одновременно открывали форму создания документа. Теперь клиентский doc_number
+        // просто игнорируется, а настоящий номер сервер присваивает сам после вставки записи в базу,
+        // на основе её собственного id (id — автоинкремент Postgres, атомарен и никогда не повторяется).
+        const docNumberPrefixes = {
+            receipts: 'ПР-',
+            moves: 'ПМ-',
+            repairs: 'РЕМ-',
+            accidents: 'ДТП-',
+            realizations: 'РЛ-'
+        };
+        const isDocEntity = Object.prototype.hasOwnProperty.call(docNumberPrefixes, entity);
+
+        if (isDocEntity && req.body.doc_number !== undefined) {
+            browserLog(`[INFO] doc_number от клиента (${req.body.doc_number}) проигнорирован — сервер сгенерирует номер сам после вставки`);
+            delete req.body.doc_number;
+        }
+        // ================================================================================================
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -6816,7 +6837,20 @@ router.post('/:entity', async (req, res) => {
 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
         const result = await pool.query(query, processedValues);
-        const newRecord = result.rows[0];
+        let newRecord = result.rows[0];
+
+        // ==================== НОВОЕ: ПРИСВОЕНИЕ РЕАЛЬНОГО НОМЕРА ДОКУМЕНТА ПОСЛЕ ВСТАВКИ ====================
+        if (isDocEntity) {
+            const prefix = docNumberPrefixes[entity];
+            const docNumber = `${prefix}${newRecord.id}`;
+            const updateRes = await pool.query(
+                `UPDATE "${entity}" SET doc_number = $1 WHERE id = $2 RETURNING *;`,
+                [docNumber, newRecord.id]
+            );
+            newRecord = updateRes.rows[0];
+            browserLog(`[INFO] Присвоен номер документа: ${docNumber}`);
+        }
+        // ================================================================================================
 
         // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
         try {
@@ -6865,7 +6899,6 @@ router.post('/:entity', async (req, res) => {
         });
     }
 });
-
 
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)

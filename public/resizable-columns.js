@@ -1,5 +1,4 @@
 (function() {
-    // Автоматические стили для ресайзера
     if (!document.getElementById('persistent-resizer-style')) {
         const style = document.createElement('style');
         style.id = 'persistent-resizer-style';
@@ -25,7 +24,6 @@
     }
 
     function initResizers() {
-        // Узнаем текущий активный раздел, чтобы сохранять ширину персонально для каждой вкладки
         const activeLink = document.querySelector('.nav-link.active');
         const sectionKey = activeLink ? activeLink.innerText.trim() : 'default_table';
 
@@ -47,7 +45,6 @@
             textRow.querySelectorAll('th, td').forEach((th, index) => {
                 if (th.querySelector('.resizer')) return;
 
-                // Восстанавливаем сохраненную ширину из localStorage, если она была
                 const savedWidths = JSON.parse(localStorage.getItem(`col_widths_${sectionKey}`) || '{}');
                 if (savedWidths[index]) {
                     th.style.width = savedWidths[index];
@@ -81,7 +78,6 @@
                         window.removeEventListener('mousemove', onMouseMove);
                         window.removeEventListener('mouseup', onMouseUp);
 
-                        // Сохраняем все ширины колонок текущей таблицы в localStorage при отпускании мыши
                         const currentWidths = {};
                         textRow.querySelectorAll('th, td').forEach((cell, idx) => {
                             currentWidths[idx] = cell.style.width;
@@ -99,20 +95,16 @@
         });
     }
 
-    // Слушаем клики по меню, чтобы при переключении разделов заново инициализировать таблицы
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', () => {
-            // Даем время функции loadData отрисовать новую таблицу
             setTimeout(initResizers, 150);
         });
     });
 
-    // Также следим за изменениями DOM на случай динамической подгрузки данных
     const observer = new MutationObserver(() => {
         initResizers();
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Первичный запуск при загрузке
     setTimeout(initResizers, 200);
 })();
