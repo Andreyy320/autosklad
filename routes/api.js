@@ -2048,7 +2048,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад-источник -> Склад-получатель)
+                -- 2. Перемещения (Склад -> Склад) — цена берётся строго из последнего прихода на момент даты перемещения (без наценок)
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2059,10 +2059,10 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(mi.price, 0) AS price,
+                    COALESCE(lr.price, mi.price, 0) AS price,
                     CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, 0))
-                        ELSE (mi.quantity * COALESCE(mi.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(lr.price, mi.price, 0))
+                        ELSE (mi.quantity * COALESCE(lr.price, mi.price, 0))
                     END AS sum,
                     mi.description,
                     m.warehouse_from_id,
@@ -2076,13 +2076,21 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
                 LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
                 LEFT JOIN users u_to ON mol_to.user_id = u_to.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = mi.zaphasti_id AND r_p.date <= m.date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr ON true
                 WHERE mi.zaphasti_id = $1 
                   AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
                   AND (m.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
-                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт)
+                -- 3. Списания в ремонт (Склад -> Ремонт) — по чистой закупочной цене
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2090,8 +2098,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
                     CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
                     (-1 * ri_rep.quantity) AS qty,
-                    COALESCE(ri_rep.price, 0) AS price,
-                    (-1 * ri_rep.quantity * COALESCE(ri_rep.price, 0)) AS sum,
+                    COALESCE(lr_rep.price, ri_rep.price, 0) AS price,
+                    (-1 * ri_rep.quantity * COALESCE(lr_rep.price, ri_rep.price, 0)) AS sum,
                     ri_rep.description,
                     rep.warehouse_id AS warehouse_from_id,
                     NULL::int AS warehouse_to_id,
@@ -2102,13 +2110,21 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
                 LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
                 LEFT JOIN cars car ON rep.car_id = car.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_rep.zaphast_id AND r_p.date <= rep.doc_date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rep ON true
                 WHERE ri_rep.zaphast_id = $1 
                   AND rep.warehouse_id IS NOT NULL 
                   AND (rep.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель)
+                -- 4. Реализации / Продажи (Склад -> Покупатель) — по чистой закупочной цене
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
@@ -2116,8 +2132,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(ri_rel.purchase_price, ri_rel.price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
+                    COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
                     ri_rel.description,
                     r_rel.sklad_id AS warehouse_id,
                     NULL::int AS warehouse_to_id,
@@ -2128,6 +2144,14 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
                 LEFT JOIN customers cust ON r_rel.customer_id = cust.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_rel.zaphasti_id AND r_p.date <= COALESCE(r_rel.doc_date, NOW())
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rel ON true
                 WHERE ri_rel.zaphasti_id = $1 
                   AND r_rel.sklad_id IS NOT NULL 
                   AND (r_rel.is_posted::text IN ('true', '1', '2'))
@@ -2146,6 +2170,9 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
