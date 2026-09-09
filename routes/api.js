@@ -6948,11 +6948,8 @@ router.put('/:entity/:id', async (req, res) => {
         const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations'];
         if (docWithStatusTables.includes(entity)) {
             const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
-            
-            // Проверяем: если документ уже был проведен, но в запросе НЕ пытаются снять его с проведения (т.е. is_posted остался true или отсутствует)
-            const isUnposting = req.body.is_posted === false;
 
-            if (oldIsPosted && !isUnposting) {
+            if (oldIsPosted) {
                 const allowedKeysForPosted = ['is_posted', 'fact_date'];
                 const incomingKeys = Object.keys(req.body);
 
@@ -7007,6 +7004,13 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
+        // Удаляем ключи со значением undefined, чтобы они не ломали параметры запроса
+        Object.keys(req.body).forEach(key => {
+            if (req.body[key] === undefined) {
+                delete req.body[key];
+            }
+        });
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
 
@@ -7016,7 +7020,7 @@ router.put('/:entity/:id', async (req, res) => {
         }
 
         const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
-        const processedValues = values.map(val => val === '' ? null : val);
+        const processedValues = values.map(val => (val === '' || val === undefined ? null : val));
 
         const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
         const result = await client.query(query, [...processedValues, id]);
