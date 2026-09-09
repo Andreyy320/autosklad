@@ -801,10 +801,16 @@ const tableConfig = {
         { field: 'sklad', label: 'Склад', width: '130px' },
         { field: 'current_sklad', label: 'Текущий склад', width: '130px' },
         { field: 'unit', label: 'Ед.изм', width: '60px', align: 'center' },
+        // Остаток на начало
+        { field: 'start_qty', label: 'Кол-во', width: '60px', align: 'right' },
+        { field: 'start_sum', label: 'Сумма', width: '80px', align: 'right' },
+        // Приход
         { field: 'income_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'income_sum', label: 'Сумма', width: '80px', align: 'right' },
+        // Расход
         { field: 'outcome_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'outcome_sum', label: 'Сумма', width: '80px', align: 'right' },
+        // Остаток на конец
         { field: 'end_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'end_sum', label: 'Сумма', width: '80px', align: 'right' },
         { field: 'description', label: 'Описание' }
@@ -824,13 +830,17 @@ const tableConfig = {
             <td>${item.current_sklad || '—'}</td>
             <td style="text-align: center;">${item.unit || 'шт'}</td>
             
+            <!-- Остаток на начало -->
+            <td style="text-align: right;">${item.start_qty !== undefined ? item.start_qty : 0}</td>
+            <td style="text-align: right;">${item.start_sum !== undefined ? Number(item.start_sum).toFixed(2) : '0.00'}</td>
+
             <!-- Приход -->
-            <td style="text-align: right; color: #006600;">${item.income_qty || ''}</td>
-            <td style="text-align: right; color: #006600;">${item.income_sum ? Number(item.income_sum).toFixed(2) : ''}</td>
+            <td style="text-align: right; color: #006600;">${item.income_qty || 0}</td>
+            <td style="text-align: right; color: #006600;">${item.income_sum ? Number(item.income_sum).toFixed(2) : '0.00'}</td>
             
             <!-- Расход -->
-            <td style="text-align: right; color: #b30000;">${item.outcome_qty || ''}</td>
-            <td style="text-align: right; color: #b30000;">${item.outcome_sum ? Number(item.outcome_sum).toFixed(2) : ''}</td>
+            <td style="text-align: right; color: #b30000;">${item.outcome_qty || 0}</td>
+            <td style="text-align: right; color: #b30000;">${item.outcome_sum ? Number(item.outcome_sum).toFixed(2) : '0.00'}</td>
             
             <!-- Остаток на конец -->
             <td style="text-align: right; font-weight: bold;">${item.end_qty !== undefined ? item.end_qty : 0}</td>
@@ -839,7 +849,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `;
     }
-    },
+ },
     accidents: {
     title: 'ДТП',
     columns: [
