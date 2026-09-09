@@ -1832,7 +1832,6 @@ router.get('/stock_batches', async (req, res) => {
     }
 });
 
-
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1870,34 +1869,66 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
+                -- 2. Перемещения (приход) — по цене последнего прихода на момент перемещения
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_in.price, mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = mi.zaphasti_id AND r_p.date <= m.date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_in ON true
+                WHERE m.warehouse_to_id IS NOT NULL AND (m.is_posted::text IN ('true', '1', '2'))
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
+                -- 3. Перемещения (расход) — по цене последнего прихода на момент перемещения
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_out.price, mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = mi.zaphasti_id AND r_p.date <= m.date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_out ON true
+                WHERE m.warehouse_from_id IS NOT NULL AND (m.is_posted::text IN ('true', '1', '2'))
                 
                 UNION ALL
                 
-                -- 4. Списания в ремонт
-                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
+                -- 4. Списания в ремонт — по цене последнего прихода на момент списания
+                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(lr_rep.price, rep_i.price, 0)) AS sum, 'out' as op_type
                 FROM repair_items rep_i 
                 JOIN repairs rep ON rep_i.repair_id = rep.id 
-                WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = rep_i.zaphast_id AND r_p.date <= rep.doc_date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rep ON true
+                WHERE rep.warehouse_id IS NOT NULL AND (rep.is_posted::text IN ('true', '1', '2'))
                 
                 UNION ALL
                 
-                -- 5. Реализации (продажи)
-                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
+                -- 5. Реализации (продажи) — по цене последнего прихода на момент реализации
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_rel.zaphasti_id AND r_p.date <= COALESCE(r_rel.doc_date, NOW())
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rel ON true
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             -- Последний склад для каждой запчасти
