@@ -1842,171 +1842,124 @@ router.get('/stock_movement', async (req, res) => {
         const queryParams = [];
         let paramIndex = 1;
 
-        let dateCondition = '';
-
-        // Фильтр по диапазону дат для оборотов
+        let startDateVal = null;
         if (start_date && start_date.trim() !== '' && start_date !== 'undefined' && start_date !== 'null') {
-            const formattedStart = start_date.replace('T', ' ');
-            queryParams.push(formattedStart);
-            dateCondition += ` AND d.date >= $${paramIndex}::timestamp`;
-            paramIndex++;
+            startDateVal = start_date.replace('T', ' ');
         }
 
+        let endDateVal = null;
         if (end_date && end_date.trim() !== '' && end_date !== 'undefined' && end_date !== 'null') {
-            const formattedEnd = end_date.replace('T', ' ');
-            queryParams.push(formattedEnd);
-            dateCondition += ` AND d.date <= $${paramIndex}::timestamp`;
-            paramIndex++;
+            endDateVal = end_date.replace('T', ' ');
         }
 
-        let warehouseFilterClause = '';
-
-        // Фильтр по складу (применяется только к фильтрации самих операций в отчете)
+        let warehouseFilter = '';
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
-            warehouseFilterClause += ` AND warehouse_id = $${paramIndex}`;
+            warehouseFilter = ` AND warehouse_id = $${paramIndex}`;
             paramIndex++;
         }
 
         const query = `
             WITH all_operations AS (
-                -- 1. Приходы (receipts)
-                SELECT 
-                    ri.zaphasti_id,
-                    r.warehouse_id,
-                    r.date,
-                    ri.quantity AS qty_in,
-                    0 AS qty_out,
-                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum_in,
-                    0 AS sum_out
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
-                WHERE r.warehouse_id IS NOT NULL
-
+                -- 1. Приходы
+                SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
+                FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE r.warehouse_id IS NOT NULL
                 UNION ALL
-
-                -- 2. Перемещения - приход (warehouse_to)
-                SELECT 
-                    mi.zaphasti_id,
-                    m.warehouse_to_id AS warehouse_id,
-                    m.date,
-                    mi.quantity AS qty_in,
-                    0 AS qty_out,
-                    (mi.quantity * COALESCE(mi.price, 0)) AS sum_in,
-                    0 AS sum_out
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
-
+                -- 2. Перемещения (приход)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
+                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
-
-                -- 3. Перемещения - расход (warehouse_from)
-                SELECT 
-                    mi.zaphasti_id,
-                    m.warehouse_from_id AS warehouse_id,
-                    m.date,
-                    0 AS qty_in,
-                    mi.quantity AS qty_out,
-                    0 AS sum_in,
-                    (mi.quantity * COALESCE(mi.price, 0)) AS sum_out
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
-
+                -- 3. Перемещения (расход)
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
+                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
-
-                -- 4. Списания в ремонт - расход (repair_items)
-                SELECT 
-                    rep_i.zaphast_id AS zaphasti_id,
-                    rep.warehouse_id,
-                    rep.doc_date AS date,
-                    0 AS qty_in,
-                    rep_i.quantity AS qty_out,
-                    0 AS sum_in,
-                    (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum_out
-                FROM repair_items rep_i
-                JOIN repairs rep ON rep_i.repair_id = rep.id
-                WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
-
+                -- 4. Списания в ремонт
+                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
+                FROM repair_items rep_i JOIN repairs rep ON rep_i.repair_id = rep.id WHERE rep.warehouse_id IS NOT NULL AND rep.is_posted = true
                 UNION ALL
-
-                -- 5. Реализации (продажи) - расход (realization_items)
-                SELECT 
-                    ri_rel.zaphasti_id,
-                    r_rel.sklad_id AS warehouse_id,
-                    COALESCE(r_rel.doc_date, NOW()) AS date,
-                    0 AS qty_in,
-                    ri_rel.quantity AS qty_out,
-                    0 AS sum_in,
-                    (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum_out
-                FROM realization_items ri_rel
-                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
+                -- 5. Реализации (продажи)
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, 0)) AS sum, 'out' as op_type
+                FROM realization_items ri_rel JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
-            filtered_ops AS (
-                SELECT * FROM all_operations d
-                WHERE 1=1 
-                ${warehouseFilterClause}
-                ${dateCondition}
+            -- Последний склад для каждой запчасти
+            latest_warehouse AS (
+                SELECT DISTINCT ON (zaphasti_id) zaphasti_id, warehouse_id
+                FROM all_operations
+                ORDER BY zaphasti_id, date DESC
             ),
-            calculated_turnover AS (
+            -- Остатки на начало периода
+            opening_balance AS (
                 SELECT 
                     zaphasti_id,
                     warehouse_id,
-                    SUM(qty_in) AS income_qty,
-                    SUM(sum_in) AS income_sum,
-                    SUM(qty_out) AS outcome_qty,
-                    SUM(sum_out) AS outcome_sum
-                FROM filtered_ops
+                    SUM(CASE WHEN op_type = 'in' THEN qty ELSE -qty END) AS start_qty,
+                    SUM(CASE WHEN op_type = 'in' THEN sum ELSE -sum END) AS start_sum
+                FROM all_operations
+                WHERE ${startDateVal ? `date < '${startDateVal}'::timestamp` : '1=0'}
+                ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),
-            -- Определяем реальный актуальный склад для каждой запчасти по последней дате операции во всей базе
-            latest_warehouse_op AS (
-                SELECT DISTINCT ON (zaphasti_id)
+            -- Обороты за период
+            turnover_period AS (
+                SELECT 
                     zaphasti_id,
                     warehouse_id,
-                    date
+                    SUM(CASE WHEN op_type = 'in' THEN qty ELSE 0 END) AS income_qty,
+                    SUM(CASE WHEN op_type = 'in' THEN sum ELSE 0 END) AS income_sum,
+                    SUM(CASE WHEN op_type = 'out' THEN qty ELSE 0 END) AS outcome_qty,
+                    SUM(CASE WHEN op_type = 'out' THEN sum ELSE 0 END) AS outcome_sum
                 FROM all_operations
-                ORDER BY zaphasti_id, date DESC, qty_in DESC, qty_out DESC
+                WHERE 1=1
+                ${startDateVal ? `AND date >= '${startDateVal}'::timestamp` : ''}
+                ${endDateVal ? `AND date <= '${endDateVal}'::timestamp` : ''}
+                ${warehouseFilter}
+                GROUP BY zaphasti_id, warehouse_id
+            ),
+            -- Сбор всех уникальных пар запчасть-склад, участвующих в отчете
+            combined_keys AS (
+                SELECT zaphasti_id, warehouse_id FROM opening_balance
+                UNION
+                SELECT zaphasti_id, warehouse_id FROM turnover_period
             )
             SELECT 
-                z.id AS zaphasti_id,
-                t.warehouse_id,
+                ck.zaphasti_id,
+                ck.warehouse_id,
                 s.name AS sklad,
                 z.article AS artikul,
                 z.code,
                 z.name,
                 p.name AS manufacturer,
                 COALESCE(z.unit, 'шт') AS unit,
-                COALESCE(t.income_qty, 0) AS income_qty,
-                COALESCE(t.income_sum, 0) AS income_sum,
-                COALESCE(t.outcome_qty, 0) AS outcome_qty,
-                COALESCE(t.outcome_sum, 0) AS outcome_sum,
-                (COALESCE(t.income_qty, 0) - COALESCE(t.outcome_qty, 0)) AS end_qty,
-                (COALESCE(t.income_sum, 0) - COALESCE(t.outcome_sum, 0)) AS end_sum,
+                COALESCE(ob.start_qty, 0) AS start_qty,
+                COALESCE(ob.start_sum, 0) AS start_sum,
+                COALESCE(tp.income_qty, 0) AS income_qty,
+                COALESCE(tp.income_sum, 0) AS income_sum,
+                COALESCE(tp.outcome_qty, 0) AS outcome_qty,
+                COALESCE(tp.outcome_sum, 0) AS outcome_sum,
+                (COALESCE(ob.start_qty, 0) + COALESCE(tp.income_qty, 0) - COALESCE(tp.outcome_qty, 0)) AS end_qty,
+                (COALESCE(ob.start_sum, 0) + COALESCE(tp.income_sum, 0) - COALESCE(tp.outcome_sum, 0)) AS end_sum,
                 z.description,
-                curr_s.name AS current_skjladi,
-                lwo.warehouse_id AS current_warehouse_id
-            FROM calculated_turnover t
-            JOIN zaphasti z ON t.zaphasti_id = z.id
-            LEFT JOIN skladi s ON t.warehouse_id = s.id
+                curr_s.name AS current_sklad
+            FROM combined_keys ck
+            JOIN zaphasti z ON ck.zaphasti_id = z.id
+            LEFT JOIN skladi s ON ck.warehouse_id = s.id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
-            LEFT JOIN latest_warehouse_op lwo ON z.id = lwo.zaphasti_id
-            LEFT JOIN skladi curr_s ON lwo.warehouse_id = curr_s.id
-            WHERE (COALESCE(t.income_qty, 0) <> 0 OR COALESCE(t.outcome_qty, 0) <> 0)
+            LEFT JOIN latest_warehouse lw ON z.id = lw.zaphasti_id
+            LEFT JOIN skladi curr_s ON lw.warehouse_id = curr_s.id
+            LEFT JOIN opening_balance ob ON ck.zaphasti_id = ob.zaphasti_id AND ck.warehouse_id = ob.warehouse_id
+            LEFT JOIN turnover_period tp ON ck.zaphasti_id = tp.zaphasti_id AND ck.warehouse_id = tp.warehouse_id
+            WHERE (
+                COALESCE(ob.start_qty, 0) <> 0 OR 
+                COALESCE(tp.income_qty, 0) <> 0 OR 
+                COALESCE(tp.outcome_qty, 0) <> 0
+            )
             ORDER BY z.name ASC, s.name ASC;
         `;
 
-        console.log(`[DEBUG] SQL Query for /stock_movement executed`);
-
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
-
-        console.log(`[SUCCESS] Оборотная ведомость сформирована. Записей: ${result.rows.length}`);
-
     } catch (err) {
         console.error("❌ [ERROR] Ошибка в /stock_movement:", err.message);
-        console.error(err.stack);
         res.status(500).json({ error: err.message });
     }
 });
