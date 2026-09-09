@@ -7580,8 +7580,13 @@ function printMainTable() {
     }, 250);
 }
 
+
+
+
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
+    resetSharedUiForEntity(entity);   // 👈 добавили
 
     currentEntity = entity;
     selectedItem = null;
@@ -7760,7 +7765,7 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'stock_balances'];
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
                 }
@@ -7869,6 +7874,71 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
+
+
+
+// ==========================================================
+// ЕДИНАЯ ТОЧКА СБРОСА UI — вызывается в начале КАЖДОЙ загрузки таблицы
+// (loadData, loadReceiptMainData, loadExpenseMainData)
+// entity — строка с именем текущей открываемой сущности/раздела
+// ==========================================================
+function resetSharedUiForEntity(entity) {
+    // 1. Кнопка "Печать" — по умолчанию скрыта, показываем только явно перечисленным
+    const printBtn = document.querySelector('button[onclick="printMainTable()"]');
+    if (printBtn) {
+        const printableEntities = ['car_cards', 'realizations', 'stock_balances', 'stock_movement'];
+        printBtn.style.display = printableEntities.includes(entity) ? 'inline-block' : 'none';
+    }
+
+    // 2. Кнопки Добавить/Изменить/Удалить — по умолчанию видимы, кроме read-only разделов
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
+    const readOnlyMainEntities = [
+        'car_cards', 'stock_balances', 'stock_movement',
+        'money_receipts_by_sklad', 'money_receipts', 'money_receipts_detail',
+        'expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'
+    ];
+    const isReadOnly = readOnlyMainEntities.includes(entity);
+    if (btnAdd) btnAdd.style.display = isReadOnly ? 'none' : 'inline-block';
+    if (btnEdit) btnEdit.style.display = isReadOnly ? 'none' : 'inline-block';
+    if (btnDelete) btnDelete.style.display = isReadOnly ? 'none' : 'inline-block';
+
+    // 3. Кнопка "Назад" (для расходов) — скрываем по умолчанию, каждый уровень расходов сам её включит если нужно
+    const btnBack = document.getElementById('btn-back-expense');
+    if (btnBack) {
+        btnBack.style.display = 'none';
+        btnBack.onclick = null;
+    }
+
+    // 4. Все панели фильтров по датам — скрываем все разом
+    ['parts-filter-panel', 'movement-filter-panel', 'expenses-filter-panel', 'receipts-filter-panel']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+    // 5. Нижний detail-container и его вкладки/тулбар — прячем по умолчанию
+    const detailContainer = document.getElementById('detail-container');
+    if (detailContainer) detailContainer.style.display = 'none';
+
+    const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbar) detailToolbar.style.display = 'none';
+
+    const carTabsBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel');
+    if (carTabsBar) carTabsBar.style.display = 'none';
+
+    ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-customers', 'tabs-for-realizations']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+    // 6. Строка счётчика строк — тоже прячем, кто хочет — сам покажет
+    const rowCount = document.getElementById('row-count');
+    if (rowCount) rowCount.innerText = '';
+}
+
 
 
 async function openPaymentHistory(receiptId, docNumber) {
@@ -8068,7 +8138,8 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     let currentExpenseView = entity;
-    
+        resetSharedUiForEntity(entity);   // 👈 добавили
+
     // Сразу фиксируем текущую сущность в глобальной переменной для защиты контекста
     if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
@@ -8667,6 +8738,7 @@ async function submitIncomePayment(event, docId, skladId) {
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
+    resetSharedUiForEntity(entity);   // 👈 добавили
 
     let fetchUrl = '';
     let currentReceiptView = entity;
