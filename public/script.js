@@ -7525,6 +7525,8 @@ function printMainTable() {
                         font-weight: bold;
                         text-align: center;
                     }
+                    td[style*="background"], tr[style*="background"] {
+                    }
                 </style>
             </head>
             <body>
@@ -7597,6 +7599,16 @@ async function loadData(entity, title, customParams = {}) {
             btnAdd.style.display = 'inline-block';
             btnEdit.style.display = 'inline-block';
             btnDelete.style.display = 'inline-block';
+        }
+    }
+
+    // Управляем видимостью кнопки «Печать» в тулбаре: показываем только для car_cards и realizations
+    const printBtn = document.querySelector('button[onclick="printMainTable()"]');
+    if (printBtn) {
+        if (entity === 'car_cards' || entity === 'realizations') {
+            printBtn.style.display = 'inline-block';
+        } else {
+            printBtn.style.display = 'none';
         }
     }
 
