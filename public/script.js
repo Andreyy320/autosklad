@@ -5421,11 +5421,11 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
 
         config.columns.forEach(col => {
-    if (col.field === 'fact_date') return; // не трогаем при создании
-    if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
-        item[col.field] = currentDateTime;
-    }
-    });
+            if (col.field === 'fact_date') return; // не трогаем при создании
+            if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                item[col.field] = currentDateTime;
+            }
+        });
     } else {
         if (entity === 'move_items') {
             if (!item.currency) {
@@ -5437,7 +5437,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
     }
 
-    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
+    const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -5490,8 +5490,8 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        // Если документ проведен, защищаем все поля от изменений (кроме возможности снять проведение, если это разрешено)
-        if (isPosted) {
+        // Разрешаем менять только поле is_posted (снятие с проведения), если документ проведен
+        if (isPosted && col.field !== 'is_posted') {
             fieldReadonly = true;
         }
 
@@ -5500,15 +5500,13 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
         if (col.field === 'is_posted') {
-            const statusItems = await fetchReferenceData('statuses');
-            let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-
-            statusItems.forEach(st => {
-                const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
-                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
-            });
-
-            inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            const isCurrentPosted = val === true || val === 'true' || val === 1 || val === '1';
+            inputHtml = `
+                <select name="${col.field}" style="${controlStyle}">
+                    <option value="false" ${!isCurrentPosted ? 'selected' : ''}>Не проведен</option>
+                    <option value="true" ${isCurrentPosted ? 'selected' : ''}>Проведен</option>
+                </select>
+            `;
         } else if (col.ref) {
             const referenceName = col.ref;
             let refItems = await fetchReferenceData(referenceName);
@@ -5565,8 +5563,8 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
-                    ${item && item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
+                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                     <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Закрыть</button>
                 </div>
             </form>
@@ -5584,15 +5582,15 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
     if (isPostedSelect && factDateInput) {
         isPostedSelect.addEventListener('change', () => {
-            if ((isPostedSelect.value === 'true' || isPostedSelect.value === '1') && !factDateInput.value) {
+            if (isPostedSelect.value === 'true' && !factDateInput.value) {
                 factDateInput.value = currentDateTime;
-            } else if (isPostedSelect.value === 'false' || isPostedSelect.value === '0') {
+            } else if (isPostedSelect.value === 'false') {
                 factDateInput.value = '';
             }
         });
     }
 
-    if (formElement && !isPosted) {
+    if (formElement) {
         const pairs = [
             { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
             { warehouse: formElement.querySelector('[name="warehouse_to_id"]'), mol: formElement.querySelector('[name="mol_to_id"]') },
@@ -5704,16 +5702,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         if (saveButton) saveButton.disabled = true;
 
         const formData = new FormData(e.target);
-        
-        const rawEntries = Array.from(formData.entries());
-        console.group('[DEBUG FORM SUBMIT] Содержимое FormData по полям:');
-        rawEntries.forEach(([key, val]) => {
-            console.log(`%c[Field] ${key}:`, 'color: #0066cc; font-weight: bold;', val);
-        });
-        console.groupEnd();
-
         const data = Object.fromEntries(formData.entries());
-        console.log('[SUBMIT] Собрано в объект (Object.fromEntries):', data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -5721,28 +5710,20 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
         if (entity === 'move_items') {
             const currentParentId = parentId || formElement.getAttribute('data-parent-id');
-            console.log('[SUBMIT] Проверка move_id:', { parentIdArg: parentId, attrParentId: formElement.getAttribute('data-parent-id'), resolved: currentParentId });
-            
             if (currentParentId) {
                 data.move_id = currentParentId;
             }
-            
             if (data.zaphasti && !data.zaphasti_id) {
                 data.zaphasti_id = data.zaphasti;
             }
-
             data.currency = 'Рубль ПМР';
         }
-
-        console.log('[SUBMIT] Итоговый JSON для отправки на сервер (data):', data);
 
         try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
-
-            console.log(`[SUBMIT] Отправка запроса: ${method} ${url}`);
 
             const response = await fetch(url, {
                 method: method,
@@ -5754,7 +5735,6 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             });
 
             if (response.ok) {
-                console.log('[SUBMIT] Ответ сервера: Успешно (200-299)');
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
