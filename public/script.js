@@ -7516,12 +7516,9 @@ async function loadData(entity, title, customParams = {}) {
     }
 
     const detailContainer = document.getElementById('detail-container');
-    // Безопасно ищем панель по обоим возможным ID, чтобы код не ломался при разметке
     const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
 
     if (detailContainer) {
-        // Убираем принудительное открытие нижней таблицы при старте загрузки списка.
-        // Теперь таблица деталей изначально скрыта и откроется только при выборе конкретной строки.
         detailContainer.style.display = 'none'; 
 
         if (detailToolbar) {
@@ -7601,7 +7598,7 @@ async function loadData(entity, title, customParams = {}) {
 
             const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
 
-            filterRow.innerHTML = visibleColumnsForFilter.map(col => {
+            filterRow.innerHTML = visibleColumnsForFilter.map((col, index) => {
                 let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
                 if (col.style && col.style.includes('display: none')) {
                     return `<th style="display: none; padding: 4px;"></th>`;
@@ -7609,6 +7606,7 @@ async function loadData(entity, title, customParams = {}) {
                 return `
                     <th ${styleAttr}>
                         <input type="text" 
+                               data-column-index="${index}" 
                                data-column="${col.field}" 
                                oninput="filterTable()" 
                                placeholder="Фильтр..."
@@ -7646,7 +7644,6 @@ async function loadData(entity, title, customParams = {}) {
                     return;
                 }
 
-                // При клике на строку активируем и показываем нижнюю таблицу деталей
                 const detailContainerTarget = document.getElementById('detail-container');
                 const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
                 
@@ -7658,7 +7655,6 @@ async function loadData(entity, title, customParams = {}) {
                     if (entity === 'stock_movement') {
                         detailToolbarTarget.style.display = 'none';
                     } else if (entity === 'car_cards' || entity === 'stock_balances') {
-                        // Скрываем кнопки тулбара детализации для карточки авто и остатков запчастей (stock_batches)
                         detailToolbarTarget.style.display = 'none';
                     } else {
                         detailToolbarTarget.style.display = 'flex';
