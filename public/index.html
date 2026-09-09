@@ -177,36 +177,19 @@
             </div>
 
             <div style="flex: 1; overflow-y: auto; min-height: 150px;">
-               <table id="data-table" style="width: 100%; border-collapse: collapse;">
-    <thead>
-        <tr id="table-headers">
-            <th rowspan="2" style="width: 110px;" data-field="artikul">Артикул</th>
-            <th rowspan="2" style="width: 90px;" data-field="code">Код</th>
-            <th rowspan="2" style="width: 280px;" data-field="name">Наименование</th>
-            <th rowspan="2" style="width: 130px;" data-field="manufacturer">Производитель</th>
-            <th rowspan="2" style="width: 130px;" data-field="sklad">Склад</th>
-            <th rowspan="2" style="width: 130px;" data-field="current_sklad">Текущий склад</th>
-            <th rowspan="2" style="width: 60px;" data-field="unit">Ед.изм</th>
-            <th colspan="2" style="text-align: center;">Остаток на начало</th>
-            <th colspan="2" style="text-align: center;">Приход</th>
-            <th colspan="2" style="text-align: center;">Расход</th>
-            <th colspan="2" style="text-align: center;">Остаток на конец</th>
-            <th rowspan="2" data-field="description">Описание</th>
-        </tr>
-        <tr id="table-subheaders">
-            <th style="width: 60px; text-align: right;" data-field="start_qty">Кол-во</th>
-            <th style="width: 80px; text-align: right;" data-field="start_sum">Сумма</th>
-            <th style="width: 60px; text-align: right;" data-field="income_qty">Кол-во</th>
-            <th style="width: 80px; text-align: right;" data-field="income_sum">Сумма</th>
-            <th style="width: 60px; text-align: right;" data-field="outcome_qty">Кол-во</th>
-            <th style="width: 80px; text-align: right;" data-field="outcome_sum">Сумма</th>
-            <th style="width: 60px; text-align: right;" data-field="end_qty">Кол-во</th>
-            <th style="width: 80px; text-align: right;" data-field="end_sum">Сумма</th>
-        </tr>
-    </thead>
-    <tbody id="table-body">
-    </tbody>
-</table>
+                <table id="data-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr id="table-headers">
+                        <th style="width: 40px;" data-field="id">ID</th>
+                        <th style="width: 150px;" data-field="login">Логин</th>
+                        <th style="width: 150px;" data-field="password_hash">Пароль</th>
+                        <th style="width: 250px;" data-field="name">Наименование</th>
+                        <th data-field="description">Описание</th>
+                      </tr>
+                    </thead>
+                    <tbody id="table-body">
+                    </tbody>
+                </table>
             </div>
 
             <div id="detail-container" style="display: none; height: 260px; border-top: 4px solid #ccc; flex-direction: column; background: #fafafa; flex-shrink: 0;">
@@ -219,7 +202,7 @@
         <button class="car-tab-btn" data-tab="repair_history" onclick="switchCarTab('repair_history', this)">Ремонт</button>
     <button class="car-tab-btn" data-tab="dtp_history" onclick="switchCarTab('dtp_history', this)">ДТП</button>
     <button class="car-tab-btn" data-tab="accident_images" onclick="switchCarTab('accident_images', this)">Изображения ДТП</button>
-</div>
+    </div>
 
      <div id="tabs-for-accidents" style="display: none; gap: 2px;">
     <button class="accident-tab-btn" data-tab="accident_invoices" onclick="switchAccidentTab('accident_invoices', this)">Выставить счет</button>

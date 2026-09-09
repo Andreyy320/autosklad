@@ -1865,13 +1865,19 @@ router.get('/stock_movement', async (req, res) => {
                 SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
                 FROM receipt_items ri JOIN receipts r ON ri.receipt_id = r.id WHERE r.warehouse_id IS NOT NULL
                 UNION ALL
-                -- 2. Перемещения (приход)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
-                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
+                -- 2. Перемещения (приход) — считаем по базовой закупочной цене z.price
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.price, mi.price, 0)) AS sum, 'in' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                JOIN zaphasti z ON mi.zaphasti_id = z.id
+                WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
-                -- 3. Перемещения (расход)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
-                FROM move_items mi JOIN moves m ON mi.move_id = m.id WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
+                -- 3. Перемещения (расход) — считаем по базовой закупочной цене z.price
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.price, mi.price, 0)) AS sum, 'out' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                JOIN zaphasti z ON mi.zaphasti_id = z.id
+                WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 UNION ALL
                 -- 4. Списания в ремонт
                 SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
@@ -1963,7 +1969,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 router.get('/part_movement_details', async (req, res) => {
     try {
         const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
