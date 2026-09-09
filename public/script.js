@@ -10311,6 +10311,64 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
     });
 }
 
+function filterDetailTable() {
+    const filterRow = document.getElementById('detail-filter-row');
+    if (!filterRow) return;
+
+    const filterInputs = filterRow.querySelectorAll('input[data-column]');
+    const filters = {};
+
+    filterInputs.forEach(input => {
+        const field = input.getAttribute('data-column');
+        const val = input.value.trim().toLowerCase();
+        if (val) {
+            filters[field] = val;
+        }
+    });
+
+    const tbody = document.getElementById('detail-body');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+
+    rows.forEach((row, index) => {
+        let isVisible = true;
+        const item = currentDetailItems ? currentDetailItems[index] : null;
+
+        if (!item) return;
+
+        const cells = Array.from(row.children);
+        // Получаем конфигурацию для активной сущности деталей
+        const config = typeof activeEntity !== 'undefined' ? getConfig(activeEntity) : null;
+
+        for (const field in filters) {
+            let match = false;
+            
+            const itemValue = item[field];
+            if (itemValue !== undefined && itemValue !== null) {
+                if (String(itemValue).toLowerCase().includes(filters[field])) {
+                    match = true;
+                }
+            }
+
+            if (!match && config && config.columns) {
+                const colIndex = config.columns.filter(c => c.table !== false).findIndex(c => c.field === field);
+                if (colIndex !== -1 && cells[colIndex]) {
+                    if (cells[colIndex].textContent.toLowerCase().includes(filters[field])) {
+                        match = true;
+                    }
+                }
+            }
+
+            if (!match) {
+                isVisible = false;
+                break;
+            }
+        }
+
+        row.style.display = isVisible ? '' : 'none';
+    });
+}
+
 async function loadDetailData(entity, parentId) {
     console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
 
@@ -10433,7 +10491,6 @@ async function loadDetailData(entity, parentId) {
     
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) {
-        console.warn(`🧹 [loadDetailData] Найден старый #detail-filter-row. Удаляем его, чтобы избежать наложения инпутов!`);
         existingFilterRow.remove();
     }
 
@@ -10441,6 +10498,24 @@ async function loadDetailData(entity, parentId) {
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
     console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
+
+    if (thead && headerTr) {
+        let filterRow = document.createElement('tr');
+        filterRow.id = 'detail-filter-row';
+        thead.insertBefore(filterRow, headerTr);
+
+        filterRow.innerHTML = visibleColumns.map(col => {
+            return `
+                <th style="padding: 4px; border-bottom: 1px solid #ddd;">
+                    <input type="text" 
+                           data-column="${col.field}" 
+                           oninput="filterDetailTable()" 
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
+        }).join('');
+    }
 
     if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
