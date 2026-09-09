@@ -1869,20 +1869,18 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход) — строго по закупочной цене из карточки запчасти (колонка purchase_price)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'in' as op_type
+                -- 2. Перемещения (приход)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_to_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход) — строго по закупочной цене из карточки запчасти (колонка purchase_price)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(z.purchase_price, mi.price, 0)) AS sum, 'out' as op_type
+                -- 3. Перемещения (расход)
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
                 WHERE m.warehouse_from_id IS NOT NULL AND m.is_posted = true
                 
                 UNION ALL
@@ -1895,11 +1893,10 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 5. Реализации (продажи) — по закупочной цене из строки реализации или карточки запчасти
-                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, z.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
+                -- 5. Реализации (продажи)
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
-                JOIN zaphasti z ON ri_rel.zaphasti_id = z.id
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
             ),
             -- Последний склад для каждой запчасти
@@ -2027,7 +2024,7 @@ router.get('/part_movement_details', async (req, res) => {
 
         const query = `
             WITH all_ops AS (
-                -- 1. Приходы (Поставщик -> Склад) — цена прихода
+                -- 1. Приходы (Поставщик -> Склад)
                 SELECT 
                     r.date AS op_date,
                     r.doc_number AS doc_num,
@@ -2051,7 +2048,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад-источник -> Склад-получатель) — закупочная цена из карточки z.purchase_price
+                -- 2. Перемещения (Склад-источник -> Склад-получатель)
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2062,10 +2059,10 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(z.purchase_price, mi.price, 0) AS price,
+                    COALESCE(mi.price, 0) AS price,
                     CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(z.purchase_price, mi.price, 0))
-                        ELSE (mi.quantity * COALESCE(z.purchase_price, mi.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, 0))
+                        ELSE (mi.quantity * COALESCE(mi.price, 0))
                     END AS sum,
                     mi.description,
                     m.warehouse_from_id,
@@ -2073,7 +2070,6 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS sklad_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
-                JOIN zaphasti z ON mi.zaphasti_id = z.id
                 LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
                 LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
                 LEFT JOIN users u_from ON mol_from.user_id = u_from.id
@@ -2086,7 +2082,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт) — цена списания
+                -- 3. Списания в ремонт (Склад -> Автомобиль / Ремонт)
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2112,7 +2108,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель) — закупочная цена
+                -- 4. Реализации / Продажи (Склад -> Покупатель)
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
@@ -2120,15 +2116,14 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(ri_rel.purchase_price, z.purchase_price, ri_rel.price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, z.purchase_price, ri_rel.price, 0)) AS sum,
+                    COALESCE(ri_rel.purchase_price, ri_rel.price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
                     ri_rel.description,
                     r_rel.sklad_id AS warehouse_id,
                     NULL::int AS warehouse_to_id,
                     r_rel.sklad_id AS sklad_id
                 FROM realization_items ri_rel
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                JOIN zaphasti z ON ri_rel.zaphasti_id = z.id
                 LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
