@@ -2074,7 +2074,7 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS sklad_id
                 FROM receipt_items ri
                 JOIN receipts r ON ri.receipt_id = r.id
-                JOIN warehouse_batches wb ON wb.receipt_id = ri.receipt_id AND wb.zaphasti_id = ri.zaphasti_id AND wb.warehouse_id = r.warehouse_id
+                JOIN warehouse_batches wb ON wb.zaphasti_id = ri.zaphasti_id AND wb.warehouse_id = r.warehouse_id
                 LEFT JOIN postavhik p ON r.supplier_id = p.id
                 LEFT JOIN skladi s ON r.warehouse_id = s.id
                 LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
@@ -2083,7 +2083,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад-источник -> Склад-получатель) по исходной закупочной цене партии
+                -- 2. Перемещения (Склад-источник -> Склад-получатель) по закупочной цене из warehouse_batches
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2105,7 +2105,7 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS sklad_id
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
-                LEFT JOIN warehouse_batches wb_m ON wb_m.receipt_id = mi.receipt_id AND wb_m.zaphasti_id = mi.zaphasti_id 
+                LEFT JOIN warehouse_batches wb_m ON wb_m.zaphasti_id = mi.zaphasti_id 
                     AND wb_m.warehouse_id = CASE WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN m.warehouse_from_id ELSE m.warehouse_to_id END
                 LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
                 LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
@@ -2135,7 +2135,7 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS sklad_id
                 FROM repair_items ri_rep
                 JOIN repairs rep ON ri_rep.repair_id = rep.id
-                LEFT JOIN warehouse_batches wb_rep ON wb_rep.receipt_id = ri_rep.receipt_id AND wb_rep.zaphasti_id = ri_rep.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
+                LEFT JOIN warehouse_batches wb_rep ON wb_rep.zaphasti_id = ri_rep.zaphast_id AND wb_rep.warehouse_id = rep.warehouse_id
                 LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
                 LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
                 LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
@@ -2146,7 +2146,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель) по чистой закупочной цене партии
+                -- 4. Реализации / Продажи (Склад -> Покупатель)
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
@@ -2157,12 +2157,12 @@ router.get('/part_movement_details', async (req, res) => {
                     COALESCE(wb_rel.price_rub, ri_rel.purchase_price, 0) AS price,
                     (-1 * ri_rel.quantity * COALESCE(wb_rel.price_rub, ri_rel.purchase_price, 0)) AS sum,
                     ri_rel.description,
-                    r_rel.sklad_id AS warehouse_id,
+                    r_rel.sklad_id AS warehouse_from_id,
                     NULL::int AS warehouse_to_id,
                     r_rel.sklad_id AS sklad_id
                 FROM realization_items ri_rel
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                LEFT JOIN warehouse_batches wb_rel ON wb_rel.receipt_id = ri_rel.receipt_id AND wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
+                LEFT JOIN warehouse_batches wb_rel ON wb_rel.zaphasti_id = ri_rel.zaphasti_id AND wb_rel.warehouse_id = r_rel.sklad_id
                 LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
