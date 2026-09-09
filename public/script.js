@@ -1696,7 +1696,7 @@ const tableConfig = {
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
-        { field: 'counterparty_name', label: 'Покупатель / Авто', width: '180px' },
+        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
