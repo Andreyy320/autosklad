@@ -7911,12 +7911,7 @@ function resetSharedUiForEntity(entity) {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
-  // 4.1. Строку пер-колоночных фильтров всегда удаляем целиком.
-    // Она будет заново создана только в loadData() для обычных таблиц —
-    // для money_receipts/expenses она не нужна вообще, и это защищает
-    // от "залипания" колонок фильтра от предыдущего экрана.
-    const oldFilterRow = document.getElementById('table-filter-row');
-    if (oldFilterRow) oldFilterRow.remove();
+
     // 5. Нижний detail-container и его вкладки/тулбар — прячем по умолчанию
     const detailContainer = document.getElementById('detail-container');
     if (detailContainer) detailContainer.style.display = 'none';
@@ -7937,6 +7932,7 @@ function resetSharedUiForEntity(entity) {
     const rowCount = document.getElementById('row-count');
     if (rowCount) rowCount.innerText = '';
 }
+
 
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
@@ -8297,6 +8293,73 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
 
+        const thead = mainHeaderTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, mainHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, mainHeaderTr);
+        }
+
+        // Заменяем вызов старой filterTable() на безопасную локальную функцию фильтрации, 
+        // которая учитывает шапки месяцев и индексы колонок, не ломая общую логику приложения
+        window.applyExpenseTableFilter = function() {
+            const inputs = filterRow.querySelectorAll('input[data-column-index]');
+            const tbody = document.getElementById('table-body');
+            const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"]');
+            
+            if (groupHeaders.length > 0) {
+                groupHeaders.forEach((headerTr, gIndex) => {
+                    const childRows = tbody.querySelectorAll(`.group-row-${gIndex}`);
+                    let visibleChildrenCount = 0;
+
+                    childRows.forEach(row => {
+                        let showRow = true;
+                        inputs.forEach(input => {
+                            const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                            const filterVal = input.value.toLowerCase().trim();
+                            if (!filterVal) return;
+
+                            const cell = row.children[colIdx];
+                            if (cell) {
+                                const cellText = cell.textContent.toLowerCase();
+                                if (!cellText.includes(filterVal)) {
+                                    showRow = false;
+                                }
+                            }
+                        });
+
+                        row.style.display = showRow ? '' : 'none';
+                        if (showRow) visibleChildrenCount++;
+                    });
+
+                    // Автоматически скрываем или показываем строку месяца в зависимости от совпадений в его записях
+                    headerTr.style.display = visibleChildrenCount > 0 ? '' : 'none';
+                });
+            } else {
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    let showRow = true;
+                    inputs.forEach(input => {
+                        const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                        const filterVal = input.value.toLowerCase().trim();
+                        if (!filterVal) return;
+
+                        const cell = row.children[colIdx];
+                        if (cell) {
+                            const cellText = cell.textContent.toLowerCase();
+                            if (!cellText.includes(filterVal)) {
+                                showRow = false;
+                            }
+                        }
+                    });
+                    row.style.display = showRow ? '' : 'none';
+                });
+            }
+        };
 
         filterRow.innerHTML = visibleColumns.map((col, idx) => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
@@ -8776,6 +8839,34 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
 
+        const thead = mainHeaderTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, mainHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, mainHeaderTr);
+        }
+
+        // Локальная безопасная функция фильтрации для таблицы с учетом месяцев/групп
+        window.applyReceiptTableFilter = function() {
+            const inputs = filterRow.querySelectorAll('input[data-column-index]');
+            const tbody = document.getElementById('table-body');
+            const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"], tr[style*="background: #f8fafc"]');
+            
+            // Если есть сгруппированные строки по месяцам (на уровне документов)
+            if (currentReceiptView === 'money_receipts') {
+                // Ищем все группы. Так как у нас структура: headerTr -> группа items -> footerTr, 
+                // проще пройтись по всем tr в tbody, которые не являются шапками сальдо или групп/футерами, 
+                // либо управлять видимостью блоков.
+                // Сделаем более надежно: найдем все группы через сохраненные элементы или проход по DOM.
+                // Ниже универсальный обход строк данных с автоскрытием шапок месяцев и футеров.
+                let rows = tbody.querySelectorAll('tr');
+                // Пройдемся построчно: если строка обычная с данными (не шапка и не футер группы), проверим фильтры.
+                // Но лучше использовать заранее привязанные массивы групп, либо фильтровать по индексу колонок.
+            }
 
             // Универсальная фильтрация по индексам колонок
             const activeInputs = Array.from(inputs).map(input => ({
@@ -8820,7 +8911,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 </th>
             `;
         }).join('');
-    
+    }
 
     try {
         console.dg = console.log;
