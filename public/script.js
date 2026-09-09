@@ -7477,7 +7477,6 @@ function printMainTable() {
         return;
     }
 
-    // Получаем текущую дату и время для отчета
     const now = new Date();
     const formattedDate = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
@@ -7528,7 +7527,6 @@ function printMainTable() {
                         text-align: left;
                         vertical-align: middle;
                         word-wrap: break-word;
-                        overflow-hidden: hidden;
                     }
                     th {
                         background-color: #f2f2f2 !important;
@@ -7537,11 +7535,11 @@ function printMainTable() {
                         text-align: center;
                         font-size: 11px;
                     }
-                    /* Убираем лишние элементы интерфейса, если они попали в таблицу (например, кнопки статусов) */
-                    button, .btn {
+                    /* Скрываем интерактивные кнопки и элементы управления внутри таблицы */
+                    button, .btn, input {
                         display: none !important;
                     }
-                    /* Выравнивание числовых колонок вправо */
+                    /* Правое выравнивание для числовых колонок и сумм */
                     td:nth-child(n+5) {
                         text-align: right;
                     }
@@ -7573,7 +7571,6 @@ function printMainTable() {
     printWindow.document.close();
     printWindow.focus();
     
-    // Автоматический вызов диалога печати после загрузки содержимого
     setTimeout(() => {
         printWindow.print();
     }, 250);
