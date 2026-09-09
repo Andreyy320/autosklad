@@ -7465,12 +7465,103 @@ async function applyMovementFilters() {
     }
 }
 
+function printMainTable() {
+    const titleElement = document.querySelector('.sidebar .nav-link.active') || document.querySelector('.accordion-header span');
+    const title = titleElement ? titleElement.innerText.replace('▲', '').replace('▼', '').trim() : 'Отчет по системе';
+    
+    const thead = document.getElementById('table-headers');
+    const tbody = document.getElementById('table-body');
+
+    if (!tbody || !thead) {
+        alert('Нечего печатать: таблица не найдена.');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Предварительный просмотр — ${title}</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        font-size: 11px;
+                        color: #000;
+                        margin: 10px;
+                    }
+                    .print-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        background: #f0f0f0;
+                        padding: 8px 12px;
+                        border: 1px solid #ccc;
+                        margin-bottom: 10px;
+                        font-weight: bold;
+                    }
+                    .print-header button {
+                        padding: 6px 15px;
+                        background: #4caf50;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        font-weight: bold;
+                        cursor: pointer;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 5px;
+                    }
+                    th, td {
+                        border: 1px solid #ccc;
+                        padding: 5px 6px;
+                        text-align: left;
+                        word-break: break-word;
+                    }
+                    th {
+                        background-color: #e6e6e6;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    /* Сохраняем подсветку строк/ячеек (например, красную заливку просрочки) */
+                    td[style*="background"], tr[style*="background"] {
+                        /* Стили подтягиваются из инлайн-стилей строки/ячейки */
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-header">
+                    <span>Предварительный просмотр: ${title}</span>
+                    <button onclick="window.print();">Распечатать</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>${thead.innerHTML}</tr>
+                    </thead>
+                    <tbody>
+                        ${tbody.innerHTML}
+                    </tbody>
+                </table>
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+}
+
 async function loadData(entity, title, customParams = {}) {
     console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
 
     currentEntity = entity;
     selectedItem = null;
     const config = getConfig(entity);
+
+    // Сохраняем текущие данные и заголовок на уровне window, чтобы функция печати могла к ним обратиться
+    window.currentEntityName = entity;
+    window.currentEntityTitle = title;
 
     const filterPanel = document.getElementById('parts-filter-panel');
     if (filterPanel) {
@@ -7742,6 +7833,8 @@ async function loadData(entity, title, customParams = {}) {
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
 }
+
+
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -10337,6 +10430,7 @@ function filterDetailTable() {
         if (!item) return;
 
         const cells = Array.from(row.children);
+        // Получаем конфигурацию для активной сущности деталей
         const config = typeof activeEntity !== 'undefined' ? getConfig(activeEntity) : null;
 
         for (const field in filters) {
@@ -10366,77 +10460,6 @@ function filterDetailTable() {
 
         row.style.display = isVisible ? '' : 'none';
     });
-}
-
-function printDetailTable() {
-    const titleElement = document.getElementById('detail-title');
-    const title = titleElement ? titleElement.innerText.replace('🖨 Печать', '').trim() : 'Отчет';
-    const thead = document.getElementById('detail-headers');
-    const tbody = document.getElementById('detail-body');
-
-    if (!tbody || !thead) {
-        alert('Нечего печатать: таблица не найдена.');
-        return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>${title}</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        font-size: 12px;
-                        color: #000;
-                        margin: 20px;
-                    }
-                    h2 {
-                        text-align: center;
-                        margin-bottom: 20px;
-                        font-size: 16px;
-                    }
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 10px;
-                    }
-                    th, td {
-                        border: 1px solid #ddd;
-                        padding: 6px 8px;
-                        text-align: left;
-                    }
-                    th {
-                        background-color: #f2f2f2;
-                        font-weight: bold;
-                    }
-                    tr[style*="display: none"] {
-                        display: none !important;
-                    }
-                </style>
-            </head>
-            <body>
-                <h2>${title}</h2>
-                <table>
-                    <thead>
-                        <tr>${thead.innerHTML}</tr>
-                    </thead>
-                    <tbody>
-                        ${tbody.innerHTML}
-                    </tbody>
-                </table>
-            </body>
-        </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-    }, 250);
 }
 
 async function loadDetailData(entity, parentId) {
@@ -10635,44 +10658,22 @@ async function loadDetailData(entity, parentId) {
 
         const titleElement = document.getElementById('detail-title');
         if (titleElement) {
-            let baseTitle = '';
             if (queryParamName === 'car_id') {
-                baseTitle = `Автомобиль (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `Автомобиль (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (['dtp_id', 'accident_id'].includes(queryParamName)) {
-                baseTitle = `ДТП (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `ДТП (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'repair_id') {
-                baseTitle = `Ремонт (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `Ремонт (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (queryParamName === 'realization_id') {
-                baseTitle = `Реализация (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
+                titleElement.innerText = `Реализация (ID: ${cleanParentId}) — ${prettyEntityName} | Записей: ${items.length}`;
             } else if (entity === 'stock_batches') {
-                baseTitle = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
+                titleElement.innerText = `Партии и документы прихода по выбранному складу | Позиций: ${items.length}`;
             } else if (entity === 'part_movement_details') {
-                baseTitle = `Детальная история движения запчасти | Операций: ${items.length}`;
+                titleElement.innerText = `Детальная история движения запчасти | Операций: ${items.length}`;
             } else if (entity === 'stock_balances') {
-                baseTitle = `Остатки запчастей на складах | Позиций: ${items.length}`;
+                titleElement.innerText = `Остатки запчастей на складах | Позиций: ${items.length}`;
             } else {
-                baseTitle = `${prettyEntityName} | Записей: ${items.length}`;
-            }
-
-            const printableList = [
-                'car_general', 'car_details', 'stock_balances', 
-                'stock_movement', 'part_movement_details', 
-                'receipts', 'receipt_items', 'expenses', 'expense_items', 
-                'realizations', 'realization_items', 'realization_works',
-                'repair_items', 'repair_works', 'repair_history', 'receipts_history'
-            ];
-
-            if (printableList.includes(activeEntity) || printableList.includes(entity)) {
-                titleElement.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <span>${baseTitle}</span>
-                        <button onclick="printDetailTable()" style="padding: 4px 10px; cursor: pointer; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: bold;">
-                            🖨 Печать
-                        </button>
-                    </div>
-                `;
-            } else {
-                titleElement.innerText = baseTitle;
+                titleElement.innerText = `${prettyEntityName} | Записей: ${items.length}`;
             }
         }
         
