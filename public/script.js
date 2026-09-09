@@ -7658,6 +7658,10 @@ function ensureDetailPrintButton() {
         detailTitle.parentElement.style.alignItems = 'center';
     }
 
+    detailTitle.parentElement.appendChild(btn);
+    return btn;
+}
+
 
 
 async function loadData(entity, title, customParams = {}) {
