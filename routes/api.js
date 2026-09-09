@@ -1831,6 +1831,7 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -1860,7 +1861,7 @@ router.get('/stock_movement', async (req, res) => {
 
         let warehouseFilterClause = '';
 
-        // Фильтр по складу
+        // Фильтр по складу (применяется только к фильтрации самих операций в отчете)
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined') {
             queryParams.push(warehouse_id);
             warehouseFilterClause += ` AND warehouse_id = $${paramIndex}`;
@@ -1959,6 +1960,7 @@ router.get('/stock_movement', async (req, res) => {
                 FROM filtered_ops
                 GROUP BY zaphasti_id, warehouse_id
             ),
+            -- Определяем реальный актуальный склад для каждой запчасти по последней дате операции во всей базе
             latest_warehouse_op AS (
                 SELECT DISTINCT ON (zaphasti_id)
                     zaphasti_id,
@@ -1983,7 +1985,7 @@ router.get('/stock_movement', async (req, res) => {
                 (COALESCE(t.income_qty, 0) - COALESCE(t.outcome_qty, 0)) AS end_qty,
                 (COALESCE(t.income_sum, 0) - COALESCE(t.outcome_sum, 0)) AS end_sum,
                 z.description,
-                curr_s.name AS current_sklad,
+                curr_s.name AS current_skjladi,
                 lwo.warehouse_id AS current_warehouse_id
             FROM calculated_turnover t
             JOIN zaphasti z ON t.zaphasti_id = z.id
@@ -2008,7 +2010,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 router.get('/part_movement_details', async (req, res) => {
     try {

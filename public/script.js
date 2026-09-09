@@ -798,7 +798,8 @@ const tableConfig = {
         { field: 'code', label: 'Код', width: '90px', align: 'center' },
         { field: 'name', label: 'Наименование', width: '280px' },
         { field: 'manufacturer', label: 'Производитель', width: '130px' },
-        { field: 'current_sklad', label: 'Текущий склад', width: '140px' },
+        { field: 'sklad', label: 'Склад', width: '130px' },
+        { field: 'current_sklad', label: 'Текущий склад', width: '130px' },
         { field: 'unit', label: 'Ед.изм', width: '60px', align: 'center' },
         { field: 'income_qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'income_sum', label: 'Сумма', width: '80px', align: 'right' },
@@ -819,7 +820,8 @@ const tableConfig = {
             <td style="text-align: center;">${item.code || ''}</td>
             <td><b>${item.name || ''}</b></td>
             <td>${item.manufacturer || ''}</td>
-            <td><b>${item.current_sklad || '—'}</b></td>
+            <td><b>${item.sklad || '—'}</b></td>
+            <td>${item.current_sklad || '—'}</td>
             <td style="text-align: center;">${item.unit || 'шт'}</td>
             
             <!-- Приход -->
