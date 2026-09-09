@@ -9269,7 +9269,6 @@ function emptyDetailBody(entity) {
 
     detailBody.innerHTML = `<tr><td colspan="${visibleColumnsCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
 }
-
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
     const filters = {};
@@ -9284,23 +9283,34 @@ function filterTable() {
 
     const rows = document.querySelectorAll('#table-body tr');
 
-    rows.forEach(row => {
+    rows.forEach((row, index) => {
         let isVisible = true;
-        const id = row.getAttribute('data-id');
-        const item = currentItems.find(i => i.id == id);
+        const item = currentItems[index]; // Берем элемент напрямую по индексу строки
 
         if (!item) return;
 
+        const cells = Array.from(row.children);
+        const config = getConfig(currentEntity);
+
         for (const field in filters) {
-            const cellValue = String(item[field] !== undefined && item[field] !== null ? item[field] : '').toLowerCase();
+            let match = false;
             
-            const cells = Array.from(row.children);
-            const config = getConfig(currentEntity);
-            const colIndex = config.columns.findIndex(c => c.field === field);
-            
-            let match = cellValue.includes(filters[field]);
-            if (!match && colIndex !== -1 && cells[colIndex]) {
-                match = cells[colIndex].textContent.toLowerCase().includes(filters[field]);
+            // 1. Проверяем значение в самом объекте данных
+            const itemValue = item[field];
+            if (itemValue !== undefined && itemValue !== null) {
+                if (String(itemValue).toLowerCase().includes(filters[field])) {
+                    match = true;
+                }
+            }
+
+            // 2. Если не нашли в объекте или поле вычисляемое, проверяем текст в ячейке таблицы (td)
+            if (!match) {
+                const colIndex = config.columns.findIndex(c => c.field === field);
+                if (colIndex !== -1 && cells[colIndex]) {
+                    if (cells[colIndex].textContent.toLowerCase().includes(filters[field])) {
+                        match = true;
+                    }
+                }
             }
 
             if (!match) {
