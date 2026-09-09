@@ -1,3 +1,39 @@
+// Атомарно выдаёт следующий номер документа для указанного типа.
+// Обязательно вызывать внутри транзакции (передавая client, а не pool!),
+// иначе гарантия от гонки пропадает.
+async function getNextDocNumber(client, entityType, prefix) {
+    const result = await client.query(
+        `UPDATE document_sequences 
+         SET current_value = current_value + 1 
+         WHERE entity_type = $1 
+         RETURNING current_value`,
+        [entityType]
+    );
+
+    if (result.rows.length === 0) {
+        // Если строки счётчика ещё нет (например, для нового типа документа) — создаём её на лету
+        const insertResult = await client.query(
+            `INSERT INTO document_sequences (entity_type, current_value) 
+             VALUES ($1, 1) 
+             ON CONFLICT (entity_type) DO UPDATE SET current_value = document_sequences.current_value + 1
+             RETURNING current_value`,
+            [entityType]
+        );
+        return `${prefix}${insertResult.rows[0].current_value}`;
+    }
+
+    return `${prefix}${result.rows[0].current_value}`;
+}
+
+// Соответствие типа сущности и его префикса номера документа
+const DOC_NUMBER_CONFIG = {
+    receipts: 'ПР-',
+    moves: 'ПМ-',
+    repairs: 'РЕМ-',
+    accidents: 'ДТП-',
+    realizations: 'РЛ-'
+};
+
 // ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер

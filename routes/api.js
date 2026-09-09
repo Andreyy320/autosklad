@@ -29,6 +29,38 @@ function getServerNowString() {
     return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+async function getNextDocNumber(client, entityType, prefix) {
+    const result = await client.query(
+        `UPDATE document_sequences 
+         SET current_value = current_value + 1 
+         WHERE entity_type = $1 
+         RETURNING current_value`,
+        [entityType]
+    );
+
+    if (result.rows.length === 0) {
+        // Если строки счётчика ещё нет (например, для нового типа документа) — создаём её на лету
+        const insertResult = await client.query(
+            `INSERT INTO document_sequences (entity_type, current_value) 
+             VALUES ($1, 1) 
+             ON CONFLICT (entity_type) DO UPDATE SET current_value = document_sequences.current_value + 1
+             RETURNING current_value`,
+            [entityType]
+        );
+        return `${prefix}${insertResult.rows[0].current_value}`;
+    }
+
+    return `${prefix}${result.rows[0].current_value}`;
+}
+
+// Соответствие типа сущности и его префикса номера документа
+const DOC_NUMBER_CONFIG = {
+    receipts: 'ПР-',
+    moves: 'ПМ-',
+    repairs: 'РЕМ-',
+    accidents: 'ДТП-',
+    realizations: 'РЛ-'
+};
 module.exports = (pool) => {
     
     // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
@@ -6672,21 +6704,25 @@ async function writeAuditLog(client, req, data) {
     }
 }
 
-// ==================== УНИВЕРСАЛЬНЫЙ POST С ЛОГИРОВАНИЕМ ====================
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
     const browserLog = (msg) => {
         console.log(msg);
         logsBuffer.push(msg);
     };
-
+ 
     browserLog(`\n----------------------------------------`);
     browserLog(`[POST REQUEST] Сущность: ${req.params.entity}`);
     browserLog(`[BODY]: ${JSON.stringify(req.body)}`);
-
+ 
+    // Работаем через отдельного клиента из пула, чтобы можно было открыть транзакцию:
+    // генерация номера документа и сама вставка записи должны быть атомарны вместе,
+    // иначе гарантия от гонки при получении номера теряется.
+    const client = await pool.connect();
+ 
     try {
         let { entity } = req.params;
-
+ 
         if (entity === 'brands') { entity = 'car_brands'; }
         if (entity === 'models') { entity = 'car_models'; }
         if (entity === 'bodies') { entity = 'kyzov_type'; }
@@ -6695,12 +6731,12 @@ router.post('/:entity', async (req, res) => {
         if (entity === 'postavhik-contacts' || entity === 'postavhik_ contacts') { 
             entity = 'postavhik_contacts'; 
         }
-
+ 
         // Обработка для покупателей
         if (entity === 'customer-contacts' || entity === 'customer_ contacts') { 
             entity = 'customer_contacts'; 
         }
-
+ 
         const allowedTables = [
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
             'counterparties', 'postavhik', 'customers', 'counterparty_types', 
@@ -6713,42 +6749,49 @@ router.post('/:entity', async (req, res) => {
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
         ];
-
+ 
         if (!allowedTables.includes(entity)) {
             browserLog(`[ERROR] Недопустимая таблица: ${entity}`);
+            client.release();
             return res.status(400).json({ 
                 error: `Недопустимая таблица: ${entity}`,
                 serverLogs: logsBuffer 
             });
         }
-
+ 
+        // Открываем транзакцию — всё, что ниже (проверки, генерация номера, вставка,
+        // лог) либо целиком применится, либо целиком откатится при ошибке.
+        await client.query('BEGIN');
+ 
         if (entity === 'repairs') {
             if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
                 req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
             }
             delete req.body.repair_type;
-
+ 
             if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
                 req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
             }
             delete req.body.doc_type;
         }
-
+ 
         // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
         if (entity === 'repair_works') {
             if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
                 req.body.vidy_rabot_id = req.body.work_id;
             }
             delete req.body.work_id;
-
+ 
             const { repair_id } = req.body;
             
             if (repair_id) {
-                const repairCheck = await pool.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
+                const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [repair_id]);
                 if (repairCheck.rows.length > 0) {
                     const isPostedVal = repairCheck.rows[0].is_posted;
                     if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2) {
+                        await client.query('ROLLBACK');
                         browserLog(`[ERROR] Попытка добавить работу в проведенный ремонт ID: ${repair_id}`);
+                        client.release();
                         return res.status(400).json({ 
                             error: 'Нельзя добавлять работы в уже проведенный ремонт!',
                             serverLogs: logsBuffer 
@@ -6757,7 +6800,7 @@ router.post('/:entity', async (req, res) => {
                 }
             }
         }
-
+ 
         if (req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted; 
@@ -6765,35 +6808,49 @@ router.post('/:entity', async (req, res) => {
                 req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
             }
         }
-
+ 
         // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и realizations
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs' || entity === 'realizations')) {
             req.body.user_id = currentUserId;
         }
-
+ 
+        // ==================== АТОМАРНАЯ ГЕНЕРАЦИЯ НОМЕРА ДОКУМЕНТА ====================
+        // Для документных сущностей номер ВСЕГДА генерируется на сервере внутри транзакции,
+        // что бы ни прислал фронтенд в doc_number — это исключает гонку между
+        // одновременными созданиями и гарантирует уникальность номера.
+        if (DOC_NUMBER_CONFIG[entity]) {
+            req.body.doc_number = await getNextDocNumber(client, entity, DOC_NUMBER_CONFIG[entity]);
+            browserLog(`[DOC NUMBER] Сгенерирован номер для ${entity}: ${req.body.doc_number}`);
+        }
+        // ================================================================================
+ 
         // Проверка уникальности для запчастей при добавлении (код и связка артикул+производитель)
         if (entity === 'zaphasti') {
             const { code, article, proizvoditel_id } = req.body;
-
+ 
             if (code) {
-                const codeCheck = await pool.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
+                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
                 if (codeCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
                     browserLog(`[ERROR] Запчасть с кодом ${code} уже существует`);
+                    client.release();
                     return res.status(400).json({ 
                         error: 'Запчасть с таким кодом уже существует!', 
                         serverLogs: logsBuffer 
                     });
                 }
             }
-
+ 
             if (article && proizvoditel_id) {
-                const artProvCheck = await pool.query(
+                const artProvCheck = await client.query(
                     'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2', 
                     [article, proizvoditel_id]
                 );
                 if (artProvCheck.rows.length > 0) {
+                    await client.query('ROLLBACK');
                     browserLog(`[ERROR] Запчасть с таким артикулом и производителем уже существует`);
+                    client.release();
                     return res.status(400).json({ 
                         error: 'Запчасть с таким артикулом для этого производителя уже существует!', 
                         serverLogs: logsBuffer 
@@ -6801,57 +6858,25 @@ router.post('/:entity', async (req, res) => {
                 }
             }
         }
-
-        // ==================== НОВОЕ: ЗАЩИТА НОМЕРА ДОКУМЕНТА ОТ ГОНКИ ПРИ ОДНОВРЕМЕННОМ СОЗДАНИИ ====================
-        // Список сущностей-документов, для которых номер генерирует СЕРВЕР, а не клиент.
-        // Раньше клиент сам вычислял "макс id + 1" и мог выдать одинаковый номер двум пользователям,
-        // если оба одновременно открывали форму создания документа. Теперь клиентский doc_number
-        // просто игнорируется, а настоящий номер сервер присваивает сам после вставки записи в базу,
-        // на основе её собственного id (id — автоинкремент Postgres, атомарен и никогда не повторяется).
-        const docNumberPrefixes = {
-            receipts: 'ПР-',
-            moves: 'ПМ-',
-            repairs: 'РЕМ-',
-            accidents: 'ДТП-',
-            realizations: 'РЛ-'
-        };
-        const isDocEntity = Object.prototype.hasOwnProperty.call(docNumberPrefixes, entity);
-
-        if (isDocEntity && req.body.doc_number !== undefined) {
-            browserLog(`[INFO] doc_number от клиента (${req.body.doc_number}) проигнорирован — сервер сгенерирует номер сам после вставки`);
-            delete req.body.doc_number;
-        }
-        // ================================================================================================
-
+ 
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
-
+ 
         if (keys.length === 0) {
+            await client.query('ROLLBACK');
             browserLog(`[ERROR] Пустое тело запроса`);
+            client.release();
             return res.status(400).json({ error: 'Нет данных для сохранения', serverLogs: logsBuffer });
         }
-
+ 
         const processedValues = values.map(val => val === '' ? null : val);
         const columns = keys.map(k => `"${k}"`).join(', ');
         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
+ 
         const query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *;`;
-        const result = await pool.query(query, processedValues);
-        let newRecord = result.rows[0];
-
-        // ==================== НОВОЕ: ПРИСВОЕНИЕ РЕАЛЬНОГО НОМЕРА ДОКУМЕНТА ПОСЛЕ ВСТАВКИ ====================
-        if (isDocEntity) {
-            const prefix = docNumberPrefixes[entity];
-            const docNumber = `${prefix}${newRecord.id}`;
-            const updateRes = await pool.query(
-                `UPDATE "${entity}" SET doc_number = $1 WHERE id = $2 RETURNING *;`,
-                [docNumber, newRecord.id]
-            );
-            newRecord = updateRes.rows[0];
-            browserLog(`[INFO] Присвоен номер документа: ${docNumber}`);
-        }
-        // ================================================================================================
-
+        const result = await client.query(query, processedValues);
+        const newRecord = result.rows[0];
+ 
         // ==================== ПОЛНОЕ УНИВЕРСАЛЬНОЕ ЛОГИРОВАНИЕ (ОБЩИЙ INSERT) ====================
         try {
             const userId = currentUserId || req.body.user_id || null;
@@ -6863,8 +6888,8 @@ router.post('/:entity', async (req, res) => {
             } catch (e) {
                 detailsJson = '{}';
             }
-
-            await pool.query(
+ 
+            await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
                  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
@@ -6881,7 +6906,9 @@ router.post('/:entity', async (req, res) => {
             console.error('❌ [AUDIT ERROR] Не удалось записать лог:', logErr.message);
         }
         // ======================================================================================
-
+ 
+        await client.query('COMMIT');
+ 
         browserLog(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
         
         // Возвращаем запись и логи для браузера
@@ -6889,16 +6916,20 @@ router.post('/:entity', async (req, res) => {
             ...newRecord,
             serverLogs: logsBuffer
         });
-
+ 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error("❌ [CRITICAL ERROR НА СЕРВЕРЕ]:", err.message);
         console.error(err.stack);
         res.status(500).json({ 
             error: 'Ошибка сервера при добавлении: ' + err.message,
             serverLogs: logsBuffer 
         });
+    } finally {
+        client.release();
     }
 });
+
 
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
