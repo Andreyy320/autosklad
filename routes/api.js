@@ -2356,7 +2356,6 @@ router.put('/moves/:id/post', async (req, res) => {
     }
 });
 
-// ==================== БЫСТРОЕ ПРОВЕДЕНИЕ ПРИХОДА ====================
 router.put('/receipts/:id/post', async (req, res) => {
     try {
         const { id } = req.params;
@@ -2366,11 +2365,13 @@ router.put('/receipts/:id/post', async (req, res) => {
         }
 
         const factDate = getServerNowString();
+        console.log('🕐🕐🕐 [POST RECEIPT] ID:', id, '| Вычисленная factDate:', factDate, '| Реальное серверное время сейчас:', new Date().toString());
 
         const result = await pool.query(
             'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
             [factDate, id]
         );
+        console.log('✅✅✅ [POST RECEIPT] Что реально сохранилось в fact_date:', result.rows[0].fact_date);
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Ошибка при проведении прихода:', err.message);
