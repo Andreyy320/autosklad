@@ -7640,10 +7640,9 @@ function ensureDetailPrintButton() {
     const oldBtn = document.getElementById('detail-print-btn');
     if (oldBtn) oldBtn.remove();
 
-    // Кнопка "Печать" нужна ТОЛЬКО для Карточки авто и для ДТП — остальные экраны не трогаем
+      // Проверяем видимость КОНКРЕТНЫХ блоков вкладок (не общей обёртки car-tabs-bar,
+    // так как она одна на всех и включается даже для receipts/moves/customers/repairs)
     const possibleTabBars = [
-        document.getElementById('car-tabs-bar'),
-        document.getElementById('car-tabs-panel'),
         document.getElementById('tabs-for-cars'),
         document.getElementById('tabs-for-accidents')
     ].filter(Boolean);
