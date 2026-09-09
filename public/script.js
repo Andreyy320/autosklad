@@ -7477,62 +7477,86 @@ function printMainTable() {
         return;
     }
 
+    // Получаем текущую дату и время для отчета
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
     const printWindow = window.open('', '_blank');
     
     printWindow.document.write(`
         <html>
             <head>
-                <title>Предварительный просмотр — ${title}</title>
+                <title>${title}</title>
                 <style>
+                    @page {
+                        size: A4 landscape;
+                        margin: 10mm;
+                    }
                     body {
                         font-family: Arial, sans-serif;
                         font-size: 11px;
-                        color: #000;
-                        margin: 10px;
+                        color: #111;
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
                     }
                     .print-header {
                         display: flex;
                         justify-content: space-between;
-                        align-items: center;
-                        background: #f0f0f0;
-                        padding: 8px 12px;
-                        border: 1px solid #ccc;
-                        margin-bottom: 10px;
-                        font-weight: bold;
+                        align-items: baseline;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 8px;
+                        margin-bottom: 15px;
                     }
-                    .print-header button {
-                        padding: 6px 15px;
-                        background: #4caf50;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        font-weight: bold;
-                        cursor: pointer;
+                    .print-header h2 {
+                        margin: 0;
+                        font-size: 16px;
+                        color: #111;
+                    }
+                    .print-header .print-date {
+                        font-size: 11px;
+                        color: #555;
                     }
                     table {
                         width: 100%;
                         border-collapse: collapse;
-                        margin-top: 5px;
+                        table-layout: fixed;
                     }
                     th, td {
-                        border: 1px solid #ccc;
-                        padding: 5px 6px;
+                        border: 1px solid #bbb;
+                        padding: 6px 8px;
                         text-align: left;
-                        word-break: break-word;
+                        vertical-align: middle;
+                        word-wrap: break-word;
+                        overflow-hidden: hidden;
                     }
                     th {
-                        background-color: #e6e6e6;
+                        background-color: #f2f2f2 !important;
+                        color: #000;
                         font-weight: bold;
                         text-align: center;
+                        font-size: 11px;
                     }
-                    td[style*="background"], tr[style*="background"] {
+                    /* Убираем лишние элементы интерфейса, если они попали в таблицу (например, кнопки статусов) */
+                    button, .btn {
+                        display: none !important;
+                    }
+                    /* Выравнивание числовых колонок вправо */
+                    td:nth-child(n+5) {
+                        text-align: right;
+                    }
+                    th:nth-child(n+5) {
+                        text-align: right;
+                    }
+                    tr {
+                        page-break-inside: avoid;
                     }
                 </style>
             </head>
             <body>
                 <div class="print-header">
-                    <span>Предварительный просмотр: ${title}</span>
-                    <button onclick="window.print();">Распечатать</button>
+                    <h2>Отчет: ${title}</h2>
+                    <div class="print-date">Дата печати: ${formattedDate}</div>
                 </div>
                 <table>
                     <thead>
@@ -7548,6 +7572,11 @@ function printMainTable() {
 
     printWindow.document.close();
     printWindow.focus();
+    
+    // Автоматический вызов диалога печати после загрузки содержимого
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
 }
 
 async function loadData(entity, title, customParams = {}) {
@@ -7605,7 +7634,7 @@ async function loadData(entity, title, customParams = {}) {
     // Управляем видимостью кнопки «Печать» в тулбаре: показываем только для car_cards и realizations
     const printBtn = document.querySelector('button[onclick="printMainTable()"]');
     if (printBtn) {
-        if (entity === 'car_cards' || entity === 'realizations') {
+        if (entity === 'car_cards' || entity === 'realizations'|| entity === 'stock_balances'|| entity === 'stock_movement' ) {
             printBtn.style.display = 'inline-block';
         } else {
             printBtn.style.display = 'none';
