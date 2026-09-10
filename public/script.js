@@ -8103,7 +8103,7 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName) {
 }
 
 
-function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
+async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
@@ -8111,6 +8111,8 @@ function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
             <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата за месяц: ${titleLabel}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
+
+        <div id="pay-receipts-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
 
         <form id="pay-form" onsubmit="submitPayment(event, '${postavhikId}', '${monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
@@ -8133,16 +8135,66 @@ function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     `;
 
     openDrawer();
+
+    // Подгружаем список неоплаченных накладных поставщика за этот месяц, чтобы
+    // можно было отметить конкретные и оплатить именно их, а не всё подряд по ФИФО.
+    try {
+        const [year, month] = monthStr.split('-').map(Number);
+        const startDate = `${monthStr}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+        const skladParam = window.currentSkladId ? `&sklad_id=${window.currentSkladId}` : '';
+
+        const resp = await fetch(`/api/expenses_by_receipts?postavhik_id=${postavhikId}&start_date=${startDate}&end_date=${endDate}${skladParam}`);
+        const listEl = document.getElementById('pay-receipts-list');
+        if (!listEl) return;
+
+        if (!resp.ok) {
+            listEl.innerHTML = '<span style="color:#dc2626;">Не удалось загрузить список накладных</span>';
+            return;
+        }
+
+        const receipts = await resp.json();
+        const unpaid = (Array.isArray(receipts) ? receipts : []).filter(r => Number(r.debt_sum || 0) > 0);
+
+        if (unpaid.length === 0) {
+            listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
+            return;
+        }
+
+        listEl.innerHTML = `
+            <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 8px; font-weight: 500;">
+                Накладные (необязательно): отметьте, если хотите оплатить конкретные.
+                Если ничего не отмечено — сумма распределится по всем от старых к новым, как раньше.
+            </label>
+            <div style="max-height: 160px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
+                ${unpaid.map(r => `
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: #334155; cursor: pointer;">
+                        <input type="checkbox" class="pay-receipt-checkbox" value="${r.receipt_id || r.id}">
+                        <span>№ ${r.doc_number || r.id} от ${r.date ? new Date(r.date).toLocaleDateString() : '—'} — долг: <b>${Number(r.debt_sum || 0).toFixed(2)}</b></span>
+                    </label>
+                `).join('')}
+            </div>
+        `;
+    } catch (err) {
+        console.error('Ошибка загрузки списка накладных для оплаты:', err);
+        const listEl = document.getElementById('pay-receipts-list');
+        if (listEl) listEl.innerHTML = '<span style="color:#dc2626;">Ошибка загрузки списка накладных</span>';
+    }
 }
 
 async function submitPayment(event, postavhikId, monthStr) {
     event.preventDefault();
-    
+
+    const checkedBoxes = document.querySelectorAll('.pay-receipt-checkbox:checked');
+    const receiptIds = Array.from(checkedBoxes).map(cb => cb.value);
+
     const payload = {
         amount: parseFloat(document.getElementById('payment-amount').value),
         comment: document.getElementById('payment-comment').value,
         month_str: monthStr,
-        sklad_id: window.currentSkladId || null
+        sklad_id: window.currentSkladId || null,
+        receipt_ids: receiptIds.length > 0 ? receiptIds : null
     };
 
     try {

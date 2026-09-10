@@ -5041,12 +5041,13 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
 // Сумма автоматически распределяется по накладным этого поставщика/месяца
 // от САМОЙ СТАРОЙ к самой новой (FIFO) — так каждая накладная получает
 // свою частичную/полную оплату, и на уровне 3 видно, что оплачено, а что нет.
+// Если передан receipt_ids — распределение идёт только среди этих накладных
+// (тоже по FIFO среди них), а не среди всех накладных месяца.
 router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params; // id поставщика
-        const { amount, month_str, sklad_id, comment } = req.body;
-
+        const { amount, month_str, sklad_id, comment, receipt_ids } = req.body;
         const paymentAmount = Number(amount);
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Некорректная сумма оплаты' });
@@ -5055,10 +5056,17 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
             return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
         }
 
+        // Если пользователь отметил конкретные накладные — сузим выборку только до них.
+        // Если нет (null/пусто) — поведение как раньше: все накладные поставщика за месяц.
+        const receiptIdsFilter = Array.isArray(receipt_ids) && receipt_ids.length > 0
+            ? receipt_ids.map(Number).filter(n => !isNaN(n))
+            : null;
+
         await client.query('BEGIN');
 
-        // Берём все накладные этого поставщика за этот месяц (и склад, если указан),
+        // Берём накладные этого поставщика за этот месяц (и склад, если указан),
         // с суммой ДОЛГА по каждой (закупка минус уже оплаченное), от старых к новым.
+        // Если receiptIdsFilter задан — ограничиваемся только отмеченными накладными.
         // FOR UPDATE — блокируем строки, чтобы два одновременных платежа не перепутали остатки долга.
         const receiptsQuery = `
             SELECT 
@@ -5079,10 +5087,11 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
               AND rec.is_posted = true
               AND TO_CHAR(rec.date, 'YYYY-MM') = $2
               AND ($3::integer IS NULL OR rec.warehouse_id = $3::integer)
+              AND ($4::int[] IS NULL OR rec.id = ANY($4::int[]))
             ORDER BY rec.date ASC, rec.id ASC
             FOR UPDATE OF rec
         `;
-        const receiptsRes = await client.query(receiptsQuery, [id, month_str, sklad_id || null]);
+        const receiptsRes = await client.query(receiptsQuery, [id, month_str, sklad_id || null, receiptIdsFilter]);
 
         let remaining = paymentAmount;
         const appliedPayments = [];
