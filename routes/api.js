@@ -3990,10 +3990,10 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts', async (req, res) => {
     try {
-        const { sklad_id, start_date, end_date } = req.query;
-        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
+    const { sklad_id, start_date, end_date, customer_id, warehouse_to_id } = req.query;        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
 
         const query = `
             WITH calc_data AS (
@@ -4004,7 +4004,6 @@ router.get('/money_receipts', async (req, res) => {
                     real.doc_number::text AS doc_number,
                     real.doc_date AS date,
                     c.id AS customer_id,
-                    NULL::integer AS debtor_warehouse_id,
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
@@ -4049,10 +4048,11 @@ router.get('/money_receipts', async (req, res) => {
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
                 WHERE real.is_posted = true
-                  AND ($1::integer IS NULL OR real.sklad_id = $1)
-                  AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
-                  AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
-
+    AND ($1::integer IS NULL OR real.sklad_id = $1)
+    AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
+    AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
+    AND ($4::integer IS NULL OR real.customer_id = $4)
+    AND ($5::integer IS NULL)
                 UNION ALL
 
                 -- 2. Перемещения (берем чистую закупку из связанного прихода через receipt_items)
@@ -4062,7 +4062,6 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
                     NULL::integer AS customer_id,
-                    sk_to.id AS debtor_warehouse_id,
                     CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     1 AS total_orders,
@@ -4110,17 +4109,20 @@ router.get('/money_receipts', async (req, res) => {
                     GROUP BY move_id
                 ) m_p ON m.id = m_p.move_id
                 WHERE m.is_posted = true
-                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
-                  AND ($2::date IS NULL OR m.date::date >= $2::date)
-                  AND ($3::date IS NULL OR m.date::date <= $3::date)
-            )
+                  WHERE m.is_posted = true
+    AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+     AND ($2::date IS NULL OR m.date::date >= $2::date)
+    AND ($3::date IS NULL OR m.date::date <= $3::date)
+    AND ($4::integer IS NULL)
+     AND ($5::integer IS NULL OR m.warehouse_to_id = $5)
+            
+                  )
             SELECT 
                 id,
                 realization_id,
                 doc_number,
                 date,
                 customer_id,
-                debtor_warehouse_id,
                 counterparty_name,
                 sklad_name,
                 total_orders,
@@ -4146,8 +4148,7 @@ router.get('/money_receipts', async (req, res) => {
         `;
 
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
-        const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
-
+    const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, warehouse_to_id || null]);
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -4174,6 +4175,67 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
+
+router.get('/money_receipts_by_customer', async (req, res) => {
+    try {
+        const { sklad_id } = req.query;
+        const query = `
+            WITH debtors AS (
+                -- 1. Покупатели через реализации
+                SELECT
+                    c.id AS debtor_id,
+                    'customer'::text AS debtor_type,
+                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS debtor_name,
+                    date_trunc('month', real.doc_date)::date AS month,
+                    SUM(COALESCE(sub_i.parts_sum,0) + COALESCE(sub_w.works_sum,0)) AS total_realization_sum,
+                    SUM(COALESCE(sub_p.paid_sum,0)) AS total_paid,
+                    SUM(COALESCE(sub_i.parts_sum,0) + COALESCE(sub_w.works_sum,0) - COALESCE(sub_p.paid_sum,0)) AS debt_sum
+                FROM realizations real
+                JOIN customers c ON real.customer_id = c.id
+                LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub,0), price*quantity,0)) parts_sum
+                           FROM realization_items GROUP BY realization_id) sub_i ON sub_i.realization_id = real.id
+                LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub,0), price*quantity,0)) works_sum
+                           FROM realization_works GROUP BY realization_id) sub_w ON sub_w.realization_id = real.id
+                LEFT JOIN (SELECT realization_id, SUM(amount) paid_sum
+                           FROM customer_payments GROUP BY realization_id) sub_p ON sub_p.realization_id = real.id
+                WHERE real.is_posted = true
+                  AND ($1::integer IS NULL OR real.sklad_id = $1)
+                GROUP BY c.id, c.name_full, c.name_short, date_trunc('month', real.doc_date)
+
+                UNION ALL
+
+                -- 2. Склады-получатели через перемещения
+                SELECT
+                    sk_to.id AS debtor_id,
+                    'warehouse'::text AS debtor_type,
+                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS debtor_name,
+                    date_trunc('month', m.date)::date AS month,
+                    SUM(COALESCE(m_items.total_sum,0)) AS total_realization_sum,
+                    SUM(COALESCE(m_p.paid_sum,0)) AS total_paid,
+                    SUM(COALESCE(m_items.total_sum,0) - COALESCE(m_p.paid_sum,0)) AS debt_sum
+                FROM moves m
+                JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
+                LEFT JOIN (SELECT move_id, SUM(COALESCE(total_rub, price*quantity,0)) total_sum
+                           FROM move_items GROUP BY move_id) m_items ON m_items.move_id = m.id
+                LEFT JOIN (SELECT move_id, SUM(amount) paid_sum
+                           FROM warehouse_debt_payments GROUP BY move_id) m_p ON m_p.move_id = m.id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+                GROUP BY sk_to.id, sk_to.name, date_trunc('month', m.date)
+            )
+            SELECT * FROM debtors
+            WHERE debt_sum > 0
+            ORDER BY month DESC, debt_sum DESC;
+        `;
+        const result = await pool.query(query, [sklad_id || null]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка money_receipts_by_customer:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
@@ -4340,141 +4402,118 @@ router.get('/money_receipts_detail', async (req, res) => {
 });
 
 
-// --- 1. Эндпоинт для оплаты клиентских реализаций ---
-router.post('/realizations/:id/pay', async (req, res) => {
-    // Работаем через client + транзакцию: проверка остатка долга и сама вставка
-    // платежа теперь атомарны вместе — если два человека одновременно проведут
-    // оплату одного документа, второй увидит уже актуальный долг, а не устаревший,
-    // и переплата станет невозможна даже при одновременных запросах.
+router.post('/customers/:id/pay-debt', async (req, res) => {
     const client = await pool.connect();
     try {
-        const docId = parseInt(req.params.id);
-        const { amount, customer_id, comment } = req.body;
- 
-        if (!docId || isNaN(docId)) {
-            client.release();
-            return res.status(400).json({ error: 'Некорректный ID реализации' });
-        }
- 
-        const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
-        if (!paymentAmount || paymentAmount <= 0) {
-            client.release();
-            return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
-        }
- 
+        const { id } = req.params;
+        const { amount, comment, month } = req.body; // month опционально: 'YYYY-MM-01'
+        let payAmount = Math.round(parseFloat(amount) * 100) / 100;
+        if (!payAmount || payAmount <= 0) return res.status(400).json({ error: 'Некорректная сумма' });
+
         await client.query('BEGIN');
- 
-        // FOR UPDATE блокирует строку реализации на время транзакции — второй
-        // одновременный запрос на оплату того же документа дождётся коммита
-        // первого и увидит уже обновлённую сумму оплат.
-        const realizationCheck = await client.query(
-            `SELECT id, customer_id FROM realizations WHERE id = $1 FOR UPDATE`,
-            [docId]
-        );
- 
-        if (realizationCheck.rows.length === 0) {
+
+        const debtsRes = await client.query(`
+            SELECT real.id, real.doc_date,
+                   (COALESCE(sub_i.parts_sum,0)+COALESCE(sub_w.works_sum,0)) AS total_sum,
+                   COALESCE(sub_p.paid_sum,0) AS paid_sum
+            FROM realizations real
+            LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub,0), price*quantity,0)) parts_sum
+                       FROM realization_items GROUP BY realization_id) sub_i ON sub_i.realization_id = real.id
+            LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub,0), price*quantity,0)) works_sum
+                       FROM realization_works GROUP BY realization_id) sub_w ON sub_w.realization_id = real.id
+            LEFT JOIN (SELECT realization_id, SUM(amount) paid_sum
+                       FROM customer_payments GROUP BY realization_id) sub_p ON sub_p.realization_id = real.id
+            WHERE real.customer_id = $1 AND real.is_posted = true
+              AND ($2::date IS NULL OR date_trunc('month', real.doc_date) = $2::date)
+            ORDER BY real.doc_date ASC
+            FOR UPDATE OF real
+        `, [id, month || null]);
+
+        const totalDebt = debtsRes.rows.reduce((s, r) => s + (Number(r.total_sum) - Number(r.paid_sum)), 0);
+        if (payAmount > totalDebt + 0.01) {
             await client.query('ROLLBACK');
-            client.release();
-            return res.status(404).json({ error: 'Реализация не найдена' });
+            return res.status(400).json({ error: `Сумма (${payAmount}) больше долга (${totalDebt.toFixed(2)})` });
         }
- 
-        const realData = realizationCheck.rows[0];
-        const customerId = customer_id ? parseInt(customer_id) : realData.customer_id;
- 
-        // Проверка долга с учетом уже внесенных оплат
-        const debtCheckQuery = `
-            SELECT 
-                COALESCE(tot.total_sum, 0) AS total_sum,
-                COALESCE(paid.paid_sum, 0) AS paid_sum
-            FROM realizations r
-            LEFT JOIN (
-                SELECT realization_id, 
-                    SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                FROM realization_items WHERE realization_id = $1 GROUP BY realization_id
-            ) i ON true
-            LEFT JOIN (
-                SELECT realization_id, 
-                    SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                FROM realization_works WHERE realization_id = $1 GROUP BY realization_id
-            ) w ON true
-            LEFT JOIN (
-                SELECT realization_id, SUM(amount) AS paid_sum 
-                FROM customer_payments WHERE realization_id = $1 GROUP BY realization_id
-            ) paid ON true
-            CROSS JOIN LATERAL (
-                SELECT COALESCE(i.s, 0) + COALESCE(w.s, 0) AS total_sum
-            ) tot
-            WHERE r.id = $1
-        `;
- 
-        const debtRes = await client.query(debtCheckQuery, [docId]);
-        const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
-        const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
-        
-        const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
- 
-        if (paymentAmount > currentDebt) {
-            await client.query('ROLLBACK');
-            client.release();
-            return res.status(400).json({ 
-                error: `Сумма оплаты (${paymentAmount}) превышает остаток долга (${currentDebt.toFixed(2)} руб.). Переплата запрещена!` 
-            });
-        }
- 
-        // Кто провёл оплату — берём из проверенного токена (authMiddleware подставляет
-        // сюда настоящий id пользователя, а не то, что прислал клиент в заголовке).
-        const currentUserId = req.headers['x-user-id'] || null;
- 
-        const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *;
-        `;
-        
-        const result = await client.query(insertQuery, [
-            customerId, 
-            docId, 
-            paymentAmount, 
-            comment || 'Оплата по реализации',
-            currentUserId
-        ]);
- 
-        // Записываем в общий журнал аудита — этот роут раньше был "невидимым" для /logs
-        try {
+
+        let remaining = payAmount;
+        for (const row of debtsRes.rows) {
+            if (remaining <= 0) break;
+            const rowDebt = Number(row.total_sum) - Number(row.paid_sum);
+            if (rowDebt <= 0) continue;
+            const part = Math.min(rowDebt, remaining);
             await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-                [
-                    currentUserId,
-                    'PAYMENT',
-                    'customer_payments',
-                    result.rows[0].id,
-                    JSON.stringify({ customer_id: customerId, realization_id: docId, amount: paymentAmount }),
-                    'customer_payments'
-                ]
+                `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
+                 VALUES ($1,$2,$3,$4,$5)`,
+                [id, row.id, part, comment || null, req.headers['x-user-id'] || null]
             );
-        } catch (logErr) {
-            console.error('Ошибка записи лога оплаты (не критично):', logErr.message);
+            remaining = Math.round((remaining - part) * 100) / 100;
         }
- 
+
         await client.query('COMMIT');
- 
-        return res.json({ 
-            success: true, 
-            message: 'Оплата реализации успешно сохранена',
-            payment: result.rows[0] 
-        });
- 
+        res.json({ success: true, paid: payAmount });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('❌ Ошибка при оплате реализации:', err);
-        res.status(500).json({ error: err.message });
+        console.error('Ошибка pay-debt:', err);
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
     } finally {
         client.release();
     }
 });
  
- 
+ router.post('/warehouses/:id/pay-debt', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params; // это warehouse_to_id
+        const { amount, comment, month, sklad_id } = req.body;
+        let payAmount = Math.round(parseFloat(amount) * 100) / 100;
+        if (!payAmount || payAmount <= 0) return res.status(400).json({ error: 'Некорректная сумма' });
+
+        await client.query('BEGIN');
+
+       const debtsRes = await client.query(`
+    SELECT m.id, m.date, m.warehouse_from_id,
+           COALESCE(mi.total_sum,0) AS total_sum,
+           COALESCE(mp.paid_sum,0) AS paid_sum
+    FROM moves m
+    LEFT JOIN (SELECT move_id, SUM(COALESCE(total_rub, price*quantity,0)) total_sum
+               FROM move_items GROUP BY move_id) mi ON mi.move_id = m.id
+    LEFT JOIN (SELECT move_id, SUM(amount) paid_sum
+               FROM warehouse_debt_payments GROUP BY move_id) mp ON mp.move_id = m.id
+    WHERE m.warehouse_to_id = $1 AND m.is_posted = true
+      AND ($2::integer IS NULL OR m.warehouse_from_id = $2)
+      AND ($3::date IS NULL OR date_trunc('month', m.date) = $3::date)
+    ORDER BY m.date ASC
+    FOR UPDATE OF m
+    `, [id, sklad_id || null, month || null]);
+        const totalDebt = debtsRes.rows.reduce((s, r) => s + (Number(r.total_sum) - Number(r.paid_sum)), 0);
+        if (payAmount > totalDebt + 0.01) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Сумма (${payAmount}) больше долга (${totalDebt.toFixed(2)})` });
+        }
+
+        let remaining = payAmount;
+        for (const row of debtsRes.rows) {
+            if (remaining <= 0) break;
+            const rowDebt = Number(row.total_sum) - Number(row.paid_sum);
+            if (rowDebt <= 0) continue;
+            const part = Math.min(rowDebt, remaining);
+            await client.query(
+    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [row.id, row.warehouse_from_id, id, part, comment || null, req.headers['x-user-id'] || null]
+    );
+            remaining = Math.round((remaining - part) * 100) / 100;
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, paid: payAmount });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
 // --- 2. Эндпоинт для погашения долга по перемещениям ---
 router.post('/moves/:id/pay', async (req, res) => {
     // Та же защита: проверка долга и вставка погашения — одна атомарная транзакция.
@@ -4664,179 +4703,6 @@ router.get('/realizations/:id/payments', async (req, res) => {
     }
 });
 
-
-// --- 3. Пакетное погашение долга должника (покупателя или склада) сразу по нескольким документам ---
-// Принимает { docs: [{ id, type: 'realization'|'move' }], amount, comment }.
-// Гасит документы в переданном порядке (фронт присылает от старых к новым), пока не кончится сумма.
-// Переплата запрещена так же, как и в одиночных эндпоинтах оплаты.
-router.post('/debt/pay-batch', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        const { docs, amount, comment } = req.body;
-
-        if (!Array.isArray(docs) || docs.length === 0) {
-            client.release();
-            return res.status(400).json({ error: 'Не переданы документы для погашения' });
-        }
-
-        let remaining = Math.round(parseFloat(amount) * 100) / 100;
-        if (!remaining || remaining <= 0) {
-            client.release();
-            return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
-        }
-
-        const currentUserId = req.headers['x-user-id'] || null;
-        const appliedPayments = [];
-
-        await client.query('BEGIN');
-
-        for (const doc of docs) {
-            if (remaining <= 0.01) break;
-
-            const docId = parseInt(doc && doc.id);
-            const docType = doc && doc.type === 'move' ? 'move' : 'realization';
-            if (!docId || isNaN(docId)) continue;
-
-            if (docType === 'realization') {
-                const realizationCheck = await client.query(
-                    `SELECT id, customer_id FROM realizations WHERE id = $1 FOR UPDATE`,
-                    [docId]
-                );
-                if (realizationCheck.rows.length === 0) continue;
-
-                const debtCheckQuery = `
-                    SELECT 
-                        COALESCE(tot.total_sum, 0) AS total_sum,
-                        COALESCE(paid.paid_sum, 0) AS paid_sum
-                    FROM realizations r
-                    LEFT JOIN (
-                        SELECT realization_id, 
-                            SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                        FROM realization_items WHERE realization_id = $1 GROUP BY realization_id
-                    ) i ON true
-                    LEFT JOIN (
-                        SELECT realization_id, 
-                            SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
-                        FROM realization_works WHERE realization_id = $1 GROUP BY realization_id
-                    ) w ON true
-                    LEFT JOIN (
-                        SELECT realization_id, SUM(amount) AS paid_sum 
-                        FROM customer_payments WHERE realization_id = $1 GROUP BY realization_id
-                    ) paid ON true
-                    CROSS JOIN LATERAL (
-                        SELECT COALESCE(i.s, 0) + COALESCE(w.s, 0) AS total_sum
-                    ) tot
-                    WHERE r.id = $1
-                `;
-                const debtRes = await client.query(debtCheckQuery, [docId]);
-                const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
-                const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
-                const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
-
-                if (currentDebt <= 0) continue;
-
-                const toApply = Math.round(Math.min(currentDebt, remaining) * 100) / 100;
-                const customerId = realizationCheck.rows[0].customer_id;
-
-                const insertRes = await client.query(
-                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
-                     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-                    [customerId, docId, toApply, comment || 'Групповая оплата по покупателю', currentUserId]
-                );
-
-                remaining = Math.round((remaining - toApply) * 100) / 100;
-                appliedPayments.push({ doc_id: docId, type: 'realization', amount: toApply, payment: insertRes.rows[0] });
-
-            } else {
-                const moveCheck = await client.query(
-                    `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1 FOR UPDATE`,
-                    [docId]
-                );
-                if (moveCheck.rows.length === 0) continue;
-
-                const moveDebtQuery = `
-                    SELECT 
-                        COALESCE(m_tot.total_sum, 0) AS total_sum,
-                        COALESCE(m_paid.paid_sum, 0) AS paid_sum
-                    FROM moves m
-                    LEFT JOIN (
-                        SELECT move_id, SUM(total_rub) AS total_sum 
-                        FROM move_items WHERE move_id = $1 GROUP BY move_id
-                    ) m_tot ON true
-                    LEFT JOIN (
-                        SELECT move_id, SUM(amount) AS paid_sum 
-                        FROM warehouse_debt_payments WHERE move_id = $1 GROUP BY move_id
-                    ) m_paid ON true
-                    WHERE m.id = $1
-                `;
-                const moveDebtRes = await client.query(moveDebtQuery, [docId]);
-                const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
-                const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
-                const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
-
-                if (moveCurrentDebt <= 0) continue;
-
-                const toApply = Math.round(Math.min(moveCurrentDebt, remaining) * 100) / 100;
-                const moveData = moveCheck.rows[0];
-
-                const insertRes = await client.query(
-                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
-                     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                    [docId, moveData.warehouse_from_id, moveData.warehouse_to_id, toApply, comment || 'Групповая оплата по складу-должнику', currentUserId]
-                );
-
-                remaining = Math.round((remaining - toApply) * 100) / 100;
-                appliedPayments.push({ doc_id: docId, type: 'move', amount: toApply, payment: insertRes.rows[0] });
-            }
-        }
-
-        if (appliedPayments.length === 0) {
-            await client.query('ROLLBACK');
-            client.release();
-            return res.status(400).json({ error: 'Нет долга по переданным документам для погашения' });
-        }
-
-        if (remaining > 0.01) {
-            await client.query('ROLLBACK');
-            client.release();
-            return res.status(400).json({
-                error: `Сумма оплаты превышает общий долг по выбранным накладным на ${remaining.toFixed(2)} руб. Переплата запрещена!`
-            });
-        }
-
-        try {
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-                [
-                    currentUserId,
-                    'PAYMENT_BATCH',
-                    'debt_pay_batch',
-                    null,
-                    JSON.stringify({ docs: appliedPayments.map(p => ({ doc_id: p.doc_id, type: p.type, amount: p.amount })) }),
-                    'debt_pay_batch'
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи лога групповой оплаты (не критично):', logErr.message);
-        }
-
-        await client.query('COMMIT');
-
-        return res.json({
-            success: true,
-            message: 'Групповая оплата успешно сохранена',
-            applied: appliedPayments
-        });
-
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('❌ Ошибка при групповой оплате долга:', err);
-        res.status(500).json({ error: err.message });
-    } finally {
-        client.release();
-    }
-});
 
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
