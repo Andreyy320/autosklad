@@ -5014,21 +5014,24 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
             return res.status(400).json({ error: 'Некорректный ID поставщика' });
         }
 
-        const query = `
-            SELECT 
-                sp.id,
-                sp.date,
-                sp.amount,
-                sp.comment,
-                rec.doc_number,
-                rec.id AS receipt_id
-            FROM supplier_payments sp
-            LEFT JOIN receipts rec ON sp.receipt_id = rec.id
-            WHERE sp.supplier_id = $1
-            ORDER BY sp.date DESC, sp.id DESC;
-        `;
+       const { month_str } = req.query;
 
-        const result = await pool.query(query, [supplierId]);
+const query = `
+    SELECT 
+        sp.id,
+        sp.date,
+        sp.amount,
+        sp.comment,
+        rec.doc_number,
+        rec.id AS receipt_id
+    FROM supplier_payments sp
+    LEFT JOIN receipts rec ON sp.receipt_id = rec.id
+    WHERE sp.supplier_id = $1
+      AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
+    ORDER BY sp.date DESC, sp.id DESC;
+`;
+
+const result = await pool.query(query, [supplierId, month_str || null]);
         res.json(result.rows);
 
     } catch (err) {

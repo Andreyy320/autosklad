@@ -1969,7 +1969,7 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-                    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
+                    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}, '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
                     : totalPaid
                 }
             </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
@@ -8033,12 +8033,14 @@ function resetSharedUiForEntity(entity) {
     if (rowCount) rowCount.innerText = '';
 }
 
-async function openSupplierPaymentHistory(postavhikId, postavhikName) {
+async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) {
     const drawer = getOrCreateDrawer();
+
+    const monthLabel = monthStr ? ` — ${monthStr}` : '';
 
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}${monthLabel}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
         <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
@@ -8046,7 +8048,8 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName) {
     openDrawer();
 
     try {
-        let response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/payments`);
+        const monthParam = monthStr ? `?month_str=${monthStr}` : '';
+        let response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/payments${monthParam}`);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
 
         let payments = await response.json();
@@ -8073,7 +8076,7 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName) {
 
         drawer.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}</h3>
+        <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}${monthLabel}</h3>
                 <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
             </div>
             
