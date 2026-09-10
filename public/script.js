@@ -8134,22 +8134,26 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
     }
 }
 
-function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr) {
+async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr) {
     const drawer = getOrCreateDrawer();
+
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата за месяц: ${titleLabel}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
-        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}')">
-            <div style="margin-bottom: 15px;">
-                <label style="display:block; margin-bottom:5px; color:#555;">Сумма долга за месяц: ${debtSum}</label>
-                <input type="number" step="0.01" name="amount" required placeholder="Введите сумму оплаты"
+
+        <div id="pay-docs-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
+
+        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+                <label style="display:block; margin-bottom:5px; color:#555;">Сумма долга за месяц: <span style="font-weight:600;">${debtSum}</span></label>
+                <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
             </div>
-            <div style="margin-bottom: 15px;">
+            <div>
                 <label style="display:block; margin-bottom:5px; color:#555;">Комментарий</label>
-                <textarea name="comment" placeholder="Примечание к платежу..."
+                <textarea id="receipt-payment-comment" placeholder="Примечание к платежу..."
                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;"></textarea>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -8159,19 +8163,158 @@ function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthSt
         </form>
     `;
     openDrawer();
+
+    // Подгружаем неоплаченные накладные (реализации ИЛИ перемещения — смотря кто groupKey)
+    // за этот месяц, чтобы можно было найти и выбрать конкретные для оплаты.
+    try {
+        const isWarehouseDebtor = String(groupKey).startsWith('wh_');
+        const realId = isWarehouseDebtor ? String(groupKey).replace('wh_', '') : groupKey;
+
+        const [year, month] = monthStr.split('-').map(Number);
+        const startDate = `${monthStr}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+        const skladParam = window.currentSkladId ? `&sklad_id=${window.currentSkladId}` : '';
+        const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
+
+        const resp = await fetch(`/api/money_receipts?${idParam}&start_date=${startDate}&end_date=${endDate}${skladParam}`);
+        const listEl = document.getElementById('pay-docs-list');
+        if (!listEl) return;
+
+        if (!resp.ok) {
+            listEl.innerHTML = '<span style="color:#dc2626;">Не удалось загрузить список накладных</span>';
+            return;
+        }
+
+        const docs = await resp.json();
+        const unpaid = (Array.isArray(docs) ? docs : []).filter(d => Number(d.debt_sum || 0) > 0);
+
+        if (unpaid.length === 0) {
+            listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
+            return;
+        }
+
+        window._payUnpaidDocs = unpaid;
+        window._paySelectedDocIds = [];
+
+        listEl.innerHTML = `
+            <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px; font-weight: 500;">
+                Накладные (необязательно): найдите и выберите конкретную для оплаты.
+                Если ничего не выбрано — сумма распределится по всем от старых к новым, как раньше.
+            </label>
+            <div id="pay-docs-search-block" style="position: relative;">
+                <input type="text" id="pay-doc-search-input" placeholder="🔍 Введите номер накладной..." autocomplete="off"
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
+                <div id="pay-doc-search-dropdown" style="display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08);"></div>
+                <div id="pay-doc-selected-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+            </div>
+        `;
+
+        const searchInput = document.getElementById('pay-doc-search-input');
+        const dropdown = document.getElementById('pay-doc-search-dropdown');
+        const selectedListEl = document.getElementById('pay-doc-selected-list');
+
+        function renderSelectedChips() {
+            selectedListEl.innerHTML = window._paySelectedDocIds.map(did => {
+                const d = window._payUnpaidDocs.find(x => String(x.id) === String(did));
+                if (!d) return '';
+                return `<span style="display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; padding: 4px 8px; font-size: 12px;">
+                    № ${d.doc_number || d.id} (долг ${Number(d.debt_sum || 0).toFixed(2)})
+                    <span data-remove-id="${did}" style="cursor: pointer; font-weight: bold;">&times;</span>
+                </span>`;
+            }).join('');
+
+            selectedListEl.querySelectorAll('[data-remove-id]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const did = el.getAttribute('data-remove-id');
+                    window._paySelectedDocIds = window._paySelectedDocIds.filter(x => String(x) !== String(did));
+                    renderSelectedChips();
+                });
+            });
+
+            // Автоподстановка суммы: выбрана накладная(-ые) — сумма равна их долгу.
+            // Ничего не выбрано — возвращаем исходный долг за весь месяц.
+            const amountInput = document.getElementById('receipt-payment-amount');
+            if (amountInput) {
+                if (window._paySelectedDocIds.length > 0) {
+                    const sum = window._paySelectedDocIds.reduce((acc, did) => {
+                        const d = window._payUnpaidDocs.find(x => String(x.id) === String(did));
+                        return acc + (d ? Number(d.debt_sum || 0) : 0);
+                    }, 0);
+                    amountInput.value = sum.toFixed(2);
+                } else {
+                    amountInput.value = debtSum;
+                }
+            }
+        }
+
+        function renderDropdown(filterText) {
+            const filter = (filterText || '').toLowerCase().trim();
+            const available = window._payUnpaidDocs.filter(d => {
+                const did = String(d.id);
+                if (window._paySelectedDocIds.includes(did)) return false;
+                const label = `${d.doc_number || d.id}`.toLowerCase();
+                return !filter || label.includes(filter);
+            });
+
+            if (available.length === 0) {
+                dropdown.innerHTML = `<div style="padding: 8px; color: #94a3b8; font-size: 12px;">Ничего не найдено</div>`;
+            } else {
+                dropdown.innerHTML = available.map(d => `
+                    <div class="pay-doc-option" data-id="${d.id}" style="padding: 8px; cursor: pointer; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9;">
+                        № ${d.doc_number || d.id} от ${d.date ? new Date(d.date).toLocaleDateString() : '—'} — долг: <b>${Number(d.debt_sum || 0).toFixed(2)}</b>
+                    </div>
+                `).join('');
+
+                dropdown.querySelectorAll('.pay-doc-option').forEach(opt => {
+                    opt.addEventListener('click', () => {
+                        const did = opt.getAttribute('data-id');
+                        if (!window._paySelectedDocIds.includes(did)) {
+                            window._paySelectedDocIds.push(did);
+                        }
+                        searchInput.value = '';
+                        dropdown.style.display = 'none';
+                        renderSelectedChips();
+                    });
+                });
+            }
+
+            dropdown.style.display = 'block';
+        }
+
+        searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+        searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#pay-docs-search-block')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    } catch (err) {
+        console.error('Ошибка загрузки списка накладных для оплаты:', err);
+        const listEl = document.getElementById('pay-docs-list');
+        if (listEl) listEl.innerHTML = '<span style="color:#dc2626;">Ошибка загрузки списка накладных</span>';
+    }
 }
 
 async function submitReceiptCustomerPayment(event, groupKey, monthStr) {
     event.preventDefault();
-    const form = event.target;
-    const amount = form.amount.value;
-    const comment = form.comment.value;
+
+    const docIds = Array.isArray(window._paySelectedDocIds) ? window._paySelectedDocIds : [];
+
+    const amount = document.getElementById('receipt-payment-amount').value;
+    const comment = document.getElementById('receipt-payment-comment').value;
 
     try {
         let response = await fetch(`/api/money_receipts_by_customers/${groupKey}/pay_month`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount, comment, month_str: monthStr, sklad_id: window.currentSkladId || null })
+            body: JSON.stringify({
+                amount,
+                comment,
+                month_str: monthStr,
+                sklad_id: window.currentSkladId || null,
+                doc_ids: docIds.length > 0 ? docIds : null
+            })
         });
 
         let result = await response.json();

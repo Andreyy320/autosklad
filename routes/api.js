@@ -4824,8 +4824,9 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const { amount, month_str, sklad_id, comment } = req.body;
-
+        const { amount, month_str, sklad_id, comment, doc_ids } = req.body;
+        
+        
         const paymentAmount = Number(amount);
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Некорректная сумма оплаты' });
@@ -4833,6 +4834,12 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
         if (!month_str) {
             return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
         }
+
+        // Если пользователь выбрал конкретные накладные — платим только по ним.
+        // Если нет (null/пусто) — старое поведение: ФИФО по всем накладным месяца.
+        const docIdsFilter = Array.isArray(doc_ids) && doc_ids.length > 0
+            ? doc_ids.map(Number).filter(n => !isNaN(n))
+            : null;
 
         const isWarehouseDebtor = String(id).startsWith('wh_');
         const realId = isWarehouseDebtor ? String(id).replace('wh_', '') : id;
@@ -4865,10 +4872,11 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                   AND m.is_posted = true
                   AND TO_CHAR(m.date, 'YYYY-MM') = $2
                   AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
+                  AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
                 ORDER BY m.date ASC, m.id ASC
                 FOR UPDATE OF m
             `;
-            docsParams = [realId, month_str, sklad_id || null];
+            docsParams = [realId, month_str, sklad_id || null, docIdsFilter];
         } else {
             // Долг покупателя за реализации
             docsQuery = `
@@ -4894,10 +4902,11 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                   AND real.is_posted = true
                   AND TO_CHAR(real.doc_date, 'YYYY-MM') = $2
                   AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
+                  AND ($4::integer[] IS NULL OR real.id = ANY($4::integer[]))
                 ORDER BY real.doc_date ASC, real.id ASC
                 FOR UPDATE OF real
             `;
-            docsParams = [realId, month_str, sklad_id || null];
+            docsParams = [realId, month_str, sklad_id || null, docIdsFilter];
         }
 
         const docsRes = await client.query(docsQuery, docsParams);
