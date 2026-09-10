@@ -1125,15 +1125,16 @@ router.put('/moves/:id', async (req, res) => {
 
         // Явно превращаем Date-объекты в "голую" строку без смещения таймзоны,
         // чтобы избежать повторной UTC-конвертации драйвером pg при обратной записи
-        function toSafeTimestampString(val) {
-            if (!val) return null;
-            if (typeof val === 'string') return val;
-            if (val instanceof Date) {
-                const pad = (n) => String(n).padStart(2, '0');
-                return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`;
-            }
-            return val;
-        }
+       function toSafeTimestampString(val) {
+    if (!val) return null;
+    if (typeof val === 'string') return val;
+    if (val instanceof Date) {
+        if (isNaN(val.getTime())) return null;   // <-- добавить эту строку
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`;
+    }
+    return val;
+}
 
         const finalDate = toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date);
         const finalWhFrom = warehouse_from_id ? parseInt(warehouse_from_id, 10) : oldDoc.warehouse_from_id;
