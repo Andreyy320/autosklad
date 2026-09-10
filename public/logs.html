@@ -60,6 +60,30 @@
     let currentType = 'Приход';
     let warehousesMap = {};
 
+    // ==================== АВТОРИЗАЦИЯ ДЛЯ СТРАНИЦЫ ЖУРНАЛА ====================
+    // Эта страница отдельная от основного приложения (свой script), поэтому
+    // подставляем токен так же, как это делает основной script.js — иначе
+    // все запросы будут получать 401, ведь /api теперь защищён.
+    const _originalFetch = window.fetch;
+    window.fetch = async function(url, options = {}) {
+        const isApiCall = typeof url === 'string' && url.startsWith('/api/');
+        if (isApiCall) {
+            const token = localStorage.getItem('token');
+            options.headers = {
+                ...(options.headers || {}),
+                'Authorization': token ? `Bearer ${token}` : ''
+            };
+        }
+        const response = await _originalFetch(url, options);
+        if (isApiCall && response.status === 401) {
+            alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
+            localStorage.clear();
+            window.location.href = '/';
+        }
+        return response;
+    };
+    // ================================================================================
+
     async function loadWarehouses() {
         try {
             const res = await fetch('/api/warehouses');
