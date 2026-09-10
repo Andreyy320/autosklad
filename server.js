@@ -6,13 +6,7 @@ const path = require('path');
 const multer = require('multer');
 require('dotenv').config();
 
-// ==================== ФИКС ДЛЯ TIMESTAMP БЕЗ ЧАСОВОГО ПОЯСА ====================
-// По умолчанию pg конвертирует "timestamp without time zone" в JS Date,
-// интерпретируя "голую" строку из базы как UTC. Это ломает и чтение (сдвиг при
-// отображении через локальные геттеры), и повторную запись (Date.toISOString()
-// снова конвертирует в UTC при использовании как fallback-значения, как было
-// в PUT /moves/:id с oldDoc.date). Отключаем автоконвертацию: pg отдаёт
-// timestamp/date как обычные строки "как есть" из базы.
+
 types.setTypeParser(1114, (val) => val); // timestamp without time zone
 types.setTypeParser(1082, (val) => val); // date
 // =================================================================================
@@ -27,7 +21,21 @@ app.disable('x-powered-by');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+
+// ==================== ОГРАНИЧЕНИЕ CORS ====================
+// Раньше cors() без параметров разрешал запросы с ЛЮБОГО сайта в интернете.
+// Теперь разрешаем только со своих собственных адресов.
+const corsOptions = {
+    origin: [
+        'http://194.156.66.100:5000',
+        'http://194.156.66.100'
+        // добавьте сюда ваш домен, если он появится, например 'https://autosklad.ваш-домен.ru'
+    ],
+    credentials: true
+};
+app.use(cors(corsOptions));
+// ============================================================
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -42,13 +50,13 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// ==================== ПОДКЛЮЧЕНИЕ К БАЗЕ ЧЕРЕЗ .env ====================
+// Раньше логин/пароль от базы были захардкожены прямо в коде.
+// Теперь берём готовую строку подключения DATABASE_URL из .env — она там уже есть.
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'autosklad',
-    password: 'martyn999',
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
 });
+// =========================================================================
 
 const apiRoutes = require('./routes/api')(pool, upload);
 app.use('/api', apiRoutes); 
