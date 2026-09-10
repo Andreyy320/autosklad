@@ -8562,20 +8562,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     childRows.push(tr);
                 });
 
+                // ИЗМЕНЕНО: клик по заголовку месяца теперь ТОЛЬКО сворачивает/разворачивает
+                // список — как в разделе накладных. Переход на след. уровень
+                // (список накладных поставщика) отсюда убран: он и так уже
+                // происходит по клику на саму строку поставщика в общем обработчике таблицы.
                 headerTr.addEventListener('click', (e) => {
-                    if (currentEntity === 'expenses_by_suppliers') {
-                        if (typeof window.selectedItem !== 'undefined' && window.selectedItem) {
-                            window.selectedItem.month_str = group.month_str;
-                            loadExpenseMainData('expenses_by_receipts', window.selectedItem);
-                        } else {
-                            loadExpenseMainData('expenses_by_receipts', { 
-                                postavhik_id: window.currentPostavhikId, 
-                                month_str: group.month_str 
-                            });
-                        }
-                        return;
-                    }
-
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
                     
@@ -8614,7 +8605,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
     }
 }
-
 
 
 
@@ -9368,13 +9358,16 @@ if (tableBodyForReceipts) {
                 return;
             }
 
-            const tr = e.target.closest('tr');
-            if (!tr) return;
+          const tr = e.target.closest('tr');
+if (!tr) return;
 
-            // Игнорируем клики по строкам-шапкам групп (например, по месяцам)
-            if (tr.querySelector('[id^="icon-"]') || tr.style.background === 'rgb(241, 245, 249)' || tr.style.background === '#f1f5f9') {
-                return;
-            }
+if (tr.querySelector('[id^="icon-"]') || tr.style.background === 'rgb(241, 245, 249)' || tr.style.background === '#f1f5f9') {
+    return;
+}
+
+if (e.target.closest('button, [onclick]')) {
+    return;
+}
 
             // ИЗВЛЕЧЕНИЕ ID С УЧЕТОМ РАЗНЫХ СУЩНОСТЕЙ И СТРУКТУРЫ
             let id = tr.getAttribute('data-id');
