@@ -76,9 +76,9 @@ module.exports = (pool) => {
     
 
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 5,                   // максимум 5 попыток за это окно
-    message: { success: false, message: 'Слишком много попыток входа. Попробуйте снова через 15 минут.' },
+    windowMs: 2 * 60 * 1000, // 15 минут
+    max: 7,                   // максимум 5 попыток за это окно
+    message: { success: false, message: 'Слишком много попыток входа. Попробуйте снова через 2 минуты.' },
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true // успешные входы не считаются как "попытка", лимит только на неудачные
