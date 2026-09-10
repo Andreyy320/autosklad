@@ -4004,6 +4004,7 @@ router.get('/money_receipts', async (req, res) => {
                     real.doc_number::text AS doc_number,
                     real.doc_date AS date,
                     c.id AS customer_id,
+                    NULL::integer AS debtor_warehouse_id,
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
@@ -4061,6 +4062,7 @@ router.get('/money_receipts', async (req, res) => {
                     CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
                     m.date AS date,
                     NULL::integer AS customer_id,
+                    sk_to.id AS debtor_warehouse_id,
                     CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     1 AS total_orders,
@@ -4118,6 +4120,7 @@ router.get('/money_receipts', async (req, res) => {
                 doc_number,
                 date,
                 customer_id,
+                debtor_warehouse_id,
                 counterparty_name,
                 sklad_name,
                 total_orders,
@@ -4661,6 +4664,179 @@ router.get('/realizations/:id/payments', async (req, res) => {
     }
 });
 
+
+// --- 3. Пакетное погашение долга должника (покупателя или склада) сразу по нескольким документам ---
+// Принимает { docs: [{ id, type: 'realization'|'move' }], amount, comment }.
+// Гасит документы в переданном порядке (фронт присылает от старых к новым), пока не кончится сумма.
+// Переплата запрещена так же, как и в одиночных эндпоинтах оплаты.
+router.post('/debt/pay-batch', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { docs, amount, comment } = req.body;
+
+        if (!Array.isArray(docs) || docs.length === 0) {
+            client.release();
+            return res.status(400).json({ error: 'Не переданы документы для погашения' });
+        }
+
+        let remaining = Math.round(parseFloat(amount) * 100) / 100;
+        if (!remaining || remaining <= 0) {
+            client.release();
+            return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
+        }
+
+        const currentUserId = req.headers['x-user-id'] || null;
+        const appliedPayments = [];
+
+        await client.query('BEGIN');
+
+        for (const doc of docs) {
+            if (remaining <= 0.01) break;
+
+            const docId = parseInt(doc && doc.id);
+            const docType = doc && doc.type === 'move' ? 'move' : 'realization';
+            if (!docId || isNaN(docId)) continue;
+
+            if (docType === 'realization') {
+                const realizationCheck = await client.query(
+                    `SELECT id, customer_id FROM realizations WHERE id = $1 FOR UPDATE`,
+                    [docId]
+                );
+                if (realizationCheck.rows.length === 0) continue;
+
+                const debtCheckQuery = `
+                    SELECT 
+                        COALESCE(tot.total_sum, 0) AS total_sum,
+                        COALESCE(paid.paid_sum, 0) AS paid_sum
+                    FROM realizations r
+                    LEFT JOIN (
+                        SELECT realization_id, 
+                            SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
+                        FROM realization_items WHERE realization_id = $1 GROUP BY realization_id
+                    ) i ON true
+                    LEFT JOIN (
+                        SELECT realization_id, 
+                            SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s 
+                        FROM realization_works WHERE realization_id = $1 GROUP BY realization_id
+                    ) w ON true
+                    LEFT JOIN (
+                        SELECT realization_id, SUM(amount) AS paid_sum 
+                        FROM customer_payments WHERE realization_id = $1 GROUP BY realization_id
+                    ) paid ON true
+                    CROSS JOIN LATERAL (
+                        SELECT COALESCE(i.s, 0) + COALESCE(w.s, 0) AS total_sum
+                    ) tot
+                    WHERE r.id = $1
+                `;
+                const debtRes = await client.query(debtCheckQuery, [docId]);
+                const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
+                const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
+                const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
+
+                if (currentDebt <= 0) continue;
+
+                const toApply = Math.round(Math.min(currentDebt, remaining) * 100) / 100;
+                const customerId = realizationCheck.rows[0].customer_id;
+
+                const insertRes = await client.query(
+                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
+                     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                    [customerId, docId, toApply, comment || 'Групповая оплата по покупателю', currentUserId]
+                );
+
+                remaining = Math.round((remaining - toApply) * 100) / 100;
+                appliedPayments.push({ doc_id: docId, type: 'realization', amount: toApply, payment: insertRes.rows[0] });
+
+            } else {
+                const moveCheck = await client.query(
+                    `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1 FOR UPDATE`,
+                    [docId]
+                );
+                if (moveCheck.rows.length === 0) continue;
+
+                const moveDebtQuery = `
+                    SELECT 
+                        COALESCE(m_tot.total_sum, 0) AS total_sum,
+                        COALESCE(m_paid.paid_sum, 0) AS paid_sum
+                    FROM moves m
+                    LEFT JOIN (
+                        SELECT move_id, SUM(total_rub) AS total_sum 
+                        FROM move_items WHERE move_id = $1 GROUP BY move_id
+                    ) m_tot ON true
+                    LEFT JOIN (
+                        SELECT move_id, SUM(amount) AS paid_sum 
+                        FROM warehouse_debt_payments WHERE move_id = $1 GROUP BY move_id
+                    ) m_paid ON true
+                    WHERE m.id = $1
+                `;
+                const moveDebtRes = await client.query(moveDebtQuery, [docId]);
+                const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
+                const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
+                const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
+
+                if (moveCurrentDebt <= 0) continue;
+
+                const toApply = Math.round(Math.min(moveCurrentDebt, remaining) * 100) / 100;
+                const moveData = moveCheck.rows[0];
+
+                const insertRes = await client.query(
+                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
+                     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                    [docId, moveData.warehouse_from_id, moveData.warehouse_to_id, toApply, comment || 'Групповая оплата по складу-должнику', currentUserId]
+                );
+
+                remaining = Math.round((remaining - toApply) * 100) / 100;
+                appliedPayments.push({ doc_id: docId, type: 'move', amount: toApply, payment: insertRes.rows[0] });
+            }
+        }
+
+        if (appliedPayments.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
+            return res.status(400).json({ error: 'Нет долга по переданным документам для погашения' });
+        }
+
+        if (remaining > 0.01) {
+            await client.query('ROLLBACK');
+            client.release();
+            return res.status(400).json({
+                error: `Сумма оплаты превышает общий долг по выбранным накладным на ${remaining.toFixed(2)} руб. Переплата запрещена!`
+            });
+        }
+
+        try {
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                [
+                    currentUserId,
+                    'PAYMENT_BATCH',
+                    'debt_pay_batch',
+                    null,
+                    JSON.stringify({ docs: appliedPayments.map(p => ({ doc_id: p.doc_id, type: p.type, amount: p.amount })) }),
+                    'debt_pay_batch'
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога групповой оплаты (не критично):', logErr.message);
+        }
+
+        await client.query('COMMIT');
+
+        return res.json({
+            success: true,
+            message: 'Групповая оплата успешно сохранена',
+            applied: appliedPayments
+        });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ Ошибка при групповой оплате долга:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
 
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
