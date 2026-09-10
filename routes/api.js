@@ -5094,7 +5094,7 @@ router.get('/get-customer-payment-logs', async (req, res) => {
                 COALESCE(r.doc_number, '—') AS doc_number,
                 cp.date AS created_at,
                 COALESCE(u.name, u.login, 'Система') AS user_name,
-                c.name AS counterparty,
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty,
                 cp.amount AS total_amount,
                 cp.comment AS reason
             FROM customer_payments cp
