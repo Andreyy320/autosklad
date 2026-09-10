@@ -76,12 +76,20 @@ module.exports = (pool) => {
     
 
 const loginLimiter = rateLimit({
-    windowMs: 2 * 60 * 1000, // 15 минут
-    max: 7,                   // максимум 5 попыток за это окно
-    message: { success: false, message: 'Слишком много попыток входа. Попробуйте снова через 2 минуты.' },
+    windowMs: 5 * 60 * 1000,
+    max: 7,
+    message: { success: false, message: 'Слишком много попыток входа. Попробуйте снова через 5 минут.' },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: true // успешные входы не считаются как "попытка", лимит только на неудачные
+    skipSuccessfulRequests: true,
+    // Считаем лимит по связке IP + логин, а не просто по IP — иначе один и тот же
+    // офисный интернет (общий внешний IP) блокирует ВСЕХ сотрудников разом, даже если
+    // они входят под РАЗНЫМИ учётными записями. Так подбор пароля к ОДНОМУ конкретному
+    // аккаунту всё ещё ограничен, а разные люди друг другу не мешают.
+    keyGenerator: (req) => {
+        const login = (req.body && req.body.login) ? String(req.body.login).toLowerCase().trim() : 'unknown';
+        return `${req.ip}:${login}`;
+    }
 });
 
     router.post('/login', loginLimiter, async (req, res) => {
