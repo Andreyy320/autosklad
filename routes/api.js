@@ -3915,7 +3915,6 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 
 
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
@@ -3991,6 +3990,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id, start_date, end_date } = req.query;
@@ -4003,7 +4003,7 @@ router.get('/money_receipts', async (req, res) => {
                     real.id AS id,
                     real.id AS realization_id,
                     real.doc_number::text AS doc_number,
-                    real.doc_date AS date,
+                     real.doc_date AS date,
                     c.id AS customer_id,
                     NULL::integer AS debtor_warehouse_id,
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
@@ -4175,6 +4175,7 @@ router.get('/money_receipts', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
+
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
@@ -4666,6 +4667,48 @@ router.get('/realizations/:id/payments', async (req, res) => {
 });
 
 
+router.get('/expenses_by_sklad', async (req, res) => {
+    try {
+        const skladId = req.query.sklad_id || 1;
+
+        const query = `
+            WITH sklad_payments AS (
+                -- Считаем сколько всего денег отдали поставщикам по конкретному складу
+                SELECT rec.warehouse_id, SUM(sp.amount) AS total_paid
+                FROM supplier_payments sp
+                JOIN receipts rec ON sp.receipt_id = rec.id
+                WHERE rec.warehouse_id = $1
+                GROUP BY rec.warehouse_id
+            )
+            SELECT 
+                sk.id AS id,
+                sk.id AS sklad_id,
+                COALESCE(sk.name, 'Центральный')::text AS sklad_name,
+                COUNT(DISTINCT rec.id)::integer AS total_receipts,
+                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
+            FROM skladi sk
+            LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
+            LEFT JOIN (
+                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+                FROM receipt_items ri
+                GROUP BY ri.receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
+            WHERE sk.id = $1
+            GROUP BY sk.id, sk.name, spay.total_paid;
+        `;
+        const result = await pool.query(query, [skladId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения расходов по складам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+
 // --- 3. Пакетное погашение долга должника (покупателя или склада) сразу по нескольким документам ---
 // Принимает { docs: [{ id, type: 'realization'|'move' }], amount, comment }.
 // Гасит документы в переданном порядке (фронт присылает от старых к новым), пока не кончится сумма.
@@ -4840,46 +4883,13 @@ router.post('/debt/pay-batch', async (req, res) => {
 });
 
 
-router.get('/expenses_by_sklad', async (req, res) => {
-    try {
-        const skladId = req.query.sklad_id || 1;
 
-        const query = `
-            WITH sklad_payments AS (
-                -- Считаем сколько всего денег отдали поставщикам по конкретному складу
-                SELECT rec.warehouse_id, SUM(sp.amount) AS total_paid
-                FROM supplier_payments sp
-                JOIN receipts rec ON sp.receipt_id = rec.id
-                WHERE rec.warehouse_id = $1
-                GROUP BY rec.warehouse_id
-            )
-            SELECT 
-                sk.id AS id,
-                sk.id AS sklad_id,
-                COALESCE(sk.name, 'Центральный')::text AS sklad_name,
-                COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
-                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
-            FROM skladi sk
-            LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
-            LEFT JOIN (
-                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-                FROM receipt_items ri
-                GROUP BY ri.receipt_id
-            ) sub_i ON rec.id = sub_i.receipt_id
-            LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
-            WHERE sk.id = $1
-            GROUP BY sk.id, sk.name, spay.total_paid;
-        `;
-        const result = await pool.query(query, [skladId]);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Ошибка получения расходов по складам:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
+
+
+
+
+
+
 
 // 2. Список поставщиков для конкретного склада (уровень 2)
 router.get('/expenses_by_suppliers', async (req, res) => {

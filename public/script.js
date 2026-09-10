@@ -1744,19 +1744,56 @@ const tableConfig = {
     `;
     }
     },
+    // Верхняя таблица уровня "приходы": должники (покупатели и склады-получатели), сгруппированные по месяцам.
+    // Один ряд = один должник за один месяц. Кнопка "Оплатить" гасит долг сразу по всем его накладным этого месяца.
     money_receipts: {
-    title: 'Список документов (продажи и ремонты)',
+    title: 'Должники по месяцам (покупатели и склады)',
+    columns: [
+        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '240px' },
+        { field: 'docs_count', label: 'Накладных', width: '90px', align: 'center' },
+        { field: 'total_realization_sum', label: 'Сумма', width: '120px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '120px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '120px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
+    ],
+    render: (group) => {
+        const sum = Number(group.totalSum || 0).toFixed(2);
+        const paid = Number(group.totalPaid || 0).toFixed(2);
+        const debtNum = Number(group.totalDebt || 0);
+        const debt = debtNum.toFixed(2);
+        const isRepair = !group.items || !group.items.length || !group.items[0].customer_id;
+
+        let actionHtml = '';
+        if (debtNum <= 0.01) {
+            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
+        } else {
+            actionHtml = `<button type="button" class="debtor-pay-btn"
+                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+              </button>`;
+        }
+
+        return `
+            <td><span style="font-weight: 600; color: #0f172a;" title="${isRepair ? 'Внутренний ремонт/перемещение' : ''}">${group.counterpartyName || 'Розничный покупатель'}</span></td>
+            <td style="text-align: center; color: #334155;">${group.items ? group.items.length : 0}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
+            <td style="text-align: right; color: #334155;">${paid}</td>
+            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">${debt}</td>
+            <td style="text-align: center;">${actionHtml}</td>
+        `;
+    }
+    }, // Клик по строке открывает детальную спецификацию (money_receipts_detail / money_receipts_works_detail).
+    money_receipts_invoices: {
+    title: 'Накладные должника',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
-        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
@@ -1769,45 +1806,16 @@ const tableConfig = {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
-        
-        let counterpartyHtml = '';
-        if (isRepair) {
-            // Значок машинки убран, остался аккуратный текст
-            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">${item.counterparty_name || 'Ремонт а/м'}</span>`;
-        } else {
-            counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
-        }
-
-        const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
-            : `<span style="color: #334155;">${formattedPaid}</span>`;
-
-        let actionHtml = '';
-        if (debtSumNum <= 0) {
-            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
-        } else {
-            // Возвращен прежний зеленый цвет кнопки (#16a34a)
-            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
-                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
-        }
-
         return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
-            <td>${counterpartyHtml}</td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right; color: #334155;">${partsSum}</td>
             <td style="text-align: right; color: #334155;">${worksSum}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
-            <td style="text-align: right;">${paidHtml}</td>
+            <td style="text-align: right; color: #334155;">${formattedPaid}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}
-            </td>
-            <td style="text-align: center;">
-                ${actionHtml}
             </td>
         `;
     }
@@ -8875,8 +8883,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             btnBackExpense.style.display = 'none';
             btnBackExpense.onclick = null;
         }
-    } 
-    // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
+    }    // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
         let skladId = '';
         if (parentId && typeof parentId === 'object') {
@@ -8925,9 +8932,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 loadReceiptMainData('money_receipts_by_sklad', '');
             };
         }
-    }
-
-    currentEntity = currentReceiptView;
+    } currentEntity = currentReceiptView;
 
     const config = getConfig(currentEntity);
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
@@ -8994,9 +8999,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 });
                 row.style.display = showRow ? '' : 'none';
             });
-        };
-
-        filterRow.innerHTML = visibleColumns.map((col, idx) => {
+        }; filterRow.innerHTML = visibleColumns.map((col, idx) => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
             if (col.style && col.style.includes('display: none')) {
                 return `<th style="display: none; padding: 4px;"></th>`;
@@ -9064,8 +9067,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             const turnover = Number(saldoData.turnover_period || 0).toFixed(2);
             const sEndStr = sEnd.toFixed(2);
 
-            saldoHeaderHtml = `
-                <tr style="background: #e2e8f0; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+            saldoHeaderHtml = `<tr style="background: #e2e8f0; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
                     <td colspan="${colCount}" style="padding: 10px 12px; font-size: 14px;">
                         <span style="color: #334155; margin-right: 20px;">Сальдо на начало: <b style="color: #0f172a;">${sStartStr}</b></span>
                         <span style="color: #334155; margin-right: 20px;">Сальдо на конец: <b style="color: #0f172a;">${sEndStr}</b></span>
@@ -9135,9 +9137,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 groupedByMonth[m.key].totalPartsProfit += itemPartsProfit;
                 groupedByMonth[m.key].totalWorksSum += itemWorksSum;
                 groupedByMonth[m.key].totalNetProfit += itemNetProfit;
-            });
-
-            const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
+            }); const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
 
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
@@ -9207,8 +9207,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.style.cursor = 'pointer';
                     tr.innerHTML = config.render(dGroup);
 
-                    tr.addEventListener('click', (e) => {
-                        if (e.target.closest('.debtor-pay-btn')) return;
+                    tr.addEventListener('click', (e) => { if (e.target.closest('.debtor-pay-btn')) return;
 
                         console.log('🖱️ [Клик по строке должника]:', dGroup);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
@@ -9290,6 +9289,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
 
 let currentDetailController = null;
 
@@ -9760,10 +9760,6 @@ if (tableBodyForReceipts) {
 
 
 
-
-
-
-        
 
 
 
