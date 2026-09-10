@@ -8830,171 +8830,6 @@ async function submitIncomePayment(event, docId, skladId) {
     }
 }
 
-// ==========================================================================
-// НОВОЕ: единая оплата долга покупателя за месяц (агрегированная кнопка
-// «Оплатить» на уровне должников, а не на каждой отдельной накладной)
-// ==========================================================================
-function openCustomerDebtPaymentDrawer(customerId, debtSum, customerName, monthKey) {
-    console.log(`[CUSTOMER DEBT DRAWER] customerId=${customerId}, debtSum=${debtSum}, name=${customerName}, month=${monthKey}`);
-
-    const drawer = getOrCreateDrawer();
-
-    drawer.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата долга: ${customerName}</h3>
-            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
-        </div>
-
-        <form id="pay-customer-debt-form" onsubmit="submitCustomerDebtPayment(event, '${customerId}', '${monthKey}')" style="display: flex; flex-direction: column; gap: 16px;">
-            <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
-                <input type="number" step="0.01" id="customer-payment-amount" value="${debtSum}" required
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
-                <textarea id="customer-payment-comment" placeholder="Примечание к платежу..." 
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
-            </div>
-
-            <div style="margin-top: 10px; display: flex; gap: 10px;">
-                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
-                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
-            </div>
-        </form>
-    `;
-
-    openDrawer();
-}
-
-async function submitCustomerDebtPayment(event, customerId, monthKey) {
-    event.preventDefault();
-
-    const parsedAmount = parseFloat(document.getElementById('customer-payment-amount').value);
-    const commentVal = document.getElementById('customer-payment-comment').value;
-
-    const payload = {
-        amount: parsedAmount,
-        comment: commentVal,
-        month: monthKey || null
-    };
-
-    const targetUrl = `/api/customers/${customerId}/pay-debt`;
-    console.log(`[CUSTOMER DEBT SUBMIT] Отправка платежа:`, { url: targetUrl, payload });
-
-    try {
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            const resData = await response.json().catch(() => ({}));
-            console.log(`[CUSTOMER DEBT SUBMIT SUCCESS]`, resData);
-            closeDrawer();
-            showAppNotification('Долг покупателя оплачен', 'success');
-            loadReceiptMainData('money_receipts_by_customer', window.currentSkladId);
-        } else {
-            const errData = await response.json().catch(() => ({}));
-            console.warn(`[CUSTOMER DEBT SUBMIT ERROR]`, errData);
-            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
-        }
-    } catch (err) {
-        console.error('[CUSTOMER DEBT NETWORK ERROR]:', err);
-        showAppNotification('Не удалось отправить данные на сервер', 'error');
-    }
-}
-
-// ==========================================================================
-// НОВОЕ: единая оплата долга склада-получателя за месяц (перемещения между
-// складами тоже считаются "должником", только это не customers, а skladi)
-// ==========================================================================
-function openWarehouseDebtPaymentDrawer(warehouseId, debtSum, warehouseName, monthKey) {
-    console.log(`[WAREHOUSE DEBT DRAWER] warehouseId=${warehouseId}, debtSum=${debtSum}, name=${warehouseName}, month=${monthKey}`);
-
-    const drawer = getOrCreateDrawer();
-
-    drawer.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата долга: ${warehouseName}</h3>
-            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
-        </div>
-
-        <form id="pay-warehouse-debt-form" onsubmit="submitWarehouseDebtPayment(event, '${warehouseId}', '${monthKey}')" style="display: flex; flex-direction: column; gap: 16px;">
-            <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum} )</label>
-                <input type="number" step="0.01" id="warehouse-payment-amount" value="${debtSum}" required
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
-                <textarea id="warehouse-payment-comment" placeholder="Примечание к платежу..." 
-                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
-            </div>
-
-            <div style="margin-top: 10px; display: flex; gap: 10px;">
-                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
-                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
-            </div>
-        </form>
-    `;
-
-    openDrawer();
-}
-
-async function submitWarehouseDebtPayment(event, warehouseId, monthKey) {
-    event.preventDefault();
-
-    const parsedAmount = parseFloat(document.getElementById('warehouse-payment-amount').value);
-    const commentVal = document.getElementById('warehouse-payment-comment').value;
-
-    const payload = {
-        amount: parsedAmount,
-        comment: commentVal,
-        month: monthKey || null,
-        sklad_id: window.currentSkladId || null
-    };
-
-    const targetUrl = `/api/warehouses/${warehouseId}/pay-debt`;
-    console.log(`[WAREHOUSE DEBT SUBMIT] Отправка платежа:`, { url: targetUrl, payload });
-
-    try {
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            const resData = await response.json().catch(() => ({}));
-            console.log(`[WAREHOUSE DEBT SUBMIT SUCCESS]`, resData);
-            closeDrawer();
-            showAppNotification('Долг склада оплачен', 'success');
-            loadReceiptMainData('money_receipts_by_customer', window.currentSkladId);
-        } else {
-            const errData = await response.json().catch(() => ({}));
-            console.warn(`[WAREHOUSE DEBT SUBMIT ERROR]`, errData);
-            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
-        }
-    } catch (err) {
-        console.error('[WAREHOUSE DEBT NETWORK ERROR]:', err);
-        showAppNotification('Не удалось отправить данные на сервер', 'error');
-    }
-}
-
-// Вспомогательная функция: по значению месяца (Date/строка) строит start_date/end_date для фильтра
-function getMonthRangeFromKey(monthValue) {
-    if (!monthValue) return { start: '', end: '' };
-    const d = new Date(monthValue);
-    if (isNaN(d.getTime())) return { start: '', end: '' };
-    const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-    return { start, end };
-}
-
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
     resetSharedUiForEntity(entity);   // 👈 добавили
@@ -9022,7 +8857,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
         window.currentCustomerId = null;
-        window.currentWarehouseToId = null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
@@ -9041,62 +8875,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             btnBackExpense.style.display = 'none';
             btnBackExpense.onclick = null;
         }
-    }
-    // НОВЫЙ 2 уровень: Должники по месяцам (покупатели через реализации
-    // + склады-получатели через перемещения) выбранного склада
-    else if (currentReceiptView === 'money_receipts_by_customer') {
-        let skladId = '';
-        if (parentId && typeof parentId === 'object') {
-            skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
-        } else if (parentId) {
-            skladId = parentId;
-        } else {
-            skladId = window.currentSkladId;
-        }
-
-        if (skladId) {
-            window.currentSkladId = skladId;
-        }
-
-        window.currentCustomerId = null;
-        window.currentWarehouseToId = null;
-        window.currentRealizationId = null;
-        window.currentRepairId = null;
-
-        // На уровне должников фильтр по датам не нужен — там уже разбивка по месяцам
-        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
-
-        fetchUrl = `/api/money_receipts_by_customer` + (window.currentSkladId ? `?sklad_id=${window.currentSkladId}` : '');
-
-        if (detailContainer) detailContainer.style.display = 'none';
-
-        if (btnAdd) btnAdd.style.display = 'none';
-        if (btnEdit) btnEdit.style.display = 'none';
-        if (btnDelete) btnDelete.style.display = 'none';
-
-        // Кнопка «Назад» на уровне должников ведет обратно к списку складов
-        if (btnBackExpense) {
-            btnBackExpense.style.display = 'inline-block';
-            btnBackExpense.onclick = () => {
-                loadReceiptMainData('money_receipts_by_sklad', '');
-            };
-        }
-    }
-    // 3 уровень (бывший 2-й): Документы (реализации и перемещения) конкретного
-    // должника (покупателя или склада-получателя) за конкретный месяц
+    } 
+    // 2 уровень: Документы (реализации и перемещения) выбранного склада с учетом дат
     else if (currentReceiptView === 'money_receipts') {
         let skladId = '';
-        let customerIdParam = '';
-        let warehouseToIdParam = '';
-        let explicitStart = '';
-        let explicitEnd = '';
-
         if (parentId && typeof parentId === 'object') {
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
-            customerIdParam = parentId.customer_id || '';
-            warehouseToIdParam = parentId.warehouse_to_id || '';
-            explicitStart = parentId.start_date || '';
-            explicitEnd = parentId.end_date || '';
         } else if (parentId) {
             skladId = parentId;
         } else {
@@ -9106,39 +8890,24 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (skladId) {
             window.currentSkladId = skladId;
         }
-
-        // Если пришли конкретные customer_id/warehouse_to_id — фиксируем их как контекст должника
-        window.currentCustomerId = customerIdParam || null;
-        window.currentWarehouseToId = warehouseToIdParam || null;
+        
+        window.currentCustomerId = null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
         // Показываем панель дат для документов ТОЛЬКО здесь
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'flex';
 
-        // Если пришел явный диапазон месяца от уровня должников — подставляем его в поля дат
-        if (startDateInput && explicitStart) startDateInput.value = explicitStart;
-        if (endDateInput && explicitEnd) endDateInput.value = explicitEnd;
-
-        // Собираем параметры фильтрации
+        // Собираем параметры фильтрации дат, если они заданы
         let queryParams = [];
         if (window.currentSkladId) {
             queryParams.push(`sklad_id=${window.currentSkladId}`);
         }
-        if (window.currentCustomerId) {
-            queryParams.push(`customer_id=${window.currentCustomerId}`);
+        if (startDateInput && startDateInput.value) {
+            queryParams.push(`start_date=${startDateInput.value}`);
         }
-        if (window.currentWarehouseToId) {
-            queryParams.push(`warehouse_to_id=${window.currentWarehouseToId}`);
-        }
-
-        const effectiveStart = explicitStart || (startDateInput && startDateInput.value) || '';
-        const effectiveEnd = explicitEnd || (endDateInput && endDateInput.value) || '';
-        if (effectiveStart) {
-            queryParams.push(`start_date=${effectiveStart}`);
-        }
-        if (effectiveEnd) {
-            queryParams.push(`end_date=${effectiveEnd}`);
+        if (endDateInput && endDateInput.value) {
+            queryParams.push(`end_date=${endDateInput.value}`);
         }
 
         fetchUrl = `/api/money_receipts` + (queryParams.length > 0 ? `?${queryParams.join('&')}` : '');
@@ -9149,11 +8918,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // Кнопка «Назад» теперь ведёт на уровень должников, а не сразу на склады
+        // Показываем и настраиваем кнопку «Назад» на уровне документов склада
         if (btnBackExpense) {
             btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
-                loadReceiptMainData('money_receipts_by_customer', window.currentSkladId);
+                loadReceiptMainData('money_receipts_by_sklad', '');
             };
         }
     }
@@ -9190,7 +8959,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             
             // Если есть сгруппированные строки по месяцам (на уровне документов)
             if (currentReceiptView === 'money_receipts') {
-                // Ищем все группы. Так как у нас структура: headerTr -> группа items -> футерTr, 
+                // Ищем все группы. Так как у нас структура: headerTr -> группа items -> footerTr, 
                 // проще пройтись по всем tr в tbody, которые не являются шапками сальдо или групп/футерами, 
                 // либо управлять видимостью блоков.
                 // Сделаем более надежно: найдем все группы через сохраненные элементы или проход по DOM.
@@ -9400,49 +9169,64 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                 mainTableBody.appendChild(headerTr);
 
+                // Группируем накладные этого месяца по должнику: покупатель (customer_id) 
+                // либо склад-получатель при перемещении (debtor_warehouse_id).
+                const debtorsInMonth = {};
                 group.items.forEach(item => {
+                    const debtorKey = item.customer_id
+                        ? `c_${item.customer_id}`
+                        : `w_${item.debtor_warehouse_id || item.counterparty_name || 'unknown'}`;
+                    const fullKey = `${debtorKey}__${monthKey}`;
+
+                    if (!debtorsInMonth[fullKey]) {
+                        debtorsInMonth[fullKey] = {
+                            key: fullKey,
+                            counterpartyName: item.counterparty_name || 'Розничный покупатель',
+                            monthKey: monthKey,
+                            monthTitle: group.title,
+                            items: [],
+                            totalSum: 0,
+                            totalPaid: 0,
+                            totalDebt: 0
+                        };
+                    }
+                    const dGroup = debtorsInMonth[fullKey];
+                    dGroup.items.push(item);
+                    dGroup.totalSum += Number(item.total_realization_sum || item.total_sum || item.sum || 0);
+                    dGroup.totalPaid += Number(item.total_paid || item.paid || 0);
+                    dGroup.totalDebt += Number(item.debt_sum || item.total_debt || item.debt || 0);
+                });
+
+                window.currentDebtorGroups = window.currentDebtorGroups || {};
+
+                Object.values(debtorsInMonth).forEach(dGroup => {
+                    window.currentDebtorGroups[dGroup.key] = dGroup;
+
                     const tr = document.createElement('tr');
-                    tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
+                    tr.dataset.id = dGroup.key;
                     tr.style.cursor = 'pointer';
-                    tr.innerHTML = config.render(item);
+                    tr.innerHTML = config.render(dGroup);
 
-                    tr.addEventListener('click', (evt) => {
-                        // Останавливаем всплытие, чтобы старый делегированный обработчик
-                        // на #table-body не обрабатывал этот же клик повторно
-                        evt.stopPropagation();
+                    tr.addEventListener('click', (e) => {
+                        if (e.target.closest('.debtor-pay-btn')) return;
 
-                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
+                        console.log('🖱️ [Клик по строке должника]:', dGroup);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
-                        window.selectedItem = item;
+                        window.selectedItem = dGroup;
+                        window.currentCustomerId = (dGroup.items[0] && dGroup.items[0].customer_id) || '';
 
-                        window.currentRealizationId = item.realization_id || item.id;
-                        window.currentRepairId = null;
-                        window.currentCustomerId = item.customer_id || window.currentCustomerId || '';
-                        
-                        window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
-
-                        const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-                        if (detailToolbar) {
-                            detailToolbar.style.display = 'none';
-                        }
-                        
-                        let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
-                        
-                        let realizationId = window.currentRealizationId || '';
-                        let customerId = window.currentCustomerId || '';
-                        let skladId = item.sklad_id || window.currentSkladId || '';
-                        
-                        let url = '';
-                        if (detailEntity === 'money_receipts_works_detail') {
-                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        } else {
-                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        }
-
-                        loadReceiptDetailTable(url, detailEntity);
+                        showDebtorInvoicesInDetail(dGroup);
                     });
+
+                    const payBtn = tr.querySelector('.debtor-pay-btn');
+                    if (payBtn) {
+                        payBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            openDebtorPaymentDrawer(dGroup);
+                        });
+                    }
 
                     rowElements.push(tr);
                     mainTableBody.appendChild(tr);
@@ -9477,45 +9261,21 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             });
 
         } else {
-            // Сюда попадает и уровень складов (money_receipts_by_sklad),
-            // и НОВЫЙ уровень должников по месяцам (money_receipts_by_customer)
             currentItems.forEach(item => {
                 const tr = document.createElement('tr');
-                tr.dataset.id = item.id || item.sklad_id || item.realization_id || (item.debtor_type ? `${item.debtor_type}_${item.debtor_id}_${item.month}` : '');
+                tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
                 tr.style.cursor = 'pointer';
                 tr.innerHTML = config.render(item);
 
-                tr.addEventListener('click', (evt) => {
-                    // Клик по кнопке «Оплатить» внутри строки не должен переключать уровень —
-                    // сама кнопка уже вызывает openCustomerDebtPaymentDrawer/openWarehouseDebtPaymentDrawer
-                    if (evt.target.closest('button')) {
-                        return;
-                    }
-                    evt.stopPropagation();
-
-                    console.log('🖱️ [Клик на строку складов/должников]:', item);
+                tr.addEventListener('click', () => {
+                    console.log('🖱️ [Клик на строку складов]:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
                     window.selectedItem = item;
 
                     if (currentEntity === 'money_receipts_by_sklad') {
-                        // Склад -> уровень должников по месяцам (а не сразу список накладных)
-                        loadReceiptMainData('money_receipts_by_customer', item);
-                    } else if (currentEntity === 'money_receipts_by_customer') {
-                        // Должник за месяц -> нижняя таблица накладных именно по этому должнику и месяцу
-                        const range = getMonthRangeFromKey(item.month);
-                        const params = {
-                            sklad_id: window.currentSkladId,
-                            start_date: range.start,
-                            end_date: range.end
-                        };
-                        if (item.debtor_type === 'warehouse') {
-                            params.warehouse_to_id = item.debtor_id;
-                        } else {
-                            params.customer_id = item.debtor_id;
-                        }
-                        loadReceiptMainData('money_receipts', params);
+                        loadReceiptMainData('money_receipts', item);
                     }
                 });
 
@@ -9624,6 +9384,193 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
+// ==========================================================================
+// НОВАЯ ЛОГИКА: должники по месяцам (money_receipts) — нижняя таблица накладных
+// конкретного должника + возврат из детальной спецификации обратно к списку
+// накладных + пакетная оплата долга по всем накладным должника разом.
+// ==========================================================================
+
+function showDebtorInvoicesInDetail(group) {
+    window.currentDebtorInvoicesGroup = group;
+    window.currentDebtorInvoicesBack = () => showDebtorInvoicesInDetail(group);
+
+    const detailContainer = document.getElementById('detail-container');
+    if (detailContainer) detailContainer.style.display = 'block';
+
+    const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbarEl) detailToolbarEl.style.display = 'none';
+
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+    const existingAlternativeRow = document.getElementById('detail-table-filter-row');
+    if (existingAlternativeRow) existingAlternativeRow.remove();
+
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    const detailBody = document.getElementById('detail-body');
+
+    const config = getConfig('money_receipts_invoices');
+    if (detailTitle) {
+        detailTitle.innerText = `Накладные: ${group.counterpartyName || 'Розничный покупатель'} — ${group.monthTitle || ''}`;
+    }
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    if (!detailBody) return;
+
+    const colCount = config && config.columns ? config.columns.length : 8;
+
+    if (!group.items || group.items.length === 0) {
+        detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет накладных</td></tr>`;
+        hideDetailBackLink();
+        return;
+    }
+
+    detailBody.innerHTML = '';
+    group.items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = config.render(item);
+
+        tr.addEventListener('click', () => {
+            detailBody.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
+            tr.classList.add('selected-row');
+
+            window.currentRealizationId = item.realization_id || item.id;
+            window.currentRepairId = null;
+            window.currentCustomerId = item.customer_id || '';
+            window.currentDocType = item.customer_id ? 'realization' : 'move';
+
+            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
+            const skladId = item.sklad_id || window.currentSkladId || '';
+
+            let url = '';
+            if (activeTab === 'money_receipts_works_detail') {
+                url = `/api/money_receipts_works_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${skladId}`;
+            } else {
+                url = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${skladId}`;
+            }
+
+            loadReceiptDetailTable(url, activeTab);
+            showDetailBackLink();
+        });
+
+        detailBody.appendChild(tr);
+    });
+
+    hideDetailBackLink();
+}
+
+function showDetailBackLink() {
+    let backBar = document.getElementById('debtor-invoices-back-bar');
+    const detailTitle = document.getElementById('detail-title');
+    if (!backBar && detailTitle && detailTitle.parentElement) {
+        backBar = document.createElement('div');
+        backBar.id = 'debtor-invoices-back-bar';
+        backBar.style.cssText = 'margin-bottom: 8px;';
+        backBar.innerHTML = `<a href="#" onclick="event.preventDefault(); if (window.currentDebtorInvoicesBack) window.currentDebtorInvoicesBack();" style="color: #2563eb; font-size: 13px; text-decoration: underline;">← Назад к накладным</a>`;
+        detailTitle.parentElement.insertBefore(backBar, detailTitle);
+    }
+    if (backBar) backBar.style.display = 'block';
+}
+
+function hideDetailBackLink() {
+    const backBar = document.getElementById('debtor-invoices-back-bar');
+    if (backBar) backBar.style.display = 'none';
+}
+
+function openDebtorPaymentDrawer(group) {
+    const debtSum = Number(group.totalDebt || 0).toFixed(2);
+    const drawer = getOrCreateDrawer();
+
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата: ${group.counterpartyName || 'Розничный покупатель'}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="margin: -10px 0 16px; color: #64748b; font-size: 12px;">${group.monthTitle || ''} · накладных: ${group.items ? group.items.length : 0}</div>
+
+        <form id="pay-form" onsubmit="submitDebtorBatchPayment(event, '${group.key}')" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum})</label>
+                <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
+                <textarea id="payment-comment" placeholder="Примечание к платежу..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
+            </div>
+        </form>
+    `;
+
+    openDrawer();
+}
+
+async function submitDebtorBatchPayment(event, debtorKey) {
+    event.preventDefault();
+
+    const group = window.currentDebtorGroups ? window.currentDebtorGroups[debtorKey] : null;
+    if (!group) {
+        showAppNotification('Не удалось определить должника для оплаты', 'error');
+        return;
+    }
+
+    const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
+    const commentVal = document.getElementById('payment-comment').value;
+
+    // Гасим накладные по порядку: сначала самые старые
+    const sortedDocs = [...group.items].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const docs = sortedDocs.map(item => ({
+        id: item.realization_id || item.id,
+        type: item.customer_id ? 'realization' : 'move'
+    }));
+
+    const payload = { docs, amount: parsedAmount, comment: commentVal };
+
+    console.log('[BATCH PAY] Отправка групповой оплаты:', payload);
+
+    try {
+        let response = await fetch('/api/debt/pay-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            let resData = await response.json().catch(() => ({}));
+            console.log('[BATCH PAY SUCCESS]', resData);
+            closeDrawer();
+            showAppNotification('Платёж успешно сохранен', 'success');
+
+            if (typeof applyReceiptsFilters === 'function') {
+                applyReceiptsFilters();
+            } else if (window.currentSkladId) {
+                loadReceiptMainData('money_receipts', window.currentSkladId);
+            }
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            console.warn('[BATCH PAY ERROR]', errData);
+            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
+        }
+    } catch (err) {
+        console.error('[BATCH PAY NETWORK ERROR]:', err);
+        showAppNotification('Не удалось отправить данные на сервер', 'error');
+    }
+}
+
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
     if (!tableBodyForReceipts.dataset.listenerAttached) {
@@ -9631,10 +9578,11 @@ if (tableBodyForReceipts) {
 
         tableBodyForReceipts.addEventListener('click', async (e) => {
             
+            // 'money_receipts' убран отсюда: у уровня должников теперь свои
+            // обработчики кликов (см. loadReceiptMainData/showDebtorInvoicesInDetail),
+            // делегированный обработчик ниже не должен в них вмешиваться.
             const allowedEntities = [
                 'money_receipts_by_sklad', 
-                'money_receipts_by_customer',
-                'money_receipts',
                 'expenses_by_sklad', 
                 'expenses_by_suppliers', 
                 'expenses_by_receipts'
@@ -9644,12 +9592,6 @@ if (tableBodyForReceipts) {
             console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
             
             if (!allowedEntities.includes(activeEntity)) {
-                return;
-            }
-
-            // Клик по кнопке «Оплатить» (в т.ч. новые кнопки должников) обрабатывается
-            // своими onclick — сюда не лезем, чтобы не переключать таблицу мимо оплаты
-            if (e.target.closest('button')) {
                 return;
             }
 
@@ -9706,8 +9648,7 @@ if (tableBodyForReceipts) {
                     String(i.realization_id || '') === String(id) || 
                     String(i.sklad_id || '') === String(id) || 
                     String(i.receipt_id || '') === String(id) || 
-                    String(i.postavhik_id || '') === String(id) ||
-                    (i.debtor_type ? String(`${i.debtor_type}_${i.debtor_id}_${i.month}`) === String(id) : false)
+                    String(i.postavhik_id || '') === String(id)
                 );
             }
 
@@ -9740,24 +9681,7 @@ if (tableBodyForReceipts) {
             // ==========================================
             if (activeEntity === 'money_receipts_by_sklad') {
                 if (typeof loadReceiptMainData === 'function') {
-                    // Теперь ведём не сразу в накладные, а на уровень должников по месяцам
-                    loadReceiptMainData('money_receipts_by_customer', selectedItem);
-                }
-            } else if (activeEntity === 'money_receipts_by_customer') {
-                // НОВОЕ: клик по должнику (покупателю или складу-получателю) за конкретный месяц
-                if (typeof loadReceiptMainData === 'function') {
-                    const range = (typeof getMonthRangeFromKey === 'function') ? getMonthRangeFromKey(selectedItem.month) : { start: '', end: '' };
-                    const params = {
-                        sklad_id: window.currentSkladId,
-                        start_date: range.start,
-                        end_date: range.end
-                    };
-                    if (selectedItem.debtor_type === 'warehouse') {
-                        params.warehouse_to_id = selectedItem.debtor_id;
-                    } else {
-                        params.customer_id = selectedItem.debtor_id;
-                    }
-                    loadReceiptMainData('money_receipts', params);
+                    loadReceiptMainData('money_receipts', selectedItem);
                 }
             } else if (activeEntity === 'money_receipts') {
                 window.currentRealizationId = selectedItem.realization_id || selectedItem.id;
@@ -9833,6 +9757,13 @@ if (tableBodyForReceipts) {
         });
     }
 }
+
+
+
+
+
+
+        
 
 
 
