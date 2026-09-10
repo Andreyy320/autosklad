@@ -4922,17 +4922,17 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
 
             const toApply = Math.min(remaining, debt);
 
-                       if (isWarehouseDebtor) {
+                          if (isWarehouseDebtor) {
                 await client.query(
-                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id, date)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
                 );
             } else {
                 await client.query(
-                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [realId, row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id, date)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [realId, row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
                 );
             }
 
@@ -5447,10 +5447,10 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
 
             const toApply = Math.min(remaining, debt);
 
-            await client.query(
-                `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [id, row.receipt_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                        await client.query(
+                `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, date)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [id, row.receipt_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
             );
 
             appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
