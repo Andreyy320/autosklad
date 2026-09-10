@@ -2012,7 +2012,8 @@ const tableConfig = {
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
+        // Колонка 'actions' полностью удалена
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
@@ -2023,6 +2024,11 @@ const tableConfig = {
         const debtSum = debtSumNum.toFixed(2);
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
+
+        // Если есть оплата, делаем сумму кликабельной для просмотра истории, иначе просто выводим текст
+        const paidHtml = totalPaidNum > 0 
+            ? `<span onclick="openPaymentHistory('${item.id}', '${docTitle}')" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${formattedPaid}</span>`
+            : `<span style="color: #334155;">${formattedPaid}</span>`;
 
         return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
@@ -2037,7 +2043,7 @@ const tableConfig = {
             </td>
         `;
     }
-    },
+},
     expense_payments: {
     title: 'История всех оплат',
     columns: [
