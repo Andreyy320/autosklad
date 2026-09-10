@@ -9528,7 +9528,20 @@ if (tableBodyForReceipts) {
                 if (activeEntity === 'expenses_by_sklad') {
                     if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
                 } else if (activeEntity === 'expenses_by_suppliers') {
-                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
+                    // ИСПРАВЛЕНИЕ: Передаем поставщика вместе с диапазоном дат выбранного месяца
+                    if (typeof loadExpenseMainData === 'function') {
+                        let payload = { ...selectedItem };
+                        
+                        // Если у строки есть месяц (например, '2026-08'), рассчитываем границы для уровня 3
+                        if (selectedItem.month_str) {
+                            const [year, month] = selectedItem.month_str.split('-').map(Number);
+                            payload.start_date = `${selectedItem.month_str}-01`;
+                            const lastDay = new Date(year, month, 0).getDate();
+                            payload.end_date = `${selectedItem.month_str}-${String(lastDay).padStart(2, '0')}`;
+                        }
+                        
+                        loadExpenseMainData('expenses_by_receipts', payload);
+                    }
                 } else if (activeEntity === 'expenses_by_receipts') {
                     let receiptId = selectedItem.receipt_id || selectedItem.id || id;
                     if (receiptId) window.currentReceiptId = receiptId;
@@ -9549,7 +9562,6 @@ if (tableBodyForReceipts) {
         });
     }
 }
-
 
 
 
