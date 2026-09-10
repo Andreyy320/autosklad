@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const path = require('path'); // Нужно для указания пути к файлу html
 const multer = require('multer'); // <--- 1. Подключаем multer
+const jwt = require('jsonwebtoken');
 
 
 const upload = multer({
@@ -83,11 +84,19 @@ module.exports = (pool) => {
                 const user = result.rows[0];
                 const match = await bcrypt.compare(password, user.password_hash);
                 
-                if (match) {
-                    // Никогда не отправляем хеш пароля на клиент
-                    const { password_hash, ...safeUser } = user;
-                    return res.json({ success: true, user: safeUser });
-                } else {
+               if (match) {
+    // Никогда не отправляем хеш пароля на клиент
+        const { password_hash, ...safeUser } = user;
+
+    // Выдаём настоящий токен доступа — он будет проверяться на всех остальных запросах
+    const token = jwt.sign(
+        { id: user.id, login: user.login },
+        process.env.JWT_SECRET,
+        { expiresIn: '12h' }
+    );
+
+    return res.json({ success: true, user: safeUser, token });
+    } else {
                     return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
                 }
             } else {
@@ -100,6 +109,30 @@ module.exports = (pool) => {
     });
 
 
+// ==================== ПРОВЕРКА АВТОРИЗАЦИИ ДЛЯ ВСЕХ ОСТАЛЬНЫХ ЗАПРОСОВ ====================
+// Без валидного токена — доступа нет. Ставим ПОСЛЕ /login, поэтому сам вход остаётся открытым,
+// а всё, что зарегистрировано в router НИЖЕ этой строки, требует токен.
+function authMiddleware(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+        return res.status(401).json({ error: 'Не авторизован: токен отсутствует' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded; // теперь req.user.id и req.user.login доступны в любом роуте ниже
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
+    }
+}
+
+router.use(authMiddleware);
+// ================================================================================
+
+    
 
 // Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
