@@ -1,3 +1,28 @@
+
+const _originalFetch = window.fetch;
+window.fetch = async function(url, options = {}) {
+    const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
+
+    if (isApiCall) {
+        const token = localStorage.getItem('token');
+        options.headers = {
+            ...(options.headers || {}),
+            'Authorization': token ? `Bearer ${token}` : ''
+        };
+    }
+
+    const response = await _originalFetch(url, options);
+
+    if (isApiCall && response.status === 401) {
+        console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
+        localStorage.clear();
+        location.reload();
+    }
+
+    return response;
+};
+
+
 let currentEntity = 'users';
 let currentItems = [];
 let selectedItem = null;
@@ -7018,6 +7043,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         if (response.ok && result.success) {
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
+            localStorage.setItem('token', result.token);
             
             // Универсальный поиск ID (проверяем все возможные варианты ответа бэкенда)
             const userId = result.user?.id || result.id || result.userId || null;
