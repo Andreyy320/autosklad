@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const path = require('path'); // Нужно для указания пути к файлу html
 const multer = require('multer'); // <--- 1. Подключаем multer
 const jwt = require('jsonwebtoken');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
@@ -86,9 +86,9 @@ const loginLimiter = rateLimit({
     // офисный интернет (общий внешний IP) блокирует ВСЕХ сотрудников разом, даже если
     // они входят под РАЗНЫМИ учётными записями. Так подбор пароля к ОДНОМУ конкретному
     // аккаунту всё ещё ограничен, а разные люди друг другу не мешают.
-    keyGenerator: (req) => {
+        keyGenerator: (req) => {
         const login = (req.body && req.body.login) ? String(req.body.login).toLowerCase().trim() : 'unknown';
-        return `${req.ip}:${login}`;
+        return `${ipKeyGenerator(req.ip)}:${login}`;
     }
 });
 
