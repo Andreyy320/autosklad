@@ -1895,9 +1895,9 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 500; color: ${totalDebtNum > 0 ? '#991b1b' : '#334155'};">${totalDebt}</td>
             <td style="text-align: center;">
                 ${totalDebtNum > 0
-                    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
-                    : ''
-                }
+    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
+    : ''
+}
             </td>
         `;
     }
@@ -8134,7 +8134,7 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
     }
 }
 
-async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr) {
+async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr, skladId) {
     const drawer = getOrCreateDrawer();
 
     drawer.innerHTML = `
@@ -8145,7 +8145,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
         <div id="pay-docs-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
 
-        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
                 <label style="display:block; margin-bottom:5px; color:#555;">Сумма долга за месяц: <span style="font-weight:600;">${debtSum}</span></label>
                 <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
@@ -8164,8 +8164,6 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
     `;
     openDrawer();
 
-    // Подгружаем неоплаченные накладные (реализации ИЛИ перемещения — смотря кто groupKey)
-    // за этот месяц, чтобы можно было найти и выбрать конкретные для оплаты.
     try {
         const isWarehouseDebtor = String(groupKey).startsWith('wh_');
         const realId = isWarehouseDebtor ? String(groupKey).replace('wh_', '') : groupKey;
@@ -8174,10 +8172,13 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         const startDate = `${monthStr}-01`;
         const lastDay = new Date(year, month, 0).getDate();
         const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
-        const skladParam = window.currentSkladId ? `&sklad_id=${window.currentSkladId}` : '';
+        const skladParam = skladId ? `&sklad_id=${skladId}` : '';
         const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
 
-        const resp = await fetch(`/api/money_receipts?${idParam}&start_date=${startDate}&end_date=${endDate}${skladParam}`);
+        const requestUrl = `/api/money_receipts?${idParam}&start_date=${startDate}&end_date=${endDate}${skladParam}`;
+        console.log('🔍 [openReceiptCustomerPaymentDrawer] Запрос неоплаченных накладных:', requestUrl); // 👈 временно, чтобы видеть в консоли
+
+        const resp = await fetch(requestUrl);
         const listEl = document.getElementById('pay-docs-list');
         if (!listEl) return;
 
@@ -8187,7 +8188,9 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         }
 
         const docs = await resp.json();
+        console.log('📥 [openReceiptCustomerPaymentDrawer] Ответ сервера:', docs); // 👈 временно
         const unpaid = (Array.isArray(docs) ? docs : []).filter(d => Number(d.debt_sum || 0) > 0);
+
 
         if (unpaid.length === 0) {
             listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
@@ -8296,7 +8299,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
     }
 }
 
-async function submitReceiptCustomerPayment(event, groupKey, monthStr) {
+async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) {
     event.preventDefault();
 
     const docIds = Array.isArray(window._paySelectedDocIds) ? window._paySelectedDocIds : [];
@@ -8312,7 +8315,7 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr) {
                 amount,
                 comment,
                 month_str: monthStr,
-                sklad_id: window.currentSkladId || null,
+                sklad_id: skladId || null,   // 👈 берём переданный, а не window.currentSkladId
                 doc_ids: docIds.length > 0 ? docIds : null
             })
         });
@@ -8433,7 +8436,7 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
 
     // Подгружаем список неоплаченных накладных поставщика за этот месяц, чтобы
     // можно было найти и выбрать конкретные (через поиск) и оплатить именно их,
-    // а не всё подряд по ФИФО.
+    // а не всё подряд по ФИФО.а
     try {
         const [year, month] = monthStr.split('-').map(Number);
         const startDate = `${monthStr}-01`;
@@ -9333,9 +9336,17 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             window.currentSkladId = skladId;
         }
 
-        window.currentCustomerId = customerId || null;
+          window.currentCustomerId = customerId || null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
+
+        // 👈 ДОБАВИТЬ: сбрасываем нижнюю таблицу, чтобы не висели данные от предыдущего документа
+        const detailBodyReset = document.getElementById('detail-body');
+        if (detailBodyReset) {
+            detailBodyReset.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Выберите документ в верхней таблице</td></tr>`;
+        }
+        const detailHeadersReset = document.getElementById('detail-headers');
+        if (detailHeadersReset) detailHeadersReset.innerHTML = '';
 
         // Показываем панель дат для документов ТОЛЬКО здесь
         if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'flex';
