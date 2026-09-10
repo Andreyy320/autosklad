@@ -1957,8 +1957,7 @@ const tableConfig = {
         // item.month_str и item.postavhik_id должны быть прокинуты в объект строки при группировке
        const actionHtml = debtNum <= 0 
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-    : `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', true, '${item.month_str}')" 
-        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+: `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить
       </button>`;
 
