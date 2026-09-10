@@ -8137,28 +8137,30 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
 async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr, skladId) {
     const drawer = getOrCreateDrawer();
 
-    drawer.innerHTML = `
+       drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата за месяц: ${titleLabel}</h3>
-            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата за месяц: ${titleLabel}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
 
         <div id="pay-docs-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
 
         <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display:block; margin-bottom:5px; color:#555;">Сумма долга за месяц: <span style="font-weight:600;">${debtSum}</span></label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма долга за месяц: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>
                 <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
-                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
+
             <div>
-                <label style="display:block; margin-bottom:5px; color:#555;">Комментарий</label>
-                <textarea id="receipt-payment-comment" placeholder="Примечание к платежу..."
-                          style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;"></textarea>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Комментарий</label>
+                <textarea id="receipt-payment-comment" placeholder="Примечание к платежу..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical; min-height: 60px; color: #0f172a;"></textarea>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="submit" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
-                <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e2e8f0; color: #334151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
             </div>
         </form>
     `;
@@ -8200,13 +8202,13 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         window._payUnpaidDocs = unpaid;
         window._paySelectedDocIds = [];
 
-        listEl.innerHTML = `
+                listEl.innerHTML = `
             <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px; font-weight: 500;">
-                Накладные (необязательно): найдите и выберите конкретную для оплаты.
+                Накладные (необязательно): найдите и выберите конкретные для оплаты.
                 Если ничего не выбрано — сумма распределится по всем от старых к новым, как раньше.
             </label>
             <div id="pay-docs-search-block" style="position: relative;">
-                <input type="text" id="pay-doc-search-input" placeholder="🔍 Введите номер накладной..." autocomplete="off"
+                <input type="text" id="pay-doc-search-input" placeholder="🔍 Начните ввод для поиска накладной..." autocomplete="off"
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
                 <div id="pay-doc-search-dropdown" style="display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08);"></div>
                 <div id="pay-doc-selected-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
