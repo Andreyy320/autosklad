@@ -8137,7 +8137,8 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     openDrawer();
 
     // Подгружаем список неоплаченных накладных поставщика за этот месяц, чтобы
-    // можно было отметить конкретные и оплатить именно их, а не всё подряд по ФИФО.
+    // можно было найти и выбрать конкретные (через поиск) и оплатить именно их,
+    // а не всё подряд по ФИФО.
     try {
         const [year, month] = monthStr.split('-').map(Number);
         const startDate = `${monthStr}-01`;
@@ -8162,20 +8163,89 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
             return;
         }
 
+        // Поле поиска накладных — по аналогии с поиском запчастей:
+        // вводишь текст, показывается фильтруемый выпадающий список,
+        // клик по варианту добавляет накладную в список выбранных (чипом).
+        window._payUnpaidReceipts = unpaid;
+        window._paySelectedReceiptIds = [];
+
         listEl.innerHTML = `
-            <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 8px; font-weight: 500;">
-                Накладные (необязательно): отметьте, если хотите оплатить конкретные.
-                Если ничего не отмечено — сумма распределится по всем от старых к новым, как раньше.
+            <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px; font-weight: 500;">
+                Накладные (необязательно): найдите и выберите конкретные для оплаты.
+                Если ничего не выбрано — сумма распределится по всем от старых к новым, как раньше.
             </label>
-            <div style="max-height: 160px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
-                ${unpaid.map(r => `
-                    <label style="display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: #334155; cursor: pointer;">
-                        <input type="checkbox" class="pay-receipt-checkbox" value="${r.receipt_id || r.id}">
-                        <span>№ ${r.doc_number || r.id} от ${r.date ? new Date(r.date).toLocaleDateString() : '—'} — долг: <b>${Number(r.debt_sum || 0).toFixed(2)}</b></span>
-                    </label>
-                `).join('')}
+            <div id="pay-receipts-search-block" style="position: relative;">
+                <input type="text" id="pay-receipt-search-input" placeholder="🔍 Начните ввод для поиска накладной..." autocomplete="off"
+                    style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
+                <div id="pay-receipt-search-dropdown" style="display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08);"></div>
+                <div id="pay-receipt-selected-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
             </div>
         `;
+
+        const searchInput = document.getElementById('pay-receipt-search-input');
+        const dropdown = document.getElementById('pay-receipt-search-dropdown');
+        const selectedListEl = document.getElementById('pay-receipt-selected-list');
+
+        function renderSelectedChips() {
+            selectedListEl.innerHTML = window._paySelectedReceiptIds.map(rid => {
+                const r = window._payUnpaidReceipts.find(x => String(x.receipt_id || x.id) === String(rid));
+                if (!r) return '';
+                return `<span style="display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; padding: 4px 8px; font-size: 12px;">
+                    № ${r.doc_number || r.id} (долг ${Number(r.debt_sum || 0).toFixed(2)})
+                    <span data-remove-id="${rid}" style="cursor: pointer; font-weight: bold;">&times;</span>
+                </span>`;
+            }).join('');
+
+            selectedListEl.querySelectorAll('[data-remove-id]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const rid = el.getAttribute('data-remove-id');
+                    window._paySelectedReceiptIds = window._paySelectedReceiptIds.filter(x => String(x) !== String(rid));
+                    renderSelectedChips();
+                });
+            });
+        }
+
+        function renderDropdown(filterText) {
+            const filter = (filterText || '').toLowerCase().trim();
+            const available = window._payUnpaidReceipts.filter(r => {
+                const rid = String(r.receipt_id || r.id);
+                if (window._paySelectedReceiptIds.includes(rid)) return false;
+                const label = `${r.doc_number || r.id}`.toLowerCase();
+                return !filter || label.includes(filter);
+            });
+
+            if (available.length === 0) {
+                dropdown.innerHTML = `<div style="padding: 8px; color: #94a3b8; font-size: 12px;">Ничего не найдено</div>`;
+            } else {
+                dropdown.innerHTML = available.map(r => `
+                    <div class="pay-receipt-option" data-id="${r.receipt_id || r.id}" style="padding: 8px; cursor: pointer; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9;">
+                        № ${r.doc_number || r.id} от ${r.date ? new Date(r.date).toLocaleDateString() : '—'} — долг: <b>${Number(r.debt_sum || 0).toFixed(2)}</b>
+                    </div>
+                `).join('');
+
+                dropdown.querySelectorAll('.pay-receipt-option').forEach(opt => {
+                    opt.addEventListener('click', () => {
+                        const rid = opt.getAttribute('data-id');
+                        if (!window._paySelectedReceiptIds.includes(rid)) {
+                            window._paySelectedReceiptIds.push(rid);
+                        }
+                        searchInput.value = '';
+                        dropdown.style.display = 'none';
+                        renderSelectedChips();
+                    });
+                });
+            }
+
+            dropdown.style.display = 'block';
+        }
+
+        searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+        searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#pay-receipts-search-block')) {
+                dropdown.style.display = 'none';
+            }
+        });
     } catch (err) {
         console.error('Ошибка загрузки списка накладных для оплаты:', err);
         const listEl = document.getElementById('pay-receipts-list');
@@ -8186,8 +8256,7 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
 async function submitPayment(event, postavhikId, monthStr) {
     event.preventDefault();
 
-    const checkedBoxes = document.querySelectorAll('.pay-receipt-checkbox:checked');
-    const receiptIds = Array.from(checkedBoxes).map(cb => cb.value);
+    const receiptIds = Array.isArray(window._paySelectedReceiptIds) ? window._paySelectedReceiptIds : [];
 
     const payload = {
         amount: parseFloat(document.getElementById('payment-amount').value),
