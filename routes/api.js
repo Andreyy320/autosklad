@@ -4081,14 +4081,13 @@ router.get('/money_receipts', async (req, res) => {
                     -- Плюс по запчастям отдельно
                     (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS parts_profit,
                     0::numeric AS works_profit
-                FROM moves m
+                               FROM moves m
                 LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
                 LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
                 LEFT JOIN (
                     SELECT 
                         mi.move_id, 
                         SUM(mi.quantity) AS total_qty, 
-                        -- ЧИСТАЯ ЗАКУПКА ИЗ ПРИХОДА: подтягиваем из receipt_items по income_document_id
                         SUM(
                             COALESCE(
                                 NULLIF(ri_orig.price_rub, 0),
@@ -4109,14 +4108,13 @@ router.get('/money_receipts', async (req, res) => {
                     GROUP BY move_id
                 ) m_p ON m.id = m_p.move_id
                 WHERE m.is_posted = true
-                  WHERE m.is_posted = true
-    AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
-     AND ($2::date IS NULL OR m.date::date >= $2::date)
-    AND ($3::date IS NULL OR m.date::date <= $3::date)
-    AND ($4::integer IS NULL)
-     AND ($5::integer IS NULL OR m.warehouse_to_id = $5)
+                    AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+                    AND ($2::date IS NULL OR m.date::date >= $2::date)
+                    AND ($3::date IS NULL OR m.date::date <= $3::date)
+                    AND ($4::integer IS NULL)
+                    AND ($5::integer IS NULL OR m.warehouse_to_id = $5)
+            )
             
-                  )
             SELECT 
                 id,
                 realization_id,
