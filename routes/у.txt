@@ -1,3 +1,4 @@
+
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
@@ -1177,7 +1178,7 @@ router.get('/get-customer-payment-logs', async (req, res) => {
                 COALESCE(r.doc_number, '—') AS doc_number,
                 cp.date AS created_at,
                 COALESCE(u.name, u.login, 'Система') AS user_name,
-                c.name AS counterparty,
+                COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty,
                 cp.amount AS total_amount,
                 cp.comment AS reason
             FROM customer_payments cp
@@ -1193,3 +1194,140 @@ router.get('/get-customer-payment-logs', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+// Журнал оплат поставщикам — кто провёл оплату, по какому приходу, сколько
+router.get('/get-supplier-payment-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                'supplier_payment' AS operation_type,
+                sp.id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                sp.date AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                p.name AS counterparty,
+                sp.amount AS total_amount,
+                sp.comment AS reason
+            FROM supplier_payments sp
+            LEFT JOIN receipts r ON sp.receipt_id = r.id
+            LEFT JOIN postavhik p ON sp.supplier_id = p.id
+            LEFT JOIN users u ON sp.user_id = u.id
+            ORDER BY sp.date DESC, sp.id DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения журнала оплат поставщикам:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Функция записи лога приходов
+async function writeReceiptLog(client, req, data = {}) {
+    try {
+        const d = data || {};
+        
+        const userId = req?.headers?.['x-user-id'] || 
+                       req?.headers?.['user-id'] || 
+                       req?.body?.user_id || 
+                       d.user_id || 
+                       null;
+
+        await client.query(`
+            INSERT INTO receipt_logs (
+                action, receipt_id, document_number, user_id, 
+                supplier_id, warehouse_id, zaphasti_id, 
+                quantity, price, currency, price_rub, total_rub, description
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [
+            d.action || 'INSERT',
+            d.receipt_id ? Number(d.receipt_id) : null,
+            d.document_number ? String(d.document_number) : null,
+            userId ? Number(userId) : null,
+            d.supplier_id ? Number(d.supplier_id) : null,
+            d.warehouse_id ? Number(d.warehouse_id) : null,
+            d.zaphasti_id ? Number(d.zaphasti_id) : null,
+            Number(d.quantity) || 0,
+            Number(d.price) || 0,
+            d.currency || 'RUB',
+            Number(d.price_rub) || 0,
+            Number(d.total_rub) || 0,
+            d.description || ''
+        ]);
+    } catch (err) {
+        console.error('❌ ОШИБКА записи в receipt_logs:', err.message);
+        throw err;
+    }
+}
+
+// Функция для записи логов перемещений (аналог writeReceiptLog, создайте её в своем файле или утилите)
+async function writeMoveLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO move_logs (
+                action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
+                zaphasti_id, quantity, price, currency, price_rub, total_rub, 
+                income_document_id, description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            [
+                data.action,
+                data.move_id,
+                data.document_number,
+                data.warehouse_from_id,
+                data.warehouse_to_id,
+                data.zaphasti_id,
+                data.quantity,
+                data.price,
+                data.currency,
+                data.price_rub,
+                data.total_rub,
+                data.income_document_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога перемещения (не критично):', logErr.message);
+    }
+}
+
+// Функция для записи логов ремонта в таблицу repair_logs
+async function writeRepairLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        await client.query(
+            `INSERT INTO repair_logs (
+                action, repair_id, document_number, warehouse_id, car_id, 
+                zaphast_id, quantity, price, total, receipt_id, 
+                description, user_id, ip_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+                data.action,
+                data.repair_id,
+                data.document_number,
+                data.warehouse_id,
+                data.car_id,
+                data.zaphast_id,
+                data.quantity,
+                data.price,
+                data.total,
+                data.receipt_id,
+                data.description,
+                userId,
+                clientIp
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
+    }
+}

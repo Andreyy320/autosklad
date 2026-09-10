@@ -5139,6 +5139,34 @@ router.get('/get-supplier-payment-logs', async (req, res) => {
     }
 });
 
+
+// Журнал погашений долга по перемещениям — кто провёл погашение, по какому перемещению, сколько
+router.get('/get-move-payment-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                'move_payment' AS operation_type,
+                wdp.id AS doc_id,
+                COALESCE(m.doc_number, '—') AS doc_number,
+                wdp.date AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                COALESCE(sk.name, 'Склад-получатель') AS counterparty,
+                wdp.amount AS total_amount,
+                wdp.comment AS reason
+            FROM warehouse_debt_payments wdp
+            LEFT JOIN moves m ON wdp.move_id = m.id
+            LEFT JOIN skladi sk ON m.warehouse_to_id = sk.id
+            LEFT JOIN users u ON wdp.user_id = u.id
+            ORDER BY wdp.date DESC, wdp.id DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения журнала погашений по перемещениям:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Функция записи лога приходов
 async function writeReceiptLog(client, req, data = {}) {
     try {
