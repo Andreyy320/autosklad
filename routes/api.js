@@ -5003,7 +5003,40 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// ==================== ИСТОРИЯ ВСЕХ ОПЛАТ КОНКРЕТНОМУ ПОСТАВЩИКУ ====================
+// В отличие от истории по одной накладной — тут все платежи этому поставщику
+// за всё время, с указанием, на какую именно накладную ушёл каждый платёж.
+router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
+    try {
+        const supplierId = parseInt(req.params.id);
 
+        if (!supplierId || isNaN(supplierId)) {
+            return res.status(400).json({ error: 'Некорректный ID поставщика' });
+        }
+
+        const query = `
+            SELECT 
+                sp.id,
+                sp.date,
+                sp.amount,
+                sp.comment,
+                rec.doc_number,
+                rec.id AS receipt_id
+            FROM supplier_payments sp
+            LEFT JOIN receipts rec ON sp.receipt_id = rec.id
+            WHERE sp.supplier_id = $1
+            ORDER BY sp.date DESC, sp.id DESC;
+        `;
+
+        const result = await pool.query(query, [supplierId]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ Ошибка получения истории оплат поставщика:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+// ================================================================================
 // ==================== ОПЛАТА ДОЛГА ПОСТАВЩИКУ ЗА МЕСЯЦ (уровень 2) ====================
 // Сумма автоматически распределяется по накладным этого поставщика/месяца
 // от САМОЙ СТАРОЙ к самой новой (FIFO) — так каждая накладная получает
