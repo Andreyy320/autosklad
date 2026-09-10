@@ -72,6 +72,50 @@ const DOC_NUMBER_CONFIG = {
     accidents: 'ДТП-',
     realizations: 'РЛ-'
 };
+
+
+// ==================== ЗАЩИТА ОТ SQL-ИНЪЕКЦИИ ЧЕРЕЗ ИМЕНА ПОЛЕЙ ====================
+// Раньше ключи присланного JSON (Object.keys(req.body)) подставлялись в запрос
+// как имена колонок БЕЗ проверки, что такая колонка вообще существует в таблице.
+// Значения всегда были защищены через $1, $2 — а вот сами имена полей нет.
+// Кэшируем список реальных колонок каждой таблицы, чтобы не дёргать
+// information_schema на каждый запрос — только один раз на процесс.
+const allowedColumnsCache = {};
+
+async function getAllowedColumns(client, tableName) {
+    if (allowedColumnsCache[tableName]) {
+        return allowedColumnsCache[tableName];
+    }
+
+    const result = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+        [tableName]
+    );
+
+    const columns = new Set(result.rows.map(r => r.column_name));
+    allowedColumnsCache[tableName] = columns;
+    return columns;
+}
+
+// Фильтрует тело запроса, оставляя только те ключи, которые реально являются
+// колонками указанной таблицы. Всё остальное — тихо отбрасывается с предупреждением в лог.
+async function sanitizeBodyColumns(client, tableName, body) {
+    const allowedColumns = await getAllowedColumns(client, tableName);
+    const sanitized = {};
+
+    for (const key of Object.keys(body)) {
+        if (allowedColumns.has(key)) {
+            sanitized[key] = body[key];
+        } else {
+            console.warn(`[SECURITY] Отброшено недопустимое поле "${key}" для таблицы "${tableName}"`);
+        }
+    }
+
+    return sanitized;
+}
+// =====================================================================================
+
+
 module.exports = (pool) => {
     
 
@@ -82,10 +126,7 @@ const loginLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    // Считаем лимит по связке IP + логин, а не просто по IP — иначе один и тот же
-    // офисный интернет (общий внешний IP) блокирует ВСЕХ сотрудников разом, даже если
-    // они входят под РАЗНЫМИ учётными записями. Так подбор пароля к ОДНОМУ конкретному
-    // аккаунту всё ещё ограничен, а разные люди друг другу не мешают.
+   
         keyGenerator: (req) => {
         const login = (req.body && req.body.login) ? String(req.body.login).toLowerCase().trim() : 'unknown';
         return `${ipKeyGenerator(req.ip)}:${login}`;
@@ -6934,6 +6975,10 @@ router.post('/:entity', async (req, res) => {
             }
         }
  
+        // Отбрасываем любые поля, которых нет в реальной схеме таблицы —
+        // закрывает инъекцию через "хитрые" имена ключей JSON.
+        req.body = await sanitizeBodyColumns(client, entity, req.body);
+
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
  
@@ -7153,6 +7198,10 @@ router.put('/:entity/:id', async (req, res) => {
                 delete req.body[key];
             }
         });
+
+                // Отбрасываем любые поля, которых нет в реальной схеме таблицы —
+        // закрывает инъекцию через "хитрые" имена ключей JSON.
+        req.body = await sanitizeBodyColumns(client, entity, req.body);
 
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
