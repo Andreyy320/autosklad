@@ -39,11 +39,13 @@
     
     <!-- Вкладки со своими эндпоинтами -->
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('Приход', '/api/get-receipt-logs', this)">📥 Приходы</button>
-        <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)">📄 Реализация</button>
-        <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)">🔄 Перемещения</button>
-        <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)">🔧 Ремонт</button>
-        <button class="tab-btn" onclick="switchTab('Аудит', '/api/get-audit-logs', this)">🛡️ Общий аудит</button>
+        <button class="tab-btn active" onclick="switchTab('Приход', '/api/get-receipt-logs', this)">Приходы</button>
+        <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)"> Реализация</button>
+        <button class="tab-btn" onclick="switchTab('Перемещение', '/api/get-move-logs', this)"> Перемещения</button>
+        <button class="tab-btn" onclick="switchTab('Ремонт', '/api/get-repair-logs', this)"> Ремонт</button>
+        <button class="tab-btn" onclick="switchTab('Аудит', '/api/get-audit-logs', this)"> Общий аудит</button>
+         <button class="tab-btn" onclick="switchTab('Оплаты клиентов', '/api/get-customer-payment-logs', this)"> Оплаты клиентов</button>
+        <button class="tab-btn" onclick="switchTab('Оплаты поставщикам', '/api/get-supplier-payment-logs', this)"> Оплаты поставщикам</button>
     </div>
 
     <table>

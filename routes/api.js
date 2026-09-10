@@ -3914,6 +3914,7 @@ router.delete('/realization_works/:id', async (req, res) => {
 });
 
 
+
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
@@ -4336,35 +4337,47 @@ router.get('/money_receipts_detail', async (req, res) => {
 });
 
 
-
 // --- 1. Эндпоинт для оплаты клиентских реализаций ---
 router.post('/realizations/:id/pay', async (req, res) => {
+    // Работаем через client + транзакцию: проверка остатка долга и сама вставка
+    // платежа теперь атомарны вместе — если два человека одновременно проведут
+    // оплату одного документа, второй увидит уже актуальный долг, а не устаревший,
+    // и переплата станет невозможна даже при одновременных запросах.
+    const client = await pool.connect();
     try {
         const docId = parseInt(req.params.id);
         const { amount, customer_id, comment } = req.body;
-
+ 
         if (!docId || isNaN(docId)) {
+            client.release();
             return res.status(400).json({ error: 'Некорректный ID реализации' });
         }
-
+ 
         const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
+            client.release();
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
-
-        // Проверяем существование реализации
-        const realizationCheck = await pool.query(
-            `SELECT id, customer_id FROM realizations WHERE id = $1`,
+ 
+        await client.query('BEGIN');
+ 
+        // FOR UPDATE блокирует строку реализации на время транзакции — второй
+        // одновременный запрос на оплату того же документа дождётся коммита
+        // первого и увидит уже обновлённую сумму оплат.
+        const realizationCheck = await client.query(
+            `SELECT id, customer_id FROM realizations WHERE id = $1 FOR UPDATE`,
             [docId]
         );
-
+ 
         if (realizationCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
-
+ 
         const realData = realizationCheck.rows[0];
         const customerId = customer_id ? parseInt(customer_id) : realData.customer_id;
-
+ 
         // Проверка долга с учетом уже внесенных оплат
         const debtCheckQuery = `
             SELECT 
@@ -4390,72 +4403,111 @@ router.post('/realizations/:id/pay', async (req, res) => {
             ) tot
             WHERE r.id = $1
         `;
-
-        const debtRes = await pool.query(debtCheckQuery, [docId]);
+ 
+        const debtRes = await client.query(debtCheckQuery, [docId]);
         const totalSum = parseFloat(debtRes.rows[0]?.total_sum || 0);
         const alreadyPaid = parseFloat(debtRes.rows[0]?.paid_sum || 0);
         
         const currentDebt = Math.round((totalSum - alreadyPaid) * 100) / 100;
-
+ 
         if (paymentAmount > currentDebt) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(400).json({ 
                 error: `Сумма оплаты (${paymentAmount}) превышает остаток долга (${currentDebt.toFixed(2)} руб.). Переплата запрещена!` 
             });
         }
-
+ 
+        // Кто провёл оплату — берём из проверенного токена (authMiddleware подставляет
+        // сюда настоящий id пользователя, а не то, что прислал клиент в заголовке).
+        const currentUserId = req.headers['x-user-id'] || null;
+ 
         const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, amount, comment)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
         
-        const result = await pool.query(insertQuery, [
+        const result = await client.query(insertQuery, [
             customerId, 
             docId, 
             paymentAmount, 
-            comment || 'Оплата по реализации'
+            comment || 'Оплата по реализации',
+            currentUserId
         ]);
-
+ 
+        // Записываем в общий журнал аудита — этот роут раньше был "невидимым" для /logs
+        try {
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                [
+                    currentUserId,
+                    'PAYMENT',
+                    'customer_payments',
+                    result.rows[0].id,
+                    JSON.stringify({ customer_id: customerId, realization_id: docId, amount: paymentAmount }),
+                    'customer_payments'
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога оплаты (не критично):', logErr.message);
+        }
+ 
+        await client.query('COMMIT');
+ 
         return res.json({ 
             success: true, 
             message: 'Оплата реализации успешно сохранена',
             payment: result.rows[0] 
         });
-
+ 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('❌ Ошибка при оплате реализации:', err);
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
-
-
+ 
+ 
 // --- 2. Эндпоинт для погашения долга по перемещениям ---
 router.post('/moves/:id/pay', async (req, res) => {
+    // Та же защита: проверка долга и вставка погашения — одна атомарная транзакция.
+    const client = await pool.connect();
     try {
         const docId = parseInt(req.params.id);
         const { amount, comment } = req.body;
-
+ 
         if (!docId || isNaN(docId)) {
+            client.release();
             return res.status(400).json({ error: 'Некорректный ID перемещения' });
         }
-
+ 
         const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
+            client.release();
             return res.status(400).json({ error: 'Сумма погашения должна быть больше нуля' });
         }
-
-        // Проверяем существование перемещения
-        const moveCheck = await pool.query(
-            `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1`,
+ 
+        await client.query('BEGIN');
+ 
+        // FOR UPDATE блокирует строку перемещения на время транзакции — как и в
+        // оплате реализаций, это исключает переплату при одновременных запросах.
+        const moveCheck = await client.query(
+            `SELECT id, warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1 FOR UPDATE`,
             [docId]
         );
-
+ 
         if (moveCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(404).json({ error: 'Перемещение не найдено' });
         }
-
+ 
         const moveData = moveCheck.rows[0];
-
+ 
         // Считаем долг по перемещению (сумма move_items минус уже внесенные погашения)
         const moveDebtQuery = `
             SELECT 
@@ -4472,44 +4524,73 @@ router.post('/moves/:id/pay', async (req, res) => {
             ) m_paid ON true
             WHERE m.id = $1
         `;
-
-        const moveDebtRes = await pool.query(moveDebtQuery, [docId]);
+ 
+        const moveDebtRes = await client.query(moveDebtQuery, [docId]);
         const moveTotal = parseFloat(moveDebtRes.rows[0]?.total_sum || 0);
         const movePaid = parseFloat(moveDebtRes.rows[0]?.paid_sum || 0);
         
         const moveCurrentDebt = Math.round((moveTotal - movePaid) * 100) / 100;
-
+ 
         if (paymentAmount > moveCurrentDebt) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(400).json({ 
                 error: `Сумма погашения (${paymentAmount}) превышает долг по перемещению (${moveCurrentDebt.toFixed(2)} руб.)!` 
             });
         }
-
+ 
+        // Кто провёл погашение — берём из проверенного токена
+        const currentUserId = req.headers['x-user-id'] || null;
+ 
         const insertMoveQuery = `
-            INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *;
         `;
-
-        const result = await pool.query(insertMoveQuery, [
+ 
+        const result = await client.query(insertMoveQuery, [
             docId,
             moveData.warehouse_from_id,
             moveData.warehouse_to_id,
             paymentAmount,
-            comment || 'Погашение долга по перемещению'
+            comment || 'Погашение долга по перемещению',
+            currentUserId
         ]);
-
+ 
+        try {
+            await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                [
+                    currentUserId,
+                    'PAYMENT',
+                    'warehouse_debt_payments',
+                    result.rows[0].id,
+                    JSON.stringify({ move_id: docId, amount: paymentAmount }),
+                    'warehouse_debt_payments'
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога погашения (не критично):', logErr.message);
+        }
+ 
+        await client.query('COMMIT');
+ 
         return res.json({ 
             success: true, 
             message: 'Погашение долга по перемещению успешно сохранено',
             payment: result.rows[0] 
         });
-
+ 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('❌ Ошибка при погашении долга по перемещению:', err);
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
+
 router.get('/moves/:id/payments', async (req, res) => {
     try {
         const docId = parseInt(req.params.id);
@@ -4792,7 +4873,6 @@ router.get('/expense_items', async (req, res) => {
     }
 });
 
-// POST-эндпоинт для проведения оплаты по накладной
 router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
     try {
         const receiptId = parseInt(req.params.id);
@@ -4819,10 +4899,13 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
 
         const supplierId = postavhik_id ? parseInt(postavhik_id) : receiptCheck.rows[0].supplier_id;
 
+        // Кто провёл оплату — берём из проверенного токена
+        const currentUserId = req.headers['x-user-id'] || null;
+
         // 2. Вставляем запись об оплате в твою таблицу supplier_payments
         const insertQuery = `
-            INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
         
@@ -4830,10 +4913,28 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
             supplierId, 
             receiptId, 
             paymentAmount, 
-            comment || 'Оплата по накладной'
+            comment || 'Оплата по накладной',
+            currentUserId
         ];
 
         const result = await pool.query(insertQuery, values);
+
+        try {
+            await pool.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                [
+                    currentUserId,
+                    'PAYMENT',
+                    'supplier_payments',
+                    result.rows[0].id,
+                    JSON.stringify({ supplier_id: supplierId, receipt_id: receiptId, amount: paymentAmount }),
+                    'supplier_payments'
+                ]
+            );
+        } catch (logErr) {
+            console.error('Ошибка записи лога оплаты (не критично):', logErr.message);
+        }
 
         res.json({ 
             success: true, 
@@ -4848,14 +4949,15 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
 });
     
 
+// Читающий роут — без изменений, там нечего чинить (просто SELECT)
 router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
     try {
         const receiptId = parseInt(req.params.id);
-
+ 
         if (!receiptId || isNaN(receiptId)) {
             return res.status(400).json({ error: 'Некорректный ID накладной' });
         }
-
+ 
         const query = `
             SELECT 
                 id,
@@ -4868,16 +4970,15 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
             WHERE receipt_id = $1
             ORDER BY date DESC, id DESC;
         `;
-
+ 
         const result = await pool.query(query, [receiptId]);
         res.json(result.rows);
-
+ 
     } catch (err) {
         console.error('❌ Ошибка получения истории оплат:', err);
         res.status(500).json({ error: err.message });
     }
 });
-
 
 
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
@@ -4980,6 +5081,61 @@ router.get('/get-repair-logs', async (req, res) => {
         return res.status(500).json({ error: 'Ошибка получения логов ремонта: ' + err.message });
     } finally {
         client.release();
+    }
+});
+
+// Журнал оплат от клиентов — кто принял оплату, по какой реализации, сколько
+router.get('/get-customer-payment-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                'customer_payment' AS operation_type,
+                cp.id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                cp.date AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                c.name AS counterparty,
+                cp.amount AS total_amount,
+                cp.comment AS reason
+            FROM customer_payments cp
+            LEFT JOIN realizations r ON cp.realization_id = r.id
+            LEFT JOIN customers c ON cp.customer_id = c.id
+            LEFT JOIN users u ON cp.user_id = u.id
+            ORDER BY cp.date DESC, cp.id DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения журнала оплат клиентов:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// Журнал оплат поставщикам — кто провёл оплату, по какому приходу, сколько
+router.get('/get-supplier-payment-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                'supplier_payment' AS operation_type,
+                sp.id AS doc_id,
+                COALESCE(r.doc_number, '—') AS doc_number,
+                sp.date AS created_at,
+                COALESCE(u.name, u.login, 'Система') AS user_name,
+                p.name AS counterparty,
+                sp.amount AS total_amount,
+                sp.comment AS reason
+            FROM supplier_payments sp
+            LEFT JOIN receipts r ON sp.receipt_id = r.id
+            LEFT JOIN postavhik p ON sp.supplier_id = p.id
+            LEFT JOIN users u ON sp.user_id = u.id
+            ORDER BY sp.date DESC, sp.id DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения журнала оплат поставщикам:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
