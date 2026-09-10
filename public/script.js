@@ -1934,7 +1934,7 @@ const tableConfig = {
         `;
     }
     },
-    expenses_by_suppliers: {
+   expenses_by_suppliers: {
     title: 'Аналитика закупленных товаров по поставщикам',
     columns: [
         { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
@@ -1943,7 +1943,8 @@ const tableConfig = {
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Сумма затрат', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' }
+        { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' } // 👈 Добавили колонку для кнопки оплаты на уровне 2
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
@@ -1951,6 +1952,15 @@ const tableConfig = {
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
+
+        // Кнопка оплаты на уровне поставщика за этот месяц/период
+        // item.month_str и item.postavhik_id должны быть прокинуты в объект строки при группировке
+       const actionHtml = debtNum <= 0 
+    ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
+    : `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', true, '${item.month_str}')" 
+        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+        Оплатить
+      </button>`;
 
         return `
             <td><span style="font-weight: 600; color: #0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
@@ -1961,6 +1971,9 @@ const tableConfig = {
             <td style="text-align: right; color: #334155;">${totalPaid}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
+            </td>
+            <td style="text-align: center;">
+                ${actionHtml}
             </td>
         `;
     }
@@ -8031,7 +8044,6 @@ function resetSharedUiForEntity(entity) {
     if (rowCount) rowCount.innerText = '';
 }
 
-
 async function openPaymentHistory(receiptId, docNumber) {
     const drawer = getOrCreateDrawer();
     
@@ -8058,7 +8070,6 @@ async function openPaymentHistory(receiptId, docNumber) {
         }
 
         let rowsHtml = payments.map(p => {
-            // Исправлено с p.payment_date на p.date в соответствии со структурой базы данных
             const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
             const pAmount = Number(p.amount || 0).toFixed(2);
             const pComment = p.comment || '—';
@@ -8091,7 +8102,7 @@ async function openPaymentHistory(receiptId, docNumber) {
             </table>
 
             <div style="margin-top: 20px;">
-                <button type="button" onclick="closeDrawer()" style="width: 100%; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Закрыть</button>
+                <button type="button" onclick="closeDrawer()" style="width: 100%; background: #e2e8f0; color: #334151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Закрыть</button>
             </div>
         `;
 
@@ -8101,18 +8112,18 @@ async function openPaymentHistory(receiptId, docNumber) {
     }
 }
 
-function openPaymentDrawer(receiptId, debtSum, docNumber) {
+function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата накладной ${docNumber}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата за месяц: ${titleLabel}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
 
-        <form id="pay-form" onsubmit="submitPayment(event, '${receiptId}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitPayment(event, '${postavhikId}', '${monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма (Долг: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span>)</label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма долга за месяц: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
@@ -8133,17 +8144,19 @@ function openPaymentDrawer(receiptId, debtSum, docNumber) {
     openDrawer();
 }
 
-async function submitPayment(event, receiptId) {
+async function submitPayment(event, postavhikId, monthStr) {
     event.preventDefault();
     
     const payload = {
         amount: parseFloat(document.getElementById('payment-amount').value),
-        comment: document.getElementById('payment-comment').value
+        comment: document.getElementById('payment-comment').value,
+        month_str: monthStr,
+        sklad_id: window.currentSkladId || null
     };
 
     try {
-        // Стучимся на твой существующий бэкенд-эндпоинт с ID накладной в строке
-        let response = await fetch(`/api/expenses_by_receipts/${receiptId}/pay`, {
+        // Стучимся на эндпоинт погашения долга поставщику за конкретный месяц
+        let response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/pay_month`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -8151,7 +8164,7 @@ async function submitPayment(event, receiptId) {
 
         if (response.ok) {
             closeDrawer();
-            showAppNotification('Платёж успешно сохранен', 'success');
+            showAppNotification('Оплата за месяц успешно сохранена', 'success');
             if (typeof loadTableData === 'function') loadTableData();
         } else {
             const errData = await response.json().catch(() => ({}));
@@ -8162,7 +8175,6 @@ async function submitPayment(event, receiptId) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-
 async function loadExpenseDetailTable(fetchUrl) {
   const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbarEl) detailToolbarEl.style.display = 'none';
@@ -8229,9 +8241,8 @@ async function loadExpenseDetailTable(fetchUrl) {
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     let currentExpenseView = entity;
-        resetSharedUiForEntity(entity);   // 👈 добавили
+    resetSharedUiForEntity(entity);
 
-    // Сразу фиксируем текущую сущность в глобальной переменной для защиты контекста
     if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
@@ -8249,14 +8260,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
-    // Управление кнопкой «Назад» для разных уровней
     let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
     if (!backBtn) {
-        // Если кнопки в DOM нет, можем найти место или создать её динамически, но для примера предполагаем её наличие или контейнер
-        // Давайте сделаем безопасную проверку: если кнопка есть, управляем её видимостью и обработчиком
+        // Контейнер или кнопка отсутствуют
     }
 
-    // Элементы панели фильтров по датам (показываем только на уровне expenses_by_receipts)
     const receiptsFilterPanel = document.getElementById('expenses-filter-panel') || document.getElementById('receipts-filter-panel');
     if (receiptsFilterPanel) {
         receiptsFilterPanel.style.display = (currentExpenseView === 'expenses_by_receipts') ? 'flex' : 'none';
@@ -8277,7 +8285,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На складах кнопки «Назад» не будет
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) backBtnElement.style.display = 'none';
     } 
@@ -8296,7 +8303,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На поставщиках (уровень после складов) показываем стрелку назад -> ведет на склады (expenses_by_sklad)
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8313,7 +8319,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
         
-        // ИСПРАВЛЕНИЕ: Добавление поддержки передачи месяца (month_str) или ручных дат из инпутов фильтра
         if (parentId && typeof parentId === 'object' && parentId.month_str) {
             const [year, month] = parentId.month_str.split('-').map(Number);
             const startDate = `${parentId.month_str}-01`;
@@ -8322,7 +8327,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             
             fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
             
-            // Синхронизируем инпут фильтра, если он присутствует на странице
             const startDateInput = document.getElementById('expenses-start-date');
             const endDateInput = document.getElementById('expenses-end-date');
             if (startDateInput) startDateInput.value = startDate;
@@ -8346,7 +8350,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На накладных (expenses_by_receipts) показываем стрелку назад -> ведет на поставщиков (expenses_by_suppliers) с текущим skladId
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8373,7 +8376,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // На деталях накладной (товарах) кнопка назад тоже должна работать -> ведет к списку накладных (expenses_by_receipts)
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
@@ -8384,7 +8386,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         return; 
     }
 
-    // Защита глобального контекста уже выполнена в начале функции, но оставляем для синхронизации currentEntity
     if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
@@ -8417,8 +8418,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             thead.insertBefore(filterRow, mainHeaderTr);
         }
 
-        // Заменяем вызов старой filterTable() на безопасную локальную функцию фильтрации, 
-        // которая учитывает шапки месяцев и индексы колонок, не ломая общую логику приложения
         window.applyExpenseTableFilter = function() {
             const inputs = filterRow.querySelectorAll('input[data-column-index]');
             const tbody = document.getElementById('table-body');
@@ -8449,7 +8448,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                         if (showRow) visibleChildrenCount++;
                     });
 
-                    // Автоматически скрываем или показываем строку месяца в зависимости от совпадений в его записях
                     headerTr.style.display = visibleChildrenCount > 0 ? '' : 'none';
                 });
             } else {
@@ -8518,7 +8516,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         mainTableBody.innerHTML = '';
 
-    if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
+        if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
             console.log('📑 [Group] Рендеринг сгруппированных данных по месяцам...');
             const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
@@ -8527,18 +8525,18 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
             const groups = {};
             currentItems.forEach((item, idx) => {
-                const rawDate = item.date || item.created_at || item.receipt_date;
+                const rawDate = item.date || item.created_at || item.receipt_date || item.month_str + '-01';
                 const dateObj = rawDate ? new Date(rawDate) : new Date();
                 const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
                 const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
                 
-                const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+                const key = item.month_str || `${year}-${String(month + 1).padStart(2, '0')}`;
                 const title = `${monthNames[month]} ${year} года`;
 
                 if (!groups[key]) {
                     groups[key] = {
                         title: title,
-                        month_str: key, // 👈 Сохраняем строковый ключ месяца для последующей передачи при клике
+                        month_str: key,
                         totalSum: 0,
                         totalPaid: 0,
                         totalDebt: 0,
@@ -8567,9 +8565,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                         <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
                         ${group.title} &nbsp;|&nbsp; 
-                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)} </span> &nbsp;|&nbsp; 
-                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)} </span> &nbsp;|&nbsp; 
-                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)} </span>
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
+                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
                     </td>
                 `;
                 mainTableBody.appendChild(headerTr);
@@ -8582,8 +8580,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-${currentGIdx}`;
                     
-                    console.log(`    └─ [Group Item #${itemIdx}] Рендеринг строки ID: ${rowId}`, item);
-
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
                     } else {
@@ -8595,7 +8591,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 });
 
                 headerTr.addEventListener('click', (e) => {
-                    // ИСПРАВЛЕНИЕ: Если пользователь находится на уровне suppliers и кликает по шапке месяца — проваливаемся в receipts за этот месяц
                     if (currentEntity === 'expenses_by_suppliers') {
                         if (typeof window.selectedItem !== 'undefined' && window.selectedItem) {
                             window.selectedItem.month_str = group.month_str;
@@ -8609,10 +8604,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                         return;
                     }
 
-                    // Старая логика сворачивания/разворачивания строк группы
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
-                    console.log(`🖱️ [Group Click] Клик по группе "${group.title}". Переключение видимости: ${isHidden ? 'развернуть' : 'свернуть'}`);
                     
                     childRows.forEach(tr => {
                         tr.style.display = isHidden ? '' : 'none';
@@ -8631,8 +8624,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
                 
-                console.log(`🛠️ [Render Row #${index + 1}] ID: ${rowId}`, item);
-
                 if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
                 } else {
