@@ -9601,7 +9601,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
                     }
-                    tr.addEventListener('click', () => {
+                                        tr.addEventListener('click', (e) => {
+                        if (e.target.closest('button, [onclick]')) {
+                            return;
+                        }
+
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
                         window.selectedItem = item;
