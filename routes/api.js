@@ -4055,6 +4055,7 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
                   AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
                   AND ($4::integer IS NULL OR real.customer_id = $4)
+                    AND ($5::integer IS NULL)   -- 👈 добавить: если выбран склад-должник, этот блок вообще не участвует
 
                 UNION ALL
 
@@ -4117,7 +4118,8 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($2::date IS NULL OR m.date::date >= $2::date)
                   AND ($3::date IS NULL OR m.date::date <= $3::date)
                   AND ($5::integer IS NULL OR sk_to.id = $5)
-            )
+            AND ($4::integer IS NULL)   -- 👈 добавить: если выбран покупатель, этот блок вообще не участвует
+                  )
             SELECT 
                 id,
                 realization_id,
