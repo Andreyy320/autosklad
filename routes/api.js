@@ -5,8 +5,18 @@ const path = require('path'); // Нужно для указания пути к 
 const multer = require('multer'); // <--- 1. Подключаем multer
 
 
-const upload = multer({ dest: path.join(__dirname, '../uploads/') });
-
+const upload = multer({
+    dest: path.join(__dirname, '../uploads/'),
+    limits: { fileSize: 5 * 1024 * 1024 }, // максимум 5 МБ на файл
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Разрешены только изображения (jpeg, png, webp, gif)'));
+        }
+    }
+});
 
 function getServerNowString() {
     // Явно берём время в нужном часовом поясе, не полагаясь на TZ операционной системы сервера
@@ -1172,7 +1182,8 @@ router.get('/accident_images', async (req, res) => {
     }
 });
 
-router.post('/accident_images', upload.single('image_url'), async (req, res) => {
+router.post('/accident_images', handleUpload('image_url'), async (req, res) => {
+
     const client = await pool.connect();
     try {
         const { accident_id, description, created_at } = req.body;
@@ -1208,7 +1219,8 @@ router.post('/accident_images', upload.single('image_url'), async (req, res) => 
 });
 
 // ==================== ОБНОВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП (РЕДАКТИРОВАНИЕ) ====================
-router.put('/accident_images/:id', upload.single('image_url'), async (req, res) => {
+router.put('/accident_images/:id', handleUpload('image_url'), async (req, res) => {
+
     const client = await pool.connect();
     try {
         const { id } = req.params;
@@ -2524,7 +2536,7 @@ router.post('/logs', async (req, res) => {
 
 
 // Эндпоинт для создания записи с деталями и фото автомобиля
-    router.post('/car_details', upload.single('photo'), async (req, res) => {
+    router.post('/car_details', handleUpload('photo'), async (req, res) => {
         const client = await pool.connect();
         try {
             const { car_id, date, title, description } = req.body;
@@ -2554,7 +2566,7 @@ router.post('/logs', async (req, res) => {
     });
 
 // Эндпоинт для обновления записи (PUT)
-    router.put('/car_details/:id', upload.single('photo'), async (req, res) => {
+    router.put('/car_details/:id', handleUpload('photo'), async (req, res) => {
         const client = await pool.connect();
         try {
             const { id } = req.params;
@@ -2600,6 +2612,23 @@ router.post('/logs', async (req, res) => {
             client.release();
         }
     });
+
+
+
+// Оборачиваем multer, чтобы ошибки (превышен размер / неверный тип файла)
+// возвращались клиенту красивым JSON, а не голым падением сервера
+function handleUpload(fieldName) {
+    const middleware = upload.single(fieldName);
+    return (req, res, next) => {
+        middleware(req, res, (err) => {
+            if (err) {
+                console.error('[UPLOAD ERROR]', err.message);
+                return res.status(400).json({ error: err.message });
+            }
+            next();
+        });
+    };
+}
 
     // Эндпоинт для удаления записи (DELETE)
   const fs = require('fs');

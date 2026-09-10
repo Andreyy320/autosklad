@@ -1,358 +1,169 @@
-// ==========================================
-// УНИВЕРСАЛЬНЫЙ PUT (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
-// ==========================================
-router.put('/:entity/:id', async (req, res) => {
+router.post('/accident_images', upload.single('image_url'), async (req, res) => {
     const client = await pool.connect();
     try {
-        let { entity, id } = req.params;
+        const { accident_id, description, created_at } = req.body;
+        
+        const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-        if (entity === 'brands') entity = 'car_brands';
-        if (entity === 'models') entity = 'car_models';
-        if (entity === 'bodies') entity = 'kyzov_type';
-
-        const allowedTables = [
-            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
-            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
-            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 
-            'autoservices', 'payment_types', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
-        ];
-
-        if (!allowedTables.includes(entity)) {
-            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        if (!accident_id || !image_url) {
+            return res.status(400).json({ error: 'Не указан accident_id или не загружено изображение' });
         }
 
-        if (entity === 'accidents' && req.body.car_model !== undefined) {
-            delete req.body.car_model;
+        await client.query('BEGIN');
+
+        // Добавили created_at, если пользователь его менял
+        const query = `
+            INSERT INTO accident_images (accident_id, image_url, description, created_at) 
+            VALUES ($1, $2, $3, COALESCE($4, NOW())) 
+            RETURNING *;
+        `;
+        const values = [accident_id, image_url, description || null, created_at || null];
+        const result = await client.query(query, values);
+
+        await client.query('COMMIT');
+        
+        console.log(`[SUCCESS] Успешно добавлено фото ДТП ID: ${result.rows[0].id}`);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при добавлении фото ДТП:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==================== ОБНОВЛЕНИЕ ИЗОБРАЖЕНИЯ ДТП (РЕДАКТИРОВАНИЕ) ====================
+router.put('/accident_images/:id', upload.single('image_url'), async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { description, created_at } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Получаем старую запись, чтобы узнать старый путь к файлу
+        const oldRecord = await client.query('SELECT * FROM accident_images WHERE id = $1', [id]);
+        if (oldRecord.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
         }
 
-        if (entity === 'repairs') {
-            if (req.body.repair_type !== undefined && req.body.repair_type_id === undefined) {
-                req.body.repair_type_id = req.body.repair_type === '' ? null : req.body.repair_type;
+        let image_url = oldRecord.rows[0].image_url;
+
+        // 2. Если загружен новый файл, удаляем старый с диска и обновляем путь
+        if (req.file) {
+            const newImageUrl = `/uploads/${req.file.filename}`;
+            
+            // Удаляем старый файл физически из папки uploads, если он существует
+            if (image_url && image_url.startsWith('/uploads/')) {
+                const oldFilePath = path.join(__dirname, '..', image_url); // Подстройте путь к папке uploads при необходимости
+                if (fs.existsSync(oldFilePath)) {
+                    fs.unlinkSync(oldFilePath);
+                }
             }
-            delete req.body.repair_type;
-
-            if (req.body.doc_type !== undefined && req.body.doc_type_id === undefined) {
-                req.body.doc_type_id = req.body.doc_type === '' ? null : req.body.doc_type;
-            }
-            delete req.body.doc_type;
+            image_url = newImageUrl;
         }
 
-        if (req.body.is_posted !== undefined) {
-            if (req.body.is_posted === '' || req.body.is_posted === null) {
-                delete req.body.is_posted;
+        // 3. Обновляем данные в базе
+        const query = `
+            UPDATE accident_images 
+            SET image_url = $1, description = $2, created_at = COALESCE($3, created_at)
+            WHERE id = $4 
+            RETURNING *;
+        `;
+        const values = [image_url, description || null, created_at || null, id];
+        const result = await client.query(query, values);
+
+        await client.query('COMMIT');
+        
+        console.log(`[SUCCESS] Обновлено фото ДТП ID: ${id}`);
+        res.json(result.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Ошибка при обновлении фото ДТП:", err.message);
+        res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
+/ Эндпоинт для создания записи с деталями и фото автомобиля
+    router.post('/car_details', upload.single('photo'), async (req, res) => {
+        const client = await pool.connect();
+        try {
+            const { car_id, date, title, description } = req.body;
+            
+            // Если файл был прикреплен, формируем путь к нему, иначе null
+            const photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+            await client.query('BEGIN');
+
+            const query = `
+                INSERT INTO car_details (car_id, date, title, description, photo_url)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING *;
+            `;
+            const values = [car_id, date || new Date(), title, description, photo_url];
+            const result = await client.query(query, values);
+
+            await client.query('COMMIT');
+            res.json(result.rows[0]);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error("Ошибка при добавлении car_details:", err.message);
+            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+// Эндпоинт для обновления записи (PUT)
+    router.put('/car_details/:id', upload.single('photo'), async (req, res) => {
+        const client = await pool.connect();
+        try {
+            const { id } = req.params;
+            const { car_id, date, title, description } = req.body;
+            
+            // Если прикреплен новый файл, берем его путь, иначе оставляем старый из базы
+            const newPhotoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+            await client.query('BEGIN');
+
+            let query, values;
+            if (newPhotoUrl) {
+                query = `
+                    UPDATE car_details 
+                    SET car_id = $1, date = $2, title = $3, description = $4, photo_url = $5
+                    WHERE id = $6
+                    RETURNING *;
+                `;
+                values = [car_id, date || new Date(), title, description, newPhotoUrl, id];
             } else {
-                req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
+                query = `
+                    UPDATE car_details 
+                    SET car_id = $1, date = $2, title = $3, description = $4
+                    WHERE id = $5
+                    RETURNING *;
+                `;
+                values = [car_id, date || new Date(), title, description, id];
             }
-        }
 
-        // Безопасное перенаправление старого поля work_id в vidy_rabot_id для таблицы repair_works
-        if (entity === 'repair_works') {
-            if (req.body.work_id !== undefined && req.body.vidy_rabot_id === undefined) {
-                req.body.vidy_rabot_id = req.body.work_id;
+            const result = await client.query(query, values);
+            await client.query('COMMIT');
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Запись не найдена' });
             }
-            delete req.body.work_id;
-        }
 
-        // ==================== ЗАЩИТА НОМЕРА ДОКУМЕНТА ОТ ИЗМЕНЕНИЯ ====================
-        // Для документных сущностей номер присваивается один раз при создании
-        // (см. DOC_NUMBER_CONFIG и getNextDocNumber в POST). Что бы фронтенд ни прислал
-        // в doc_number при редактировании — игнорируем, чтобы не словить конфликт
-        // с UNIQUE-индексом и не потерять гарантию уникальности номера задним числом.
-        if (DOC_NUMBER_CONFIG[entity] && req.body.doc_number !== undefined) {
-            delete req.body.doc_number;
-        }
-        // ================================================================================
-
-        await client.query('BEGIN');
-
-        // Получаем старую запись для сравнения изменений (что на что поменялось)
-        const currentDocRes = await client.query(`SELECT * FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
-        if (currentDocRes.rows.length === 0) {
+            res.json(result.rows[0]);
+        } catch (err) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Запись не найдена' });
+            console.error("Ошибка при обновлении car_details:", err.message);
+            res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+        } finally {
+            client.release();
         }
-        const oldDoc = currentDocRes.rows[0];
-
-        const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations'];
-        if (docWithStatusTables.includes(entity)) {
-            const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
-
-            if (oldIsPosted) {
-                const allowedKeysForPosted = ['is_posted', 'fact_date'];
-                const incomingKeys = Object.keys(req.body);
-
-                for (const key of incomingKeys) {
-                    if (!allowedKeysForPosted.includes(key)) {
-                        delete req.body[key];
-                    }
-                }
-            }
-        }
-
-        if (entity === 'repair_works') {
-            const targetRepairId = req.body.repair_id || oldDoc.repair_id;
-
-            if (targetRepairId) {
-                const repairCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [targetRepairId]);
-                if (repairCheck.rows.length > 0) {
-                    const isPostedVal = repairCheck.rows[0].is_posted;
-                    if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Нельзя изменять работы в уже проведенном ремонте!' });
-                    }
-                }
-            }
-        }
-
-        // Проверка уникальности при обновлении запчастей (код и связка артикул+производитель исключая текущий ID)
-        if (entity === 'zaphasti') {
-            const { code, article, proizvoditel_id } = req.body;
-
-            if (code !== undefined && code !== null && code !== '') {
-                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1 AND id <> $2', [code, id]);
-                if (codeCheck.rows.length > 0) {
-                    await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Запчасть с таким кодом уже существует!' });
-                }
-            }
-
-            // Если артикул или производитель меняются, проверяем связку
-            const targetArticle = article !== undefined ? article : oldDoc.article;
-            const targetProvId = proizvoditel_id !== undefined ? proizvoditel_id : oldDoc.proizvoditel_id;
-
-            if (targetArticle && targetProvId) {
-                const artProvCheck = await client.query(
-                    'SELECT id FROM zaphasti WHERE article = $1 AND proizvoditel_id = $2 AND id <> $3', 
-                    [targetArticle, targetProvId, id]
-                );
-                if (artProvCheck.rows.length > 0) {
-                    await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Запчасть с таким артикулом для этого производителя уже существует!' });
-                }
-            }
-        }
-
-        // Удаляем id и поля со значением undefined, чтобы они не дублировались в параметрах запроса
-        delete req.body.id;
-        Object.keys(req.body).forEach(key => {
-            if (req.body[key] === undefined) {
-                delete req.body[key];
-            }
-        });
-
-        const keys = Object.keys(req.body);
-        const values = Object.values(req.body);
-
-        if (keys.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Нет данных для обновления или документ защищен от изменений' });
-        }
-
-        const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
-        const processedValues = values.map(val => (val === '' || val === undefined ? null : val));
-
-        const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
-        const result = await client.query(query, [...processedValues, id]);
-
-        if (result.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Запись не найдена' });
-        }
-
-        const updatedDoc = result.rows[0];
-
-        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (UPDATE с детализацией изменений) ====================
-        try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-            const userId = currentUserId || req.body.user_id || oldDoc.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-            // Сравниваем старые и новые значения по измененным полям
-            const changes = {};
-            for (const key of keys) {
-                const oldValue = oldDoc[key];
-                const newValue = updatedDoc[key];
-                if (String(oldValue) !== String(newValue)) {
-                    changes[key] = {
-                        from: oldValue,
-                        to: newValue
-                    };
-                }
-            }
-
-            const detailsObj = {
-                updated_fields: req.body,
-                changes: changes
-            };
-
-            let detailsJson = '{}';
-            try {
-                detailsJson = JSON.stringify(detailsObj);
-            } catch (e) {
-                detailsJson = '{}';
-            }
-
-            // Проверяем структуру таблицы audit_logs и записываем лог через тот же client с явным приведением к jsonb
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-                [
-                    userId,
-                    'UPDATE',
-                    entity,
-                    id,
-                    detailsJson,
-                    clientIp,
-                    entity
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи лога (не критично):', logErr.message);
-        }
-        // ============================================================================
-
-        await client.query('COMMIT');
-        res.json(updatedDoc);
-
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error("Ошибка при обновлении в БД:", err.message);
-        res.status(500).json({ error: 'Ошибка сервера при обновлении: ' + err.message });
-    } finally {
-        client.release();
-    }
-});
-
-
-
-// ==========================================
-// УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
-// ==========================================
-router.delete('/:entity/:id', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        let { entity, id } = req.params;
-
-        if (entity === 'brands') entity = 'car_brands';
-        if (entity === 'models') entity = 'car_models';
-        if (entity === 'bodies') entity = 'kyzov_type';
-
-        const allowedTables = [
-            'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
-            'counterparties', 'postavhik', 'customers', 'counterparty_types', 
-            'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
-            'toplivo', 'ed_izmereniya', 'mol', 'receipts',
-            'moves', 'statuses', 
-            'autoservices', 'payment_types', 'accidents',
-            'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
-            'customer_cars','part_discounts','service_discounts','realizations'
-        ];
-
-        if (!allowedTables.includes(entity)) {
-            return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
-        }
-
-        await client.query('BEGIN');
-
-        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs') {
-            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
-            // одного и того же документа прилетят одновременно, второй дождётся коммита первого
-            // и увидит уже актуальный статус, а не устаревший "не проведён".
-            const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
-            if (docCheck.rows.length === 0) {
-                await client.query('ROLLBACK');
-                return res.status(404).json({ error: 'Запись с таким ID не найдена' });
-            }
-            const isPosted = docCheck.rows[0].is_posted;
-            if (isPosted === true || isPosted === 'true' || isPosted === 2 || isPosted === 1) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Нельзя удалить уже проведенный документ!' });
-            }
-        }
-
-        if (entity === 'repair_works') {
-            const itemRes = await client.query('SELECT repair_id FROM repair_works WHERE id = $1', [id]);
-            if (itemRes.rows.length > 0 && itemRes.rows[0].repair_id) {
-                const parentCheck = await client.query('SELECT is_posted FROM repairs WHERE id = $1', [itemRes.rows[0].repair_id]);
-                if (parentCheck.rows.length > 0) {
-                    const pVal = parentCheck.rows[0].is_posted;
-                    if (pVal === true || pVal === 'true' || pVal === 2 || pVal === 1) {
-                        await client.query('ROLLBACK');
-                        return res.status(400).json({ error: 'Нельзя удалять работы из проведенного ремонта!' });
-                    }
-                }
-            }
-        }
-
-        if (entity === 'receipts') {
-            await client.query('DELETE FROM receipt_items WHERE receipt_id = $1', [id]);
-        } else if (entity === 'moves') {
-            await client.query('DELETE FROM move_items WHERE move_id = $1', [id]);
-        } else if (entity === 'repairs') {
-            await client.query('DELETE FROM repair_items WHERE repair_id = $1', [id]);
-            await client.query('DELETE FROM repair_works WHERE repair_id = $1', [id]);
-        } else if (entity === 'accidents') {
-            await client.query('DELETE FROM accident_invoices WHERE dtp_id = $1', [id]);
-            await client.query('DELETE FROM accident_payments WHERE dtp_id = $1', [id]);
-            await client.query('DELETE FROM accident_events WHERE dtp_id = $1', [id]);
-        }
-
-        const query = `DELETE FROM "${entity}" WHERE id = $1 RETURNING *;`;
-        const result = await client.query(query, [id]);
-
-        if (result.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Запись с таким ID не найдена' });
-        }
-
-        // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (DELETE) ====================
-        try {
-            const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
-            const deletedData = result.rows[0];
-            const userId = currentUserId || deletedData.user_id || req.body.user_id || null;
-            const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-            let detailsJson = '{}';
-            try {
-                detailsJson = JSON.stringify(deletedData);
-            } catch (e) {
-                detailsJson = '{}';
-            }
-
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-                [
-                    userId,
-                    'DELETE',
-                    entity,
-                    id,
-                    detailsJson,
-                    clientIp,
-                    entity
-                ]
-            );
-        } catch (logErr) {
-            console.error('Ошибка записи лога удаления (не критично):', logErr.message);
-        }
-        // ============================================================================
-
-        await client.query('COMMIT');
-        res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
-
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error("Ошибка при удалении из БД:", err.message);
-        res.status(500).json({ error: 'Ошибка сервера при удалении: ' + err.message });
-    } finally {
-        client.release();
-    }
-});
+    });
