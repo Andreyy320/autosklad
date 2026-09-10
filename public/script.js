@@ -1778,9 +1778,7 @@ const tableConfig = {
             counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
         }
 
-        const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
-            : `<span style="color: #334155;">${formattedPaid}</span>`;
+        const paidHtml = `<span style="color: #334155;">${formattedPaid}</span>`;
 
                return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
@@ -1882,8 +1880,8 @@ const tableConfig = {
         const totalDebt = totalDebtNum.toFixed(2);
 
         const paidHtml = totalPaidNum > 0
-            ? `<span onclick="openCustomerPaymentHistory('${item.group_key}', '${item.counterparty_name}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
-            : totalPaid;
+    ? `<span onclick="openCustomerPaymentHistory('${item.group_key}', '${item.counterparty_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат за месяц">${totalPaid}</span>`
+    : totalPaid;
 
         return `
             <td><span style="font-weight: 600; color: #0f172a;">${item.counterparty_name || '—'}</span></td>
@@ -8194,11 +8192,11 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr) {
     }
 }
 
-async function openCustomerPaymentHistory(groupKey, counterpartyName) {
+async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) {
     const drawer = getOrCreateDrawer();
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${counterpartyName}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${counterpartyName} (${monthStr || ''})</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
         </div>
         <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
@@ -8206,8 +8204,9 @@ async function openCustomerPaymentHistory(groupKey, counterpartyName) {
     openDrawer();
 
     try {
-        let response = await fetch(`/api/money_receipts_by_customers/${groupKey}/payments`);
+        let response = await fetch(`/api/money_receipts_by_customers/${groupKey}/payments?month_str=${monthStr || ''}`);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
+        // ... остальное без изменений
 
         let payments = await response.json();
         if (!payments || payments.length === 0) {
