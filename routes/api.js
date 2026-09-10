@@ -4834,11 +4834,13 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
         let docsQuery;
         let docsParams;
 
-        if (isWarehouseDebtor) {
+               if (isWarehouseDebtor) {
             // Долг склада-получателя за перемещения от указанного склада-отправителя
             docsQuery = `
                 SELECT 
                     m.id AS doc_id,
+                    m.warehouse_from_id,
+                    m.warehouse_to_id,
                     COALESCE(m_items.total_sum, 0) AS total_sum,
                     COALESCE(pay.paid_sum, 0) AS paid_sum,
                     (COALESCE(m_items.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
@@ -4902,11 +4904,11 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
 
             const toApply = Math.min(remaining, debt);
 
-            if (isWarehouseDebtor) {
+                       if (isWarehouseDebtor) {
                 await client.query(
-                    `INSERT INTO warehouse_debt_payments (move_id, amount, comment, user_id)
-                     VALUES ($1, $2, $3, $4)`,
-                    [row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
                 );
             } else {
                 await client.query(
