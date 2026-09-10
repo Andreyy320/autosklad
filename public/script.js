@@ -1756,7 +1756,6 @@ const tableConfig = {
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
@@ -1783,18 +1782,7 @@ const tableConfig = {
             ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
             : `<span style="color: #334155;">${formattedPaid}</span>`;
 
-        let actionHtml = '';
-        if (debtSumNum <= 0) {
-            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
-        } else {
-            // Возвращен прежний зеленый цвет кнопки (#16a34a)
-            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
-                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
-        }
-
-        return `
+               return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
             <td>${counterpartyHtml}</td>
@@ -1805,9 +1793,6 @@ const tableConfig = {
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}
-            </td>
-            <td style="text-align: center;">
-                ${actionHtml}
             </td>
         `;
     }

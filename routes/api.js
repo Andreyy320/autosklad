@@ -4811,9 +4811,7 @@ router.get('/realizations/:id/payments', async (req, res) => {
     }
 });
 
-// ==================== ОПЛАТА ДОЛГА ПОКУПАТЕЛЕМ ЗА МЕСЯЦ (уровень 2 "Приходы денег") ====================
-// Полный аналог /expenses_by_suppliers/:id/pay_month, только для покупателей.
-// id в URL может быть либо ID покупателя (customer_id), либо "wh_<id>" для склада-должника (перемещения).
+
 router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -4945,7 +4943,50 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
     }
 });
 // ================================================================================
+router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month_str, sklad_id } = req.query;
+        const isWarehouseDebtor = String(id).startsWith('wh_');
+        const realId = isWarehouseDebtor ? String(id).replace('wh_', '') : id;
 
+        let query, params;
+
+        if (isWarehouseDebtor) {
+            query = `
+                SELECT 
+                    wdp.id, wdp.date, wdp.amount, wdp.comment,
+                    m.doc_number AS doc_number
+                FROM warehouse_debt_payments wdp
+                LEFT JOIN moves m ON wdp.move_id = m.id
+                WHERE wdp.warehouse_to_id = $1
+                  AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
+                  AND ($3::integer IS NULL OR wdp.warehouse_from_id = $3::integer)
+                ORDER BY wdp.date DESC, wdp.id DESC;
+            `;
+            params = [realId, month_str || null, sklad_id || null];
+        } else {
+            query = `
+                SELECT 
+                    cp.id, cp.date, cp.amount, cp.comment,
+                    r.doc_number AS doc_number
+                FROM customer_payments cp
+                LEFT JOIN realizations r ON cp.realization_id = r.id
+                WHERE cp.customer_id = $1
+                  AND ($2::text IS NULL OR TO_CHAR(r.doc_date, 'YYYY-MM') = $2)
+                  AND ($3::integer IS NULL OR r.sklad_id = $3::integer)
+                ORDER BY cp.date DESC, cp.id DESC;
+            `;
+            params = [realId, month_str || null, sklad_id || null];
+        }
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения истории оплат покупателя/склада:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 
