@@ -3993,8 +3993,9 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
 router.get('/money_receipts', async (req, res) => {
     try {
-        const { sklad_id, start_date, end_date } = req.query;
-        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date);
+        const { sklad_id, start_date, end_date, customer_id, debtor_warehouse_id } = req.query;
+        console.log(`🔍 [/api/money_receipts] Запрос получен. sklad_id:`, sklad_id, `start_date:`, start_date, `end_date:`, end_date, `customer_id:`, customer_id, `debtor_warehouse_id:`, debtor_warehouse_id);
+
 
         const query = `
             WITH calc_data AS (
@@ -4049,10 +4050,11 @@ router.get('/money_receipts', async (req, res) => {
                     FROM customer_payments cp
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
-                WHERE real.is_posted = true
+                               WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
                   AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
                   AND ($3::date IS NULL OR real.doc_date::date <= $3::date)
+                  AND ($4::integer IS NULL OR real.customer_id = $4)
 
                 UNION ALL
 
@@ -4110,10 +4112,11 @@ router.get('/money_receipts', async (req, res) => {
                     FROM warehouse_debt_payments
                     GROUP BY move_id
                 ) m_p ON m.id = m_p.move_id
-                WHERE m.is_posted = true
+                                WHERE m.is_posted = true
                   AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
                   AND ($2::date IS NULL OR m.date::date >= $2::date)
                   AND ($3::date IS NULL OR m.date::date <= $3::date)
+                  AND ($5::integer IS NULL OR sk_to.id = $5)
             )
             SELECT 
                 id,
@@ -4147,8 +4150,7 @@ router.get('/money_receipts', async (req, res) => {
         `;
 
         console.log(`⚡ [/api/money_receipts] Выполнение SQL-запроса с параметрами: склад =`, sklad_id || null, `, с =`, start_date || null, `, по =`, end_date || null);
-        const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null]);
-
+const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, debtor_warehouse_id || null]);
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -4806,6 +4808,139 @@ router.get('/realizations/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ==================== ОПЛАТА ДОЛГА ПОКУПАТЕЛЕМ ЗА МЕСЯЦ (уровень 2 "Приходы денег") ====================
+// Полный аналог /expenses_by_suppliers/:id/pay_month, только для покупателей.
+// id в URL может быть либо ID покупателя (customer_id), либо "wh_<id>" для склада-должника (перемещения).
+router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { amount, month_str, sklad_id, comment } = req.body;
+
+        const paymentAmount = Number(amount);
+        if (!paymentAmount || paymentAmount <= 0) {
+            return res.status(400).json({ error: 'Некорректная сумма оплаты' });
+        }
+        if (!month_str) {
+            return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
+        }
+
+        const isWarehouseDebtor = String(id).startsWith('wh_');
+        const realId = isWarehouseDebtor ? String(id).replace('wh_', '') : id;
+
+        await client.query('BEGIN');
+
+        let docsQuery;
+        let docsParams;
+
+        if (isWarehouseDebtor) {
+            // Долг склада-получателя за перемещения от указанного склада-отправителя
+            docsQuery = `
+                SELECT 
+                    m.id AS doc_id,
+                    COALESCE(m_items.total_sum, 0) AS total_sum,
+                    COALESCE(pay.paid_sum, 0) AS paid_sum,
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
+                FROM moves m
+                LEFT JOIN (
+                    SELECT move_id, SUM(total_rub) AS total_sum
+                    FROM move_items GROUP BY move_id
+                ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments WHERE move_id IS NOT NULL GROUP BY move_id
+                ) pay ON m.id = pay.move_id
+                WHERE m.warehouse_to_id = $1
+                  AND m.is_posted = true
+                  AND TO_CHAR(m.date, 'YYYY-MM') = $2
+                  AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
+                ORDER BY m.date ASC, m.id ASC
+                FOR UPDATE OF m
+            `;
+            docsParams = [realId, month_str, sklad_id || null];
+        } else {
+            // Долг покупателя за реализации
+            docsQuery = `
+                SELECT 
+                    real.id AS doc_id,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
+                    COALESCE(pay.paid_sum, 0) AS paid_sum,
+                    ((COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) - COALESCE(pay.paid_sum, 0)) AS debt
+                FROM realizations real
+                LEFT JOIN (
+                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS parts_sum
+                    FROM realization_items GROUP BY realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS works_sum
+                    FROM realization_works GROUP BY realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT realization_id, SUM(amount) AS paid_sum
+                    FROM customer_payments WHERE realization_id IS NOT NULL GROUP BY realization_id
+                ) pay ON real.id = pay.realization_id
+                WHERE real.customer_id = $1
+                  AND real.is_posted = true
+                  AND TO_CHAR(real.doc_date, 'YYYY-MM') = $2
+                  AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
+                ORDER BY real.doc_date ASC, real.id ASC
+                FOR UPDATE OF real
+            `;
+            docsParams = [realId, month_str, sklad_id || null];
+        }
+
+        const docsRes = await client.query(docsQuery, docsParams);
+
+        let remaining = paymentAmount;
+        const appliedPayments = [];
+
+        for (const row of docsRes.rows) {
+            if (remaining <= 0) break;
+            const debt = Number(row.debt);
+            if (debt <= 0) continue;
+
+            const toApply = Math.min(remaining, debt);
+
+            if (isWarehouseDebtor) {
+                await client.query(
+                    `INSERT INTO warehouse_debt_payments (move_id, amount, comment, user_id)
+                     VALUES ($1, $2, $3, $4)`,
+                    [row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                );
+            } else {
+                await client.query(
+                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [realId, row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+                );
+            }
+
+            appliedPayments.push({ doc_id: row.doc_id, applied: toApply });
+            remaining -= toApply;
+        }
+
+        await client.query('COMMIT');
+
+        if (remaining > 0) {
+            return res.status(200).json({
+                success: true,
+                warning: `Сумма превышает долг за месяц. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
+                appliedPayments
+            });
+        }
+
+        res.status(200).json({ success: true, appliedPayments });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ Ошибка при оплате покупателем за месяц (pay_month):', err);
+        res.status(500).json({ error: 'Ошибка сервера при оплате' });
+    } finally {
+        client.release();
+    }
+});
+// ================================================================================
 
 
 
