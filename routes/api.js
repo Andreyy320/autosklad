@@ -5004,7 +5004,96 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
     }
 });
 
+// ==================== ОПЛАТА ДОЛГА ПОСТАВЩИКУ ЗА МЕСЯЦ (уровень 2) ====================
+// Сумма автоматически распределяется по накладным этого поставщика/месяца
+// от САМОЙ СТАРОЙ к самой новой (FIFO) — так каждая накладная получает
+// свою частичную/полную оплату, и на уровне 3 видно, что оплачено, а что нет.
+router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params; // id поставщика
+        const { amount, month_str, sklad_id, comment } = req.body;
 
+        const paymentAmount = Number(amount);
+        if (!paymentAmount || paymentAmount <= 0) {
+            return res.status(400).json({ error: 'Некорректная сумма оплаты' });
+        }
+        if (!month_str) {
+            return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
+        }
+
+        await client.query('BEGIN');
+
+        // Берём все накладные этого поставщика за этот месяц (и склад, если указан),
+        // с суммой ДОЛГА по каждой (закупка минус уже оплаченное), от старых к новым.
+        // FOR UPDATE — блокируем строки, чтобы два одновременных платежа не перепутали остатки долга.
+        const receiptsQuery = `
+            SELECT 
+                rec.id AS receipt_id,
+                COALESCE(sub_i.total_sum, 0) AS total_sum,
+                COALESCE(pay.paid_sum, 0) AS paid_sum,
+                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
+            FROM receipts rec
+            LEFT JOIN (
+                SELECT receipt_id, SUM(total_rub) AS total_sum
+                FROM receipt_items GROUP BY receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN (
+                SELECT receipt_id, SUM(amount) AS paid_sum
+                FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
+            ) pay ON rec.id = pay.receipt_id
+            WHERE rec.supplier_id = $1
+              AND rec.is_posted = true
+              AND TO_CHAR(rec.date, 'YYYY-MM') = $2
+              AND ($3::integer IS NULL OR rec.warehouse_id = $3::integer)
+            ORDER BY rec.date ASC, rec.id ASC
+            FOR UPDATE OF rec
+        `;
+        const receiptsRes = await client.query(receiptsQuery, [id, month_str, sklad_id || null]);
+
+        let remaining = paymentAmount;
+        const appliedPayments = [];
+
+        for (const row of receiptsRes.rows) {
+            if (remaining <= 0) break;
+            const debt = Number(row.debt);
+            if (debt <= 0) continue; // эта накладная уже полностью оплачена — пропускаем
+
+            const toApply = Math.min(remaining, debt);
+
+            await client.query(
+                `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [id, row.receipt_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null]
+            );
+
+            appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
+            remaining -= toApply;
+        }
+
+        await client.query('COMMIT');
+
+        if (remaining > 0) {
+            // Внесённая сумма оказалась больше общего долга за этот месяц —
+            // уже распределённую часть не откатываем, просто сообщаем об остатке
+            return res.status(200).json({
+                success: true,
+                warning: `Сумма превышает долг за месяц. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
+                appliedPayments
+            });
+        }
+
+        res.status(200).json({ success: true, appliedPayments });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ Ошибка при оплате за месяц (pay_month):', err);
+        res.status(500).json({ error: 'Ошибка сервера при оплате' });
+    } finally {
+        client.release();
+    }
+});
+// ================================================================================
 
 
 
