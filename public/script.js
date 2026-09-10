@@ -1,4 +1,3 @@
-
 const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
@@ -1715,19 +1714,58 @@ const tableConfig = {
         `;
     }
     },
+    // Верхняя таблица уровня "приходы": должники (покупатели и склады-получатели), сгруппированные по месяцам.
+    // Один ряд = один должник за один месяц. Кнопка "Оплатить" гасит долг сразу по всем его накладным этого месяца.
     money_receipts: {
-    title: 'Список документов (продажи и ремонты)',
+    title: 'Должники по месяцам (покупатели и склады)',
+    columns: [
+        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '240px' },
+        { field: 'docs_count', label: 'Накладных', width: '90px', align: 'center' },
+        { field: 'total_realization_sum', label: 'Сумма', width: '120px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '120px', align: 'right' },
+        { field: 'debt_sum', label: 'Долг', width: '120px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
+    ],
+    render: (group) => {
+        const sum = Number(group.totalSum || 0).toFixed(2);
+        const paid = Number(group.totalPaid || 0).toFixed(2);
+        const debtNum = Number(group.totalDebt || 0);
+        const debt = debtNum.toFixed(2);
+        const isRepair = !group.items || !group.items.length || !group.items[0].customer_id;
+
+        let actionHtml = '';
+        if (debtNum <= 0.01) {
+            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
+        } else {
+            actionHtml = `<button type="button" class="debtor-pay-btn"
+                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+              </button>`;
+        }
+
+        return `
+            <td><span style="font-weight: 600; color: #0f172a;" title="${isRepair ? 'Внутренний ремонт/перемещение' : ''}">${group.counterpartyName || 'Розничный покупатель'}</span></td>
+            <td style="text-align: center; color: #334155;">${group.items ? group.items.length : 0}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
+            <td style="text-align: right; color: #334155;">${paid}</td>
+            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">${debt}</td>
+            <td style="text-align: center;">${actionHtml}</td>
+        `;
+    }
+    },
+    // Нижняя таблица: список накладных конкретного должника за выбранный месяц.
+    // Клик по строке открывает детальную спецификацию (money_receipts_detail / money_receipts_works_detail).
+    money_receipts_invoices: {
+    title: 'Накладные должника',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
-        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
@@ -1740,45 +1778,16 @@ const tableConfig = {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
-        
-        let counterpartyHtml = '';
-        if (isRepair) {
-            // Значок машинки убран, остался аккуратный текст
-            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">${item.counterparty_name || 'Ремонт а/м'}</span>`;
-        } else {
-            counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
-        }
-
-        const paidHtml = totalPaidNum > 0 
-            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
-            : `<span style="color: #334155;">${formattedPaid}</span>`;
-
-        let actionHtml = '';
-        if (debtSumNum <= 0) {
-            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
-        } else {
-            // Возвращен прежний зеленый цвет кнопки (#16a34a)
-            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
-                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
-        }
-
         return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
-            <td>${counterpartyHtml}</td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right; color: #334155;">${partsSum}</td>
             <td style="text-align: right; color: #334155;">${worksSum}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
-            <td style="text-align: right;">${paidHtml}</td>
+            <td style="text-align: right; color: #334155;">${formattedPaid}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}
-            </td>
-            <td style="text-align: center;">
-                ${actionHtml}
             </td>
         `;
     }
@@ -9137,45 +9146,64 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                 mainTableBody.appendChild(headerTr);
 
+                // Группируем накладные этого месяца по должнику: покупатель (customer_id) 
+                // либо склад-получатель при перемещении (debtor_warehouse_id).
+                const debtorsInMonth = {};
                 group.items.forEach(item => {
-                    const tr = document.createElement('tr');
-                    tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
-                    tr.style.cursor = 'pointer';
-                    tr.innerHTML = config.render(item);
+                    const debtorKey = item.customer_id
+                        ? `c_${item.customer_id}`
+                        : `w_${item.debtor_warehouse_id || item.counterparty_name || 'unknown'}`;
+                    const fullKey = `${debtorKey}__${monthKey}`;
 
-                    tr.addEventListener('click', () => {
-                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
+                    if (!debtorsInMonth[fullKey]) {
+                        debtorsInMonth[fullKey] = {
+                            key: fullKey,
+                            counterpartyName: item.counterparty_name || 'Розничный покупатель',
+                            monthKey: monthKey,
+                            monthTitle: group.title,
+                            items: [],
+                            totalSum: 0,
+                            totalPaid: 0,
+                            totalDebt: 0
+                        };
+                    }
+                    const dGroup = debtorsInMonth[fullKey];
+                    dGroup.items.push(item);
+                    dGroup.totalSum += Number(item.total_realization_sum || item.total_sum || item.sum || 0);
+                    dGroup.totalPaid += Number(item.total_paid || item.paid || 0);
+                    dGroup.totalDebt += Number(item.debt_sum || item.total_debt || item.debt || 0);
+                });
+
+                window.currentDebtorGroups = window.currentDebtorGroups || {};
+
+                Object.values(debtorsInMonth).forEach(dGroup => {
+                    window.currentDebtorGroups[dGroup.key] = dGroup;
+
+                    const tr = document.createElement('tr');
+                    tr.dataset.id = dGroup.key;
+                    tr.style.cursor = 'pointer';
+                    tr.innerHTML = config.render(dGroup);
+
+                    tr.addEventListener('click', (e) => {
+                        if (e.target.closest('.debtor-pay-btn')) return;
+
+                        console.log('🖱️ [Клик по строке должника]:', dGroup);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
-                        window.selectedItem = item;
+                        window.selectedItem = dGroup;
+                        window.currentCustomerId = (dGroup.items[0] && dGroup.items[0].customer_id) || '';
 
-                        window.currentRealizationId = item.realization_id || item.id;
-                        window.currentRepairId = null;
-                        window.currentCustomerId = item.customer_id || '';
-                        
-                        window.currentDocType = item.doc_type || (item.realization_id ? 'realization' : (item.move_id ? 'move' : 'realization'));
-
-                        const detailToolbar = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-                        if (detailToolbar) {
-                            detailToolbar.style.display = 'none';
-                        }
-                        
-                        let detailEntity = typeof getCurrentDetailEntity === 'function' ? getCurrentDetailEntity() : 'money_receipts_detail';
-                        
-                        let realizationId = window.currentRealizationId || '';
-                        let customerId = window.currentCustomerId || '';
-                        let skladId = item.sklad_id || window.currentSkladId || '';
-                        
-                        let url = '';
-                        if (detailEntity === 'money_receipts_works_detail') {
-                            url = `/api/money_receipts_works_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        } else {
-                            url = `/api/money_receipts_detail?realization_id=${realizationId}&customer_id=${customerId}&sklad_id=${skladId}`;
-                        }
-
-                        loadReceiptDetailTable(url, detailEntity);
+                        showDebtorInvoicesInDetail(dGroup);
                     });
+
+                    const payBtn = tr.querySelector('.debtor-pay-btn');
+                    if (payBtn) {
+                        payBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            openDebtorPaymentDrawer(dGroup);
+                        });
+                    }
 
                     rowElements.push(tr);
                     mainTableBody.appendChild(tr);
@@ -9333,6 +9361,193 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     }
 }
 
+// ==========================================================================
+// НОВАЯ ЛОГИКА: должники по месяцам (money_receipts) — нижняя таблица накладных
+// конкретного должника + возврат из детальной спецификации обратно к списку
+// накладных + пакетная оплата долга по всем накладным должника разом.
+// ==========================================================================
+
+function showDebtorInvoicesInDetail(group) {
+    window.currentDebtorInvoicesGroup = group;
+    window.currentDebtorInvoicesBack = () => showDebtorInvoicesInDetail(group);
+
+    const detailContainer = document.getElementById('detail-container');
+    if (detailContainer) detailContainer.style.display = 'block';
+
+    const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbarEl) detailToolbarEl.style.display = 'none';
+
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+    const existingAlternativeRow = document.getElementById('detail-table-filter-row');
+    if (existingAlternativeRow) existingAlternativeRow.remove();
+
+    const detailTitle = document.getElementById('detail-title');
+    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
+    const detailBody = document.getElementById('detail-body');
+
+    const config = getConfig('money_receipts_invoices');
+    if (detailTitle) {
+        detailTitle.innerText = `Накладные: ${group.counterpartyName || 'Розничный покупатель'} — ${group.monthTitle || ''}`;
+    }
+
+    if (detailHeaderTr && config && config.columns) {
+        detailHeaderTr.innerHTML = config.columns.map(col => {
+            let widthStyle = col.width ? `width: ${col.width};` : '';
+            let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
+            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+    }
+
+    if (!detailBody) return;
+
+    const colCount = config && config.columns ? config.columns.length : 8;
+
+    if (!group.items || group.items.length === 0) {
+        detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет накладных</td></tr>`;
+        hideDetailBackLink();
+        return;
+    }
+
+    detailBody.innerHTML = '';
+    group.items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = config.render(item);
+
+        tr.addEventListener('click', () => {
+            detailBody.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
+            tr.classList.add('selected-row');
+
+            window.currentRealizationId = item.realization_id || item.id;
+            window.currentRepairId = null;
+            window.currentCustomerId = item.customer_id || '';
+            window.currentDocType = item.customer_id ? 'realization' : 'move';
+
+            const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
+            const skladId = item.sklad_id || window.currentSkladId || '';
+
+            let url = '';
+            if (activeTab === 'money_receipts_works_detail') {
+                url = `/api/money_receipts_works_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${skladId}`;
+            } else {
+                url = `/api/money_receipts_detail?realization_id=${window.currentRealizationId}&customer_id=${window.currentCustomerId}&sklad_id=${skladId}`;
+            }
+
+            loadReceiptDetailTable(url, activeTab);
+            showDetailBackLink();
+        });
+
+        detailBody.appendChild(tr);
+    });
+
+    hideDetailBackLink();
+}
+
+function showDetailBackLink() {
+    let backBar = document.getElementById('debtor-invoices-back-bar');
+    const detailTitle = document.getElementById('detail-title');
+    if (!backBar && detailTitle && detailTitle.parentElement) {
+        backBar = document.createElement('div');
+        backBar.id = 'debtor-invoices-back-bar';
+        backBar.style.cssText = 'margin-bottom: 8px;';
+        backBar.innerHTML = `<a href="#" onclick="event.preventDefault(); if (window.currentDebtorInvoicesBack) window.currentDebtorInvoicesBack();" style="color: #2563eb; font-size: 13px; text-decoration: underline;">← Назад к накладным</a>`;
+        detailTitle.parentElement.insertBefore(backBar, detailTitle);
+    }
+    if (backBar) backBar.style.display = 'block';
+}
+
+function hideDetailBackLink() {
+    const backBar = document.getElementById('debtor-invoices-back-bar');
+    if (backBar) backBar.style.display = 'none';
+}
+
+function openDebtorPaymentDrawer(group) {
+    const debtSum = Number(group.totalDebt || 0).toFixed(2);
+    const drawer = getOrCreateDrawer();
+
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Оплата: ${group.counterpartyName || 'Розничный покупатель'}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="margin: -10px 0 16px; color: #64748b; font-size: 12px;">${group.monthTitle || ''} · накладных: ${group.items ? group.items.length : 0}</div>
+
+        <form id="pay-form" onsubmit="submitDebtorBatchPayment(event, '${group.key}')" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Сумма (Долг: ${debtSum})</label>
+                <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; color: #555; margin-bottom: 6px;">Комментарий</label>
+                <textarea id="payment-comment" placeholder="Примечание к платежу..." 
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; resize: vertical; min-height: 60px;"></textarea>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button type="submit" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Отмена</button>
+            </div>
+        </form>
+    `;
+
+    openDrawer();
+}
+
+async function submitDebtorBatchPayment(event, debtorKey) {
+    event.preventDefault();
+
+    const group = window.currentDebtorGroups ? window.currentDebtorGroups[debtorKey] : null;
+    if (!group) {
+        showAppNotification('Не удалось определить должника для оплаты', 'error');
+        return;
+    }
+
+    const parsedAmount = parseFloat(document.getElementById('payment-amount').value);
+    const commentVal = document.getElementById('payment-comment').value;
+
+    // Гасим накладные по порядку: сначала самые старые
+    const sortedDocs = [...group.items].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const docs = sortedDocs.map(item => ({
+        id: item.realization_id || item.id,
+        type: item.customer_id ? 'realization' : 'move'
+    }));
+
+    const payload = { docs, amount: parsedAmount, comment: commentVal };
+
+    console.log('[BATCH PAY] Отправка групповой оплаты:', payload);
+
+    try {
+        let response = await fetch('/api/debt/pay-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            let resData = await response.json().catch(() => ({}));
+            console.log('[BATCH PAY SUCCESS]', resData);
+            closeDrawer();
+            showAppNotification('Платёж успешно сохранен', 'success');
+
+            if (typeof applyReceiptsFilters === 'function') {
+                applyReceiptsFilters();
+            } else if (window.currentSkladId) {
+                loadReceiptMainData('money_receipts', window.currentSkladId);
+            }
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            console.warn('[BATCH PAY ERROR]', errData);
+            showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
+        }
+    } catch (err) {
+        console.error('[BATCH PAY NETWORK ERROR]:', err);
+        showAppNotification('Не удалось отправить данные на сервер', 'error');
+    }
+}
+
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
     if (!tableBodyForReceipts.dataset.listenerAttached) {
@@ -9340,9 +9555,11 @@ if (tableBodyForReceipts) {
 
         tableBodyForReceipts.addEventListener('click', async (e) => {
             
+            // 'money_receipts' убран отсюда: у уровня должников теперь свои
+            // обработчики кликов (см. loadReceiptMainData/showDebtorInvoicesInDetail),
+            // делегированный обработчик ниже не должен в них вмешиваться.
             const allowedEntities = [
                 'money_receipts_by_sklad', 
-                'money_receipts',
                 'expenses_by_sklad', 
                 'expenses_by_suppliers', 
                 'expenses_by_receipts'
