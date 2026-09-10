@@ -1969,8 +1969,7 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-                    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}, '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
-                    : totalPaid
+? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
                 }
             </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
