@@ -8313,14 +8313,29 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
         
-        // Добавление параметров дат из инпутов фильтра, если они заполнены
-        const startDateInput = document.getElementById('expenses-start-date');
-        const endDateInput = document.getElementById('expenses-end-date');
-        if (startDateInput && startDateInput.value) {
-            fetchUrl += `&start_date=${startDateInput.value}`;
-        }
-        if (endDateInput && endDateInput.value) {
-            fetchUrl += `&end_date=${endDateInput.value}`;
+        // ИСПРАВЛЕНИЕ: Добавление поддержки передачи месяца (month_str) или ручных дат из инпутов фильтра
+        if (parentId && typeof parentId === 'object' && parentId.month_str) {
+            const [year, month] = parentId.month_str.split('-').map(Number);
+            const startDate = `${parentId.month_str}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${parentId.month_str}-${String(lastDay).padStart(2, '0')}`;
+            
+            fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
+            
+            // Синхронизируем инпут фильтра, если он присутствует на странице
+            const startDateInput = document.getElementById('expenses-start-date');
+            const endDateInput = document.getElementById('expenses-end-date');
+            if (startDateInput) startDateInput.value = startDate;
+            if (endDateInput) endDateInput.value = endDate;
+        } else {
+            const startDateInput = document.getElementById('expenses-start-date');
+            const endDateInput = document.getElementById('expenses-end-date');
+            if (startDateInput && startDateInput.value) {
+                fetchUrl += `&start_date=${startDateInput.value}`;
+            }
+            if (endDateInput && endDateInput.value) {
+                fetchUrl += `&end_date=${endDateInput.value}`;
+            }
         }
 
         console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, URL: ${fetchUrl}`);
@@ -8503,8 +8518,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         mainTableBody.innerHTML = '';
 
-if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
-                console.log('📑 [Group] Рендеринг сгруппированных данных по месяцам (expenses_by_receipts)...');
+    if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
+            console.log('📑 [Group] Рендеринг сгруппированных данных по месяцам...');
             const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"
@@ -8517,12 +8532,13 @@ if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_s
                 const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
                 const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
                 
-                const key = `${year}-${String(month).padStart(2, '0')}`;
+                const key = `${year}-${String(month + 1).padStart(2, '0')}`;
                 const title = `${monthNames[month]} ${year} года`;
 
                 if (!groups[key]) {
                     groups[key] = {
                         title: title,
+                        month_str: key, // 👈 Сохраняем строковый ключ месяца для последующей передачи при клике
                         totalSum: 0,
                         totalPaid: 0,
                         totalDebt: 0,
@@ -8566,7 +8582,7 @@ if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_s
                     tr.style.cursor = 'pointer';
                     tr.className = `group-row-${currentGIdx}`;
                     
-                    console.log(`    └─ [Group Item #${itemIdx}] Рендеринг строки накладной ID: ${rowId}`, item);
+                    console.log(`    └─ [Group Item #${itemIdx}] Рендеринг строки ID: ${rowId}`, item);
 
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
@@ -8578,7 +8594,22 @@ if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_s
                     childRows.push(tr);
                 });
 
-                headerTr.addEventListener('click', () => {
+                headerTr.addEventListener('click', (e) => {
+                    // ИСПРАВЛЕНИЕ: Если пользователь находится на уровне suppliers и кликает по шапке месяца — проваливаемся в receipts за этот месяц
+                    if (currentEntity === 'expenses_by_suppliers') {
+                        if (typeof window.selectedItem !== 'undefined' && window.selectedItem) {
+                            window.selectedItem.month_str = group.month_str;
+                            loadExpenseMainData('expenses_by_receipts', window.selectedItem);
+                        } else {
+                            loadExpenseMainData('expenses_by_receipts', { 
+                                postavhik_id: window.currentPostavhikId, 
+                                month_str: group.month_str 
+                            });
+                        }
+                        return;
+                    }
+
+                    // Старая логика сворачивания/разворачивания строк группы
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
                     console.log(`🖱️ [Group Click] Клик по группе "${group.title}". Переключение видимости: ${isHidden ? 'развернуть' : 'свернуть'}`);
