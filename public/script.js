@@ -8189,10 +8189,10 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
             return;
         }
 
-        const docs = await resp.json();
-        console.log('📥 [openReceiptCustomerPaymentDrawer] Ответ сервера:', docs); // 👈 временно
-        const unpaid = (Array.isArray(docs) ? docs : []).filter(d => Number(d.debt_sum || 0) > 0);
-
+               const data = await resp.json();
+        console.log('📥 [openReceiptCustomerPaymentDrawer] Ответ сервера:', data); // 👈 временно
+        const docs = Array.isArray(data) ? data : (data.rows || []);
+        const unpaid = docs.filter(d => Number(d.debt_sum || 0) > 0);
 
         if (unpaid.length === 0) {
             listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
