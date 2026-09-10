@@ -1,3 +1,4 @@
+
 const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
@@ -1714,58 +1715,19 @@ const tableConfig = {
         `;
     }
     },
-    // Верхняя таблица уровня "приходы": должники (покупатели и склады-получатели), сгруппированные по месяцам.
-    // Один ряд = один должник за один месяц. Кнопка "Оплатить" гасит долг сразу по всем его накладным этого месяца.
     money_receipts: {
-    title: 'Должники по месяцам (покупатели и склады)',
-    columns: [
-        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '240px' },
-        { field: 'docs_count', label: 'Накладных', width: '90px', align: 'center' },
-        { field: 'total_realization_sum', label: 'Сумма', width: '120px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '120px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '120px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
-    ],
-    render: (group) => {
-        const sum = Number(group.totalSum || 0).toFixed(2);
-        const paid = Number(group.totalPaid || 0).toFixed(2);
-        const debtNum = Number(group.totalDebt || 0);
-        const debt = debtNum.toFixed(2);
-        const isRepair = !group.items || !group.items.length || !group.items[0].customer_id;
-
-        let actionHtml = '';
-        if (debtNum <= 0.01) {
-            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
-        } else {
-            actionHtml = `<button type="button" class="debtor-pay-btn"
-                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
-        }
-
-        return `
-            <td><span style="font-weight: 600; color: #0f172a;" title="${isRepair ? 'Внутренний ремонт/перемещение' : ''}">${group.counterpartyName || 'Розничный покупатель'}</span></td>
-            <td style="text-align: center; color: #334155;">${group.items ? group.items.length : 0}</td>
-            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
-            <td style="text-align: right; color: #334155;">${paid}</td>
-            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">${debt}</td>
-            <td style="text-align: center;">${actionHtml}</td>
-        `;
-    }
-    },
-    // Нижняя таблица: список накладных конкретного должника за выбранный месяц.
-    // Клик по строке открывает детальную спецификацию (money_receipts_detail / money_receipts_works_detail).
-    money_receipts_invoices: {
-    title: 'Накладные должника',
+    title: 'Список документов (продажи и ремонты)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
+        { field: 'counterparty_name', label: 'Покупатель / Склад', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
+        { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
@@ -1778,16 +1740,45 @@ const tableConfig = {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
+        const isRepair = !item.customer_id || String(docTitle).startsWith('РЕМ');
+        
+        let counterpartyHtml = '';
+        if (isRepair) {
+            // Значок машинки убран, остался аккуратный текст
+            counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">${item.counterparty_name || 'Ремонт а/м'}</span>`;
+        } else {
+            counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
+        }
+
+        const paidHtml = totalPaidNum > 0 
+            ? `<span onclick="openIncomePaymentHistory('${item.id}', '${docTitle}', ${isRepair})" style="color: #0f172a; cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю поступлений">${formattedPaid}</span>`
+            : `<span style="color: #334155;">${formattedPaid}</span>`;
+
+        let actionHtml = '';
+        if (debtSumNum <= 0) {
+            actionHtml = `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`;
+        } else {
+            // Возвращен прежний зеленый цвет кнопки (#16a34a)
+            actionHtml = `<button type="button" onclick="openIncomePaymentDrawer('${item.id}', '${debtSum}', '${docTitle}', ${isRepair})" 
+                style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+              </button>`;
+        }
+
         return `
             <td><span style="font-weight: 600; color: #0f172a;"> ${docTitle}</span></td>
             <td><span style="color: #475569;">${formattedDate}</span></td>
+            <td>${counterpartyHtml}</td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right; color: #334155;">${partsSum}</td>
             <td style="text-align: right; color: #334155;">${worksSum}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
-            <td style="text-align: right; color: #334155;">${formattedPaid}</td>
+            <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}
+            </td>
+            <td style="text-align: center;">
+                ${actionHtml}
             </td>
         `;
     }
@@ -8631,6 +8622,30 @@ function applyReceiptsFilters() {
     }
 } 
 
+
+
+
+/*
+ * ЭТО НЕ ОТДЕЛЬНЫЙ ФАЙЛ ДЛЯ ПОДКЛЮЧЕНИЯ.
+ * Это готовый кусок кода, которым нужно ПОЛНОСТЬЮ ЗАМЕНИТЬ тот участок
+ * script.js, который ты прислал в у.txt — от строки
+ *   async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
+ * до самого конца делегированного обработчика кликов (закрывающие "});" "}" "}"
+ * перед функцией emptyDetailBody).
+ *
+ * Что изменилось внутри (по сути):
+ *  - loadReceiptMainData(): внутри группировки по месяцам добавлена вложенная
+ *    группировка по должнику (customer_id / debtor_warehouse_id), рендерится
+ *    ОДНА строка на должника с кнопкой "Оплатить" (не на каждую накладную).
+ *  - Добавлены новые функции: showDebtorInvoicesInDetail, showDetailBackLink,
+ *    hideDetailBackLink, openDebtorPaymentDrawer, submitDebtorBatchPayment.
+ *  - В делегированном обработчике кликов (allowedEntities) убрана строка
+ *    'money_receipts' — она конфликтовала бы с новой логикой должников.
+ *  - openIncomePaymentHistory / openIncomePaymentDrawer / submitIncomePayment
+ *    оставлены как есть (просто больше не используются из money_receipts,
+ *    но не мешают — можешь оставить или удалить, не критично).
+ */
+
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
@@ -9734,6 +9749,9 @@ if (tableBodyForReceipts) {
         });
     }
 }
+
+
+
 
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
