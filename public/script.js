@@ -8006,8 +8006,7 @@ function resetSharedUiForEntity(entity) {
         btnBack.onclick = null;
     }
 
-    // 4. Все панели фильтров по датам — скрываем все разом
-    ['parts-filter-panel', 'movement-filter-panel', 'expenses-filter-panel', 'receipts-filter-panel']
+    ['parts-filter-panel', 'movement-filter-panel', 'receipts-filter-panel']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -8033,7 +8032,6 @@ function resetSharedUiForEntity(entity) {
     const rowCount = document.getElementById('row-count');
     if (rowCount) rowCount.innerText = '';
 }
-
 
 async function openSupplierPaymentHistory(postavhikId, postavhikName) {
     const drawer = getOrCreateDrawer();
@@ -8258,11 +8256,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         // Контейнер или кнопка отсутствуют
     }
 
-    const receiptsFilterPanel = document.getElementById('expenses-filter-panel') || document.getElementById('receipts-filter-panel');
-    if (receiptsFilterPanel) {
-        receiptsFilterPanel.style.display = (currentExpenseView === 'expenses_by_receipts') ? 'flex' : 'none';
-    }
-
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
         currentExpenseView = 'expenses_by_sklad';
         window.currentSkladId = null;
@@ -8319,20 +8312,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             const endDate = `${parentId.month_str}-${String(lastDay).padStart(2, '0')}`;
             
             fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
-            
-            const startDateInput = document.getElementById('expenses-start-date');
-            const endDateInput = document.getElementById('expenses-end-date');
-            if (startDateInput) startDateInput.value = startDate;
-            if (endDateInput) endDateInput.value = endDate;
-        } else {
-            const startDateInput = document.getElementById('expenses-start-date');
-            const endDateInput = document.getElementById('expenses-end-date');
-            if (startDateInput && startDateInput.value) {
-                fetchUrl += `&start_date=${startDateInput.value}`;
-            }
-            if (endDateInput && endDateInput.value) {
-                fetchUrl += `&end_date=${endDateInput.value}`;
-            }
         }
 
         console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, URL: ${fetchUrl}`);
@@ -8636,22 +8615,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 }
 
-function applyExpensesFilters() {
-    const postavhikId = window.currentPostavhikId || (selectedItem && selectedItem.postavhik_id) || '';
-    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
 
-    console.log(`🔍 [applyExpensesFilters] Применение фильтра дат. postavhikId:`, postavhikId, 'skladId:', skladId);
 
-    if (currentEntity === 'expenses_by_receipts' && postavhikId) {
-        loadExpenseMainData('expenses_by_receipts', postavhikId);
-    } else if (postavhikId) {
-        loadExpenseMainData('expenses_by_receipts', postavhikId);
-    } else if (skladId) {
-        loadExpenseMainData('expenses_by_suppliers', skladId);
-    } else {
-        loadExpenseMainData('expenses_by_sklad');
-    }
-}
+
 
 function applyReceiptsFilters() {
     const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
@@ -11036,7 +11002,6 @@ const navMap = {
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
-    const expenseFilter = document.getElementById('expenses-filter-panel') || document.getElementById('expense-filter-panel'); 
     const receiptsFilter = document.getElementById('receipts-filter-panel');
 
     console.log("🎛️ [updateFilterPanels] Вызвана для entity:", entity);
@@ -11044,7 +11009,6 @@ function updateFilterPanels(entity) {
     // Сбрасываем отображение всех известных панелей фильтров
     if (partsFilter) partsFilter.style.display = 'none';
     if (movementFilter) movementFilter.style.display = 'none';
-    if (expenseFilter) expenseFilter.style.display = 'none';
     if (receiptsFilter) receiptsFilter.style.display = 'none';
 
     // Безопасно проверяем сущность
@@ -11059,13 +11023,6 @@ function updateFilterPanels(entity) {
         if (movementFilter) {
             movementFilter.style.display = 'flex';
             console.log("✅ [updateFilterPanels] Включена панель: movement-filter-panel");
-        }
-    } else if (currentEntity.startsWith('expenses_') || currentEntity === 'expense_items' || currentEntity === 'расходы' || currentEntity === 'expenses') {
-        if (expenseFilter) {
-            expenseFilter.style.display = 'flex';
-            console.log("✅ [updateFilterPanels] Включена панель расходов: expenses-filter-panel");
-        } else {
-            console.warn("⚠️ [updateFilterPanels] Панель расходов не найдена в DOM!");
         }
     } else if (currentEntity.startsWith('money_receipts')) {
         if (receiptsFilter) {
