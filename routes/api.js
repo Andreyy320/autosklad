@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const path = require('path'); // Нужно для указания пути к файлу html
 const multer = require('multer'); // <--- 1. Подключаем multer
 const jwt = require('jsonwebtoken');
-
+const rateLimit = require('express-rate-limit');
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
@@ -74,8 +74,17 @@ const DOC_NUMBER_CONFIG = {
 };
 module.exports = (pool) => {
     
-    // 1. АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ
-    router.post('/login', async (req, res) => {
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 минут
+    max: 5,                   // максимум 5 попыток за это окно
+    message: { success: false, message: 'Слишком много попыток входа. Попробуйте снова через 15 минут.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true // успешные входы не считаются как "попытка", лимит только на неудачные
+});
+
+    router.post('/login', loginLimiter, async (req, res) => {
         const { login, password } = req.body;
         try {
             const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
@@ -85,10 +94,8 @@ module.exports = (pool) => {
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                if (match) {
-    // Никогда не отправляем хеш пароля на клиент
         const { password_hash, ...safeUser } = user;
 
-    // Выдаём настоящий токен доступа — он будет проверяться на всех остальных запросах
     const token = jwt.sign(
         { id: user.id, login: user.login },
         process.env.JWT_SECRET,
@@ -122,7 +129,8 @@ function authMiddleware(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded; // теперь req.user.id и req.user.login доступны в любом роуте ниже
+        req.user = decoded;
+        req.headers['x-user-id'] = String(decoded.id);   // 👈 добавили: подменяем заголовок проверенным ID из токена
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
@@ -1214,6 +1222,21 @@ router.get('/accident_images', async (req, res) => {
         res.status(500).send('Ошибка при получении изображений ДТП');
     }
 });
+
+// Оборачиваем multer, чтобы ошибки (превышен размер / неверный тип файла)
+// возвращались клиенту красивым JSON, а не голым падением сервера
+function handleUpload(fieldName) {
+    const middleware = upload.single(fieldName);
+    return (req, res, next) => {
+        middleware(req, res, (err) => {
+            if (err) {
+                console.error('[UPLOAD ERROR]', err.message);
+                return res.status(400).json({ error: err.message });
+            }
+            next();
+        });
+    };
+}
 
 router.post('/accident_images', handleUpload('image_url'), async (req, res) => {
 
@@ -2646,22 +2669,6 @@ router.post('/logs', async (req, res) => {
         }
     });
 
-
-
-// Оборачиваем multer, чтобы ошибки (превышен размер / неверный тип файла)
-// возвращались клиенту красивым JSON, а не голым падением сервера
-function handleUpload(fieldName) {
-    const middleware = upload.single(fieldName);
-    return (req, res, next) => {
-        middleware(req, res, (err) => {
-            if (err) {
-                console.error('[UPLOAD ERROR]', err.message);
-                return res.status(400).json({ error: err.message });
-            }
-            next();
-        });
-    };
-}
 
     // Эндпоинт для удаления записи (DELETE)
   const fs = require('fs');
