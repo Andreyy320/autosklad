@@ -1910,7 +1910,7 @@ const tableConfig = {
     columns: [
         { field: 'sklad_name', label: 'Склад', width: '200px' },
         { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
-        { field: 'total_qty', label: 'Кол-во (шт)', width: '80px', align: 'right' },
+        { field: 'total_suppliers', label: 'Поставщиков', width: '90px', align: 'center' },
         { field: 'total_expense_sum', label: 'Сумма закупки', width: '120px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '120px', align: 'right' },
         { field: 'total_debt', label: 'Долг', width: '120px', align: 'right' }
@@ -1925,7 +1925,7 @@ const tableConfig = {
         return `
             <td><span style="color: #0f172a; font-weight: 500;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
-            <td style="text-align: right; color: #334155;">${totalQty}</td>
+            <td style="text-align: center; color: #334155;">${item.total_suppliers || 0}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">${totalPaid}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">

@@ -4688,20 +4688,22 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 sk.id AS sklad_id,
                 COALESCE(sk.name, 'Центральный')::text AS sklad_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
+                COUNT(DISTINCT p.id)::integer AS total_suppliers,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
                 COALESCE(spay.total_paid, 0)::numeric AS total_paid,
                 (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
             FROM skladi sk
-            LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
-            LEFT JOIN (
-                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-                FROM receipt_items ri
-                GROUP BY ri.receipt_id
-            ) sub_i ON rec.id = sub_i.receipt_id
-            LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
-            WHERE sk.id = $1
-            GROUP BY sk.id, sk.name, spay.total_paid;
+    LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
+    LEFT JOIN postavhik p ON rec.supplier_id = p.id
+    LEFT JOIN (
+    SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+    FROM receipt_items ri
+    GROUP BY ri.receipt_id
+    ) sub_i ON rec.id = sub_i.receipt_id
+    LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
+    WHERE sk.id = $1
+    GROUP BY sk.id, sk.name, spay.total_paid;
         `;
         const result = await pool.query(query, [skladId]);
         res.json(result.rows);
