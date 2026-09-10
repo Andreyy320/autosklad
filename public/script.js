@@ -8187,24 +8187,39 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
         const selectedListEl = document.getElementById('pay-receipt-selected-list');
 
         function renderSelectedChips() {
-            selectedListEl.innerHTML = window._paySelectedReceiptIds.map(rid => {
+    selectedListEl.innerHTML = window._paySelectedReceiptIds.map(rid => {
+        const r = window._payUnpaidReceipts.find(x => String(x.receipt_id || x.id) === String(rid));
+        if (!r) return '';
+        return `<span style="display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; padding: 4px 8px; font-size: 12px;">
+            № ${r.doc_number || r.id} (долг ${Number(r.debt_sum || 0).toFixed(2)})
+            <span data-remove-id="${rid}" style="cursor: pointer; font-weight: bold;">&times;</span>
+        </span>`;
+    }).join('');
+
+    selectedListEl.querySelectorAll('[data-remove-id]').forEach(el => {
+        el.addEventListener('click', () => {
+            const rid = el.getAttribute('data-remove-id');
+            window._paySelectedReceiptIds = window._paySelectedReceiptIds.filter(x => String(x) !== String(rid));
+            renderSelectedChips();
+        });
+    });
+
+    // Автоподстановка суммы: если выбраны конкретные накладные — сумма к оплате
+    // равна их долгу (сумме, если выбрано несколько). Если ничего не выбрано —
+    // возвращаем исходную сумму долга за весь месяц.
+    const amountInput = document.getElementById('payment-amount');
+    if (amountInput) {
+        if (window._paySelectedReceiptIds.length > 0) {
+            const sum = window._paySelectedReceiptIds.reduce((acc, rid) => {
                 const r = window._payUnpaidReceipts.find(x => String(x.receipt_id || x.id) === String(rid));
-                if (!r) return '';
-                return `<span style="display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8; border-radius: 4px; padding: 4px 8px; font-size: 12px;">
-                    № ${r.doc_number || r.id} (долг ${Number(r.debt_sum || 0).toFixed(2)})
-                    <span data-remove-id="${rid}" style="cursor: pointer; font-weight: bold;">&times;</span>
-                </span>`;
-            }).join('');
-
-            selectedListEl.querySelectorAll('[data-remove-id]').forEach(el => {
-                el.addEventListener('click', () => {
-                    const rid = el.getAttribute('data-remove-id');
-                    window._paySelectedReceiptIds = window._paySelectedReceiptIds.filter(x => String(x) !== String(rid));
-                    renderSelectedChips();
-                });
-            });
+                return acc + (r ? Number(r.debt_sum || 0) : 0);
+            }, 0);
+            amountInput.value = sum.toFixed(2);
+        } else {
+            amountInput.value = debtSum;
         }
-
+    }
+}
         function renderDropdown(filterText) {
             const filter = (filterText || '').toLowerCase().trim();
             const available = window._payUnpaidReceipts.filter(r => {
