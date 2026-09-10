@@ -4177,6 +4177,147 @@ router.get('/money_receipts', async (req, res) => {
 });
 
 
+// ==================== ПОКУПАТЕЛИ ПО МЕСЯЦАМ (уровень 2 для "Приходы денег") ====================
+// Точная копия calc_data из /money_receipts (ничего внутри неё не меняем),
+// просто группируем результат по (покупатель/склад-должник, месяц) — как в expenses_by_suppliers.
+router.get('/money_receipts_by_customers', async (req, res) => {
+    try {
+        const { sklad_id } = req.query;
+
+        const query = `
+            WITH calc_data AS (
+                -- 1. Обычные реализации (покупатели)
+                SELECT 
+                    real.id AS id,
+                    real.id AS realization_id,
+                    real.doc_number::text AS doc_number,
+                     real.doc_date AS date,
+                    c.id AS customer_id,
+                    NULL::integer AS debtor_warehouse_id,
+                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
+                    COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
+                    COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
+                FROM realizations real
+                JOIN customers c ON real.customer_id = c.id
+                LEFT JOIN skladi sk ON real.sklad_id = sk.id
+                LEFT JOIN (
+                    SELECT 
+                        ri.realization_id, 
+                        SUM(ri.quantity) AS parts_qty, 
+                        SUM(COALESCE(ri.purchase_price, 0) * ri.quantity) AS total_purchase_sum,
+                        SUM(COALESCE(ri.retail_price, 0) * ri.quantity) AS total_retail_sum,
+                        SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
+                    FROM realization_items ri
+                    GROUP BY ri.realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT 
+                        rw.realization_id, 
+                        SUM(rw.quantity) AS works_qty,
+                        SUM(COALESCE(NULLIF(rw.total_rub, 0), rw.price * rw.quantity, 0)) AS works_sum
+                    FROM realization_works rw
+                    GROUP BY rw.realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT cp.realization_id, SUM(cp.amount) AS paid_sum
+                    FROM customer_payments cp
+                    GROUP BY cp.realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+                  AND ($1::integer IS NULL OR real.sklad_id = $1)
+
+                UNION ALL
+
+                -- 2. Перемещения (берем чистую закупку из связанного прихода через receipt_items)
+                SELECT 
+                    m.id AS id,
+                    m.id AS realization_id,
+                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
+                    m.date AS date,
+                    NULL::integer AS customer_id,
+                    sk_to.id AS debtor_warehouse_id,
+                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    sk_from.name::text AS sklad_name,
+                    1 AS total_orders,
+                    COALESCE(m_items.total_qty, 0)::numeric AS parts_qty,
+                    COALESCE(m_items.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    0::numeric AS total_retail_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS parts_sum,
+                    0::numeric AS works_sum,
+                    COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
+                    COALESCE(m_p.paid_sum, 0)::numeric AS total_paid,
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS full_net_profit,
+                    (COALESCE(m_items.total_sum, 0) - COALESCE(m_items.total_purchase_sum, 0))::numeric AS parts_profit,
+                    0::numeric AS works_profit
+                FROM moves m
+                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
+                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
+                LEFT JOIN (
+                    SELECT 
+                        mi.move_id, 
+                        SUM(mi.quantity) AS total_qty, 
+                        SUM(
+                            COALESCE(
+                                NULLIF(ri_orig.price_rub, 0),
+                                NULLIF(ri_orig.price, 0),
+                                mi.price,
+                                0
+                            ) * mi.quantity
+                        ) AS total_purchase_sum,
+                        SUM(COALESCE(mi.total_rub, mi.price * mi.quantity, 0)) AS total_sum
+                    FROM move_items mi
+                    LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
+                    LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
+                    GROUP BY mi.move_id
+                ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments
+                    GROUP BY move_id
+                ) m_p ON m.id = m_p.move_id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+            )
+            SELECT
+                COALESCE(customer_id::text, 'wh_' || debtor_warehouse_id::text) AS group_key,
+                customer_id,
+                debtor_warehouse_id,
+                counterparty_name,
+                sklad_name,
+                TO_CHAR(date, 'YYYY-MM') AS month_str,
+                COUNT(*)::integer AS total_orders,
+                COALESCE(SUM(parts_qty), 0)::numeric AS total_qty,
+                COALESCE(SUM(parts_sum), 0)::numeric AS total_parts_sum,
+                COALESCE(SUM(works_sum), 0)::numeric AS total_works_sum,
+                COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
+                COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
+                (COALESCE(SUM(total_realization_sum), 0) - COALESCE(SUM(total_paid), 0))::numeric AS total_debt
+            FROM calc_data
+            GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name, TO_CHAR(date, 'YYYY-MM')
+            ORDER BY month_str DESC, counterparty_name ASC;
+        `;
+
+        const result = await pool.query(query, [sklad_id || null]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ [/api/money_receipts_by_customers] Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+    }
+});
+// ================================================================================
+
+
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         console.log('📥 [/api/money_receipts_detail] Получен запрос. Сырые query параметры:', req.query);
