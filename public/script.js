@@ -2002,7 +2002,7 @@ const tableConfig = {
     }
     },
 
-    expenses_by_receipts: {
+   expenses_by_receipts: {
     title: 'Список накладных (документов прихода)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '120px' },
@@ -8535,8 +8535,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
                 groups[key].items.push(item);
                 groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
-                groups[key].totalPaid += Number(item.total_paid || 0);
-                groups[key].totalDebt += Number(item.debt_sum || 0);
+    groups[key].totalPaid += Number(item.total_paid || 0);
+    groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
             });
 
             let groupIndex = 0;
