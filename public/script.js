@@ -1967,8 +1967,12 @@ const tableConfig = {
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
-            <td style="text-align: right; color: #334155;">${totalPaid}</td>
-            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
+            <td style="text-align: right; color: #334155;">
+                ${Number(item.total_paid || 0) > 0
+                    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
+                    : totalPaid
+                }
+            </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
             </td>
             <td style="text-align: center;">
@@ -8099,6 +8103,76 @@ async function openPaymentHistory(receiptId, docNumber) {
         drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории платежей</span>';
     }
 }
+
+async function openSupplierPaymentHistory(postavhikId, postavhikName) {
+    const drawer = getOrCreateDrawer();
+
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}</h3>
+            <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="text-align: center; color: #666; padding: 20px;">Загрузка истории...</div>
+    `;
+    openDrawer();
+
+    try {
+        let response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/payments`);
+        if (!response.ok) throw new Error('Не удалось загрузить историю');
+
+        let payments = await response.json();
+
+        if (!payments || payments.length === 0) {
+            drawer.querySelector('div:last-child').innerHTML = 'Этому поставщику еще не было оплат.';
+            return;
+        }
+
+        let rowsHtml = payments.map(p => {
+            const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
+            const pAmount = Number(p.amount || 0).toFixed(2);
+            const pDoc = p.doc_number || '—';
+            const pComment = p.comment || '—';
+            return `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; color: #4b5563;">${pDate}</td>
+                    <td style="padding: 10px; color: #0f172a;">${pDoc}</td>
+                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">${pAmount} </td>
+                    <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
+                </tr>
+            `;
+        }).join('');
+
+        drawer.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}</h3>
+                <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                    <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb; text-align: left;">
+                        <th style="padding: 8px; color: #374151;">Дата</th>
+                        <th style="padding: 8px; color: #374151;">Накладная</th>
+                        <th style="padding: 8px; color: #374151; text-align: right;">Сумма</th>
+                        <th style="padding: 8px; color: #374151;">Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px;">
+                <button type="button" onclick="closeDrawer()" style="width: 100%; background: #e2e8f0; color: #334151; border: none; padding: 10px; border-radius: 6px; cursor: pointer;">Закрыть</button>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error(err);
+        drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории платежей</span>';
+    }
+}
+
 
 function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     const drawer = getOrCreateDrawer();
