@@ -7363,9 +7363,15 @@ async function applyMovementFilters() {
         document.getElementById('row-count').innerText = `Раздел: Движение запчастей | Найдено строк: ${currentItems.length}`;
 
         if (currentItems.length > 0) {
-            selectedItem = currentItems[0];
-            loadDetailData('part_movement_details', selectedItem);
-        } else {
+    selectedItem = currentItems[0];
+
+    const detailContainerTarget = document.getElementById('detail-container');
+    if (detailContainerTarget) {
+        detailContainerTarget.style.display = 'flex';
+    }
+
+    loadDetailData('part_movement_details', selectedItem);
+    } else {
             emptyDetailBody();
         }
 
@@ -7847,6 +7853,14 @@ async function loadData(entity, title, customParams = {}) {
                 carTabsBar.style.display = 'none';
                 selectedItem = null;
                 if (typeof emptyDetailBody === 'function') emptyDetailBody(entity);
+            }
+        }
+
+        const autoOpenEntities = ['receipts', 'moves', 'realizations', 'cars', 'postavhik', 'counterparties', 'customers', 'stock_balances', 'stock_movement'];
+        if (autoOpenEntities.includes(entity) && currentItems.length > 0) {
+            const firstRow = tbody.querySelector('tr');
+            if (firstRow) {
+                firstRow.click();
             }
         }
 
@@ -9425,6 +9439,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
             const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
 
+            // ← ДОБАВЛЕНО: сюда будем запоминать самую первую строку-документ
+            let firstDocRow = null;
+
             sortedMonthKeys.forEach(monthKey => {
                 const group = groupedByMonth[monthKey];
 
@@ -9460,6 +9477,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.dataset.id = item.id || item.sklad_id || item.realization_id || '';
                     tr.style.cursor = 'pointer';
                     tr.innerHTML = config.render(item);
+
+                    // ← ДОБАВЛЕНО: запоминаем самую первую строку-документ во всей таблице
+                    if (!firstDocRow) {
+                        firstDocRow = tr;
+                    }
 
                     tr.addEventListener('click', () => {
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
@@ -9524,6 +9546,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     }
                 });
             });
+
+            // ← ДОБАВЛЕНО: автоматически "кликаем" по самому первому документу,
+            // чтобы нижняя таблица деталей открылась сама, без ручного клика
+            if (firstDocRow) {
+                firstDocRow.click();
+            }
 
         } else {
             currentItems.forEach(item => {
