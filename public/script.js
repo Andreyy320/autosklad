@@ -7225,11 +7225,20 @@ async function applyFilters() {
             tr.innerHTML = config.render(item);
 
             tr.onclick = () => {
-                selectedItem = item;
-                const zId = item.zaphasti_id || item.id;
-                const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
-                loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId, date: dateVal });
-            };
+    selectedItem = item;
+
+    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
+    tr.classList.add('selected-row');
+
+    const detailContainerTarget = document.getElementById('detail-container');
+    if (detailContainerTarget) {
+        detailContainerTarget.style.display = 'flex';
+    }
+
+    const zId = item.zaphasti_id || item.id;
+    const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
+    loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId, date: dateVal });
+    };
             tbody.appendChild(tr);
         });
 
@@ -7238,17 +7247,23 @@ async function applyFilters() {
             rowCountEl.innerText = `Раздел: Остатки запчастей | Найдено строк: ${currentItems.length}`;
         }
 
-        if (currentItems.length > 0) {
-            selectedItem = currentItems[0];
-            const zId = currentItems[0].zaphasti_id || currentItems[0].id;
-            const wId = currentItems[0].warehouse_id || currentItems[0].sklad_id || currentItems[0].id_sklad || currentItems[0].warehouseId;
+       if (currentItems.length > 0) {
+    selectedItem = currentItems[0];
 
-            loadDetailData('stock_batches', { 
-                zaphasti_id: zId, 
-                warehouse_id: wId,
-                date: dateVal 
-            });
-        } else {
+    const detailContainerTarget = document.getElementById('detail-container');
+    if (detailContainerTarget) {
+        detailContainerTarget.style.display = 'flex';
+    }
+
+    const zId = currentItems[0].zaphasti_id || currentItems[0].id;
+    const wId = currentItems[0].warehouse_id || currentItems[0].sklad_id || currentItems[0].id_sklad || currentItems[0].warehouseId;
+
+    loadDetailData('stock_batches', { 
+        zaphasti_id: zId, 
+        warehouse_id: wId,
+        date: dateVal 
+    });
+    } else {
             selectedItem = null;
             emptyDetailBody('stock_batches'); 
         }
