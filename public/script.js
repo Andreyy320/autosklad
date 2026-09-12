@@ -24,7 +24,7 @@ window.fetch = async function(url, options = {}) {
 };
 
 // ==================== АВТО-ВХОД ПО СОХРАНЁННОМУ ТОКЕНУ ====================
-(function tryAutoLogin() {
+setTimeout(function tryAutoLogin() {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
         const loginScreen = document.getElementById('login-screen');
@@ -35,9 +35,8 @@ window.fetch = async function(url, options = {}) {
             loadData('users', 'Пользователи');
         }
     }
-})();
+}, 0);
 // ================================================================================
-
 
 let currentEntity = 'users';
 let currentItems = [];
