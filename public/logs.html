@@ -40,10 +40,24 @@
         .audit-arrow { color: #999; }
         .table-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f1ff; color: #0056b3; font-size: 12px; font-weight: bold; }
 
-        /* Строка фильтров под шапкой таблицы */
-        .filter-row th { background: #495057; padding: 6px 8px; }
-        .filter-input { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 12px; border: 1px solid #ced4da; border-radius: 3px; font-weight: normal; }
-        .filter-input::placeholder { color: #adb5bd; }
+        /* Строка фильтров под шапкой таблицы — визуально часть шапки, не оторвана от неё */
+        .filter-row th { background: #3b4147; padding: 8px 8px 10px; border-top: 1px solid #4d545b; }
+        .filter-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 9px;
+            font-size: 12px;
+            font-weight: normal;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.92);
+            color: #333;
+            outline: none;
+            transition: background 0.15s, box-shadow 0.15s;
+        }
+        .filter-input::placeholder { color: #999; }
+        .filter-input:hover { background: #fff; }
+        .filter-input:focus { background: #fff; border-color: #80bdff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
     </style>
 </head>
 <body>
