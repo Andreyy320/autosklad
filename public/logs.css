@@ -1,0 +1,54 @@
+body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+        .back-btn { display: inline-block; margin-bottom: 15px; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; }
+        .back-btn:hover { background: #5a6268; }
+        
+        /* Стили для вкладок */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; flex-wrap: wrap; }
+        .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: #495057; }
+        .tab-btn.active { background: #007bff; color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        th { background-color: #343a40; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Бейджики действий */
+        .badge { display: inline-block; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-top: 4px; }
+        .badge-insert { background: #28a745; color: white; }
+        .badge-update { background: #ffc107; color: #333; }
+        .badge-delete { background: #dc3545; color: white; }
+        .badge-default { background: #6c757d; color: white; }
+        .json-details { font-family: monospace; font-size: 11px; color: #444; background: #f8f9fa; padding: 4px; border-radius: 4px; max-height: 100px; overflow-y: auto; }
+
+        /* Карточки деталей аудита */
+        .audit-fields { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; padding-right: 4px; }
+        .audit-field-row { font-size: 12px; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .audit-field-label { color: #555; font-weight: 600; white-space: nowrap; }
+        .audit-field-value { color: #212529; }
+        .audit-field-old { color: #d9534f; text-decoration: line-through; }
+        .audit-field-new { color: #28a745; font-weight: 600; }
+        .audit-arrow { color: #999; }
+        .table-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f1ff; color: #0056b3; font-size: 12px; font-weight: bold; }
+
+        /* Строка фильтров под шапкой таблицы — визуально часть шапки, не оторвана от неё */
+        .filter-row th { background: #3b4147; padding: 8px 8px 10px; border-top: 1px solid #4d545b; }
+        .filter-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 9px;
+            font-size: 12px;
+            font-weight: normal;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.92);
+            color: #333;
+            outline: none;
+            transition: background 0.15s, box-shadow 0.15s;
+        }
+        .filter-input::placeholder { color: #999; }
+        .filter-input:hover { background: #fff; }
+        .filter-input:focus { background: #fff; border-color: #80bdff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }

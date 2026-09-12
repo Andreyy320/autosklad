@@ -1,0 +1,576 @@
+let currentType = 'Приход';
+    let warehousesMap = {};
+
+    // ==================== СЛОВАРИ ПЕРЕВОДА ДЛЯ АУДИТА ====================
+    // Названия таблиц БД -> человекопонятные названия разделов на русском
+    const tableNamesRu = {
+        'users': 'Пользователи',
+        'spare_parts': 'Запчасти',
+        'zaphasti': 'Запчасти',
+        'car_brands': 'Марки автомобилей',
+        'brands': 'Марки автомобилей',
+        'kyzov_type': 'Тип кузова',
+        'bodies': 'Тип кузова',
+        'car_models': 'Модели автомобилей',
+        'models': 'Модели автомобилей',
+        'counterparties': 'Контрагенты',
+        'postavhik': 'Поставщики',
+        'postavhik_contacts': 'Контакты поставщиков',
+        'customers': 'Клиенты',
+        'customer_contacts': 'Контакты клиентов',
+        'customer_cars': 'Автомобили клиентов',
+        'counterparty_types': 'Типы контрагентов',
+        'counterparty_contacts': 'Контакты контрагентов',
+        'type_sklad': 'Типы складов',
+        'skladi': 'Склады',
+        'cars': 'Автомобили',
+        'type_rabot': 'Типы работ',
+        'works': 'Работы',
+        'ispolnitel': 'Исполнители',
+        'repair_types': 'Типы ремонта',
+        'gruppa_tsen': 'Группа цен',
+        'proizvoditel_zaphasti': 'Производители запчастей',
+        'gryppa_zamehenia': 'Группа взаимозаменяемости',
+        'vidy_rabot': 'Виды работ',
+        'toplivo': 'Тип топлива',
+        'ed_izmereniya': 'Единицы измерения',
+        'mol': 'Материально ответственные лица',
+        'mol_users': 'МОЛ пользователей',
+        'receipts': 'Приходы',
+        'receipt_items': 'Позиции прихода',
+        'receipt_logs': 'Журнал приходов',
+        'moves': 'Перемещения',
+        'move_logs': 'Журнал перемещений',
+        'statuses': 'Статусы',
+        'autoservices': 'Автосервисы',
+        'payment_types': 'Типы оплаты',
+        'accidents': 'ДТП / Страховые случаи',
+        'accident_invoices': 'Счета по ДТП',
+        'accident_payments': 'Оплаты по ДТП',
+        'accident_events': 'События по ДТП',
+        'accident_images': 'Фото ДТП',
+        'repairs': 'Ремонты',
+        'repair_works': 'Работы по ремонту',
+        'repair_logs': 'Журнал ремонтов',
+        'realizations': 'Реализации',
+        'realization_items': 'Позиции реализации',
+        'realization_works': 'Работы по реализации',
+        'realization_logs': 'Журнал реализаций',
+        'part_discounts': 'Скидки на запчасти',
+        'service_discounts': 'Скидки на работы',
+        'customer_payments': 'Оплаты клиентов',
+        'supplier_payments': 'Оплаты поставщикам',
+        'warehouse_debt_payments': 'Оплаты по перемещениям',
+        'warehouse_batches': 'Партии на складе',
+        'car_details': 'Данные автомобиля',
+        'document_sequences': 'Нумерация документов',
+        'audit_logs': 'Журнал аудита'
+    };
+
+    // Названия полей БД -> подписи на русском (используется в колонке "Детали изменений")
+    const fieldNamesRu = {
+        'id': 'ID',
+        'name': 'Название',
+        'name_full': 'Полное название',
+        'name_short': 'Краткое название',
+        'description': 'Описание',
+        'date': 'Дата',
+        'doc_date': 'Дата документа',
+        'fact_date': 'Фактическая дата',
+        'created_at': 'Дата создания',
+        'updated_at': 'Дата изменения',
+        'is_posted': 'Проведён',
+        'doc_number': 'Номер документа',
+        'user_id': 'Пользователь',
+        'customer_id': 'Клиент',
+        'supplier_id': 'Поставщик',
+        'warehouse_id': 'Склад',
+        'warehouse_from_id': 'Склад-отправитель',
+        'warehouse_to_id': 'Склад-получатель',
+        'sklad_id': 'Склад',
+        'mol_id': 'МОЛ',
+        'mol_from_id': 'МОЛ (откуда)',
+        'mol_to_id': 'МОЛ (куда)',
+        'quantity': 'Количество',
+        'price': 'Цена',
+        'price_rub': 'Цена (руб.)',
+        'total': 'Итого',
+        'total_rub': 'Итого (руб.)',
+        'total_amount': 'Сумма',
+        'amount': 'Сумма',
+        'comment': 'Комментарий',
+        'reason': 'Причина',
+        'article': 'Артикул',
+        'vin': 'VIN',
+        'year': 'Год выпуска',
+        'color': 'Цвет',
+        'engine': 'Объём двигателя',
+        'gos_number': 'Гос. номер',
+        'car_number': 'Гос. номер',
+        'toplivo_id': 'Тип топлива',
+        'car_id': 'Автомобиль',
+        'car_model': 'Модель авто',
+        'brand_id': 'Марка',
+        'model_id': 'Модель',
+        'body_id': 'Тип кузова',
+        'kyzov_type_id': 'Тип кузова',
+        'counterparty_id': 'Контрагент',
+        'counterparty_type_id': 'Тип контрагента',
+        'receipt_id': 'Приход',
+        'realization_id': 'Реализация',
+        'move_id': 'Перемещение',
+        'repair_id': 'Ремонт',
+        'zaphasti_id': 'Запчасть',
+        'part_id': 'Запчасть',
+        'service_id': 'Услуга',
+        'work_id': 'Работа',
+        'discount': 'Скидка',
+        'currency': 'Валюта',
+        'login': 'Логин',
+        'password': 'Пароль',
+        'password_hash': 'Пароль (хэш)',
+        'role': 'Роль',
+        'phone': 'Телефон',
+        'address': 'Адрес',
+        'email': 'Email',
+        'status': 'Статус',
+        'status_id': 'Статус',
+        'ispolnitel_id': 'Исполнитель',
+        'gruppa_tsen_id': 'Группа цен',
+        'proizvoditel_id': 'Производитель',
+        'ed_izmereniya_id': 'Единица измерения',
+        'payment_type_id': 'Тип оплаты',
+        'autoservice_id': 'Автосервис'
+    };
+
+    // Переводит название таблицы/сущности в понятное русское название
+    function translateTable(name) {
+        if (!name) return '—';
+        return tableNamesRu[name] || name;
+    }
+
+    // Переводит название поля в понятную русскую подпись, форматирует значение
+    function translateField(key) {
+        return fieldNamesRu[key] || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    }
+
+    // Форматирует значение поля для читаемого вида (даты, булевы, склады по ID)
+    function formatFieldValue(key, val) {
+        if (val === null || val === undefined || val === '') return 'пусто';
+        if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
+        if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
+
+        // Заменяем ID склада на его название, если знаем справочник
+        if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
+            return warehousesMap[val];
+        }
+
+        // Пытаемся красиво отформатировать дату/время
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.toLocaleString('ru-RU');
+        }
+
+        return val;
+    }
+    // ================================================================================
+
+    // ==================== АВТОРИЗАЦИЯ ДЛЯ СТРАНИЦЫ ЖУРНАЛА ====================
+    // Эта страница отдельная от основного приложения (свой script), поэтому
+    // подставляем токен так же, как это делает основной script.js — иначе
+    // все запросы будут получать 401, ведь /api теперь защищён.
+    const _originalFetch = window.fetch;
+    window.fetch = async function(url, options = {}) {
+        const isApiCall = typeof url === 'string' && url.startsWith('/api/');
+        if (isApiCall) {
+            const token = localStorage.getItem('token');
+            options.headers = {
+                ...(options.headers || {}),
+                'Authorization': token ? `Bearer ${token}` : ''
+            };
+        }
+        const response = await _originalFetch(url, options);
+        if (isApiCall && response.status === 401) {
+            alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
+            localStorage.clear();
+            window.location.href = '/';
+        }
+        return response;
+    };
+    // ================================================================================
+
+    async function loadWarehouses() {
+        try {
+            const res = await fetch('/api/warehouses');
+            if (res.ok) {
+                const list = await res.json();
+                list.forEach(w => {
+                    warehousesMap[w.id] = w.name;
+                });
+            }
+        } catch (e) {
+            console.error('Не удалось загрузить справочник складов:', e);
+        }
+    }
+
+    // Функция красивого форматирования деталей аудита
+    function formatAuditDetails(log) {
+        let details;
+        try {
+            details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+        } catch (e) {
+            return log.details || '—';
+        }
+
+        if (!details) return '—';
+
+        // ЕСЛИ ЭТО UPDATE (содержит изменения `changes`)
+        if (log.action === 'UPDATE' && details.changes) {
+            let html = '<div class="audit-fields">';
+            for (const [field, val] of Object.entries(details.changes)) {
+                html += `<div class="audit-field-row">
+                    <span class="audit-field-label">${translateField(field)}:</span>
+                    <span class="audit-field-old">${formatFieldValue(field, val.from)}</span>
+                    <span class="audit-arrow">➔</span>
+                    <span class="audit-field-new">${formatFieldValue(field, val.to)}</span>
+                </div>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        // ЕСЛИ ЭТО INSERT или DELETE (показываем поля и значения аккуратными карточками)
+        if (typeof details === 'object') {
+            let html = '<div class="audit-fields">';
+            for (const [key, val] of Object.entries(details)) {
+                if (val !== null && val !== '' && val !== undefined) {
+                    html += `<div class="audit-field-row">
+                        <span class="audit-field-label">${translateField(key)}:</span>
+                        <span class="audit-field-value">${formatFieldValue(key, val)}</span>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        return JSON.stringify(details);
+    }
+
+    // Динамическое формирование шапки таблицы
+    function renderTableHead(type) {
+        const thead = document.getElementById('table-head');
+        if (type === 'Перемещение') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Направление (Откуда ➔ Куда)</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
+        } else if (type === 'Ремонт') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Склад</th>
+                    <th>Автомобиль</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
+        } else if (type === 'Реализация') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Склад</th>
+                    <th>Покупатель / Авто</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Сумма (руб.)</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
+        } else if (type === 'Аудит') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Раздел</th>
+                    <th>ID записи</th>
+                    <th>IP-адрес</th>
+                    <th style="width: 40%;">Детали изменений</th>
+                </tr>
+            `;
+        } else if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время</th>
+                    <th>Пользователь</th>
+                    <th>Документ-основание</th>
+                    <th>Контрагент</th>
+                    <th class="text-right">Сумма оплаты (руб.)</th>
+                    <th>Комментарий</th>
+                </tr>
+            `;
+        } else {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Контрагент</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Скидка</th>
+                    <th class="text-right">Итого</th>
+                    <th>Направление / Причина / Детали</th>
+                </tr>
+            `;
+        }
+
+        // Добавляем строку фильтров под шапкой — не трогая уже готовые блоки выше,
+        // просто достраиваем поля по фактическому числу колонок текущей вкладки.
+        addFilterRow(thead);
+    }
+
+    // Строит строку с полями фильтра под шапкой таблицы (по числу колонок)
+    function addFilterRow(thead) {
+        const headerRow = thead.querySelector('tr');
+        if (!headerRow) return;
+        const colCount = headerRow.children.length;
+        let filterHtml = '<tr class="filter-row">';
+        for (let i = 0; i < colCount; i++) {
+            filterHtml += `<th><input type="text" class="filter-input" data-col-index="${i}" placeholder="Фильтр..." oninput="applyColumnFilters()"></th>`;
+        }
+        filterHtml += '</tr>';
+        thead.insertAdjacentHTML('beforeend', filterHtml);
+    }
+
+    // Фильтрует уже отрисованные строки таблицы по значениям полей фильтра (без обращения к серверу)
+    function applyColumnFilters() {
+        const inputs = document.querySelectorAll('#table-head .filter-input');
+        const filters = Array.from(inputs).map(inp => inp.value.trim().toLowerCase());
+        const tbody = document.getElementById('logs-table-body');
+        const rows = tbody.querySelectorAll('tr');
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+
+            // Служебные строки-заглушки (загрузка / нет записей / ошибка) не трогаем
+            if (cells.length <= 1) {
+                row.style.display = '';
+                return;
+            }
+
+            let visible = true;
+            for (let i = 0; i < filters.length; i++) {
+                if (!filters[i]) continue;
+                const cellText = (cells[i] ? cells[i].textContent : '').toLowerCase();
+                if (!cellText.includes(filters[i])) {
+                    visible = false;
+                    break;
+                }
+            }
+            row.style.display = visible ? '' : 'none';
+        });
+    }
+
+    async function loadLogs(type, endpoint) {
+        currentType = type;
+        renderTableHead(type);
+
+        let colspanCount = 10;
+        if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
+        if (type === 'Реализация') colspanCount = 10;
+        if (type === 'Аудит') colspanCount = 6;
+        if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
+
+        const tbody = document.getElementById('logs-table-body');
+        tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
+
+        console.log(`Фронтенд: отправляем запрос на ${endpoint}`);
+
+        try {
+            const response = await fetch(endpoint);
+            
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Сервер вернул не JSON (возможно, ошибка 404 или 500)");
+            }
+
+            const logs = await response.json();
+            console.log(`Фронтенд: получено записей от сервера:`, logs);
+            
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(logs) || logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">В этом разделе пока нет записей</td></tr>`;
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                
+                const dateObj = new Date(log.created_at);
+                const formattedDate = isNaN(dateObj.getTime()) ? log.created_at : dateObj.toLocaleString('ru-RU');
+
+                const action = (log.action || log.action_type || 'INSERT').toUpperCase();
+                let actionBadge = '';
+
+                if (action === 'INSERT' || action === 'ДОБАВЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-insert">Добавил</span>';
+                } else if (action === 'UPDATE' || action === 'ИЗМЕНЕНИЕ') {
+                    actionBadge = '<span class="badge badge-update">Изменил</span>';
+                } else if (action === 'DELETE' || action === 'УДАЛЕНИЕ') {
+                    actionBadge = '<span class="badge badge-delete">Удалил</span>';
+                } else {
+                    actionBadge = `<span class="badge badge-default">${action}</span>`;
+                }
+
+                const partName = log.part_name || log.name || log.zaphasti_name || log.zaphast_name || '—';
+                const partArticle = log.part_article || log.article || log.zaphasti_article || '—';
+
+                if (currentType === 'Перемещение') {
+                    const whFrom = log.warehouse_from_name || warehousesMap[log.warehouse_from_id] || log.warehouse_from_id || 'Склад';
+                    const whTo = log.warehouse_to_name || warehousesMap[log.warehouse_to_id] || log.warehouse_to_id || 'Склад';
+                    const directionStr = `<strong>${whFrom}</strong> ➔ <strong>${whTo}</strong>`;
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_number || log.doc_number || '—'}</td>
+                        <td>${directionStr}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price_rub || log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total_rub || log.total_amount || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || log.reason || '—'}</td>
+                    `;
+                } else if (currentType === 'Ремонт') {
+                    const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
+                    const carInfo = log.car_number ? `${log.car_number} (${log.car_model || '—'})` : (log.car_id ? `Авто ID: ${log.car_id}` : '—');
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${whName}</td>
+                        <td>${carInfo}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || '—'}</td>
+                    `;
+                } else if (currentType === 'Реализация') {
+                    const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
+                    const customerOrCar = [log.customer_name, log.car_number ? `${log.car_number} (${log.car_model})` : null].filter(Boolean).join(' / ') || '—';
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_number || '—'}</td>
+                        <td>${whName}</td>
+                        <td>${customerOrCar}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || '—'}</td>
+                    `;
+                } else if (currentType === 'Оплаты клиентов' || currentType === 'Оплаты поставщикам' || currentType === 'Оплаты по перемещениям') {
+                    let docLabel = log.doc_number || '—';
+                    if (currentType === 'Оплаты клиентов') docLabel = `Реализация ${docLabel}`;
+                    else if (currentType === 'Оплаты поставщикам') docLabel = `Приход ${docLabel}`;
+                    else docLabel = `Перемещение ${docLabel}`;
+
+                    tr.innerHTML = `
+                        <td>${formattedDate}</td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${docLabel}</td>
+                        <td>${log.counterparty || '—'}</td>
+                        <td class="text-right"><strong>${Number(log.total_amount || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.reason || '—'}</td>
+                    `;
+                } else if (currentType === 'Аудит') {
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td><span class="table-tag">${translateTable(log.table_name || log.entity)}</span></td>
+                        <td>${log.record_id || '—'}</td>
+                        <td>${log.ip_address || '—'}</td>
+                        <td>${formatAuditDetails(log)}</td>
+                    `;
+                } else {
+                    let rawFrom = log.warehouse_from_id || log.warehouse_from;
+                    let rawTo = log.warehouse_to_id || log.warehouse_to;
+
+                    if (rawFrom && warehousesMap[rawFrom]) rawFrom = warehousesMap[rawFrom];
+                    if (rawTo && warehousesMap[rawTo]) rawTo = warehousesMap[rawTo];
+
+                    let directionOrReason = log.reason || log.description || '';
+                    if (rawFrom || rawTo) {
+                        const whFrom = rawFrom || 'Склад';
+                        const whTo = rawTo || 'Склад';
+                        directionOrReason = `${whFrom} ➔ ${whTo} ${directionOrReason ? '(' + directionOrReason + ')' : ''}`;
+                    }
+
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || log.user_id || 'Система'}</strong></td>
+                        <td>${log.doc_number || '—'}</td>
+                        <td>${log.counterparty || log.customer_name || '—'}</td>
+                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+                        <td class="text-right">${log.discount || '—'}</td>
+                        <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                        <td>${directionOrReason}</td>
+                    `;
+                }
+                tbody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Ошибка загрузки логов на клиенте:', err);
+            tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
+        }
+    }
+
+    function switchTab(type, endpoint, buttonElement) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        buttonElement.classList.add('active');
+        loadLogs(type, endpoint);
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+        await loadWarehouses();
+        loadLogs('Приход', '/api/get-receipt-logs');
+    });
