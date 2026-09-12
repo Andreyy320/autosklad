@@ -148,7 +148,7 @@ const loginLimiter = rateLimit({
     const token = jwt.sign(
         { id: user.id, login: user.login },
         process.env.JWT_SECRET,
-        { expiresIn: '12h' }
+        { expiresIn: '3h' }
     );
 
     return res.json({ success: true, user: safeUser, token });

@@ -1,4 +1,5 @@
 
+
 const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
@@ -21,6 +22,21 @@ window.fetch = async function(url, options = {}) {
 
     return response;
 };
+
+// ==================== АВТО-ВХОД ПО СОХРАНЁННОМУ ТОКЕНУ ====================
+(function tryAutoLogin() {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+        const loginScreen = document.getElementById('login-screen');
+        const appScreen = document.getElementById('app-screen');
+        if (loginScreen && appScreen) {
+            loginScreen.style.display = 'none';
+            appScreen.style.display = 'flex';
+            loadData('users', 'Пользователи');
+        }
+    }
+})();
+// ================================================================================
 
 
 let currentEntity = 'users';
