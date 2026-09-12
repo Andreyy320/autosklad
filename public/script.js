@@ -9635,9 +9635,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 footerTr.style.fontWeight = 'bold';
                 footerTr.style.borderTop = '1px solid #e2e8f0';
                 footerTr.style.borderBottom = '2px solid #cbd5e1';
-                footerTr.innerHTML = `
+                                footerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 16px;">
-                        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
+                        <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
                             <span style="color: #475569;">Плюс запчасти: <b style="color: #0284c7; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
                             <span style="color: #475569;">Услуги: <b style="color: #7c3aed; font-weight: 600;">${group.totalWorksProfit.toFixed(2)}</b></span>
                             <span style="color: #475569;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 600;">${group.totalNetProfit.toFixed(2)}</b></span>
@@ -9789,9 +9789,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 footerTr.style.borderTop = '1px solid #e2e8f0';
                 footerTr.style.borderBottom = '2px solid #cbd5e1';
 
-                footerTr.innerHTML = `
+                               footerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 16px;">
-                        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
+                        <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
                             <span style="color: #475569;">Плюс запчасти: <b style="color: #0284c7; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
                             <span style="color: #475569;">Услуги: <b style="color: #7c3aed; font-weight: 600;">${group.totalWorksSum.toFixed(2)}</b></span>
                             <span style="color: #475569;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 600;">${group.totalNetProfit.toFixed(2)}</b></span>
