@@ -39,13 +39,18 @@
         .audit-field-new { color: #28a745; font-weight: 600; }
         .audit-arrow { color: #999; }
         .table-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f1ff; color: #0056b3; font-size: 12px; font-weight: bold; }
+
+        /* Строка фильтров под шапкой таблицы */
+        .filter-row th { background: #495057; padding: 6px 8px; }
+        .filter-input { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 12px; border: 1px solid #ced4da; border-radius: 3px; font-weight: normal; }
+        .filter-input::placeholder { color: #adb5bd; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <a href="/" class="back-btn">← На главную в склад</a>
-    <h1>📦 Журнал движения запчастей и операций</h1>
+    <h1>Журнал движения запчастей и операций</h1>
     
     <!-- Вкладки со своими эндпоинтами -->
     <div class="tabs">
@@ -413,6 +418,52 @@
                 </tr>
             `;
         }
+
+        // Добавляем строку фильтров под шапкой — не трогая уже готовые блоки выше,
+        // просто достраиваем поля по фактическому числу колонок текущей вкладки.
+        addFilterRow(thead);
+    }
+
+    // Строит строку с полями фильтра под шапкой таблицы (по числу колонок)
+    function addFilterRow(thead) {
+        const headerRow = thead.querySelector('tr');
+        if (!headerRow) return;
+        const colCount = headerRow.children.length;
+        let filterHtml = '<tr class="filter-row">';
+        for (let i = 0; i < colCount; i++) {
+            filterHtml += `<th><input type="text" class="filter-input" data-col-index="${i}" placeholder="Фильтр..." oninput="applyColumnFilters()"></th>`;
+        }
+        filterHtml += '</tr>';
+        thead.insertAdjacentHTML('beforeend', filterHtml);
+    }
+
+    // Фильтрует уже отрисованные строки таблицы по значениям полей фильтра (без обращения к серверу)
+    function applyColumnFilters() {
+        const inputs = document.querySelectorAll('#table-head .filter-input');
+        const filters = Array.from(inputs).map(inp => inp.value.trim().toLowerCase());
+        const tbody = document.getElementById('logs-table-body');
+        const rows = tbody.querySelectorAll('tr');
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+
+            // Служебные строки-заглушки (загрузка / нет записей / ошибка) не трогаем
+            if (cells.length <= 1) {
+                row.style.display = '';
+                return;
+            }
+
+            let visible = true;
+            for (let i = 0; i < filters.length; i++) {
+                if (!filters[i]) continue;
+                const cellText = (cells[i] ? cells[i].textContent : '').toLowerCase();
+                if (!cellText.includes(filters[i])) {
+                    visible = false;
+                    break;
+                }
+            }
+            row.style.display = visible ? '' : 'none';
+        });
     }
 
     async function loadLogs(type, endpoint) {
@@ -428,7 +479,7 @@
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
 
-        console.log(`🌐 Фронтенд: отправляем запрос на ${endpoint}`);
+        console.log(`Фронтенд: отправляем запрос на ${endpoint}`);
 
         try {
             const response = await fetch(endpoint);
@@ -439,7 +490,7 @@
             }
 
             const logs = await response.json();
-            console.log(`📥 Фронтенд: получено записей от сервера:`, logs);
+            console.log(`Фронтенд: получено записей от сервера:`, logs);
             
             tbody.innerHTML = '';
 
@@ -458,11 +509,11 @@
                 let actionBadge = '';
 
                 if (action === 'INSERT' || action === 'ДОБАВЛЕНИЕ') {
-                    actionBadge = '<span class="badge badge-insert">➕ Добавил</span>';
+                    actionBadge = '<span class="badge badge-insert">Добавил</span>';
                 } else if (action === 'UPDATE' || action === 'ИЗМЕНЕНИЕ') {
-                    actionBadge = '<span class="badge badge-update">✏️ Изменил</span>';
+                    actionBadge = '<span class="badge badge-update">Изменил</span>';
                 } else if (action === 'DELETE' || action === 'УДАЛЕНИЕ') {
-                    actionBadge = '<span class="badge badge-delete">🗑️ Удалил</span>';
+                    actionBadge = '<span class="badge badge-delete">Удалил</span>';
                 } else {
                     actionBadge = `<span class="badge badge-default">${action}</span>`;
                 }
@@ -585,7 +636,7 @@
                 tbody.appendChild(tr);
             });
         } catch (err) {
-            console.error('❌ Ошибка загрузки логов на клиенте:', err);
+            console.error('Ошибка загрузки логов на клиенте:', err);
             tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
         }
     }
