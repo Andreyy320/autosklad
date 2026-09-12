@@ -29,6 +29,16 @@
         .badge-delete { background: #dc3545; color: white; }
         .badge-default { background: #6c757d; color: white; }
         .json-details { font-family: monospace; font-size: 11px; color: #444; background: #f8f9fa; padding: 4px; border-radius: 4px; max-height: 100px; overflow-y: auto; }
+
+        /* Карточки деталей аудита */
+        .audit-fields { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; padding-right: 4px; }
+        .audit-field-row { font-size: 12px; background: #f8f9fa; border-radius: 4px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .audit-field-label { color: #555; font-weight: 600; white-space: nowrap; }
+        .audit-field-value { color: #212529; }
+        .audit-field-old { color: #d9534f; text-decoration: line-through; }
+        .audit-field-new { color: #28a745; font-weight: 600; }
+        .audit-arrow { color: #999; }
+        .table-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f1ff; color: #0056b3; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -62,6 +72,180 @@
 <script>
     let currentType = 'Приход';
     let warehousesMap = {};
+
+    // ==================== СЛОВАРИ ПЕРЕВОДА ДЛЯ АУДИТА ====================
+    // Названия таблиц БД -> человекопонятные названия разделов на русском
+    const tableNamesRu = {
+        'users': 'Пользователи',
+        'spare_parts': 'Запчасти',
+        'zaphasti': 'Запчасти',
+        'car_brands': 'Марки автомобилей',
+        'brands': 'Марки автомобилей',
+        'kyzov_type': 'Тип кузова',
+        'bodies': 'Тип кузова',
+        'car_models': 'Модели автомобилей',
+        'models': 'Модели автомобилей',
+        'counterparties': 'Контрагенты',
+        'postavhik': 'Поставщики',
+        'postavhik_contacts': 'Контакты поставщиков',
+        'customers': 'Клиенты',
+        'customer_contacts': 'Контакты клиентов',
+        'customer_cars': 'Автомобили клиентов',
+        'counterparty_types': 'Типы контрагентов',
+        'counterparty_contacts': 'Контакты контрагентов',
+        'type_sklad': 'Типы складов',
+        'skladi': 'Склады',
+        'cars': 'Автомобили',
+        'type_rabot': 'Типы работ',
+        'works': 'Работы',
+        'ispolnitel': 'Исполнители',
+        'repair_types': 'Типы ремонта',
+        'gruppa_tsen': 'Группа цен',
+        'proizvoditel_zaphasti': 'Производители запчастей',
+        'gryppa_zamehenia': 'Группа взаимозаменяемости',
+        'vidy_rabot': 'Виды работ',
+        'toplivo': 'Тип топлива',
+        'ed_izmereniya': 'Единицы измерения',
+        'mol': 'Материально ответственные лица',
+        'mol_users': 'МОЛ пользователей',
+        'receipts': 'Приходы',
+        'receipt_items': 'Позиции прихода',
+        'receipt_logs': 'Журнал приходов',
+        'moves': 'Перемещения',
+        'move_logs': 'Журнал перемещений',
+        'statuses': 'Статусы',
+        'autoservices': 'Автосервисы',
+        'payment_types': 'Типы оплаты',
+        'accidents': 'ДТП / Страховые случаи',
+        'accident_invoices': 'Счета по ДТП',
+        'accident_payments': 'Оплаты по ДТП',
+        'accident_events': 'События по ДТП',
+        'accident_images': 'Фото ДТП',
+        'repairs': 'Ремонты',
+        'repair_works': 'Работы по ремонту',
+        'repair_logs': 'Журнал ремонтов',
+        'realizations': 'Реализации',
+        'realization_items': 'Позиции реализации',
+        'realization_works': 'Работы по реализации',
+        'realization_logs': 'Журнал реализаций',
+        'part_discounts': 'Скидки на запчасти',
+        'service_discounts': 'Скидки на работы',
+        'customer_payments': 'Оплаты клиентов',
+        'supplier_payments': 'Оплаты поставщикам',
+        'warehouse_debt_payments': 'Оплаты по перемещениям',
+        'warehouse_batches': 'Партии на складе',
+        'car_details': 'Данные автомобиля',
+        'document_sequences': 'Нумерация документов',
+        'audit_logs': 'Журнал аудита'
+    };
+
+    // Названия полей БД -> подписи на русском (используется в колонке "Детали изменений")
+    const fieldNamesRu = {
+        'id': 'ID',
+        'name': 'Название',
+        'name_full': 'Полное название',
+        'name_short': 'Краткое название',
+        'description': 'Описание',
+        'date': 'Дата',
+        'doc_date': 'Дата документа',
+        'fact_date': 'Фактическая дата',
+        'created_at': 'Дата создания',
+        'updated_at': 'Дата изменения',
+        'is_posted': 'Проведён',
+        'doc_number': 'Номер документа',
+        'user_id': 'Пользователь',
+        'customer_id': 'Клиент',
+        'supplier_id': 'Поставщик',
+        'warehouse_id': 'Склад',
+        'warehouse_from_id': 'Склад-отправитель',
+        'warehouse_to_id': 'Склад-получатель',
+        'sklad_id': 'Склад',
+        'mol_id': 'МОЛ',
+        'mol_from_id': 'МОЛ (откуда)',
+        'mol_to_id': 'МОЛ (куда)',
+        'quantity': 'Количество',
+        'price': 'Цена',
+        'price_rub': 'Цена (руб.)',
+        'total': 'Итого',
+        'total_rub': 'Итого (руб.)',
+        'total_amount': 'Сумма',
+        'amount': 'Сумма',
+        'comment': 'Комментарий',
+        'reason': 'Причина',
+        'article': 'Артикул',
+        'vin': 'VIN',
+        'year': 'Год выпуска',
+        'color': 'Цвет',
+        'engine': 'Объём двигателя',
+        'gos_number': 'Гос. номер',
+        'car_number': 'Гос. номер',
+        'toplivo_id': 'Тип топлива',
+        'car_id': 'Автомобиль',
+        'car_model': 'Модель авто',
+        'brand_id': 'Марка',
+        'model_id': 'Модель',
+        'body_id': 'Тип кузова',
+        'kyzov_type_id': 'Тип кузова',
+        'counterparty_id': 'Контрагент',
+        'counterparty_type_id': 'Тип контрагента',
+        'receipt_id': 'Приход',
+        'realization_id': 'Реализация',
+        'move_id': 'Перемещение',
+        'repair_id': 'Ремонт',
+        'zaphasti_id': 'Запчасть',
+        'part_id': 'Запчасть',
+        'service_id': 'Услуга',
+        'work_id': 'Работа',
+        'discount': 'Скидка',
+        'currency': 'Валюта',
+        'login': 'Логин',
+        'password': 'Пароль',
+        'password_hash': 'Пароль (хэш)',
+        'role': 'Роль',
+        'phone': 'Телефон',
+        'address': 'Адрес',
+        'email': 'Email',
+        'status': 'Статус',
+        'status_id': 'Статус',
+        'ispolnitel_id': 'Исполнитель',
+        'gruppa_tsen_id': 'Группа цен',
+        'proizvoditel_id': 'Производитель',
+        'ed_izmereniya_id': 'Единица измерения',
+        'payment_type_id': 'Тип оплаты',
+        'autoservice_id': 'Автосервис'
+    };
+
+    // Переводит название таблицы/сущности в понятное русское название
+    function translateTable(name) {
+        if (!name) return '—';
+        return tableNamesRu[name] || name;
+    }
+
+    // Переводит название поля в понятную русскую подпись, форматирует значение
+    function translateField(key) {
+        return fieldNamesRu[key] || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    }
+
+    // Форматирует значение поля для читаемого вида (даты, булевы, склады по ID)
+    function formatFieldValue(key, val) {
+        if (val === null || val === undefined || val === '') return 'пусто';
+        if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
+        if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
+
+        // Заменяем ID склада на его название, если знаем справочник
+        if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
+            return warehousesMap[val];
+        }
+
+        // Пытаемся красиво отформатировать дату/время
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.toLocaleString('ru-RU');
+        }
+
+        return val;
+    }
+    // ================================================================================
 
     // ==================== АВТОРИЗАЦИЯ ДЛЯ СТРАНИЦЫ ЖУРНАЛА ====================
     // Эта страница отдельная от основного приложения (свой script), поэтому
@@ -114,25 +298,28 @@
 
         // ЕСЛИ ЭТО UPDATE (содержит изменения `changes`)
         if (log.action === 'UPDATE' && details.changes) {
-            let html = '<div style="font-size: 13px;">';
+            let html = '<div class="audit-fields">';
             for (const [field, val] of Object.entries(details.changes)) {
-                html += `<div style="margin-bottom: 2px;">
-                    <span style="color: #666; font-weight: 500;">${field}:</span> 
-                    <span style="text-decoration: line-through; color: #d9534f;">${val.from ?? 'пусто'}</span> 
-                    ➔ 
-                    <span style="color: #5cb85c; font-weight: 500;">${val.to ?? 'пусто'}</span>
+                html += `<div class="audit-field-row">
+                    <span class="audit-field-label">${translateField(field)}:</span>
+                    <span class="audit-field-old">${formatFieldValue(field, val.from)}</span>
+                    <span class="audit-arrow">➔</span>
+                    <span class="audit-field-new">${formatFieldValue(field, val.to)}</span>
                 </div>`;
             }
             html += '</div>';
             return html;
         }
 
-        // ЕСЛИ ЭТО INSERT или DELETE (просто показываем поля и значения списком)
+        // ЕСЛИ ЭТО INSERT или DELETE (показываем поля и значения аккуратными карточками)
         if (typeof details === 'object') {
-            let html = '<div style="font-size: 12px; color: #444; max-height: 100px; overflow-y: auto;">';
+            let html = '<div class="audit-fields">';
             for (const [key, val] of Object.entries(details)) {
                 if (val !== null && val !== '' && val !== undefined) {
-                    html += `<span><b>${key}:</b> ${val}</span>; `;
+                    html += `<div class="audit-field-row">
+                        <span class="audit-field-label">${translateField(key)}:</span>
+                        <span class="audit-field-value">${formatFieldValue(key, val)}</span>
+                    </div>`;
                 }
             }
             html += '</div>';
@@ -193,10 +380,10 @@
                 <tr>
                     <th>Дата / Время / Действие</th>
                     <th>Пользователь</th>
-                    <th>Таблица / Сущность</th>
+                    <th>Раздел</th>
                     <th>ID записи</th>
                     <th>IP-адрес</th>
-                    <th>Детали изменений</th>
+                    <th style="width: 40%;">Детали изменений</th>
                 </tr>
             `;
         } else if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') {
@@ -360,7 +547,7 @@
                             ${actionBadge}
                         </td>
                         <td><strong>${log.user_name || 'Система'}</strong></td>
-                        <td>${log.table_name || log.entity || '—'}</td>
+                        <td><span class="table-tag">${translateTable(log.table_name || log.entity)}</span></td>
                         <td>${log.record_id || '—'}</td>
                         <td>${log.ip_address || '—'}</td>
                         <td>${formatAuditDetails(log)}</td>
