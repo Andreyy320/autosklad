@@ -199,6 +199,17 @@
                     <th>Детали изменений</th>
                 </tr>
             `;
+        } else if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время</th>
+                    <th>Пользователь</th>
+                    <th>Документ-основание</th>
+                    <th>Контрагент</th>
+                    <th class="text-right">Сумма оплаты (руб.)</th>
+                    <th>Комментарий</th>
+                </tr>
+            `;
         } else {
             thead.innerHTML = `
                 <tr>
@@ -225,6 +236,7 @@
         if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
         if (type === 'Реализация') colspanCount = 10;
         if (type === 'Аудит') colspanCount = 6;
+        if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
 
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
@@ -326,6 +338,20 @@
                         <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
                         <td class="text-right"><strong>${Number(log.total_rub || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.description || '—'}</td>
+                    `;
+                } else if (currentType === 'Оплаты клиентов' || currentType === 'Оплаты поставщикам' || currentType === 'Оплаты по перемещениям') {
+                    let docLabel = log.doc_number || '—';
+                    if (currentType === 'Оплаты клиентов') docLabel = `Реализация ${docLabel}`;
+                    else if (currentType === 'Оплаты поставщикам') docLabel = `Приход ${docLabel}`;
+                    else docLabel = `Перемещение ${docLabel}`;
+
+                    tr.innerHTML = `
+                        <td>${formattedDate}</td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${docLabel}</td>
+                        <td>${log.counterparty || '—'}</td>
+                        <td class="text-right"><strong>${Number(log.total_amount || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.reason || '—'}</td>
                     `;
                 } else if (currentType === 'Аудит') {
                     tr.innerHTML = `
