@@ -9328,8 +9328,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
-                        window.selectedItem = item;
-
+                        selectedItem = item;
                         if (currentEntity === 'money_receipts_by_customers') {
                             let payload = { sklad_id: window.currentSkladId };
                             if (item.customer_id) payload.customer_id = item.customer_id;
@@ -9466,8 +9465,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
-                        window.selectedItem = item;
-
+                        selectedItem = item;
                         window.currentRealizationId = item.realization_id || item.id;
                         window.currentRepairId = null;
                         window.currentCustomerId = item.customer_id || '';
@@ -9538,8 +9536,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
-                    window.selectedItem = item;
-
+                selectedItem = item;
                                         if (currentEntity === 'money_receipts_by_sklad') {
                         loadReceiptMainData('money_receipts_by_customers', item);
                     } else if (currentEntity === 'money_receipts_by_customers') {
