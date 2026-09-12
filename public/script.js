@@ -2242,7 +2242,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     } else if (entity === 'car_details' && parentId) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     } else if (entity === 'moves') {
-\    } 
+} 
 
     async function renderField(col) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'receipt_id') return '';
