@@ -20,7 +20,6 @@ const upload = multer({
 });
 
 function getServerNowString() {
-    
     const timeZone = 'Europe/Chisinau'; 
 
     const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -31,7 +30,7 @@ function getServerNowString() {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false
+        hourCycle: 'h23'   // ← добавить, hour12 можно убрать
     });
 
     const parts = formatter.formatToParts(new Date());
