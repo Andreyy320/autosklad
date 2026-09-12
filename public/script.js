@@ -3109,6 +3109,8 @@ async function openRealizationWorksForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                            refreshData();
+
                 } else {
                     refreshData();
                 }
@@ -3396,6 +3398,8 @@ async function openRepairWorksForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                            refreshData();
+
                 } else {
                     refreshData();
                 }
@@ -3701,6 +3705,7 @@ async function openReceiptItemsForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
@@ -3998,6 +4003,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
@@ -4281,6 +4287,7 @@ async function openRepairItemsForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
@@ -4586,6 +4593,7 @@ async function openRealizationItemsForm(item = null, parentId = null) {
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
@@ -5034,7 +5042,8 @@ async function openAccidentForm(entity, item = null, parentId = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if (parentId) loadDetailData(entity, parentId);
+                if (parentId) loadDetailData(entity, parentId); 
+                
                 else refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -5749,6 +5758,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
                 if (entity === 'move_items' && parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
@@ -6200,6 +6210,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
                 if (entity === 'repair_items' && parentId) {
                     loadDetailData(entity, parentId);
+                    refreshData();
                 } else {
                     refreshData();
                 }
