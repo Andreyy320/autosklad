@@ -9563,13 +9563,16 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 const [yearStr, monthStr] = key.split('-');
                 const title = monthNames[parseInt(monthStr, 10) - 1] ? `${monthNames[parseInt(monthStr, 10) - 1]} ${yearStr} года` : key;
 
-                if (!groups[key]) {
-                    groups[key] = { title, items: [], totalSum: 0, totalPaid: 0, totalDebt: 0 };
+                                if (!groups[key]) {
+                    groups[key] = { title, items: [], totalSum: 0, totalPaid: 0, totalDebt: 0, totalPartsProfit: 0, totalWorksProfit: 0, totalNetProfit: 0 };
                 }
                 groups[key].items.push(item);
                 groups[key].totalSum += Number(item.total_sum || 0);
                 groups[key].totalPaid += Number(item.total_paid || 0);
                 groups[key].totalDebt += Number(item.total_debt || 0);
+                groups[key].totalPartsProfit += Number(item.total_parts_profit || 0);
+                groups[key].totalWorksProfit += Number(item.total_works_sum || 0);
+                groups[key].totalNetProfit += (Number(item.total_parts_profit || 0) + Number(item.total_works_sum || 0));
             });
 
             let groupIndex = 0;
@@ -9626,6 +9629,23 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     mainTableBody.appendChild(tr);
                     childRows.push(tr);
                 });
+
+                               const footerTr = document.createElement('tr');
+                footerTr.style.background = '#f8fafc';
+                footerTr.style.fontWeight = 'bold';
+                footerTr.style.borderTop = '1px solid #e2e8f0';
+                footerTr.style.borderBottom = '2px solid #cbd5e1';
+                footerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 10px 16px;">
+                        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
+                            <span style="color: #475569;">Плюс запчасти: <b style="color: #0284c7; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                            <span style="color: #475569;">Услуги: <b style="color: #7c3aed; font-weight: 600;">${group.totalWorksProfit.toFixed(2)}</b></span>
+                            <span style="color: #475569;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 600;">${group.totalNetProfit.toFixed(2)}</b></span>
+                        </div>
+                    </td>
+                `;
+                mainTableBody.appendChild(footerTr);
+                childRows.push(footerTr);
 
                 headerTr.addEventListener('click', () => {
                     const icon = document.getElementById(`receipt-icon-${currentGIdx}`);

@@ -4304,6 +4304,7 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                 COALESCE(SUM(parts_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(parts_sum), 0)::numeric AS total_parts_sum,
                 COALESCE(SUM(works_sum), 0)::numeric AS total_works_sum,
+                COALESCE(SUM(parts_profit), 0)::numeric AS total_parts_profit,
                 COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
                 COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
                 (COALESCE(SUM(total_realization_sum), 0) - COALESCE(SUM(total_paid), 0))::numeric AS total_debt
