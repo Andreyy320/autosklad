@@ -3,8 +3,9 @@
         const style = document.createElement('style');
         style.id = 'persistent-resizer-style';
         style.textContent = `
-            table { table-layout: auto !important; }
-            th { position: relative !important; }
+            th { position: relative !important; box-sizing: border-box; }
+            td { box-sizing: border-box; }
+            th, td { overflow-wrap: break-word; word-break: break-word; }
             th .resizer {
                 position: absolute;
                 top: 0;
@@ -92,6 +93,13 @@
                     e.stopPropagation();
                 });
             });
+
+            // Как только все ширины колонок в этой строке зафиксированы явными
+            // пикселями — переключаем ИМЕННО ЭТУ таблицу на table-layout: fixed.
+            // Раньше глобальный !important не давал этого сделать, и браузер
+            // сам "растягивал" соседние колонки при любом ресайзе — отсюда
+            // и была кривая, дёрганая раскладка.
+            table.style.tableLayout = 'fixed';
         });
     }
 
