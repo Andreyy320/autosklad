@@ -66,7 +66,7 @@
 
             <div class="accordion-header"><span>▲ Документы</span></div>
             <div class="accordion-content" style="display: none;">
-                <a href="#" class="nav-link">Приход</a>
+                <a href="#" class="nav-link">Приход запчастей</a>
                 <a href="#" class="nav-link">Перемещение</a>
                 <a href="#" class="nav-link">Ремонт</a>
                 <a href="#" class="nav-link">ДТП</a>
@@ -79,8 +79,8 @@
             <div class="accordion-item">
                 <div class="accordion-header"><span>▲ ФИНАНСЫ И ПАРТНЕРЫ</span></div>
                 <div class="accordion-content" style="display: none;">
-                    <a href="#" class="nav-link">Приходы</a>
-                    <a href="#" class="nav-link">Расходы</a>
+                    <a href="#" class="nav-link">Касса: поступления</a>
+                    <a href="#" class="nav-link">Касса: расходы</a>
                 </div>
             </div>
         </div>
@@ -109,20 +109,6 @@
 
                 
                 <button class="tool-btn" onclick="logout()" style="margin-left: auto;"><i class="fas fa-right-from-bracket" style="color: #c00;"></i> Выйти</button>
-            </div>
-
-            <div id="receipts-filter-panel" style="display: none; align-items: center; padding: 6px 10px; background: #f8f9fa; border-bottom: 1px solid #ccc; gap: 15px; flex-shrink: 0; font-size: 12px;">
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <span style="font-weight: bold; color: #333;">С:</span>
-                    <input type="date" id="receipts-start-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 130px;">
-                </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <span style="font-weight: bold; color: #333;">По:</span>
-                    <input type="date" id="receipts-end-date" style="padding: 3px 6px; border: 1px solid #ccc; border-radius: 3px; width: 130px;">
-                </div>
-                <button type="button" onclick="applyReceiptsFilters()" style="padding: 3px 12px; background: #eef2f5; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold;">
-                    <i class="fas fa-search" style="color: #0078d7;"></i> Применить
-                </button>
             </div>
 
 

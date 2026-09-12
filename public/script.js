@@ -7029,7 +7029,7 @@ function openActiveEntityForm(action, item = null) {
     const actualItem = action === 'add' ? null : item;
 
     switch (entity) {
-        case 'Приход':
+        case 'Приход запчастей':
         case 'receipts':
             if (typeof openReceiptForm === 'function') {
                 openReceiptForm('receipts', actualItem);
@@ -8035,7 +8035,7 @@ function resetSharedUiForEntity(entity) {
         btnBack.onclick = null;
     }
 
-    ['parts-filter-panel', 'movement-filter-panel', 'receipts-filter-panel']
+    ['parts-filter-panel', 'movement-filter-panel']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -9252,10 +9252,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
     
-    // Элементы панели фильтров по датам
-    const receiptsFilterPanel = document.getElementById('receipts-filter-panel');
-    const startDateInput = document.getElementById('receipts-start-date');
-    const endDateInput = document.getElementById('receipts-end-date');
+  
 
     // Находим кнопку «Назад» на панели инструментов
     const btnBackExpense = document.getElementById('btn-back-expense');
@@ -9270,9 +9267,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         fetchUrl = `/api/money_receipts_by_sklad`;
         if (detailContainer) detailContainer.style.display = 'none';
         
-        // Скрываем панель дат на уровне складов
-        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
-
+        
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -9302,7 +9297,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         fetchUrl = `/api/money_receipts_by_customers` + (skladId ? `?sklad_id=${skladId}` : '');
 
         if (detailContainer) detailContainer.style.display = 'none';
-        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'none';
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -9350,11 +9344,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         const detailHeadersReset = document.getElementById('detail-headers');
         if (detailHeadersReset) detailHeadersReset.innerHTML = '';
 
-        // Показываем панель дат для документов ТОЛЬКО здесь
-        if (receiptsFilterPanel) receiptsFilterPanel.style.display = 'flex';
-
-        if (explicitStart && startDateInput) startDateInput.value = explicitStart;
-        if (explicitEnd && endDateInput) endDateInput.value = explicitEnd;
+       
 
         // Собираем параметры фильтрации, если они заданы
         let queryParams = [];
@@ -9367,8 +9357,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (debtorWarehouseId) {
             queryParams.push(`debtor_warehouse_id=${debtorWarehouseId}`);
         }
-        const finalStart = explicitStart || (startDateInput && startDateInput.value) || '';
-        const finalEnd = explicitEnd || (endDateInput && endDateInput.value) || '';
+        
         if (finalStart) queryParams.push(`start_date=${finalStart}`);
         if (finalEnd) queryParams.push(`end_date=${finalEnd}`);
 
@@ -11569,7 +11558,7 @@ const navMap = {
     'Топливо': 'toplivo',
     'Ед.измерения': 'ed_izmereniya',
     'Ед. измерения': 'ed_izmereniya',
-    'Приход': 'receipts',                        
+    'Приход запчастей': 'receipts',                        
     'Строки прихода': 'receipt_items',
     'Перемещение': 'moves',
     'Строки перемещения': 'move_items',
@@ -11602,11 +11591,11 @@ const navMap = {
  'Реализация': 'realizations',
     'Запчасти реализации': 'realization_items',
     'Услуги реализации': 'realization_works',
-    'Приходы': 'money_receipts',
-    'Детали приходов': 'money_receipts_detail',
+    'Касса: поступления': 'money_receipts',
+        'Детали приходов': 'money_receipts_detail',
     'Аналитика по складам': 'money_receipts_by_sklad',
     'Детали услуг': 'money_receipts_works_detail',
-    'Расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
+    'Касса: расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
     'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items',
@@ -11616,14 +11605,12 @@ const navMap = {
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
-    const receiptsFilter = document.getElementById('receipts-filter-panel');
 
     console.log("🎛️ [updateFilterPanels] Вызвана для entity:", entity);
 
     // Сбрасываем отображение всех известных панелей фильтров
     if (partsFilter) partsFilter.style.display = 'none';
     if (movementFilter) movementFilter.style.display = 'none';
-    if (receiptsFilter) receiptsFilter.style.display = 'none';
 
     // Безопасно проверяем сущность
     const currentEntity = String(entity || '');
@@ -11637,13 +11624,6 @@ function updateFilterPanels(entity) {
         if (movementFilter) {
             movementFilter.style.display = 'flex';
             console.log("✅ [updateFilterPanels] Включена панель: movement-filter-panel");
-        }
-    } else if (currentEntity.startsWith('money_receipts')) {
-        if (receiptsFilter) {
-            receiptsFilter.style.display = 'flex';
-            console.log("✅ [updateFilterPanels] Включена панель приходов: receipts-filter-panel");
-        } else {
-            console.warn("⚠️ [updateFilterPanels] Панель приходов не найдена в DOM!");
         }
     } else {
         console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
@@ -11664,8 +11644,8 @@ document.querySelectorAll('.nav-link').forEach(link => {
         console.log(`🧭 [nav-link] Определена сущность (entity):`, entity);
         
         // Если кликнули на Приходы, сразу жестко переводим в режим складов
-        if (entity === 'money_receipts' || text === 'Приходы') {
-            entity = 'money_receipts_by_sklad';
+        if (entity === 'money_receipts' || text === 'Касса: поступления') {
+                        entity = 'money_receipts_by_sklad';
             console.log(`🔄 [nav-link] Сущность приведена к уровню складов: 'money_receipts_by_sklad'`);
         }
         
@@ -11675,7 +11655,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const btnBackExpense = document.getElementById('btn-back-expense');
         if (btnBackExpense) {
             const isMoneySection = (
-                text === 'Приходы' || text === 'Расходы' || 
+                 text === 'Касса: поступления' || text === 'Касса: расходы' || 
                 entity === 'money_receipts_by_sklad' || 
                 entity === 'расходы' || entity === 'expenses' ||
                 entity === 'expenses_by_sklad' || entity === 'expenses_by_suppliers' || entity === 'expenses_by_receipts'
@@ -11804,7 +11784,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         }
         
         // Роутинг по разделам
-        if (text === 'Расходы' || entity === 'расходы' || entity === 'expenses') {
+                if (text === 'Касса: расходы' || entity === 'расходы' || entity === 'expenses') {
             console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
             loadExpenseMainData('expenses_by_sklad');
             return;
