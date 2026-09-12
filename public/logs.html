@@ -11,7 +11,6 @@
     <a href="/" class="back-btn">← На главную в склад</a>
     <h1>Журнал движения запчастей и операций</h1>
     
-    <!-- Вкладки со своими эндпоинтами -->
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('Приход', '/api/get-receipt-logs', this)">Приходы</button>
         <button class="tab-btn" onclick="switchTab('Реализация', '/api/get-realization-logs', this)"> Реализация</button>
@@ -25,7 +24,6 @@
 
     <table>
         <thead id="table-head">
-            <!-- Шапка генерируется динамически -->
         </thead>
         <tbody id="logs-table-body">
             <tr><td colspan="10" style="text-align: center;">Загрузка данных...</td></tr>

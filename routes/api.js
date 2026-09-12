@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const path = require('path'); // Нужно для указания пути к файлу html
-const multer = require('multer'); // <--- 1. Подключаем multer
+const path = require('path'); 
+const multer = require('multer'); 
 const jwt = require('jsonwebtoken');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
-    limits: { fileSize: 5 * 1024 * 1024 }, // максимум 5 МБ на файл
+    limits: { fileSize: 5 * 1024 * 1024 }, 
     fileFilter: (req, file, cb) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (allowed.includes(file.mimetype)) {
@@ -20,8 +20,8 @@ const upload = multer({
 });
 
 function getServerNowString() {
-    // Явно берём время в нужном часовом поясе, не полагаясь на TZ операционной системы сервера
-    const timeZone = 'Europe/Chisinau'; // если это не подойдёт по факту — смотрите ниже
+    
+    const timeZone = 'Europe/Chisinau'; 
 
     const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone,
@@ -50,7 +50,6 @@ async function getNextDocNumber(client, entityType, prefix) {
     );
 
     if (result.rows.length === 0) {
-        // Если строки счётчика ещё нет (например, для нового типа документа) — создаём её на лету
         const insertResult = await client.query(
             `INSERT INTO document_sequences (entity_type, current_value) 
              VALUES ($1, 1) 
@@ -64,7 +63,6 @@ async function getNextDocNumber(client, entityType, prefix) {
     return `${prefix}${result.rows[0].current_value}`;
 }
 
-// Соответствие типа сущности и его префикса номера документа
 const DOC_NUMBER_CONFIG = {
     receipts: 'ПР-',
     moves: 'ПМ-',
@@ -74,12 +72,7 @@ const DOC_NUMBER_CONFIG = {
 };
 
 
-// ==================== ЗАЩИТА ОТ SQL-ИНЪЕКЦИИ ЧЕРЕЗ ИМЕНА ПОЛЕЙ ====================
-// Раньше ключи присланного JSON (Object.keys(req.body)) подставлялись в запрос
-// как имена колонок БЕЗ проверки, что такая колонка вообще существует в таблице.
-// Значения всегда были защищены через $1, $2 — а вот сами имена полей нет.
-// Кэшируем список реальных колонок каждой таблицы, чтобы не дёргать
-// information_schema на каждый запрос — только один раз на процесс.
+
 const allowedColumnsCache = {};
 
 async function getAllowedColumns(client, tableName) {
@@ -97,8 +90,6 @@ async function getAllowedColumns(client, tableName) {
     return columns;
 }
 
-// Фильтрует тело запроса, оставляя только те ключи, которые реально являются
-// колонками указанной таблицы. Всё остальное — тихо отбрасывается с предупреждением в лог.
 async function sanitizeBodyColumns(client, tableName, body) {
     const allowedColumns = await getAllowedColumns(client, tableName);
     const sanitized = {};
@@ -113,7 +104,6 @@ async function sanitizeBodyColumns(client, tableName, body) {
 
     return sanitized;
 }
-// =====================================================================================
 
 
 module.exports = (pool) => {
@@ -165,9 +155,6 @@ const loginLimiter = rateLimit({
     });
 
 
-// ==================== ПРОВЕРКА АВТОРИЗАЦИИ ДЛЯ ВСЕХ ОСТАЛЬНЫХ ЗАПРОСОВ ====================
-// Без валидного токена — доступа нет. Ставим ПОСЛЕ /login, поэтому сам вход остаётся открытым,
-// а всё, что зарегистрировано в router НИЖЕ этой строки, требует токен.
 function authMiddleware(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -179,7 +166,7 @@ function authMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
-        req.headers['x-user-id'] = String(decoded.id);   // 👈 добавили: подменяем заголовок проверенным ID из токена
+        req.headers['x-user-id'] = String(decoded.id);   
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
@@ -187,11 +174,9 @@ function authMiddleware(req, res, next) {
 }
 
 router.use(authMiddleware);
-// ================================================================================
 
     
 
-// Открытие самой страницы logs.html по адресу /logs (GET)
 router.get('/logs', (req, res) => {
     res.sendFile(path.join(__dirname, '../logs.html'));
 });

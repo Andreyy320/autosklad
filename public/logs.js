@@ -1,8 +1,6 @@
 let currentType = 'Приход';
     let warehousesMap = {};
 
-    // ==================== СЛОВАРИ ПЕРЕВОДА ДЛЯ АУДИТА ====================
-    // Названия таблиц БД -> человекопонятные названия разделов на русском
     const tableNamesRu = {
         'users': 'Пользователи',
         'spare_parts': 'Запчасти',
@@ -67,7 +65,6 @@ let currentType = 'Приход';
         'audit_logs': 'Журнал аудита'
     };
 
-    // Названия полей БД -> подписи на русском (используется в колонке "Детали изменений")
     const fieldNamesRu = {
         'id': 'ID',
         'name': 'Название',
@@ -143,29 +140,24 @@ let currentType = 'Приход';
         'autoservice_id': 'Автосервис'
     };
 
-    // Переводит название таблицы/сущности в понятное русское название
     function translateTable(name) {
         if (!name) return '—';
         return tableNamesRu[name] || name;
     }
 
-    // Переводит название поля в понятную русскую подпись, форматирует значение
     function translateField(key) {
         return fieldNamesRu[key] || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
     }
 
-    // Форматирует значение поля для читаемого вида (даты, булевы, склады по ID)
     function formatFieldValue(key, val) {
         if (val === null || val === undefined || val === '') return 'пусто';
         if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
         if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
 
-        // Заменяем ID склада на его название, если знаем справочник
         if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
             return warehousesMap[val];
         }
 
-        // Пытаемся красиво отформатировать дату/время
         if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
             const d = new Date(val);
             if (!isNaN(d.getTime())) return d.toLocaleString('ru-RU');
@@ -173,12 +165,7 @@ let currentType = 'Приход';
 
         return val;
     }
-    // ================================================================================
-
-    // ==================== АВТОРИЗАЦИЯ ДЛЯ СТРАНИЦЫ ЖУРНАЛА ====================
-    // Эта страница отдельная от основного приложения (свой script), поэтому
-    // подставляем токен так же, как это делает основной script.js — иначе
-    // все запросы будут получать 401, ведь /api теперь защищён.
+ 
     const _originalFetch = window.fetch;
     window.fetch = async function(url, options = {}) {
         const isApiCall = typeof url === 'string' && url.startsWith('/api/');
@@ -197,7 +184,6 @@ let currentType = 'Приход';
         }
         return response;
     };
-    // ================================================================================
 
     async function loadWarehouses() {
         try {
@@ -213,7 +199,6 @@ let currentType = 'Приход';
         }
     }
 
-    // Функция красивого форматирования деталей аудита
     function formatAuditDetails(log) {
         let details;
         try {
@@ -224,7 +209,6 @@ let currentType = 'Приход';
 
         if (!details) return '—';
 
-        // ЕСЛИ ЭТО UPDATE (содержит изменения `changes`)
         if (log.action === 'UPDATE' && details.changes) {
             let html = '<div class="audit-fields">';
             for (const [field, val] of Object.entries(details.changes)) {
@@ -239,7 +223,6 @@ let currentType = 'Приход';
             return html;
         }
 
-        // ЕСЛИ ЭТО INSERT или DELETE (показываем поля и значения аккуратными карточками)
         if (typeof details === 'object') {
             let html = '<div class="audit-fields">';
             for (const [key, val] of Object.entries(details)) {
@@ -257,7 +240,6 @@ let currentType = 'Приход';
         return JSON.stringify(details);
     }
 
-    // Динамическое формирование шапки таблицы
     function renderTableHead(type) {
         const thead = document.getElementById('table-head');
         if (type === 'Перемещение') {
@@ -342,12 +324,9 @@ let currentType = 'Приход';
             `;
         }
 
-        // Добавляем строку фильтров под шапкой — не трогая уже готовые блоки выше,
-        // просто достраиваем поля по фактическому числу колонок текущей вкладки.
         addFilterRow(thead);
     }
 
-    // Строит строку с полями фильтра под шапкой таблицы (по числу колонок)
     function addFilterRow(thead) {
         const headerRow = thead.querySelector('tr');
         if (!headerRow) return;
@@ -360,7 +339,6 @@ let currentType = 'Приход';
         thead.insertAdjacentHTML('beforeend', filterHtml);
     }
 
-    // Фильтрует уже отрисованные строки таблицы по значениям полей фильтра (без обращения к серверу)
     function applyColumnFilters() {
         const inputs = document.querySelectorAll('#table-head .filter-input');
         const filters = Array.from(inputs).map(inp => inp.value.trim().toLowerCase());
@@ -370,7 +348,6 @@ let currentType = 'Приход';
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
 
-            // Служебные строки-заглушки (загрузка / нет записей / ошибка) не трогаем
             if (cells.length <= 1) {
                 row.style.display = '';
                 return;

@@ -23,7 +23,6 @@ window.fetch = async function(url, options = {}) {
     return response;
 };
 
-// ==================== АВТО-ВХОД ПО СОХРАНЁННОМУ ТОКЕНУ ====================
 setTimeout(function tryAutoLogin() {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
@@ -36,7 +35,6 @@ setTimeout(function tryAutoLogin() {
         }
     }
 }, 0);
-// ================================================================================
 
 let currentEntity = 'users';
 let currentItems = [];
@@ -169,7 +167,6 @@ const tableConfig = {
         { field: 'name_full', label: 'Наименование', width: '220px' },
         { field: 'name_short', label: 'Кратко', width: '150px' },
         { field: 'discount_part_id', label: 'Скидка зап.', width: '110px', ref: 'part_discounts' },
-        // Поле скидки на услуги скрыто из интерфейса, но логика сохранена
         { field: 'description', label: 'Описание' }
     ],
     render: (item) => `
@@ -671,10 +668,8 @@ const tableConfig = {
         const qty = Number(item.quantity) || 0;
         const markupPercent = Number(item.markup_percent) || 0;
         
-        // Надежный расчет: если наценка 0%, то сумма всегда будет строго price * qty (например, 15 * 10 = 150)
-        // Если есть наценка, она корректно применится поверх закупочной цены
         const calculatedTotal = price * qty * (1 + markupPercent / 100);
-        const totalSum = calculatedTotal; // Принудительно используем расчетную актуальную сумму
+        const totalSum = calculatedTotal; 
         
         const incomeDocText = item.income_document || '—';
         
@@ -811,7 +806,6 @@ const tableConfig = {
         if (!item) return '';
         let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
         
-        // Берем готовое значение от бэкенда либо вычисляем на лету, если бэкенд еще не перезапущен
         let rawPurchasePrice = item.purchase_price !== undefined ? Number(item.purchase_price) : 0;
         let retailPrice = item.retail_price !== undefined ? item.retail_price : (rawPurchasePrice * 1.3).toFixed(2);
 
@@ -1170,7 +1164,6 @@ const tableConfig = {
         const price = Number(item.price) || 0;
         const qty = Number(item.quantity) || 0;
         
-        // Всегда считаем как честное произведение цены на количество
         const totalSum = price * qty;
         
         const incomeDocText = item.income_document || item.receipt_doc || (item.receipt_id ? `Документ ID: ${item.receipt_id}` : '—');
@@ -1543,9 +1536,7 @@ const tableConfig = {
         { field: 'customer_id', label: 'Покупатель', width: '150px', ref: 'customers' },
         { field: 'sklad_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
-        // Слева: Гос. номер (поиск идет по нему благодаря кастомному отображению в ref)
         { field: 'car_id', label: 'Гос. номер', width: '120px', ref: 'customer_cars', formatRef: (car) => car.gos_number || car.car_number || `ID #${car.id}` },
-        // Справа: Марка авто (ссылается на тот же справочник, но выводит марку/модель)
         { field: 'car_id', label: 'Марка авто', width: '140px', ref: 'customer_cars', formatRef: (car) => `${car.brand || ''} ${car.model || ''}`.trim() || '—' },
         { field: 'description', label: 'Описание' },
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
@@ -1579,7 +1570,6 @@ const tableConfig = {
             ? `<button onclick="event.stopPropagation(); postRealization(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
 
-        // Достаем значения для раздельных ячеек таблицы
         const gosNumber = item.car_number || item.gos_number || (item.car && (item.car.gos_number || item.car.car_number)) || '—';
         const carBrandModel = `${item.car_brand || (item.car && item.car.brand) || ''} ${item.car_model || (item.car && item.car.model) || ''}`.trim() || item.car_display_name || '—';
 
@@ -1606,7 +1596,6 @@ const tableConfig = {
     realization_items: {
     title: 'Спецификация реализации',
     columns: [
-        // Добавляем поле выбора запчасти со ссылкой на справочник
         { field: 'zaphasti_id', label: 'Запчасть', ref: 'zaphasti', table: false },
         
         { field: 'article', label: 'Артикул', width: '90px', table: true },
@@ -1640,7 +1629,6 @@ const tableConfig = {
         const unit = item.unit || 'шт';
         const discountText = item.discount || '';
         
-        // Меняем здесь: берем готовый текст из бэкенда (income_document), а не ID
         const incomeDoc = item.income_document || '—';
 
         return `
@@ -1662,7 +1650,6 @@ const tableConfig = {
     realization_works: {
     title: 'Спецификация услуг',
     columns: [
-        // Поле выбора услуги со ссылкой на справочник vidy_rabot (в самой таблице не выводится, нужно для модалки добавления)
         { field: 'vidy_rabot_id', label: 'Услуга', ref: 'vidy_rabot', table: false },
         
         { field: 'name', label: 'Наименование', width: '220px', table: true },
@@ -1717,7 +1704,6 @@ const tableConfig = {
         const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
         const debtSum = debtSumNum.toFixed(2);
 
-        // Строгий корпоративный стиль без ярких детских цветов и лишних плюсов
         return `
             <td><span style="color: #0f172a; font-weight: 500;">${item.sklad_name || 'Основной склад'}</span></td>
             <td style="text-align: center; color: #334155;">${item.total_orders || 0}</td>
@@ -1787,7 +1773,6 @@ const tableConfig = {
         
         let counterpartyHtml = '';
         if (isRepair) {
-            // Значок машинки убран, остался аккуратный текст
             counterpartyHtml = `<span style="color: #334155; font-weight: 500;" title="Внутренний ремонт автомобиля">${item.counterparty_name || 'Ремонт а/м'}</span>`;
         } else {
             counterpartyHtml = `<span style="color: #334155;">${item.counterparty_name || 'Розничный покупатель'}</span>`;
@@ -1852,7 +1837,6 @@ const tableConfig = {
         const finalPrice = Number(item.final_unit_price || 0).toFixed(2);
         const total = Number(item.total_rub || 0).toFixed(2);
 
-        // Строже оформляем тип (услуга или товар)
         const isWork = item.item_type === 'work';
         const codeDisplay = isWork 
             ? '<span style="color: #334155; font-weight: 500;">Услуга</span>' 
@@ -1989,7 +1973,7 @@ const tableConfig = {
         { field: 'total_expense_sum', label: 'Сумма затрат', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
-        { field: 'actions', label: 'Действие', width: '100px', align: 'center' } // 👈 Добавили колонку для кнопки оплаты на уровне 2
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
@@ -1997,9 +1981,6 @@ const tableConfig = {
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
-
-        // Кнопка оплаты на уровне поставщика за этот месяц/период
-        // item.month_str и item.postavhik_id должны быть прокинуты в объект строки при группировке
        const actionHtml = debtNum <= 0 
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
 : `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
@@ -2060,7 +2041,6 @@ const tableConfig = {
         { field: 'total_expense_sum', label: 'Сумма', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
-        // Колонка 'actions' полностью удалена
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
@@ -2072,7 +2052,6 @@ const tableConfig = {
         const formattedDate = item.date ? new Date(item.date).toLocaleDateString() : '—';
         const docTitle = item.doc_number || item.id;
 
-        // История на уровне накладной убрана — теперь история платежей смотрится только по поставщику (уровень 2)
         const paidHtml = `<span style="color: #334155;">${formattedPaid}</span>`;
 
         return `
@@ -2116,10 +2095,6 @@ const tableConfig = {
 
 
 function getConfig(entity) {
-    if (!entity || entity === 'undefined') {
-        console.warn('⚠️ [getConfig] Внимание! Попытка получить конфиг для пустой сущности (undefined). Вызов из:', new Error().stack);
-    }
-
     if (tableConfig[entity]) {
         return tableConfig[entity];
     }
@@ -2196,7 +2171,6 @@ function closeDrawer() {
 
 
 async function openEntityForm(entity, item = null, parentId = null) {
-    console.log("🚀 openEntityForm вызвана для сущности:", entity, "item:", item);
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -2208,14 +2182,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    // Сущности, для которых номер документа теперь атомарно генерирует бэкенд
-    // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем,
-    // чтобы не тратить лишний fetch на то, что сервер всё равно перезапишет.
     const serverGeneratesDocNumber = ['receipts', 'moves', 'realizations'];
 
     if (!item || item.id === null || item.id === undefined || item.id === '') {
         if (serverGeneratesDocNumber.includes(entity)) {
-            // Номер присвоится на сервере при сохранении — тут просто placeholder для формы
             item = {
                 id: null,
                 doc_number: '(будет присвоен автоматически)',
@@ -2248,7 +2218,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
 
      config.columns.forEach(col => {
-    if (col.field === 'fact_date') return; // не трогаем при создании
+    if (col.field === 'fact_date') return; 
     if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
         item[col.field] = currentDateTime;
     }
@@ -2272,8 +2242,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     } else if (entity === 'car_details' && parentId) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     } else if (entity === 'moves') {
-        // Оставляем пустым для шапки перемещений, поля выводятся через columns
-    } 
+\    } 
 
     async function renderField(col) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'receipt_id') return '';
@@ -2362,7 +2331,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
             else if (col.field === 'warehouse_to_id') { customId = 'warehouse_to_id'; extraAttributes = 'id="warehouse_to_id" class="warehouse-select"'; }
             else if (col.field === 'mol_from_id' || col.field === 'mol_to_id' || col.field === 'mol_id') { customId = col.field; extraAttributes = `id="${col.field}" class="mol-select"`; }
 
-            // Логика кастомного поиска для селектов (если элементов много или всегда по желанию)
             if (refItems.length > 10 && !fieldReadonly) {
                 let selectedDisplayName = '';
                 refItems.forEach(refItem => {
@@ -2540,7 +2508,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Инициализация интерактивных выпадающих списков с поиском
     formElement.querySelectorAll('.searchable-select-container').forEach(container => {
         const input = container.querySelector('.searchable-select-input');
         const hiddenInput = container.querySelector('input[type="hidden"]');
@@ -2877,7 +2844,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
 
 async function openRealizationWorksForm(item = null, parentId = null) {
-    console.log("🚀 openRealizationWorksForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'realization_works';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2900,7 +2866,6 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 
     const allowedFields = ['vidy_rabot_id', 'quantity', 'price', 'description'];
 
-    // Формирует человекочитаемое отображаемое имя записи справочника
     function formatDisplayName(referenceName, refItem) {
         if (referenceName === 'vidy_rabot') {
             return refItem.name || refItem.title || `Работа #${refItem.id}`;
@@ -2945,7 +2910,6 @@ async function openRealizationWorksForm(item = null, parentId = null) {
             let extraAttributes = '';
             if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
 
-            // Searchable-select с ручным вводом и поиском по подстроке (как для запчастей в приходах)
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
                 if (String(refItem.id) === String(val)) {
@@ -3001,7 +2965,6 @@ async function openRealizationWorksForm(item = null, parentId = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Инициализация интерактивных выпадающих списков с поиском (ручной ввод + фильтрация по подстроке)
     formElement.querySelectorAll('.searchable-select-container').forEach(container => {
         const input = container.querySelector('.searchable-select-input');
         const hiddenInput = container.querySelector('input[type="hidden"]');
@@ -3026,7 +2989,6 @@ async function openRealizationWorksForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -3165,7 +3127,6 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 }
 
 async function openRepairWorksForm(item = null, parentId = null) {
-    console.log("🚀 openRepairWorksForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'repair_works';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -3188,7 +3149,6 @@ async function openRepairWorksForm(item = null, parentId = null) {
 
     const allowedFields = ['ispolnitel_id', 'vidy_rabot_id', 'price', 'description'];
 
-    // Формирует человекочитаемое отображаемое имя записи справочника
     function formatDisplayName(referenceName, refItem) {
         if (referenceName === 'vidy_rabot') {
             return refItem.name || refItem.title || `Работа #${refItem.id}`;
@@ -3237,7 +3197,6 @@ async function openRepairWorksForm(item = null, parentId = null) {
             if (col.field === 'vidy_rabot_id') extraAttributes = 'id="vidy-rabot-select"';
             else if (col.field === 'ispolnitel_id') extraAttributes = 'id="ispolnitel-select"';
 
-            // Searchable-select с ручным вводом и поиском по подстроке (как для запчастей в приходах)
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
                 if (String(refItem.id) === String(val)) {
@@ -3293,7 +3252,6 @@ async function openRepairWorksForm(item = null, parentId = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Инициализация интерактивных выпадающих списков с поиском (ручной ввод + фильтрация по подстроке)
     formElement.querySelectorAll('.searchable-select-container').forEach(container => {
         const input = container.querySelector('.searchable-select-input');
         const hiddenInput = container.querySelector('input[type="hidden"]');
@@ -3318,7 +3276,6 @@ async function openRepairWorksForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -3457,7 +3414,6 @@ async function openRepairWorksForm(item = null, parentId = null) {
 }
 
 async function openReceiptItemsForm(item = null, parentId = null) {
-    console.log("🚀 openReceiptItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'receipt_items';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -3629,7 +3585,6 @@ async function openReceiptItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -3765,7 +3720,6 @@ async function openReceiptItemsForm(item = null, parentId = null) {
 
 
 async function openMoveItemsForm(item = null, parentId = null) {
-    console.log("🚀 openMoveItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'move_items';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -3928,7 +3882,6 @@ async function openMoveItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -4061,8 +4014,8 @@ async function openMoveItemsForm(item = null, parentId = null) {
         }
     });
 }
+
 async function openRepairItemsForm(item = null, parentId = null) {
-    console.log("🚀 openRepairItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'repair_items';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -4127,10 +4080,6 @@ async function openRepairItemsForm(item = null, parentId = null) {
         if (col.ref) {
             const referenceName = col.ref;
             const refItems = await fetchReferenceData(referenceName);
-
-            // Примечание: поле здесь называется 'zaphast_id' (а не 'zaphasti_id'),
-            // поэтому в оригинале ему НЕ назначался id="zaphasti-select" и не было автоподстановки цены.
-            // Сохраняем это поведение как есть.
             let extraAttributes = '';
 
             const formatDisplayName = (refItem) => {
@@ -4239,7 +4188,6 @@ async function openRepairItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -4351,7 +4299,6 @@ async function openRepairItemsForm(item = null, parentId = null) {
 }
 
 async function openRealizationItemsForm(item = null, parentId = null) {
-    console.log("🚀 openRealizationItemsForm вызвана. item:", item, "parentId:", parentId);
     const entity = 'realization_items';
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -4523,7 +4470,6 @@ async function openRealizationItemsForm(item = null, parentId = null) {
         });
 
         options.forEach(opt => {
-            // mousedown + preventDefault срабатывает раньше blur/focus гонки и закрывает список сразу же
             opt.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
@@ -4659,7 +4605,6 @@ async function openRealizationItemsForm(item = null, parentId = null) {
 
 
 async function openAccidentForm(entity, item = null, parentId = null) {
-    console.log('[openAccidentForm] СТАРТ:', entity, { item, parentId });
 
     const drawer = getOrCreateDrawer();
 
@@ -4667,15 +4612,11 @@ async function openAccidentForm(entity, item = null, parentId = null) {
     const pad = (n) => String(n).padStart(2, '0');
     const currentDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-    // ==========================================================
-    // 1. ГЛАВНАЯ КАРТОЧКА ДТП (entity === 'accidents')
-    // ==========================================================
     if (entity === 'accidents') {
         const config = getConfig('accidents');
 
                if (!item || !item.id) {
-            // Номер документа для 'accidents' теперь атомарно генерирует бэкенд
-            // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
+   
             item = { doc_number: '(будет присвоен автоматически)' };
 
             config.columns.forEach(col => {
@@ -4846,12 +4787,9 @@ async function openAccidentForm(entity, item = null, parentId = null) {
             }
         });
 
-        return; // конец ветки accidents
+        return; 
     }
 
-    // ==========================================================
-    // 2. ИЗОБРАЖЕНИЯ ДТП (entity === 'accident_images')
-    // ==========================================================
     if (entity === 'accident_images') {
         if (!item) item = {};
 
@@ -4950,16 +4888,11 @@ async function openAccidentForm(entity, item = null, parentId = null) {
             }
         });
 
-        return; // конец ветки accident_images
+        return; 
     }
 
-    // ==========================================================
-    // 3. СЧЕТА / ОПЛАТЫ / СОБЫТИЯ ДТП
-    //    (accident_invoices, accident_payments, accident_events, accident_items)
-    // ==========================================================
     const config = getConfig(entity);
 
-    // Описание полей формы для каждой под-сущности ДТП
     const fieldSets = {
         accident_invoices: [
             { field: 'invoice_date', label: 'Дата', type: 'datetime-local' },
@@ -5116,8 +5049,8 @@ async function openAccidentForm(entity, item = null, parentId = null) {
         }
     });
 }
+
 async function openReceiptForm(entity, item = null) {
-    console.log('[openReceiptForm] СТАРТ: открытие формы для entity:', entity, { item });
 
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
@@ -5139,12 +5072,11 @@ async function openReceiptForm(entity, item = null) {
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
        if (!item || !item.id) {
-        // Номер документа для 'receipts' теперь атомарно генерирует бэкенд
-        // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
+      
         item = { 
             doc_number: '(будет присвоен автоматически)',
             is_posted: false,
-            date: currentDateTime,     /* Подставляем в обычное поле даты */
+            date: currentDateTime,     
         };
     } else {
         if (!item.date) {
@@ -5186,7 +5118,6 @@ async function openReceiptForm(entity, item = null) {
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         
-        // Если документ проведен, ВСЕ поля (кроме снятия с проведения, если разрешено) блокируются
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -5204,7 +5135,6 @@ async function openReceiptForm(entity, item = null) {
                 optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
             });
 
-            // Если документ проведен, разрешаем менять статус проведения (чтобы можно было отменить проведение)
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
@@ -5257,7 +5187,6 @@ async function openReceiptForm(entity, item = null) {
         `;
     }
 
-    // Если документ проведен, скрываем кнопку сохранения или делаем предупреждение
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
@@ -5437,22 +5366,16 @@ async function openReceiptForm(entity, item = null) {
 }
 
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
-    // УМНАЯ НОРМАЛИЗАЦИЯ АРГУМЕНТОВ (защита от перепутанных параметров при вызове из разных мест)
     let entity, item, parentId;
-
     if (typeof entityOrItem === 'object' && entityOrItem !== null) {
-        // Если первым аргументом передали объект (например, item из editSelectedEntity)
         item = entityOrItem;
         entity = typeof currentEntity !== 'undefined' ? currentEntity : 'moves';
-        parentId = itemArg; // Второй аргумент в таком случае может быть parentId
+        parentId = itemArg; 
     } else {
-        // Стандартный вызов: (entity, item, parentId)
         entity = entityOrItem || (typeof currentEntity !== 'undefined' ? currentEntity : 'moves');
         item = itemArg;
         parentId = parentIdArg;
     }
-
-    console.log('[openMoveForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
 
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -5469,11 +5392,10 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         let docNumberValue = '';
 
         if (entity === 'moves') {
-            // Номер документа для 'moves' теперь атомарно генерирует бэкенд
-            // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
+           
             docNumberValue = '(будет присвоен автоматически)';
         } else {
-            // Для остальных сущностей (например, move_items) поведение не меняем
+        
             let nextId = 1;
             const prefix = 'ПМ-';
 
@@ -5508,7 +5430,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
         }
 
         config.columns.forEach(col => {
-            if (col.field === 'fact_date') return; // не трогаем при создании
+            if (col.field === 'fact_date') return; 
             if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 item[col.field] = currentDateTime;
             }
@@ -5576,10 +5498,6 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
         let inputHtml = '';
                 let fieldReadonly = col.readonly;
-        
-        // Если документ проведён — блокируем ВСЕ поля без исключений,
-        // включая is_posted (снять с проведения через эту форму больше нельзя,
-        // как и у приходов — только через отдельное действие, если оно есть).
         if (isPosted) {
             fieldReadonly = true;
         }
@@ -5649,7 +5567,6 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             </label>
         `;
     }
-
         html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                     ${isPosted 
@@ -5864,8 +5781,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         parentId = parentIdArg;
     }
 
-    console.log('[openRepairForm] СТАРТ: открытие формы для entity:', entity, { item, parentId });
-
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
 
@@ -5878,9 +5793,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
         if (!item || !item.id) {
-        // Номер документа для 'repairs' теперь атомарно генерирует бэкенд
-        // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем,
-        // чтобы не тратить лишний fetch на то, что сервер всё равно перезапишет.
+        
         item = { 
             doc_number: entity === 'repairs' ? '(будет присвоен автоматически)' : '',
             is_posted: false 
@@ -5893,7 +5806,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
         }
 
        config.columns.forEach(col => {
-    if (col.field === 'fact_date') return; // не трогаем при создании
+    if (col.field === 'fact_date') return; 
     if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
         item[col.field] = currentDateTime;
     }
@@ -5923,7 +5836,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
     const columns = [...config.columns];
     
-    // Переставляем car_id (гос номер) сразу после mol_id (МОЛ)
     const carColIndex = columns.findIndex(c => c.field === 'car_id');
     const molColIndex = columns.findIndex(c => c.field === 'mol_id' || c.field === 'mol');
 
@@ -6084,8 +5996,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterMols(isUserChange = false) {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = mol.value;
-                console.log('[filterMols] Запуск фильтрации МОЛ. Выбран склад ID:', selectedWarehouseId, 'Текущий МОЛ:', currentMolValue);
-
                 try {
                     const [molRes, usersRes] = await Promise.all([
                         fetch('/api/mol'),
@@ -6149,7 +6059,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             async function filterCarsBySklad(isUserChange = false) {
                 const selectedSkladId = sklad.value;
                 const currentCarValue = car.value;
-                console.log('[filterCarsBySklad] Запуск фильтрации авто по складу. Выбран склад ID:', selectedSkladId);
 
                 try {
                     let carRes = await fetch('/api/cars');
@@ -6309,32 +6218,17 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 }
 
 async function openRealizationForm(entity, item = null) {
-    console.log("🚀 openRealizationForm вызвана. Аргументы:", {
-        entityType: typeof entity,
-        entityValue: entity,
-        itemType: typeof item,
-        itemValue: item,
-        stack: new Error().stack
-    });
-
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
-        console.log("⚠️ Первый аргумент оказался объектом item, переназначили:", item);
     } else if (!item || (typeof item === 'object' && !item.id && !item.doc_number)) {
         if (entity && typeof entity === 'object') {
             item = entity;
-            console.log("⚠️ item был пустым, взяли entity как item:", item);
         }
     }
 
     const config = getConfig('realizations');
-    console.log("📋 Конфиг для 'realizations':", config);
-    if (!config) {
-        console.error("❌ ОШИБКА: getConfig('realizations') вернул undefined или null! Проверьте имя сущности.");
-    }
 
     const drawer = getOrCreateDrawer();
-    console.log("🗄️ Элемент drawer получен:", drawer);
 
     const now = new Date();
     const year = now.getFullYear();
@@ -6345,25 +6239,16 @@ async function openRealizationForm(entity, item = null) {
     const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
         if (!item || !item.id) {
-        console.log("➕ Режим создания новой записи (нет item или item.id)");
-        // Номер документа для 'realizations' теперь атомарно генерирует бэкенд
-        // (см. DOC_NUMBER_CONFIG в api.js) — здесь его больше не считаем и не запрашиваем.
         item = { 
             doc_number: '(будет присвоен автоматически)',
             doc_date: currentDateTime,
             is_posted: false,
         };
-        console.log("✨ Сформирован новый item по умолчанию:", item);
-    } else {
-        console.log("✏️ Режим редактирования существующей записи, ID:", item.id);
     }
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
-    console.log("🔒 Флаг isPosted:", isPosted);
 
-    // Вспомогательная функция загрузки машин покупателя
     async function loadCarsForCustomer(customerId, targetCarSelect, preselectedCarId = null) {
-        console.log("🚗 [loadCarsForCustomer] Загрузка для customerId:", customerId, "предопределенная машина:", preselectedCarId);
         targetCarSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
         if (!customerId) return;
 
@@ -6372,7 +6257,6 @@ async function openRealizationForm(entity, item = null) {
             const response = await fetch(fetchUrl);
             if (!response.ok) return;
             const cars = await response.json();
-            console.log("📦 [loadCarsForCustomer] Получен список машин:", cars);
 
             cars.forEach(car => {
                 const gos = car.gos_number || car.car_number || '';
@@ -6390,7 +6274,6 @@ async function openRealizationForm(entity, item = null) {
                 targetCarSelect.appendChild(option);
             });
         } catch (err) {
-            console.error('❌ [loadCarsForCustomer] Ошибка при запросе машин покупателя:', err);
         }
     }
 
@@ -6403,7 +6286,6 @@ async function openRealizationForm(entity, item = null) {
     `;
 
     async function renderField(col) {
-        console.log("⚙️ Рендерим поле:", col?.field);
         if (!col || col.field === 'id' || col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
 
@@ -6445,23 +6327,17 @@ async function openRealizationForm(entity, item = null) {
             let refItems = [];
             if (col.ref === 'customer_cars' || col.field === 'car_id') {
                 const targetCustomerId = item ? (item.customer_id || item.customer?.id || item.customer) : null;
-                console.log("🚗 [DEBUG CARS] Рендеринг машин. Найден targetCustomerId:", targetCustomerId, "Полный item:", item);
                 
                 if (targetCustomerId) {
                     try {
                         const fetchUrl = `/api/customer_cars?customer_id=${targetCustomerId}`;
-                        console.log("📡 [DEBUG CARS] Отправляем запрос:", fetchUrl);
                         const carRes = await fetch(fetchUrl);
-                        console.log("📥 [DEBUG CARS] Статус ответа:", carRes.status);
                         if (carRes.ok) {
                             refItems = await carRes.json();
-                            console.log("📦 [DEBUG CARS] Полученные машины для покупателя:", refItems);
                         }
                     } catch (e) {
-                        console.error('❌ [DEBUG CARS] Ошибка загрузки машин покупателя:', e);
                     }
                 } else {
-                    console.log("⚠️ [DEBUG CARS] targetCustomerId не найден или пустой. Список машин оставлен пустым.");
                     refItems = [];
                 }
             } else {
@@ -6554,14 +6430,10 @@ async function openRealizationForm(entity, item = null) {
                 try {
                     html += await renderField(col);
                 } catch (fieldErr) {
-                    console.error(`💥 Ошибка при рендере поля ${col.field}:`, fieldErr);
                 }
             }
-        } else {
-            console.error("❌ config.columns не найден!");
         }
     } catch (renderErr) {
-        console.error("💥 ОШИБКА ВНУТРИ ЦИКЛА РЕНДЕРИНГА ПОЛЕЙ:", renderErr);
     }
 
     html += `
@@ -6587,7 +6459,6 @@ async function openRealizationForm(entity, item = null) {
         customerSelect.addEventListener('change', async () => {
             const selectedCustomerId = customerSelect.value;
             const currentCarValue = carSelect.value;
-            console.log("🔄 [DEBUG CHANGE] Пользователь изменил покупателя в селекте. Новый ID:", selectedCustomerId);
             await loadCarsForCustomer(selectedCustomerId, carSelect, currentCarValue);
         });
     }
@@ -6614,7 +6485,6 @@ async function openRealizationForm(entity, item = null) {
             const updateMolOptions = async (isUserChange = false) => {
                 const selectedWarehouseId = warehouse.value;
                 const currentMolValue = item && !isUserChange ? (item.mol_id || item.mol?.id || item.mol || mol.value) : mol.value;
-                console.log("🔄 [DEBUG WAREHOUSE] Обновление МОЛ для склада ID:", selectedWarehouseId, "Текущий МОЛ:", currentMolValue);
 
                 try {
                     const [molRes, usersRes] = await Promise.all([
@@ -6662,22 +6532,17 @@ async function openRealizationForm(entity, item = null) {
                     } else if (!isUserChange && isCurrentStillValid) {
                         mol.value = activeMolVal;
                     }
-                    console.log("✅ [DEBUG WAREHOUSE] Список МОЛ успешно обновлен. Выбрано значение:", mol.value);
                 } catch (err) {
-                    console.error('❌ [DEBUG WAREHOUSE] Ошибка при обновлении списка МОЛ для склада:', err);
                 }
             };
 
             warehouse.addEventListener('change', () => {
-                console.log("🔄 [DEBUG WAREHOUSE] Склад изменен пользователем на ID:", warehouse.value);
                 updateMolOptions(true);
             });
 
             if (warehouse.value) {
-                console.log("🚀 [DEBUG WAREHOUSE] Склад уже заполнен при открытии, подгружаем МОЛ для ID:", warehouse.value);
                 updateMolOptions(false);
             } else {
-                console.log("⚠️ [DEBUG WAREHOUSE] Склад не выбран при открытии формы, подгружаем все МОЛ по умолчанию.");
                 updateMolOptions(false);
             }
         });
@@ -6733,7 +6598,6 @@ async function openRealizationForm(entity, item = null) {
 
     formElement.addEventListener('submit', async function(e) {
         e.preventDefault();
-        console.log("📤 Отправка формы 'realizations' перехвачена");
         
         if (isSubmitting) return;
         isSubmitting = true;
@@ -6743,7 +6607,6 @@ async function openRealizationForm(entity, item = null) {
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
-        console.log("📦 Данные формы перед обработкой:", data);
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -6755,8 +6618,6 @@ async function openRealizationForm(entity, item = null) {
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            console.log(`🚀 Отправка запроса [${method}] на ${url} с данными:`, data);
-
             const response = await fetch(url, {
                 method: method,
                 headers: { 
@@ -6766,21 +6627,17 @@ async function openRealizationForm(entity, item = null) {
                 body: JSON.stringify(data)
             });
 
-            console.log("📥 Ответ сервера на сохранение:", response.status);
-
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Реализация успешно сохранена', 'success');
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
-                console.error("❌ Ошибка от сервера при сохранении:", errData);
                 showAppNotification(errData.error || 'Ошибка при сохранении реализации', 'error');
                 isSubmitting = false; 
                 if (saveButton) saveButton.disabled = false;
             }
         } catch (err) {
-            console.error("❌ Ошибка соединения при сохранении:", err);
             showAppNotification('Ошибка соединения с сервером', 'error');
             isSubmitting = false;
             if (saveButton) saveButton.disabled = false;
@@ -6789,19 +6646,13 @@ async function openRealizationForm(entity, item = null) {
 }
 
 
-
-
-
-// Динамически создаем модальное окно для просмотрщика картинок на весь экран при клике на любую картинку в таблице
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
-        // Предотвращаем стандартное поведение (скачивание, переход по ссылкам и т.д.)
         e.preventDefault();
         e.stopPropagation();
 
         const img = e.target;
         if (img.src) {
-            // Проверяем, создано ли уже модальное окно, если нет — создаем
             let modal = document.getElementById('image-viewer-modal');
             if (!modal) {
                 modal = document.createElement('div');
@@ -6815,13 +6666,10 @@ document.addEventListener('click', function(e) {
                 `;
                 document.body.appendChild(modal);
 
-                // Закрытие по клику на фон или крестик
                 modal.addEventListener('click', () => {
                     modal.style.display = 'none';
                 });
             }
-
-            // Подставляем картинку и показываем модальное окно
             const modalImg = modal.querySelector('#modal-image-content');
             modalImg.src = img.src;
             modal.style.display = 'flex';
@@ -6846,7 +6694,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         <form id="car-details-form" style="display: flex; flex-direction: column; gap: 14px;" data-entity="${entity}" data-parent-id="${parentId || ''}">
     `;
 
-    // Корректно подставляем скрытый инпут в зависимости от сущности
     if (parentId) {
         if (entity === 'accident_images') {
             html += `<input type="hidden" name="accident_id" value="${parentId}">`;
@@ -6862,7 +6709,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
         let val = item[col.field] || '';
         let inputHtml = '';
 
-        // Добавлено распознавание image_url и image для корректного отображения кнопки выбора файла
         if (col.type === 'file' || col.field === 'file' || col.field === 'photo' || col.field === 'image' || col.field === 'image_url' || col.field.includes('file') || col.field.includes('photo') || col.field.includes('image')) {
             inputHtml = `<input type="file" name="photo" style="width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">`;
         } else if (col.type === 'datetime-local' || col.field.includes('date')) {
@@ -6965,8 +6811,6 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
 }
 
 
-
-// Функция удаления выбранной сущности
 function deleteSelectedEntity() {
     if (!selectedItem) {
         showAppNotification('Пожалуйста, выберите строку для удаления (кликните один раз на строку в таблице).', 'warning');
@@ -7113,22 +6957,15 @@ document.getElementById('login-form').addEventListener('submit', async function(
         });
         const result = await response.json();
 
-        // 🔍 ЛОГ: Посмотрим, что вообще пришло от сервера при логине
-        console.log("🟢 [ОТВЕТ СЕРВЕРА ПРИ ЛОГИНЕ]:", result);
-
         if (response.ok && result.success) {
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
             localStorage.setItem('token', result.token);
             
-            // Универсальный поиск ID (проверяем все возможные варианты ответа бэкенда)
             const userId = result.user?.id || result.id || result.userId || null;
 
             if (userId) {
                 localStorage.setItem('currentUserId', userId);
-                console.log("✅ [УСПЕХ] ID пользователя успешно сохранен в localStorage:", userId);
-            } else {
-                console.warn("⚠️ [ВНИМАНИЕ] Сервер пустил пользователя, но НЕ передал его ID! Проверьте, что возвращает /api/login");
             }
 
             document.getElementById('login-screen').style.display = 'none';
@@ -7141,25 +6978,21 @@ document.getElementById('login-form').addEventListener('submit', async function(
             errorDiv.innerText = result.message || 'Ошибка входа';
         }
     } catch (err) {
-        console.error("❌ Ошибка при отправке формы входа:", err);
         errorDiv.style.display = 'block';
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
+
 function logout() {
     localStorage.clear(); 
     location.reload();
 }
 
 async function refreshData() {
-    console.log('🔄 [refreshData] Запуск обновления. currentEntity:', currentEntity, 'selectedItem:', selectedItem);
-    
-    // 1. Фиксируем состояние на момент вызова (замораживаем контекст)
     const savedSelectedItem = selectedItem;
     const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
     const previousEntity = currentEntity;
 
-    // Жестко фиксируем глобальные ID текущего экрана, чтобы они не переписались асинхронно
     const lockedSkladId = window.currentSkladId;
     const lockedPostavhikId = window.currentPostavhikId;
     const lockedReceiptId = window.currentReceiptId;
@@ -7167,12 +7000,10 @@ async function refreshData() {
     const lockedRepairId = window.currentRepairId;
     const lockedCustomerId = window.currentCustomerId;
 
-    // Специальная ветка для приходов денег
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
         const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
         await loadReceiptMainData(previousEntity, parentParam);
     } 
-    // Специальная ветка для расходов денег
     else if (
         previousEntity === 'expenses_by_sklad' || 
         previousEntity === 'expenses_by_suppliers' || 
@@ -7195,7 +7026,6 @@ async function refreshData() {
         await loadData(previousEntity, title);
     }
 
-    // Восстанавливаем подсветку строки, используя зафиксированные locked-переменные
     if (savedSelectedItem && savedId) {
         const rows = document.querySelectorAll('#table-body tr');
         let foundRow = null;
@@ -7235,8 +7065,6 @@ async function refreshData() {
             }
         }
     }
-    
-    // ... остальной код проверки остальных сущностей с использованием locked переменных, если нужно
 }
 
 function showAppNotification(message, type = 'info') {
@@ -7389,7 +7217,6 @@ async function applyFilters() {
                 selectedItem = item;
                 const zId = item.zaphasti_id || item.id;
                 const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
-                // Передаем дату вместе с ID и складом
                 loadDetailData('stock_batches', { zaphasti_id: zId, warehouse_id: wId, date: dateVal });
             };
             tbody.appendChild(tr);
@@ -7405,7 +7232,6 @@ async function applyFilters() {
             const zId = currentItems[0].zaphasti_id || currentItems[0].id;
             const wId = currentItems[0].warehouse_id || currentItems[0].sklad_id || currentItems[0].id_sklad || currentItems[0].warehouseId;
 
-            // И здесь тоже передаем дату
             loadDetailData('stock_batches', { 
                 zaphasti_id: zId, 
                 warehouse_id: wId,
@@ -7420,6 +7246,7 @@ async function applyFilters() {
         console.error('Ошибка применения фильтров:', err);
     }
 }
+
 async function loadWarehousesForMovement() {
     try {
         const select = document.getElementById('movement-warehouse');
@@ -7589,19 +7416,18 @@ function printMainTable() {
                         font-size: 11px;
                     }
                     
-                    /* Точечная ширина для колонок, чтобы текст не ломался и не растягивался лишне */
-                    th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Артикул */
-                    th:nth-child(2), td:nth-child(2) { width: 60px; text-align: center; } /* Код */
-                    th:nth-child(3), td:nth-child(3) { width: auto; }                      /* Наименование (тянется сколько нужно) */
-                    th:nth-child(4), td:nth-child(4) { width: 75px; text-align: center; } /* Производитель */
-                    th:nth-child(5), td:nth-child(5) { width: 75px; text-align: center; } /* Группа цены */
-                    th:nth-child(6), td:nth-child(6) { width: auto; }                      /* Описание */
-                    th:nth-child(7), td:nth-child(7) { width: 90px; text-align: center; } /* Склад */
-                    th:nth-child(8), td:nth-child(8) { width: 140px; }                     /* МОЛ */
-                    th:nth-child(9), td:nth-child(9) { width: 65px; text-align: right; }  /* Кол-во */
-                    th:nth-child(10), td:nth-child(10) { width: 50px; text-align: center; } /* Ед. изм. */
+                  
+                    th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } 
+                    th:nth-child(2), td:nth-child(2) { width: 60px; text-align: center; } 
+                    th:nth-child(3), td:nth-child(3) { width: auto; }                      
+                    th:nth-child(4), td:nth-child(4) { width: 75px; text-align: center; } 
+                    th:nth-child(5), td:nth-child(5) { width: 75px; text-align: center; } 
+                    th:nth-child(6), td:nth-child(6) { width: auto; }                      
+                    th:nth-child(7), td:nth-child(7) { width: 90px; text-align: center; } 
+                    th:nth-child(8), td:nth-child(8) { width: 140px; }                     
+                    th:nth-child(9), td:nth-child(9) { width: 65px; text-align: right; }  
+                    th:nth-child(10), td:nth-child(10) { width: 50px; text-align: center; } 
 
-                    /* Скрываем всё лишнее интерактивное */
                     button, .btn, input {
                         display: none !important;
                     }
@@ -7637,7 +7463,6 @@ function printMainTable() {
 }
 
 function printDetailTable() {
-    // Заголовок берём из активной вкладки (Общая/Запчасти/Ремонт/ДТП и т.д.), иначе — из detail-title
     const activeTabBtn = document.querySelector(
         '.car-tab-btn.active, .accident-tab-btn.active, .repair-tab-btn.active, .customer-tab-btn.active, .realization-tab-btn.active'
     );
@@ -7691,19 +7516,16 @@ function printDetailTable() {
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
 }
+
 function ensureDetailPrintButton() {
-    // Убираем старую кнопку, если она осталась от предыдущего открытого экрана
     const oldBtn = document.getElementById('detail-print-btn');
     if (oldBtn) oldBtn.remove();
 
-    // Определяем, какая ИМЕННО группа вкладок сейчас видна: авто или ДТП
     const tabsForCars = document.getElementById('tabs-for-cars');
     const tabsForAccidents = document.getElementById('tabs-for-accidents');
     const activeGroup = [tabsForCars, tabsForAccidents].filter(Boolean).find(el => el.offsetParent !== null);
-    if (!activeGroup) return; // сейчас открыт Приход/Перемещение/Ремонт/др. — кнопку не создаём
+    if (!activeGroup) return; 
 
-    // Вставляем кнопку в ОБЩУЮ широкую полосу (car-tabs-bar), а не во внутренний блок вкладок —
-    // так margin-left: auto реально утащит её в самый правый край строки
     const outerBar = document.getElementById('car-tabs-bar') || document.getElementById('car-tabs-panel') || activeGroup.parentElement;
     if (!outerBar) return;
 
@@ -7723,11 +7545,8 @@ function ensureDetailPrintButton() {
     outerBar.appendChild(btn);
 }
 
-
-
 async function loadData(entity, title, customParams = {}) {
-    console.log(`🚀 [loadData] СТАРТ загрузки сущности: "${entity}", заголовок: "${title}", customParams:`, customParams);
-    resetSharedUiForEntity(entity);   // 👈 добавили
+    resetSharedUiForEntity(entity);
 
     currentEntity = entity;
     selectedItem = null;
@@ -7778,7 +7597,6 @@ async function loadData(entity, title, customParams = {}) {
         }
     }
 
-    // Управляем видимостью кнопки «Печать» в тулбаре: показываем только для car_cards и realizations
     const printBtn = document.querySelector('button[onclick="printMainTable()"]');
     if (printBtn) {
         if (entity === 'car_cards' || entity === 'realizations'|| entity === 'stock_balances'|| entity === 'stock_movement' ) {
@@ -7835,7 +7653,6 @@ async function loadData(entity, title, customParams = {}) {
             url += `?${params.toString()}`;
         }
 
-        console.log(`🌐 [loadData] Отправляем запрос на fetch: ${url}`);
         const response = await fetch(url, {
             method: 'GET',
             headers: {
@@ -7846,7 +7663,6 @@ async function loadData(entity, title, customParams = {}) {
         if (!response.ok) throw new Error('Ошибка сервера');
 
         currentItems = await response.json();
-        console.log(`📦 [loadData] Данные получены для ${entity}. Количество строк: ${currentItems.length}`, currentItems);
 
         const headerTr = document.getElementById('table-headers');
         const tbody = document.getElementById('table-body');
@@ -7901,7 +7717,6 @@ async function loadData(entity, title, customParams = {}) {
 
             tr.onclick = () => {
                 selectedItem = item;
-                console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: ${entity}`, { selectedItem, customParams });
 
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
@@ -8010,7 +7825,6 @@ async function loadData(entity, title, customParams = {}) {
         }
 
     } catch (err) {
-        console.error('❌ [loadData ОШИБКА] Ошибка загрузки данных для ' + entity, err);
         currentItems = [];
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
     }
@@ -8018,7 +7832,6 @@ async function loadData(entity, title, customParams = {}) {
 
 
 function resetSharedUiForEntity(entity) {
-    // 1. Кнопка "Печать" — по умолчанию скрыта, показываем только явно перечисленным
     const printBtn = document.querySelector('button[onclick="printMainTable()"]');
     if (printBtn) {
         const printableEntities = [
@@ -8029,7 +7842,6 @@ function resetSharedUiForEntity(entity) {
         printBtn.style.display = printableEntities.includes(entity) ? 'inline-block' : 'none';
     }
 
-    // 2. Кнопки Добавить/Изменить/Удалить — по умолчанию видимы, кроме read-only разделов
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
@@ -8043,7 +7855,6 @@ function resetSharedUiForEntity(entity) {
     if (btnEdit) btnEdit.style.display = isReadOnly ? 'none' : 'inline-block';
     if (btnDelete) btnDelete.style.display = isReadOnly ? 'none' : 'inline-block';
 
-    // 3. Кнопка "Назад" (для расходов) — скрываем по умолчанию, каждый уровень расходов сам её включит если нужно
     const btnBack = document.getElementById('btn-back-expense');
     if (btnBack) {
         btnBack.style.display = 'none';
@@ -8056,7 +7867,6 @@ function resetSharedUiForEntity(entity) {
             if (el) el.style.display = 'none';
         });
 
-    // 5. Нижний detail-container и его вкладки/тулбар — прячем по умолчанию
     const detailContainer = document.getElementById('detail-container');
     if (detailContainer) detailContainer.style.display = 'none';
 
@@ -8072,7 +7882,6 @@ function resetSharedUiForEntity(entity) {
             if (el) el.style.display = 'none';
         });
 
-    // 6. Строка счётчика строк — тоже прячем, кто хочет — сам покажет
     const rowCount = document.getElementById('row-count');
     if (rowCount) rowCount.innerText = '';
 }
@@ -8193,7 +8002,6 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
 
         const requestUrl = `/api/money_receipts?${idParam}&start_date=${startDate}&end_date=${endDate}${skladParam}`;
-        console.log('🔍 [openReceiptCustomerPaymentDrawer] Запрос неоплаченных накладных:', requestUrl); // 👈 временно, чтобы видеть в консоли
 
         const resp = await fetch(requestUrl);
         const listEl = document.getElementById('pay-docs-list');
@@ -8205,7 +8013,6 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         }
 
                const data = await resp.json();
-        console.log('📥 [openReceiptCustomerPaymentDrawer] Ответ сервера:', data); // 👈 временно
         const docs = Array.isArray(data) ? data : (data.rows || []);
         const unpaid = docs.filter(d => Number(d.debt_sum || 0) > 0);
 
@@ -8252,8 +8059,6 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
                 });
             });
 
-            // Автоподстановка суммы: выбрана накладная(-ые) — сумма равна их долгу.
-            // Ничего не выбрано — возвращаем исходный долг за весь месяц.
             const amountInput = document.getElementById('receipt-payment-amount');
             if (amountInput) {
                 if (window._paySelectedDocIds.length > 0) {
@@ -8332,7 +8137,7 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) 
                 amount,
                 comment,
                 month_str: monthStr,
-                sklad_id: skladId || null,   // 👈 берём переданный, а не window.currentSkladId
+                sklad_id: skladId || null,   
                 doc_ids: docIds.length > 0 ? docIds : null
             })
         });
@@ -8369,7 +8174,6 @@ async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) 
     try {
         let response = await fetch(`/api/money_receipts_by_customers/${groupKey}/payments?month_str=${monthStr || ''}`);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
-        // ... остальное без изменений
 
         let payments = await response.json();
         if (!payments || payments.length === 0) {
@@ -8451,9 +8255,6 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
 
     openDrawer();
 
-    // Подгружаем список неоплаченных накладных поставщика за этот месяц, чтобы
-    // можно было найти и выбрать конкретные (через поиск) и оплатить именно их,
-    // а не всё подряд по ФИФО.а
     try {
         const [year, month] = monthStr.split('-').map(Number);
         const startDate = `${monthStr}-01`;
@@ -8477,10 +8278,6 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
             listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
             return;
         }
-
-        // Поле поиска накладных — по аналогии с поиском запчастей:
-        // вводишь текст, показывается фильтруемый выпадающий список,
-        // клик по варианту добавляет накладную в список выбранных (чипом).
         window._payUnpaidReceipts = unpaid;
         window._paySelectedReceiptIds = [];
 
@@ -8518,10 +8315,6 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
             renderSelectedChips();
         });
     });
-
-    // Автоподстановка суммы: если выбраны конкретные накладные — сумма к оплате
-    // равна их долгу (сумме, если выбрано несколько). Если ничего не выбрано —
-    // возвращаем исходную сумму долга за весь месяц.
     const amountInput = document.getElementById('payment-amount');
     if (amountInput) {
         if (window._paySelectedReceiptIds.length > 0) {
@@ -8597,7 +8390,6 @@ async function submitPayment(event, postavhikId, monthStr) {
     };
 
     try {
-        // Стучимся на эндпоинт погашения долга поставщику за конкретный месяц
         let response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/pay_month`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -8621,7 +8413,6 @@ async function loadExpenseDetailTable(fetchUrl) {
   const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbarEl) detailToolbarEl.style.display = 'none';
   
-    console.log(`🔧 [loadExpenseDetailTable] Загрузка детализации по URL: ${fetchUrl}`);
     const detailBody = document.getElementById('detail-body');
     const detailTitle = document.getElementById('detail-title');
     const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
@@ -8632,14 +8423,12 @@ async function loadExpenseDetailTable(fetchUrl) {
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
 
-    // На всякий случай удаляем старый ряд фильтров, если он остался от других таблиц
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) existingFilterRow.remove();
 
     const existingAlternativeRow = document.getElementById('detail-table-filter-row');
     if (existingAlternativeRow) existingAlternativeRow.remove();
 
-    // Рендерим только заголовки таблицы (без инпутов фильтрации)
     if (detailHeaderTr && visibleColumns.length > 0) {
         detailHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
@@ -8673,7 +8462,6 @@ async function loadExpenseDetailTable(fetchUrl) {
         });
 
     } catch (err) {
-        console.error('❌ [loadExpenseDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации: ${err.message}</td></tr>`;
         }
@@ -8689,9 +8477,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         currentEntity = currentExpenseView;
     }
 
-    console.log(`💰 [loadExpenseMainData] НАЧАЛО. entity="${entity}", parentId:`, parentId);
-    console.trace('📍 [TRACE] Кто вызвал loadExpenseMainData:');
-
     let fetchUrl = '';
 
     const detailContainer = document.getElementById('detail-container');
@@ -8704,7 +8489,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     
     let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
     if (!backBtn) {
-        // Контейнер или кнопка отсутствуют
     }
 
     if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
@@ -8714,7 +8498,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         window.currentReceiptId = null;
 
         fetchUrl = `/api/expenses_by_sklad`;
-        console.log(`📂 [View: expenses_by_sklad] Установлен URL: ${fetchUrl}`);
 
         if (detailContainer) detailContainer.style.display = 'none';
 
@@ -8732,7 +8515,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         window.currentReceiptId = null;
 
         fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
-        console.log(`📂 [View: expenses_by_suppliers] sklad_id=${window.currentSkladId}, URL: ${fetchUrl}`);
 
         if (detailContainer) detailContainer.style.display = 'none';
 
@@ -8765,8 +8547,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
         }
 
-        console.log(`📂 [View: expenses_by_receipts] postavhik_id=${currentPostavhik}, sklad_id=${skladId}, URL: ${fetchUrl}`);
-
         if (detailContainer) detailContainer.style.display = 'none';
 
         if (btnAdd) btnAdd.style.display = 'none';
@@ -8791,7 +8571,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         let currentReceipt = window.currentReceiptId || '';
 
         fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
-        console.log(`📂 [View: expense_items] URL: ${fetchUrl}`);
 
         if (detailContainer) detailContainer.style.display = 'flex';
 
@@ -8812,13 +8591,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
-    
-    console.log(`⚙️ [Config] Инициализация конфигурации для entity: "${currentEntity}"`);
 
     const config = getConfig(currentEntity);
-    if (!config) {
-        console.error(`❌ [getConfig] Не найдена конфигурация для сущности: "${currentEntity}"! Проверьте функцию getConfig.`);
-    }
 
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
@@ -8914,25 +8688,20 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     }
 
     try {
-        console.log(`🌐 [Fetch] Отправка GET запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
 
-        console.log(`📥 [Fetch] Ответ получен. Статус: ${response.status} (${response.statusText})`);
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
         currentItems = await response.json();
-        console.log(`📦 [Data] Успешно получено элементов: ${Array.isArray(currentItems) ? currentItems.length : 'не массив'}`, currentItems);
 
         if (!mainTableBody) {
-            console.error('❌ [DOM] Элемент #table-body не найден на странице!');
             return;
         }
 
         if (!currentItems || currentItems.length === 0) {
-            console.warn('⚠️ [Data] Массив данных пуст. Выводим сообщение "Нет данных".');
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
@@ -8940,7 +8709,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         mainTableBody.innerHTML = '';
 
         if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
-            console.log('📑 [Group] Рендеринг сгруппированных данных по месяцам...');
             const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"
@@ -8977,7 +8745,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             Object.keys(groups).sort().reverse().forEach(key => {
                 const group = groups[key];
                 const currentGIdx = groupIndex++;
-                console.log(`📁 [Group #${currentGIdx}] Название: "${group.title}", элементов: ${group.items.length}`);
 
                 const headerTr = document.createElement('tr');
                 headerTr.id = `group-header-${currentGIdx}`;
@@ -9005,18 +8772,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     
                     if (config && typeof config.render === 'function') {
                         tr.innerHTML = config.render(item);
-                    } else {
-                        console.error('❌ [Config] Функция render не найдена в конфиге для:', currentEntity);
                     }
                     
                     mainTableBody.appendChild(tr);
                     childRows.push(tr);
                 });
 
-                // ИЗМЕНЕНО: клик по заголовку месяца теперь ТОЛЬКО сворачивает/разворачивает
-                // список — как в разделе накладных. Переход на след. уровень
-                // (список накладных поставщика) отсюда убран: он и так уже
-                // происходит по клику на саму строку поставщика в общем обработчике таблицы.
                 headerTr.addEventListener('click', (e) => {
                     const icon = document.getElementById(`icon-${currentGIdx}`);
                     const isHidden = childRows[0].style.display === 'none';
@@ -9030,7 +8791,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             });
 
         } else {
-            console.log(`📋 [Render] Обычный рендеринг элементов для сущности: "${currentEntity}"`);
             currentItems.forEach((item, index) => {
                 const tr = document.createElement('tr');
                 const rowId = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
@@ -9040,17 +8800,13 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 
                 if (config && typeof config.render === 'function') {
                     tr.innerHTML = config.render(item);
-                } else {
-                    console.error(`❌ [Config] У конфигурации сущности "${currentEntity}" отсутствует функция render!`, config);
                 }
 
                 mainTableBody.appendChild(tr);
             });
         }
-        console.log('✅ [loadExpenseMainData] Рендеринг таблицы успешно завершен.');
 
     } catch (err) {
-        console.error('❌ [loadExpenseMainData ОШИБКА]:', err);
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных: ${err.message}</td></tr>`;
         }
@@ -9060,29 +8816,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
 
 
-function applyReceiptsFilters() {
-    const skladId = window.currentSkladId || (selectedItem && selectedItem.sklad_id) || '';
-    
-    console.log(`🔍 [applyReceiptsFilters] Применение фильтра дат. skladId:`, skladId);
-
-    if (skladId) {
-        loadReceiptMainData('money_receipts', skladId);
-    } else {
-        console.warn('⚠️ [applyReceiptsFilters] skladId утерян, сбрасываем на список складов');
-        loadReceiptMainData('money_receipts_by_sklad');
-    }
-} 
-
-
-
-
 async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    const docType = window.currentDocType || 'realization';
-    console.log(`[HISTORY LOG] Открытие истории: docId = "${docId}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${docType}"`);
-    
+    const docType = window.currentDocType || 'realization';    
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
@@ -9095,16 +8833,13 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
     openDrawer();
 
     try {
-        // Выбираем правильный эндпоинт в зависимости от типа документа
         const endpointPrefix = docType === 'move' ? 'moves' : 'realizations';
         const targetUrl = `/api/${endpointPrefix}/${docId}/payments?sklad_id=${skladId}`;
-        console.log(`[HISTORY LOG] Запрос истории по адресу: ${targetUrl}`);
 
         let response = await fetch(targetUrl);
         if (!response.ok) throw new Error('Не удалось загрузить историю');
         
         let payments = await response.json();
-        console.log(`[HISTORY LOG] Получен массив платежей для документа ${docId}:`, payments);
 
         if (!payments || payments.length === 0) {
             drawer.querySelector('div:last-child').innerHTML = 'По этому документу еще не было поступлений.';
@@ -9149,7 +8884,6 @@ async function openIncomePaymentHistory(docId, docNumber, skladId = '') {
         `;
 
     } catch (err) {
-        console.error('[HISTORY ERROR]', err);
         drawer.querySelector('div:last-child').innerHTML = '<span style="color: #dc2626;">Ошибка при загрузке истории поступлений</span>';
     }
 }
@@ -9158,9 +8892,7 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }
-    const docType = window.currentDocType || 'realization';
-    console.log(`[DRAWER LOG] Открытие формы оплаты: docId = "${docId}", debtSum = "${debtSum}", docNumber = "${docNumber}", skladId = "${skladId}", docType = "${docType}"`);
-    
+    const docType = window.currentDocType || 'realization';    
     const drawer = getOrCreateDrawer();
     
     drawer.innerHTML = `
@@ -9209,17 +8941,8 @@ async function submitIncomePayment(event, docId, skladId) {
         doc_type: currentDocType
     };
 
-    // Динамически выбираем правильный URL в зависимости от типа документа
     const endpointPrefix = currentDocType === 'move' ? 'moves' : 'realizations';
     const targetUrl = `/api/${endpointPrefix}/${docId}/pay`;
-
-    console.log(`[SUBMIT LOG] Отправка платежа:`, {
-        url: targetUrl,
-        docId: docId,
-        skladId: skladId,
-        docType: currentDocType,
-        payloadToSend: payload
-    });
 
     try {
         let response = await fetch(targetUrl, {
@@ -9228,33 +8951,25 @@ async function submitIncomePayment(event, docId, skladId) {
             body: JSON.stringify(payload)
         });
 
-        console.log(`[SUBMIT LOG] Ответ сервера (статус):`, response.status);
-
         if (response.ok) {
             let resData = await response.json().catch(() => ({}));
-            console.log(`[SUBMIT LOG SUCCESS] Сервер успешно зафиксировал платеж:`, resData);
             closeDrawer();
             showAppNotification('Платёж успешно сохранен', 'success');
             
-            if (typeof applyReceiptsFilters === 'function') {
-                applyReceiptsFilters();
-            } else if (typeof loadTableData === 'function') {
+            if (typeof loadTableData === 'function') {
                 loadTableData();
             }
         } else {
             const errData = await response.json().catch(() => ({}));
-            console.warn(`[SUBMIT LOG ERROR] Сервер вернул ошибку:`, errData);
             showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
         }
     } catch (err) {
-        console.error('[SUBMIT NETWORK ERROR]:', err);
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
-    console.log(`📥 [loadReceiptMainData] Начало загрузки. entity="${entity}", parentId:`, parentId);
-    resetSharedUiForEntity(entity);   // 👈 добавили
+    resetSharedUiForEntity(entity);
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -9266,13 +8981,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     const btnAdd = document.getElementById('btn-add');
     const btnEdit = document.getElementById('btn-edit');
     const btnDelete = document.getElementById('btn-delete');
-    
-  
 
-    // Находим кнопку «Назад» на панели инструментов
     const btnBackExpense = document.getElementById('btn-back-expense');
 
-    // 1 уровень: Склады (отображаем все)
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
         window.currentCustomerId = null;
@@ -9287,13 +8998,11 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        // Скрываем кнопку «Назад» на уровне складов
         if (btnBackExpense) {
             btnBackExpense.style.display = 'none';
             btnBackExpense.onclick = null;
         }
         }
-    // 2 уровень (НОВЫЙ): Покупатели по месяцам, сгруппированные
     else if (currentReceiptView === 'money_receipts_by_customers') {
         let skladId = '';
         if (parentId && typeof parentId === 'object') {
@@ -9323,7 +9032,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             };
         }
     }
-    // 3 уровень: Документы (реализации и перемещения) выбранного склада/покупателя/месяца
     else if (currentReceiptView === 'money_receipts') {
         let skladId = '';
         let customerId = '';
@@ -9351,7 +9059,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
-        // 👈 ДОБАВИТЬ: сбрасываем нижнюю таблицу, чтобы не висели данные от предыдущего документа
         const detailBodyReset = document.getElementById('detail-body');
         if (detailBodyReset) {
             detailBodyReset.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Выберите документ в верхней таблице</td></tr>`;
@@ -9361,7 +9068,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
        
 
-        // Собираем параметры фильтрации, если они заданы
         let queryParams = [];
         if (window.currentSkladId) {
             queryParams.push(`sklad_id=${window.currentSkladId}`);
@@ -9384,7 +9090,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-                // Показываем и настраиваем кнопку «Назад» — теперь на уровень покупателей, а не сразу на склады
         if (btnBackExpense) {
             btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
@@ -9421,25 +9126,15 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             thead.insertBefore(filterRow, mainHeaderTr);
         }
 
-        // Локальная безопасная функция фильтрации для таблицы с учетом месяцев/групп
         window.applyReceiptTableFilter = function() {
             const inputs = filterRow.querySelectorAll('input[data-column-index]');
             const tbody = document.getElementById('table-body');
             const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"], tr[style*="background: #f8fafc"]');
             
-            // Если есть сгруппированные строки по месяцам (на уровне документов)
             if (currentReceiptView === 'money_receipts') {
-                // Ищем все группы. Так как у нас структура: headerTr -> группа items -> footerTr, 
-                // проще пройтись по всем tr в tbody, которые не являются шапками сальдо или групп/футерами, 
-                // либо управлять видимостью блоков.
-                // Сделаем более надежно: найдем все группы через сохраненные элементы или проход по DOM.
-                // Ниже универсальный обход строк данных с автоскрытием шапок месяцев и футеров.
                 let rows = tbody.querySelectorAll('tr');
-                // Пройдемся построчно: если строка обычная с данными (не шапка и не футер группы), проверим фильтры.
-                // Но лучше использовать заранее привязанные массивы групп, либо фильтровать по индексу колонок.
             }
 
-            // Универсальная фильтрация по индексам колонок
             const activeInputs = Array.from(inputs).map(input => ({
                 index: parseInt(input.getAttribute('data-column-index'), 10),
                 value: input.value.toLowerCase().trim()
@@ -9447,7 +9142,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
             const rows = tbody.querySelectorAll('tr');
             rows.forEach(row => {
-                // Пропускаем строки сальдо, шапки месяцев и футеры, чтобы они обрабатывались отдельно или не ломали верстку
                 if (row.style.background && (row.style.background.includes('e2e8f0') || row.style.background.includes('f8fafc'))) {
                     return; 
                 }
@@ -9485,8 +9179,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     }
 
     try {
-        console.dg = console.log;
-        console.log(`🌐 [loadReceiptMainData] Отправка запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
@@ -9495,7 +9187,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         const responseText = await response.text();
 
         if (!response.ok) {
-            console.error(`❌ Сервер вернул ошибку [${response.status}]:`, responseText);
             throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
         }
 
@@ -9503,7 +9194,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         try {
             parsedData = JSON.parse(responseText);
         } catch (e) {
-            console.error('❌ Сервер вернул не JSON, а HTML-страницу:', responseText);
             throw new Error('Ответ сервера не является валидным JSON');
         }
 
@@ -9517,7 +9207,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             saldoData = parsedData.saldo || null;
         }
 
-        // Сохраняем в глобальный контекст для других функций
         window.currentItems = currentItems;
 
         if (!mainTableBody) return;
@@ -9547,12 +9236,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
 
         if (currentItems.length === 0) {
-            console.warn('⚠️ [loadReceiptMainData] Получен пустой массив данных.');
             mainTableBody.innerHTML = saldoHeaderHtml + `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
             return;
         }
 
-                console.log(`📦 [loadReceiptMainData] Успешно получено записей: ${currentItems.length}`);
         mainTableBody.innerHTML = saldoHeaderHtml;
 
         if (currentReceiptView === 'money_receipts_by_customers') {
@@ -9750,7 +9437,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.innerHTML = config.render(item);
 
                     tr.addEventListener('click', () => {
-                        console.log('🖱️ [Клик на строку верхней таблицы]:', item);
                         document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                         tr.classList.add('selected-row');
 
@@ -9823,7 +9509,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 tr.innerHTML = config.render(item);
 
                 tr.addEventListener('click', () => {
-                    console.log('🖱️ [Клик на строку складов]:', item);
                     document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
 
@@ -9850,7 +9535,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
 
     } catch (err) {
-        console.error('❌ [loadReceiptMainData ОШИБКА]:', err);
         if (mainTableBody) {
             mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных</td></tr>`;
         }
@@ -9860,32 +9544,19 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 let currentDetailController = null;
 
 async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_detail') {
-    console.log(`🔍 [loadReceiptDetailTable] ЗАПУСК. Входной URL: ${fetchUrl}`);
-    console.log(`🔍 [loadReceiptDetailTable] Текущие глобальные переменные:`, {
-        currentDocType: window.currentDocType,
-        currentRealizationId: window.currentRealizationId,
-        currentCustomerId: window.currentCustomerId,
-        currentSkladId: window.currentSkladId,
-        subTabName
-    });
-    
-    // Отменяем предыдущий незавершенный запрос, если он был
     if (currentDetailController) {
         currentDetailController.abort();
     }
     currentDetailController = new AbortController();
     
-    // СТРАХОВКА: Автоматически добавляем тип документа, если он не был передан явно в URL
     if (window.currentDocType && !fetchUrl.includes('doc_type=')) {
         const separator = fetchUrl.includes('?') ? '&' : '?';
         fetchUrl = `${fetchUrl}${separator}doc_type=${window.currentDocType}`;
-        console.log(`🔍 [loadReceiptDetailTable] URL скорректирован с учетом doc_type: ${fetchUrl}`);
     }
     
        const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbarEl) detailToolbarEl.style.display = 'none';
 
-    // Удаляем строку фильтров, если она осталась от другой таблицы (например, от loadDetailData)
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) existingFilterRow.remove();
 
@@ -9911,10 +9582,8 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
     if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка позиций...</td></tr>`;
 
     try {
-        console.log(`🌐 [loadReceiptDetailTable] Отправка fetch запроса на URL: ${fetchUrl}`);
         const response = await fetch(fetchUrl, { signal: currentDetailController.signal });
         const responseText = await response.text();
-        console.log(`📥 [loadReceiptDetailTable] Ответ от сервера (status: ${response.status}):`, responseText.substring(0, 200));
 
         if (!response.ok) throw new Error('Ошибка загрузки данных');
         const data = JSON.parse(responseText);
@@ -9940,15 +9609,14 @@ async function loadReceiptDetailTable(fetchUrl, subTabName = 'money_receipts_det
         });
     } catch (err) {
         if (err.name === 'AbortError') {
-            console.log(`🚫 [loadReceiptDetailTable] Предыдущий устаревший запрос был отменен.`);
             return;
         }
-        console.error('❌ [loadReceiptDetailTable ОШИБКА]:', err);
         if (detailBody) {
             detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации</td></tr>`;
         }
     }
 }
+
 
 const tableBodyForReceipts = document.getElementById('table-body');
 if (tableBodyForReceipts) {
@@ -9966,7 +9634,6 @@ if (tableBodyForReceipts) {
             ];
 
             let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
-            console.log(`🖱️ [КЛИК В ТАБЛИЦЕ] Сработал клик. Определена activeEntity: "${activeEntity}"`);
             
             if (!allowedEntities.includes(activeEntity)) {
                 return;
@@ -9983,7 +9650,6 @@ if (e.target.closest('button, [onclick]')) {
     return;
 }
 
-            // ИЗВЛЕЧЕНИЕ ID С УЧЕТОМ РАЗНЫХ СУЩНОСТЕЙ И СТРУКТУРЫ
             let id = tr.getAttribute('data-id');
             
             if (!id || id === 'null' || id === 'undefined') {
@@ -10008,8 +9674,6 @@ if (e.target.closest('button, [onclick]')) {
                 }
             }
 
-            console.log(`🔍 [КЛИК В ТАБЛИЦЕ] Извлечен data-id из строки:`, id);
-
             document.querySelectorAll('#table-body tr').forEach(row => {
                 if (!row.querySelector('[id^="icon-"]')) {
                     row.classList.remove('selected-row');
@@ -10033,7 +9697,6 @@ if (e.target.closest('button, [onclick]')) {
             }
 
             if (!selectedItem && id) {
-                console.warn(`⚠️ [КЛИК В ТАБЛИЦЕ] Элемент с ID ${id} не найден в itemsSource! Восстанавливаем из DOM/глобальных переменных.`);
                 selectedItem = {
                     id: id,
                     realization_id: id,
@@ -10049,16 +9712,11 @@ if (e.target.closest('button, [onclick]')) {
                 window.selectedDetailItem = null;
             }
 
-            console.log(`📥 [КЛИК ИТОГ] Сущность: "${activeEntity}", ID строки: ${id}`, selectedItem);
-
             if (!selectedItem) {
-                console.error('❌ Не удалось определить selectedItem для строки с ID:', id);
                 return;
             }
 
-            // ==========================================
-            // ЛОГИКА ДЛЯ ПРИХОДОВ (money_receipts)
-            // ==========================================
+        
                         if (activeEntity === 'money_receipts_by_sklad') {
                 if (typeof loadReceiptMainData === 'function') {
                     loadReceiptMainData('money_receipts_by_customers', selectedItem);
@@ -10090,9 +9748,7 @@ if (e.target.closest('button, [onclick]')) {
                 } else {
                     window.currentDocType = 'realization';
                 }
-                
-                console.log('🔍 [КЛИК ОПРЕДЕЛЕНИЕ ТИПА]:', { docNumFromItem, detectedType: window.currentDocType, customerId: window.currentCustomerId });
-                
+                                
                 const detailContainer = document.getElementById('detail-container');
                 if (detailContainer) detailContainer.style.display = 'block';
                  const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
@@ -10106,9 +9762,6 @@ if (e.target.closest('button, [onclick]')) {
                 }
             }
 
-            // ==========================================
-            // ЛОГИКА ДЛЯ РАСХОДОВ (expenses)
-            // ==========================================
             else if (
                 activeEntity === 'expenses_by_sklad' || 
                 activeEntity === 'expenses_by_suppliers' || 
@@ -10127,11 +9780,9 @@ if (e.target.closest('button, [onclick]')) {
                 if (activeEntity === 'expenses_by_sklad') {
                     if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
                 } else if (activeEntity === 'expenses_by_suppliers') {
-                    // ИСПРАВЛЕНИЕ: Передаем поставщика вместе с диапазоном дат выбранного месяца
                     if (typeof loadExpenseMainData === 'function') {
                         let payload = { ...selectedItem };
                         
-                        // Если у строки есть месяц (например, '2026-08'), рассчитываем границы для уровня 3
                         if (selectedItem.month_str) {
                             const [year, month] = selectedItem.month_str.split('-').map(Number);
                             payload.start_date = `${selectedItem.month_str}-01`;
@@ -10163,18 +9814,16 @@ if (e.target.closest('button, [onclick]')) {
 }
 
 
-
 function emptyDetailBody(entity) {
     const detailBody = document.getElementById('detail-body');
     if (!detailBody) return;
 
-    // Получаем конфигурацию для текущей сущности
     const config = getConfig(entity);
     
-    // Считаем только те колонки, у которых не стоит table: false
+    
     const visibleColumnsCount = config.columns 
         ? config.columns.filter(col => col.table !== false).length 
-        : 1; // Дефолт на случай отсутствия конфига
+        : 1; 
 
     detailBody.innerHTML = `<tr><td colspan="${visibleColumnsCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
 }
@@ -10194,7 +9843,7 @@ function filterTable() {
 
     rows.forEach((row, index) => {
         let isVisible = true;
-        const item = currentItems[index]; // Берем элемент напрямую по индексу строки
+        const item = currentItems[index]; 
 
         if (!item) return;
 
@@ -10204,7 +9853,6 @@ function filterTable() {
         for (const field in filters) {
             let match = false;
             
-            // 1. Проверяем значение в самом объекте данных
             const itemValue = item[field];
             if (itemValue !== undefined && itemValue !== null) {
                 if (String(itemValue).toLowerCase().includes(filters[field])) {
@@ -10212,7 +9860,6 @@ function filterTable() {
                 }
             }
 
-            // 2. Если не нашли в объекте или поле вычисляемое, проверяем текст в ячейке таблицы (td)
             if (!match) {
                 const colIndex = config.columns.findIndex(c => c.field === field);
                 if (colIndex !== -1 && cells[colIndex]) {
@@ -10236,73 +9883,58 @@ let selectedDetailItem = null;
 let currentDetailItems = []; 
 
 function getCurrentDetailEntity() {
-    console.log(`🔍 [getCurrentDetailEntity] Определение детальной сущности для currentEntity: "${currentEntity}"`);
-
     if (currentEntity === 'moves') {
         const res = 'move_items';
-        console.log(`📌 [getCurrentDetailEntity] Результат для moves: ${res}`);
         return res;
     }
     if (currentEntity === 'receipts') {
         const res = 'receipt_items';
-        console.log(`📌 [getCurrentDetailEntity] Результат для receipts: ${res}`);
         return res;
     }
     if (currentEntity === 'expenses' || currentEntity === 'expense_items') {
         const res = 'expense_items';
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses/expense_items: ${res}`);
         return res;
     }
 
     if (currentEntity === 'expenses_by_sklad') {
         const res = ''; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_sklad: (пусто)`);
         return res;
     }
     if (currentEntity === 'expenses_by_suppliers') {
         const res = ''; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_suppliers: (пусто)`);
         return res;
     }
     if (currentEntity === 'expenses_by_receipts') {
         const res = 'expense_items'; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для expenses_by_receipts: ${res}`);
         return res;
     }
 
     if (currentEntity === 'cars') {
         const res = 'car_details';
-        console.log(`📌 [getCurrentDetailEntity] Результат для cars: ${res}`);
         return res;
     }
     if (currentEntity === 'stock_balances') {
         const res = 'stock_batches'; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для stock_balances: ${res}`);
         return res;
     }
     if (currentEntity === 'stock_movement') {
         const res = 'part_movement_details'; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для stock_movement: ${res}`);
         return res;
     }
     if (currentEntity === 'postavhik') {
         const res = 'postavhik_contacts'; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для postavhik: ${res}`);
         return res;
     }
     if (currentEntity === 'counterparties') {
         const res = 'counterparty_contacts'; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для counterparties: ${res}`);
         return res;
     }
     if (currentEntity === 'money_receipts_by_sklad') {
         const res = ''; 
-        console.log(`📌 [getCurrentDetailEntity] Результат для money_receipts_by_sklad: (пусто)`);
         return res;
     }
 
     if (currentEntity === 'money_receipts') {
-        console.log(`📌 [getCurrentDetailEntity:money_receipts] Возвращаем дефолтное значение: money_receipts_detail`);
         return 'money_receipts_detail';
     }
 
@@ -10311,58 +9943,48 @@ function getCurrentDetailEntity() {
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:realizations] Найден data-tab: ${dataTab}`);
                 return dataTab;
             }
         }
 
         if (typeof currentRealizationSubTab !== 'undefined' && currentRealizationSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:realizations] Найден currentRealizationSubTab: ${currentRealizationSubTab}`);
             return currentRealizationSubTab;
         }
 
         if (activeTab) {
             const text = activeTab.innerText.trim().toLowerCase();
             if (text.includes('услуг') || text.includes('работ')) {
-                console.log(`📝 [getCurrentDetailEntity:realizations] По тексту -> realization_works`);
                 return 'realization_works';
             }
             if (text.includes('запчаст')) {
-                console.log(`📝 [getCurrentDetailEntity:realizations] По тексту -> realization_items`);
                 return 'realization_items';
             }
 
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchRealizationTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:realizations] По onclick -> ${match[1]}`);
                 return match[1];
             }
         }
 
         const activeText = document.querySelector('#tabs-for-realizations button.active')?.innerText || '';
         if (activeText.toLowerCase().includes('услуг') || activeText.toLowerCase().includes('работ')) {
-            console.log(`📝 [getCurrentDetailEntity:realizations] По активному тексту -> realization_works`);
             return 'realization_works';
         }
 
-        console.log(`📌 [getCurrentDetailEntity:realizations] Дефолт -> realization_items`);
         return 'realization_items'; 
     }
 
     if (currentEntity === 'customers') {
-        console.log(`🔍 [getCurrentDetailEntity:customers] Проверка активных табов для customers...`);
         const activeTab = document.querySelector('#tabs-for-customers button.active, #tabs-for-customers .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:customers] Найден data-tab: ${dataTab}`);
                 return dataTab;
             }
         }
 
         if (typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:customers] Найден currentCustomerSubTab: ${currentCustomerSubTab}`);
             return currentCustomerSubTab;
         }
 
@@ -10370,27 +9992,22 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchCustomerTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:customers] По onclick -> ${match[1]}`);
                 return match[1];
             }
         }
-        console.log(`📌 [getCurrentDetailEntity:customers] Дефолт -> customer_contacts`);
         return 'customer_contacts'; 
     }
 
     if (currentEntity === 'accidents') {
-        console.log(`🔍 [getCurrentDetailEntity:accidents] Проверка активных табов для accidents...`);
         const activeTab = document.querySelector('#tabs-for-accidents button.active, #tabs-for-accidents .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:accidents] Найден data-tab: ${dataTab}`);
                 return dataTab;
             }
         }
 
         if (typeof currentAccidentSubTab !== 'undefined' && currentAccidentSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:accidents] Найден currentAccidentSubTab: ${currentAccidentSubTab}`);
             return currentAccidentSubTab;
         }
 
@@ -10398,27 +10015,22 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchAccidentTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:accidents] По onclick -> ${match[1]}`);
                 return match[1];
             }
         }
-        console.log(`📌 [getCurrentDetailEntity:accidents] Дефолт -> accident_invoices`);
         return 'accident_invoices'; 
     }
 
     if (currentEntity === 'repairs') {
-        console.log(`🔍 [getCurrentDetailEntity:repairs] Проверка активных табов для repairs...`);
         const activeTab = document.querySelector('#tabs-for-repairs button.active, #tabs-for-repairs .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:repairs] Найден data-tab: ${dataTab}`);
                 return dataTab;
             }
         }
 
         if (typeof currentRepairSubTab !== 'undefined' && currentRepairSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:repairs] Найден currentRepairSubTab: ${currentRepairSubTab}`);
             return currentRepairSubTab;
         }
 
@@ -10426,27 +10038,22 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/(?:loadDetailData|switchRepairTab)\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:repairs] По onclick -> ${match[1]}`);
                 return match[1];
             }
         }
-        console.log(`📌 [getCurrentDetailEntity:repairs] Дефолт -> repair_items`);
         return 'repair_items'; 
     }
 
     if (currentEntity === 'car_cards') {
-        console.log(`🔍 [getCurrentDetailEntity:car_cards] Проверка активных табов для car_cards...`);
         const activeTab = document.querySelector('#tabs-for-cars button.active, #tabs-for-cars .active');
         if (activeTab) {
             const dataTab = activeTab.getAttribute('data-tab');
             if (dataTab) {
-                console.log(`🔘 [getCurrentDetailEntity:car_cards] Найден data-tab: ${dataTab}`);
                 return dataTab;
             }
         }
 
         if (typeof currentCarSubTab !== 'undefined' && currentCarSubTab) {
-            console.log(`⚙️ [getCurrentDetailEntity:car_cards] Найден currentCarSubTab: ${currentCarSubTab}`);
             return currentCarSubTab;
         }
 
@@ -10454,73 +10061,50 @@ function getCurrentDetailEntity() {
             const onclickAttr = activeTab.getAttribute('onclick') || '';
             const match = onclickAttr.match(/loadDetailData\(['"]([^'"]+)['"]/);
             if (match && match[1]) {
-                console.log(`🔗 [getCurrentDetailEntity:car_cards] По onclick -> ${match[1]}`);
                 return match[1];
             }
         }
-        console.log(`📌 [getCurrentDetailEntity:car_cards] Дефолт -> car_details`);
         return 'car_details';
     }
     
-    console.log(`📌 [getCurrentDetailEntity] Неизвестная сущность "${currentEntity}", возвращаем дефолт: receipt_items`);
     return 'receipt_items';
 }
-
 function openDetailForm(mode) {
-    console.log(`🚀 [openDetailForm] Вызов функции с режимом (mode): "${mode}"`);
-    console.log(`📋 [openDetailForm] Текущий выбор: selectedItem =`, selectedItem, `, selectedDetailItem =`, selectedDetailItem);
-
     if (!selectedItem) {
-        console.warn(`⚠️ [openDetailForm] Ошибка: документ в верхней таблице не выбран.`);
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
         return;
     }
     
     if (mode === 'edit' && !selectedDetailItem) {
-        console.warn(`⚠️ [openDetailForm] Ошибка: выбран режим редактирования ('edit'), но строка в спецификации не выбрана (selectedDetailItem пуст).`);
         showAppNotification('Выберите строку в спецификации для изменения!', 'warning');
         return;
     }
 
     const detailEntity = getCurrentDetailEntity();
-    console.log(`🔍 [openDetailForm] Определена детальная сущность (detailEntity): "${detailEntity}"`);
 
-    // 1. Проверяем жестко заблокированные сущности-истории
     const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
     if (readOnlyDetailEntities.includes(detailEntity)) {
-        console.log(`🛡️ [openDetailForm] Сущность "${detailEntity}" находится в списке readOnlyDetailEntities и доступна только для просмотра.`);
         return;
     }
 
-    // 2. Особая проверка для фотографий ДТП: если открыто в контексте автомобиля, редактирование запрещено
     if (detailEntity === 'accident_images') {
         const detailTitleText = document.getElementById('detail-title')?.innerText || '';
         const isCarContext = detailTitleText.includes('Автомобиль') || window.currentMainEntity === 'car_details';
-        console.log(`🚗 [openDetailForm:accident_images] Проверка контекста автомобиля: detailTitleText="${detailTitleText}", isCarContext=${isCarContext}`);
         
         if (isCarContext) {
-            console.log(`🛡️ [openDetailForm] Фотографии ДТП в контексте автомобиля заблокированы для редактирования.`);
             showAppNotification('Фотографии ДТП из карточки автомобиля доступны только для просмотра. Редактирование доступно из карточки самого ДТП.', 'warning');
             return;
         }
     }
 
     const itemToEdit = mode === 'edit' ? selectedDetailItem : null;
-    console.log(`📦 [openDetailForm] Объект для передачи в форму (itemToEdit):`, itemToEdit);
 
-    // =========================================================================
-    // Динамическое определение родительского ID (учитываем текущую активную сущность)
-    // =========================================================================
     let parentId = selectedItem.id;
     const currentActiveEntity = typeof activeEntity !== 'undefined' ? activeEntity : window.currentMainEntity;
 
     if (currentActiveEntity === 'money_receipts' && typeof currentRealizationId !== 'undefined' && currentRealizationId) {
         parentId = currentRealizationId;
-        console.log(`🔄 [openDetailForm] Обнаружен контекст money_receipts, в качестве ID родителя используется currentRealizationId:`, parentId);
-    } else {
-        console.log(`📌 [openDetailForm] Используется ID выбранной строки selectedItem.id:`, parentId);
     }
-    // =========================================================================
 
       if (detailEntity === 'car_details') {
     openCarDetailsForm(detailEntity, itemToEdit, parentId);
@@ -10547,7 +10131,6 @@ function openDetailForm(mode) {
         openEntityForm(detailEntity, itemToEdit, parentId);
     }
 }
-
 async function deleteDetailItem() {
     if (!selectedDetailItem) {
         showAppNotification('Выберите строку в спецификации для удаления!', 'warning');
@@ -10654,7 +10237,7 @@ async function postReceipt(receiptId) {
         'Вы действительно хотите провести этот документ прихода?',
         async () => {
             try {
-                const response = await fetch(`/api/receipts/${receiptId}/post`, {   // 👈 добавили /post
+                const response = await fetch(`/api/receipts/${receiptId}/post`, {   
                     method: 'PUT',
                     headers: { 
                         'Content-Type': 'application/json'
@@ -10731,34 +10314,26 @@ async function postRealization(realizationId) {
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
-        console.log(`🖱️ [tableBody click] Событие клика на элементе таблицы:`, e.target);
-
-        // Если клик произошел внутри контейнера деталей — не даем главному обработчику вмешиваться
         const isInsideDetail = e.target.closest('#detail-container') || 
                                e.target.closest('#car-tabs-panel') || 
                                e.target.closest('#car-tabs-bar');
         if (isInsideDetail) {
-            console.log(`🛡️ [tableBody click] Клик внутри деталей/табов панели, обработка пропущена.`);
             return;
         }
 
-        // Если это сейчас расходы — этот общий обработчик не должен вмешиваться
         if (
             currentEntity === 'expenses_by_sklad' || 
             currentEntity === 'expenses_by_suppliers' || 
             currentEntity === 'expenses_by_receipts'
         ) {
-            console.log(`💰 [tableBody click] Текущая сущность расходов (${currentEntity}), общий обработчик пропущен.`);
             return;
         }
 
         const tr = e.target.closest('tr');
         if (!tr) {
-            console.log(`⚠️ [tableBody click] Клик вне строк таблицы (tr не найден).`);
             return;
         }
 
-       // Защита: проверяем, есть ли у сущности детализация вообще. Если нет — прерываемся сразу!
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -10785,43 +10360,29 @@ if (tableBody) {
             'parts',
             'nomenclature',
             'goods',
-            'money_receipts' // <--- Добавьте 'money_receipts' сюда, чтобы клики по ней обрабатывались вашей старой логикой без вмешательства нового кода
+            'money_receipts'
         ];
 
         const shouldLoadDetails = entitiesWithDetails.includes(currentEntity) && !summaryEntitiesWithoutDetails.includes(currentEntity);
 
         if (!shouldLoadDetails) {
-            console.log(`🛑 [tableBody click] У сущности "${currentEntity}" нет детализации, клик по строке проигнорирован, нижняя таблица не открывается.`);
-            // Подсветим строку, но дальше загрузку деталей не пускаем
             document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
             tr.style.background = '#e2e8f0';
             return;
-        }
-        
-        // Отладка
-        if (!e.isTrusted) {
-            console.warn('⚠️ [tableBody click] ВНИМАНИЕ: Сработал программный (искусственный) клик для сущности:', currentEntity);
         }
         
         document.querySelectorAll('#table-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
         const id = tr.getAttribute('data-id');
-        console.log(`🆔 [tableBody click] Получен data-id строки: "${id}"`);
         
-        // Универсальный поиск элемента с поддержкой разных вариантов ID
         selectedItem = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
 
-        // Безопасная проверка: если в текущем массиве элемент по ID не найден, 
-        // НЕ берем случайную строку по индексу, чтобы не подменять ID документов на ID пользователей/других сущностей!
         if (!selectedItem) {
-            console.warn(`⚠️ [tableBody click] Элемент по ID "${id}" не найден в массиве currentItems. Прерываем во избежание подмены данных.`);
             return;
         }
         
         selectedDetailItem = null;  
-
-        console.log(`👆 [КЛИК В ТАБЛИЦЕ] Сущность: "${currentEntity}", ID строки: ${id}`, selectedItem);
 
         const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
@@ -10842,20 +10403,16 @@ if (tableBody) {
                 currentEntity === 'car_general' ||
                 currentEntity === 'car_cards'
             ) {
-                console.log(`🔒 [tableBody click] Скрытие панели основных кнопок действий для сущности: "${currentEntity}"`);
                 actionButtonsBar.style.display = 'none';
             } else {
-                console.log(`🔓 [tableBody click] Отображение панели основных кнопок действий для сущности: "${currentEntity}"`);
                 actionButtonsBar.style.display = 'flex';
             }
         }
 
         if (selectedItem) {
             const itemId = selectedItem.id || selectedItem.receipt_id || selectedItem.sklad_id || selectedItem.postavhik_id || id;
-            console.log(`🎯 [tableBody click] Выбран элемент с итоговым идентификатором (itemId): ${itemId}`);
 
             if (currentEntity === 'cars') {
-                console.log(`🚗 [tableBody click:cars] Загрузка деталей для автомобиля (ID: ${itemId})`);
                 if (carTabsPanel) carTabsPanel.style.display = 'none';
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -10864,7 +10421,6 @@ if (tableBody) {
                 if (detailContainer) detailContainer.style.display = 'flex';
                 loadDetailData('car_details', itemId);
             } else if (currentEntity === 'car_card' || currentEntity === 'car_cards') {
-                console.log(`🚗 [tableBody click:car_cards] Загрузка карточки автомобиля (ID: ${itemId})`);
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'flex';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -10877,18 +10433,14 @@ if (tableBody) {
                     const onclickAttr = activeCarTab.getAttribute('onclick');
                     const match = onclickAttr && onclickAttr.match(/'([^']+)'/);
                     if (match && match[1]) {
-                        console.log(`📑 [tableBody click:car_cards] Найден активный таб машины: ${match[1]}`);
                         loadDetailData(match[1], itemId);
                     } else {
-                        console.log(`📑 [tableBody click:car_cards] Таб не распознан, загружаем дефолт 'car_general'`);
                         loadDetailData('car_general', itemId);
                     }
                 } else {
-                    console.log(`📑 [tableBody click:car_cards] Активные табы отсутствуют, загружаем дефолт 'car_general'`);
                     loadDetailData('car_general', itemId);
                 }
             } else if (currentEntity === 'accidents') {
-                console.log(`💥 [tableBody click:accidents] Загрузка данных ДТП (ID: ${itemId})`);
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'flex';
@@ -10899,11 +10451,9 @@ if (tableBody) {
                 const activeAccidentTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
                 const match = activeAccidentTab && activeAccidentTab.getAttribute('onclick')?.match(/'([^']+)'/);
                 const subTab = match ? match[1] : 'accident_invoices';
-                console.log(`💥 [tableBody click:accidents] Выбран подтаб ДТП: ${subTab}`);
                 if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
                 loadDetailData(subTab, itemId);
             } else if (currentEntity === 'repairs') {
-                console.log(`🔧 [tableBody click:repairs] Загрузка данных ремонта (ID: ${itemId})`);
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -10914,11 +10464,9 @@ if (tableBody) {
                 const activeRepairTab = document.querySelector('.repair-tab-btn.active') || document.querySelector('.repair-tab-btn');
                 const match = activeRepairTab && activeRepairTab.getAttribute('onclick')?.match(/'([^']+)'/);
                 const subTab = match ? match[1] : 'repair_items';
-                console.log(`🔧 [tableBody click:repairs] Выбран подтаб ремонта: ${subTab}`);
                 if (typeof currentRepairSubTab !== 'undefined') currentRepairSubTab = subTab;
                 loadDetailData(subTab, itemId);
             } else if (currentEntity === 'realizations') {
-                console.log(`📄 [tableBody click:realizations] Загрузка данных реализации (ID: ${itemId})`);
                 if (carTabsPanel) carTabsPanel.style.display = 'flex';
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
@@ -10931,11 +10479,9 @@ if (tableBody) {
 
                 const activeRealizationTab = document.querySelector('#tabs-for-realizations button.active, #tabs-for-realizations .realization-tab-btn.active') || document.querySelector('#tabs-for-realizations button, #tabs-for-realizations .realization-tab-btn');
                 const subTabName = activeRealizationTab ? (activeRealizationTab.getAttribute('data-tab') || 'realization_items') : 'realization_items';
-                console.log(`📄 [tableBody click:realizations] Выбран подтаб реализации: ${subTabName}`);
                 if (typeof currentRealizationSubTab !== 'undefined') currentRealizationSubTab = subTabName;
                 loadDetailData(subTabName, itemId);
             } else {
-                console.log(`📂 [tableBody click:default] Загрузка стандартных деталей для сущности: "${currentEntity}" (ID: ${itemId})`);
                 if (tabsForCars) tabsForCars.style.display = 'none';
                 if (tabsForAccidents) tabsForAccidents.style.display = 'none';
                 if (tabsForRepairs) tabsForRepairs.style.display = 'none';
@@ -10948,28 +10494,21 @@ if (tableBody) {
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 if (currentEntity === 'receipts') {
-                    console.log(`📦 [tableBody click] Загрузка 'receipt_items' для receipts`);
                     loadDetailData('receipt_items', itemId);
                 } else if (currentEntity === 'moves') {
-                    console.log(`📦 [tableBody click] Загрузка 'move_items' для moves`);
                     loadDetailData('move_items', itemId);
                 } else if (currentEntity === 'postavhik') {
-                    console.log(`📦 [tableBody click] Загрузка 'postavhik_contacts' для postavhik`);
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
-                    console.log(`📦 [tableBody click] Загрузка 'counterparty_contacts' для counterparties`);
                     loadDetailData('counterparty_contacts', itemId);
                 } else if (currentEntity === 'customers') {
-                    console.log(`📦 [tableBody click] Загрузка 'customer_contacts' для customers`);
                     loadDetailData('customer_contacts', itemId);
                 }
             }
 
-            // Гарантированно восстанавливаем видимость панели кнопок спецификации после загрузки данных детализации
             setTimeout(() => {
                 const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
                 if (detailActionButtons) {
-                    console.log(`🛠️ [tableBody click] Восстановление видимости панели кнопок спецификации (detail-action-buttons)`);
                     detailActionButtons.style.display = 'flex';
                 }
             }, 50);
@@ -10980,39 +10519,28 @@ if (tableBody) {
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
-        console.log("🖱️ [DBLCLICK] Сработало событие двойного клика");
-
         const tr = e.target.closest('tr');
         if (!tr) {
-            console.log("❌ [DBLCLICK] Клик вне строки таблицы (tr не найден)");
             return;
         }
 
         if (tr.querySelector('td[colspan]')) {
-            console.log("❌ [DBLCLICK] Строка содержит colspan (пустая или сервисная строка)");
             return;
         }
 
-        // Проверяем: если клик произошел внутри нижней таблицы деталей (табы автомобиля, истории и т.д.)
         const isInsideDetail = e.target.closest('#detail-container') || 
                                e.target.closest('#car-tabs-panel') || 
                                e.target.closest('#car-tabs-bar');
         
         if (isInsideDetail) {
-            console.log("🛑 [DBLCLICK] Клик внутри детальной таблицы. Предотвращаем открытие формы главного списка.");
             return; 
         }
 
-        // 🛑 ЖЕСТКИЙ БЛОКАТОР: Если сейчас активна детальная сущность, а главный список другой
         if (typeof activeEntity !== 'undefined' && activeEntity && activeEntity !== currentEntity) {
-            console.log(`🛑 [DBLCLICK] Клик по строке детальной таблицы. activeEntity ("${activeEntity}") != currentEntity ("${currentEntity}"). Предотвращаем открытие формы.`);
             return;
         }
 
-        // Жестко определяем текущую сущность
         const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
-
-        console.log("🔍 [DBLCLICK] currentEntity:", currentEntity, "| targetEntity:", targetEntity);
 
         if (
             targetEntity === 'stock_remains' || 
@@ -11034,16 +10562,12 @@ if (tableBodyForDblClick) {
             targetEntity === 'expenses_by_suppliers' || 
             targetEntity === 'expenses_by_receipts'
         ) {
-            console.log("🛑 [DBLCLICK] Сущность (" + targetEntity + ") попала в список исключений. Выход (return).");
             return; 
         }
 
         const id = tr.getAttribute('data-id');
-        console.log("🆔 [DBLCLICK] ID найденной строки:", id);
 
-        // Универсальный поиск элемента с поддержкой разных вариантов ID
         const item = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
-        console.log("📦 [DBLCLICK] Найденный элемент в currentItems:", item);
         
         if (item) {
             if (item.is_posted !== undefined) {
@@ -11051,8 +10575,6 @@ if (tableBodyForDblClick) {
             }
 
             selectedItem = item;
-            
-            console.log("🚀 [DBLCLICK] Успешно пробились к открытию формы для сущности:", currentEntity);
 
             if (currentEntity === 'realizations') {
                 openRealizationForm(currentEntity, item);
@@ -11069,8 +10591,6 @@ if (tableBodyForDblClick) {
             } else {
                 openEntityForm(currentEntity, item);
             }
-        } else {
-            console.log("⚠️ [DBLCLICK] Элемент с ID", id, "не найден в массиве currentItems!");
         }
     });
 }
@@ -11252,7 +10772,6 @@ function filterDetailTable() {
         if (!item) return;
 
         const cells = Array.from(row.children);
-        // Получаем конфигурацию для активной сущности деталей
         const config = typeof activeEntity !== 'undefined' ? getConfig(activeEntity) : null;
 
         for (const field in filters) {
@@ -11285,8 +10804,7 @@ function filterDetailTable() {
 }
 
 async function loadDetailData(entity, parentId) {
-    console.log(`🚀 [loadDetailData] СТАРТ загрузки деталей: entity="${entity}", parentId:`, parentId);
-    ensureDetailPrintButton();   // 👈 добавили: гарантируем наличие кнопки "Печать" у нижней таблицы
+    ensureDetailPrintButton();
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionButtonsBar) {
@@ -11306,7 +10824,6 @@ async function loadDetailData(entity, parentId) {
     }
 
     let activeEntity = entity;
-    console.log(`📌 [loadDetailData] activeEntity определен как: "${activeEntity}"`);
 
     let cleanParentId = parentId;
     const skipObjectCleaning = ['stock_batches', 'part_movement_details'];
@@ -11314,7 +10831,6 @@ async function loadDetailData(entity, parentId) {
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || parentId.accident_id || parentId.id_accident || '';
     }
-    console.log(`🧹 [loadDetailData] cleanParentId:`, cleanParentId);
 
     let checkEntity = entity;
 
@@ -11327,7 +10843,6 @@ async function loadDetailData(entity, parentId) {
     
     const hasValidParam = parentId && (typeof parentId === 'object' || String(parentId).trim() !== '');
     if (!hasValidParam && !allowedWithoutId.includes(entity) && !allowedWithoutId.includes(activeEntity)) {
-        console.warn(`⚠️ [loadDetailData] Отменено: нет валидного ID или параметра для сущности "${entity}"`);
         if (tbodyCheck) {
             tbodyCheck.innerHTML = `<tr><td colspan="${colCountCheck}" style="text-align: center; color: #888; padding: 20px;">Выберите элемент в верхней таблице</td></tr>`;
         }
@@ -11400,8 +10915,6 @@ async function loadDetailData(entity, parentId) {
             fetchUrl = `/api/${entity}?${queryParamName}=${cleanParentId}`;
         }
     }
-    
-    console.log(`🌐 [loadDetailData] Сформированный fetchUrl: ${fetchUrl}`);
 
     const thead = headerTr ? headerTr.closest('thead') : null;
     
@@ -11412,8 +10925,6 @@ async function loadDetailData(entity, parentId) {
 
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
     const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
-
-    console.log(`📊 [loadDetailData] Колонок для активной сущности "${activeEntity}": ${visibleColumns.length}`, visibleColumns.map(c => c.field));
 
     if (thead && headerTr) {
         let filterRow = document.createElement('tr');
@@ -11452,7 +10963,6 @@ async function loadDetailData(entity, parentId) {
         if (!response.ok) throw new Error(`Ошибка загрузки деталей (Статус: ${response.status})`);
         
         const items = await response.json();
-        console.log(`📦 [loadDetailData] Получены детальные данные для "${activeEntity}". Строк: ${items.length}`, items);
         
         currentDetailItems = items; 
         selectedDetailItem = null;  
@@ -11529,7 +11039,6 @@ async function loadDetailData(entity, parentId) {
 
                 tr.onclick = () => {
                     selectedDetailItem = item;
-                    console.log(`👆 [КЛИК В ДЕТАЛЯХ] Выбрана строка детали:`, selectedDetailItem);
 
                     tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                     tr.classList.add('selected-row');
@@ -11540,7 +11049,6 @@ async function loadDetailData(entity, parentId) {
         }
 
     } catch (err) {
-        console.error('❌ [loadDetailData ОШИБКА]:', err);
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
@@ -11610,38 +11118,30 @@ const navMap = {
         'Детали приходов': 'money_receipts_detail',
     'Аналитика по складам': 'money_receipts_by_sklad',
     'Детали услуг': 'money_receipts_works_detail',
-    'Касса: расходы': 'expenses_by_sklad',          // 🔥 Добавили прямое соответствие для главного пункта меню
-    'Поставщики по складу': 'expenses_by_suppliers', // Поменяли "Расходы" на точное описание
+    'Касса: расходы': 'expenses_by_sklad',          
+    'Поставщики по складу': 'expenses_by_suppliers',
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items',
-    'История всех оплат':'expense_payments'       // Поменяли "Детали расходов" для единообразия
+    'История всех оплат':'expense_payments'       
 };
 
 function updateFilterPanels(entity) {
     const partsFilter = document.getElementById('parts-filter-panel');
     const movementFilter = document.getElementById('movement-filter-panel');
 
-    console.log("🎛️ [updateFilterPanels] Вызвана для entity:", entity);
-
-    // Сбрасываем отображение всех известных панелей фильтров
     if (partsFilter) partsFilter.style.display = 'none';
     if (movementFilter) movementFilter.style.display = 'none';
 
-    // Безопасно проверяем сущность
     const currentEntity = String(entity || '');
 
     if (currentEntity === 'stock_balances') {
         if (partsFilter) {
             partsFilter.style.display = 'flex';
-            console.log("✅ [updateFilterPanels] Включена панель: parts-filter-panel");
         }
     } else if (currentEntity === 'stock_movement') {
         if (movementFilter) {
             movementFilter.style.display = 'flex';
-            console.log("✅ [updateFilterPanels] Включена панель: movement-filter-panel");
         }
-    } else {
-        console.log("ℹ️ [updateFilterPanels] Для сущности", currentEntity, "панели фильтров дат не предусмотрены.");
     }
 }
 
@@ -11650,23 +11150,17 @@ document.querySelectorAll('.nav-link').forEach(link => {
         e.preventDefault();
         
         const text = link.innerText.trim();
-        console.log(`🔗 [nav-link] Клик по навигационной ссылке: "${text}"`);
         
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
 
         let entity = navMap[text] || text.toLowerCase();
-        console.log(`🧭 [nav-link] Определена сущность (entity):`, entity);
         
-        // Если кликнули на Приходы, сразу жестко переводим в режим складов
         if (entity === 'money_receipts' || text === 'Касса: поступления') {
-                        entity = 'money_receipts_by_sklad';
-            console.log(`🔄 [nav-link] Сущность приведена к уровню складов: 'money_receipts_by_sklad'`);
+            entity = 'money_receipts_by_sklad';
         }
         
-        // ==========================================
-        // УПРАВЛЕНИЕ КНОПКОЙ «НАЗАД» ДЛЯ ГЛАВНОГО МЕНЮ
-        // ==========================================
+       
         const btnBackExpense = document.getElementById('btn-back-expense');
         if (btnBackExpense) {
             const isMoneySection = (
@@ -11679,20 +11173,14 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (isMoneySection) {
                 btnBackExpense.style.setProperty('display', 'none', 'important');
                 btnBackExpense.onclick = null;
-                console.log(`🔙 [nav-link] Кнопка «Назад» скрыта на главном экране раздела: ${text}`);
             } else {
                 btnBackExpense.style.setProperty('display', 'none', 'important');
                 btnBackExpense.onclick = null;
             }
         }
-        // ==========================================
 
-        // Корректно обновляем панели фильтров
         if (typeof updateFilterPanels === 'function') {
-            console.log(`🎛️ [nav-link] Вызов updateFilterPanels для entity:`, entity);
             updateFilterPanels(entity);
-        } else {
-            console.log(`⚠️ [nav-link] Функция updateFilterPanels не найдена`);
         }
 
         const detailContainer = document.getElementById('detail-container');
@@ -11702,7 +11190,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const tabsForRepairs = document.getElementById('tabs-for-repairs');
         const tabsForRealizations = document.getElementById('tabs-for-realizations');
 
-        // Управляем главным баром кнопок верхней таблицы
         const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
         if (actionButtonsBar) {
             const readOnlyMainEntities = [
@@ -11717,15 +11204,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
             ];
             
             if (readOnlyMainEntities.includes(entity) || entity === 'расходы' || entity === 'expenses') {
-                console.log(`🔒 [nav-link] Скрываем панель главных кнопок (read-only сущность):`, entity);
                 actionButtonsBar.style.setProperty('display', 'none', 'important');
             } else {
-                console.log(`🔓 [nav-link] Показываем панель главных кнопок для сущности:`, entity);
                 actionButtonsBar.style.setProperty('display', 'flex', 'important');
             }
         }
 
-        // Сущности, у КОТОРЫХ ЕСТЬ нижняя таблица с деталями документов (убран 'money_receipts')
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
@@ -11742,7 +11226,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
             'money_receipts'
         ];
 
-        // Сущности уровня "по складам", справочники или общие отчеты, где нижняя таблица НЕ нужна
         const summaryEntitiesWithoutDetails = [
             'money_receipts_by_sklad',
             'expenses_by_sklad',
@@ -11759,14 +11242,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
         const isInSummaryWithoutDetails = summaryEntitiesWithoutDetails.includes(entity);
         const shouldShowDetails = isInEntitiesWithDetails && !isInSummaryWithoutDetails;
 
-        console.log(`🔍 [nav-link ДЕТАЛИЗАЦИЯ] Проверка для entity = "${entity}":`, {
-            isInEntitiesWithDetails,
-            isInSummaryWithoutDetails,
-            shouldShowDetails
-        });
-
         if (shouldShowDetails) {
-            console.log(`📂 [nav-link] Включаем контейнер деталей для: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'flex', 'important');
             
             const detailActionButtons = document.getElementById('detail-action-buttons') || document.querySelector('.detail-action-buttons');
@@ -11788,7 +11264,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
             if (tabsForRealizations) tabsForRealizations.style.display = (entity === 'realizations') ? 'flex' : 'none';
 
         } else {
-            console.log(`🚫 [nav-link] СКРЫВАЕМ контейнер деталей для сущности: ${entity}`);
             if (detailContainer) detailContainer.style.setProperty('display', 'none', 'important');
             if (carTabsBar) carTabsBar.style.setProperty('display', 'none', 'important');
             
@@ -11798,30 +11273,22 @@ document.querySelectorAll('.nav-link').forEach(link => {
             }
         }
         
-        // Роутинг по разделам
-                if (text === 'Касса: расходы' || entity === 'расходы' || entity === 'expenses') {
-            console.log(`💸 [nav-link] Запуск загрузки раздела расходов: expenses_by_sklad`);
+        if (text === 'Касса: расходы' || entity === 'расходы' || entity === 'expenses') {
             loadExpenseMainData('expenses_by_sklad');
             return;
         }
 
         if (entity === 'money_receipts_by_sklad') {
-            console.log(`📥 [nav-link] Запуск загрузки раздела приходов: money_receipts_by_sklad`);
             loadReceiptMainData('money_receipts_by_sklad');
             return;
         }
 
-        // Стандартная загрузка для остальных
-        console.log(`📂 [nav-link] Запуск стандартной загрузки loadData для entity: "${entity}"`);
         loadData(entity, text, () => {
             if (shouldShowDetails) {
                 const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
                 if ($firstRow.length) {
-                    console.log(`👉 [nav-link] Автоматический клик по первой строке`);
                     $firstRow.trigger('click');
                 }
-            } else {
-                console.log(`🛑 [nav-link] Авто-клики по первой строке отменены.`);
             }
         });
     });
@@ -11858,7 +11325,6 @@ function setDetailToolbarVisible(visible) {
 
 
 (function() {
-    // 1. Внедряем стили для ресайзера
     if (!document.getElementById('auto-table-resizer-style')) {
         const style = document.createElement('style');
         style.id = 'auto-table-resizer-style';
@@ -11884,9 +11350,7 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
     }
 
-    // 2. Функция применения ресайзеров с сохранением в localStorage
     function applyTableResizers() {
-        // Узнаем текущий раздел (например, по активной ссылке в меню), чтобы сохранять размеры для каждой таблицы отдельно
         const activeLink = document.querySelector('.nav-link.active');
         const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
         const storageKey = `col_widths_${sectionKey}`;
@@ -11895,7 +11359,6 @@ function setDetailToolbarVisible(visible) {
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
-            // Находим строку с текстом заголовков
             for (let i = 0; i < rows.length; i++) {
                 const cells = rows[i].querySelectorAll('th, td');
                 const hasText = Array.from(cells).some(cell => cell.textContent.trim().length > 0 && !cell.querySelector('input'));
@@ -11910,11 +11373,9 @@ function setDetailToolbarVisible(visible) {
             const textRow = rows[textRowIndex];
             const textCells = textRow.querySelectorAll('th, td');
 
-            // Загружаем сохраненные размеры для этого раздела
             const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
             textCells.forEach((th, colIndex) => {
-                // Восстанавливаем сохраненную ширину, если она есть
                 if (savedWidths[colIndex]) {
                     th.style.width = savedWidths[colIndex];
                     for (let i = 0; i < textRowIndex; i++) {
@@ -11943,11 +11404,10 @@ function setDetailToolbarVisible(visible) {
 
                     function onMouseMove(e) {
                         const dx = e.clientX - startX;
-                        const newWidth = Math.max(10, startWidth + dx); // Позволяем сжимать до 10px
+                        const newWidth = Math.max(10, startWidth + dx); 
                         
                         th.style.width = `${newWidth}px`;
 
-                        // Синхронно меняем верхние строки с фильтрами
                         for (let i = 0; i < textRowIndex; i++) {
                             const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
                             if (upperCell) {
@@ -11962,7 +11422,6 @@ function setDetailToolbarVisible(visible) {
                         window.removeEventListener('mousemove', onMouseMove);
                         window.removeEventListener('mouseup', onMouseUp);
 
-                        // Сохраняем все ширины колонок текущей таблицы в localStorage при отпускании мыши
                         const currentWidths = {};
                         textRow.querySelectorAll('th, td').forEach((cell, idx) => {
                             currentWidths[idx] = cell.style.width;
@@ -11980,14 +11439,12 @@ function setDetailToolbarVisible(visible) {
         });
     }
 
-    // 3. Перехватываем клики по меню (.nav-link), чтобы после загрузки данных применились сохраненные размеры
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', () => {
             setTimeout(applyTableResizers, 200);
         });
     });
 
-    // 4. Наблюдатель за изменениями DOM на случай динамической перерисовки таблиц
     const observer = new MutationObserver(() => {
         applyTableResizers();
     });
