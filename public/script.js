@@ -9358,8 +9358,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             queryParams.push(`debtor_warehouse_id=${debtorWarehouseId}`);
         }
         
-        if (finalStart) queryParams.push(`start_date=${finalStart}`);
-        if (finalEnd) queryParams.push(`end_date=${finalEnd}`);
+                if (explicitStart) queryParams.push(`start_date=${explicitStart}`);
+        if (explicitEnd) queryParams.push(`end_date=${explicitEnd}`);
 
         fetchUrl = `/api/money_receipts` + (queryParams.length > 0 ? `?${queryParams.join('&')}` : '');
         
