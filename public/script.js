@@ -7011,10 +7011,10 @@ async function refreshData() {
     const lockedRepairId = window.currentRepairId;
     const lockedCustomerId = window.currentCustomerId;
 
-    if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad') {
-        const parentParam = (previousEntity === 'money_receipts') ? (lockedSkladId || savedSelectedItem) : '';
-        await loadReceiptMainData(previousEntity, parentParam);
-    } 
+    if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad' || previousEntity === 'money_receipts_by_customers') {
+    const parentParam = (previousEntity === 'money_receipts_by_sklad') ? '' : (lockedSkladId || savedSelectedItem);
+    await loadReceiptMainData(previousEntity, parentParam);
+    }   
     else if (
         previousEntity === 'expenses_by_sklad' || 
         previousEntity === 'expenses_by_suppliers' || 
