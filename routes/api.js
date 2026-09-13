@@ -5763,37 +5763,9 @@ router.post('/receipt_items', async (req, res) => {
         const totalRub = numPrice * numQty;
         const curr = currency || 'Рубль ПМР';
 
-        // 4. Вставка позиции в таблицу receipt_items
-        const insertQuery = `
-            INSERT INTO receipt_items (
-                receipt_id, 
-                zaphasti_id, 
-                price, 
-                currency, 
-                quantity, 
-                description, 
-                price_rub, 
-                total_rub
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-            RETURNING *;
-        `;
-
-        const values = [
-            receipt_id,
-            zaphasti_id,
-            numPrice,
-            curr,
-            numQty,
-            description || null,
-            priceRub,
-            totalRub
-        ];
-
-        const newItemResult = await client.query(insertQuery, values);
-        const createdItem = newItemResult.rows[0];
-
-        // 5. Запись в таблицу остатков партий (warehouse_batches) для учета на складе
+              // 4. Сначала создаём партию на складе (warehouse_batches) — ДО строки прихода,
+        // чтобы получить её id и сразу привязать к строке прихода (избегаем путаницы,
+        // если в одном приходе несколько строк с одной и той же запчастью)
         const batchQuery = `
             INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
             VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
@@ -5807,6 +5779,40 @@ router.post('/receipt_items', async (req, res) => {
             numQty,
             receiptData.date
         ]);
+        const newBatch = batchResult.rows[0];
+        console.log('📦 [WAREHOUSE BATCH CREATED]:', newBatch);
+
+        // 5. Вставка позиции в таблицу receipt_items — сразу с привязкой к своей партии (batch_id)
+        const insertQuery = `
+            INSERT INTO receipt_items (
+                receipt_id, 
+                zaphasti_id, 
+                price, 
+                currency, 
+                quantity, 
+                description, 
+                price_rub, 
+                total_rub,
+                batch_id
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            RETURNING *;
+        `;
+
+        const values = [
+            receipt_id,
+            zaphasti_id,
+            numPrice,
+            curr,
+            numQty,
+            description || null,
+            priceRub,
+            totalRub,
+            newBatch.id
+        ];
+
+        const newItemResult = await client.query(insertQuery, values);
+        const createdItem = newItemResult.rows[0];
         
         // 6. Запись лога в новую изолированную таблицу receipt_logs
         await writeReceiptLog(client, req, {
@@ -5910,11 +5916,20 @@ router.put('/receipt_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
 
-        // 4. Обновление партии в таблице warehouse_batches по данному документу прихода и запчасти
-        const batchCheck = await client.query(
-            'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-            [receiptData.warehouse_id, zaphasti_id, receipt_id]
-        );
+                // 4. Находим СВОЮ конкретную партию по batch_id (если он есть — точный, однозначный поиск).
+        // Для старых строк, созданных до появления batch_id, используем прежний способ поиска как запасной вариант.
+        let batchCheck;
+        if (currentItem.batch_id) {
+            batchCheck = await client.query(
+                'SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE',
+                [currentItem.batch_id]
+            );
+        } else {
+            batchCheck = await client.query(
+                'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                [receiptData.warehouse_id, zaphasti_id, receipt_id]
+            );
+        }
 
                if (batchCheck.rows.length > 0) {
             const currentBatchQty = Number(batchCheck.rows[0].quantity) || 0;
@@ -5935,11 +5950,12 @@ router.put('/receipt_items/:id', async (req, res) => {
                 'UPDATE warehouse_batches SET quantity = $1, price_rub = $2 WHERE id = $3',
                 [newBatchQty, priceRub, batchCheck.rows[0].id]
             );
-        } else {
-            // Если вдруг партии не оказалось, создаем новую
-            await client.query(`
+               } else {
+            // Если вдруг партии не оказалось, создаем новую и сразу привязываем её к строке прихода
+            const newBatchResult = await client.query(`
                 INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
                 VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
+                RETURNING *;
             `, [
                 receiptData.warehouse_id,
                 zaphasti_id,
@@ -5948,6 +5964,7 @@ router.put('/receipt_items/:id', async (req, res) => {
                 numQty,
                 receiptData.date || new Date()
             ]);
+            await client.query('UPDATE receipt_items SET batch_id = $1 WHERE id = $2', [newBatchResult.rows[0].id, itemId]);
         }
 
         // 5. Обновление позиции в таблице receipt_items
@@ -6052,12 +6069,19 @@ router.delete('/receipt_items/:id', async (req, res) => {
         const warehouseId = receiptData.warehouse_id;
         const isPosted = receiptData.is_posted;
 
-        // 3. Проверяем остаток партии на складе через таблицу warehouse_batches
-        const batchCheck = await client.query(
-            'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-            [warehouseId, zaphasti_id, receipt_id]
-        );
-
+               // 3. Находим СВОЮ конкретную партию по batch_id — точно, без путаницы с другими строками той же запчасти в этом же приходе
+        let batchCheck;
+        if (currentItem.batch_id) {
+            batchCheck = await client.query(
+                'SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE',
+                [currentItem.batch_id]
+            );
+        } else {
+            batchCheck = await client.query(
+                'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                [warehouseId, zaphasti_id, receipt_id]
+            );
+        }
         if (batchCheck.rows.length > 0) {
             const batch = batchCheck.rows[0];
             const currentBatchQty = Number(batch.quantity) || 0;
