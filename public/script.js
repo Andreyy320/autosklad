@@ -2799,7 +2799,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             }
         }
 
-        try {
+                try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
@@ -2817,6 +2817,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
+
+                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
+                // выделение строки, иначе после обновления списка подсветится не только
+                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
+                if (!isEdit) {
+                    selectedItem = null;
+                }
 
                 const detailEntities = [
                     'entity_contacts', 
@@ -5737,7 +5744,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             data.currency = 'Рубль ПМР';
         }
 
-        try {
+               try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
@@ -5755,6 +5762,13 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
+
+                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
+                // выделение строки, иначе после обновления списка подсветится не только
+                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
+                if (!isEdit) {
+                    selectedItem = null;
+                }
 
                 if (entity === 'move_items' && parentId) {
                     loadDetailData(entity, parentId);
@@ -6189,7 +6203,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         }
 
-        try {
+                try {
             const isEdit = item && item.id;
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
@@ -6207,6 +6221,13 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             if (response.ok) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
+
+                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
+                // выделение строки, иначе после обновления списка подсветится не только
+                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
+                if (!isEdit) {
+                    selectedItem = null;
+                }
 
                 if (entity === 'repair_items' && parentId) {
                     loadDetailData(entity, parentId);
