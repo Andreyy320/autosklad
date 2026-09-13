@@ -2734,11 +2734,15 @@ router.get('/realizations', async (req, res) => {
                    COALESCE(c.name_full, c.name_short, 'Покупатель #' || c.id) AS customer_name,
                    s.name AS sklad_name,
                    COALESCE(u.name, u.login, m.description, 'МОЛ #' || m.id) AS mol_name,
-                   COALESCE(
-                       TRIM(CONCAT(cc.brand, ' ', cc.model, ' (', cc.gos_number, ')')), 
-                       cc.gos_number, 
-                       'Авто #' || cc.id
-                   ) AS car_display_name,
+                  COALESCE(
+    NULLIF(TRIM(CONCAT_WS(' ',
+        NULLIF(TRIM(CONCAT_WS(' ', cc.brand, cc.model)), ''),
+        CASE WHEN cc.gos_number IS NOT NULL AND cc.gos_number <> ''
+             THEN CONCAT('(', cc.gos_number, ')')
+        END
+    )), ''),
+    'Авто #' || cc.id
+    ) AS car_display_name,
                    cc.model AS car_model,
                    cc.brand AS car_brand,
                    cc.gos_number AS car_number
