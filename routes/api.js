@@ -6082,7 +6082,7 @@ router.delete('/receipt_items/:id', async (req, res) => {
                 [warehouseId, zaphasti_id, receipt_id]
             );
         }
-        if (batchCheck.rows.length > 0) {
+               if (batchCheck.rows.length > 0) {
             const batch = batchCheck.rows[0];
             const currentBatchQty = Number(batch.quantity) || 0;
 
@@ -6094,13 +6094,18 @@ router.delete('/receipt_items/:id', async (req, res) => {
                 });
             }
 
-            // Если товар еще полностью на складе (или списаний не было), удаляем эту конкретную партию
+            // 4. Сначала удаляем саму строку прихода (она ссылается на партию через batch_id) —
+            // только ПОСЛЕ этого можно безопасно удалить саму партию, иначе база не даст
+            // удалить партию, пока на неё ещё есть ссылка
+            await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
+
+            // 5. Теперь удаляем саму партию — ссылок на неё больше нет
             await client.query('DELETE FROM warehouse_batches WHERE id = $1', [batch.id]);
+            console.log(`📦 [WAREHOUSE BATCH DELETED]: ID ${batch.id} для прихода ${receipt_id}`);
+        } else {
+            // Партии не нашли вообще — просто удаляем строку прихода
+            await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
         }
-
-        // 4. Удаляем позицию из базы данных (receipt_items)
-        await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
-
         // 5. Запись лога через writeReceiptLog
         await writeReceiptLog(client, req, {
             action: 'DELETE',
