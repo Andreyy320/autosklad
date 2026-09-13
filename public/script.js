@@ -7009,12 +7009,28 @@ async function refreshData() {
     const lockedReceiptId = window.currentReceiptId;
     const lockedRealizationId = window.currentRealizationId;
     const lockedRepairId = window.currentRepairId;
-    const lockedCustomerId = window.currentCustomerId;
+      const lockedCustomerId = window.currentCustomerId;
+    const lockedDebtorWarehouseId = window.currentDebtorWarehouseId;
+    const lockedReceiptsStartDate = window.currentReceiptsStartDate;
+    const lockedReceiptsEndDate = window.currentReceiptsEndDate;
 
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad' || previousEntity === 'money_receipts_by_customers') {
-    const parentParam = (previousEntity === 'money_receipts_by_sklad') ? '' : (lockedSkladId || savedSelectedItem);
-    await loadReceiptMainData(previousEntity, parentParam);
-    }   
+        let parentParam = '';
+        if (previousEntity === 'money_receipts_by_sklad') {
+            parentParam = '';
+        } else if (previousEntity === 'money_receipts') {
+            parentParam = {
+                sklad_id: lockedSkladId,
+                customer_id: lockedCustomerId,
+                debtor_warehouse_id: lockedDebtorWarehouseId,
+                start_date: lockedReceiptsStartDate,
+                end_date: lockedReceiptsEndDate
+            };
+        } else {
+            parentParam = lockedSkladId || savedSelectedItem;
+        }
+        await loadReceiptMainData(previousEntity, parentParam);
+    }
     else if (
         previousEntity === 'expenses_by_sklad' || 
         previousEntity === 'expenses_by_suppliers' || 
@@ -9095,7 +9111,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             window.currentSkladId = skladId;
         }
 
-          window.currentCustomerId = customerId || null;
+                window.currentCustomerId = customerId || null;
+        window.currentDebtorWarehouseId = debtorWarehouseId || null;
+        window.currentReceiptsStartDate = explicitStart || null;
+        window.currentReceiptsEndDate = explicitEnd || null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
