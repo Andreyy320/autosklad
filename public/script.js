@@ -9593,7 +9593,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
-        currentItems = await response.json();
+              currentItems = await response.json();
 
         if (!mainTableBody) {
             return;
@@ -9605,6 +9605,32 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
 
         mainTableBody.innerHTML = '';
+
+        // Дополнительно — сводка "Итого по поставщику" за всё время (без разбивки по месяцам)
+        if (currentEntity === 'expenses_by_suppliers') {
+            try {
+                const totalsRes = await fetch(`/api/expenses_by_suppliers/totals${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`);
+                if (totalsRes.ok) {
+                    const totals = await totalsRes.json();
+                    if (totals.length > 0) {
+                        const summaryRow = document.createElement('tr');
+                        summaryRow.style.background = '#eef2ff';
+                        summaryRow.style.borderBottom = '2px solid #c7d2fe';
+                        const cardsHtml = totals.map(t => `
+                            <span style="display:inline-block; margin: 4px 16px 4px 0; padding: 6px 12px; background:#fff; border-radius:6px; border:1px solid #dbeafe;">
+                                <b style="color:#1e293b;">${t.postavhik_name}</b>:
+                                Долг <b style="color:${Number(t.total_debt) > 0 ? '#991b1b' : '#334155'};">${Number(t.total_debt).toFixed(2)}</b>
+                                <span style="color:#94a3b8; font-size:12px;">(куплено ${Number(t.total_expense_sum).toFixed(2)}, возврат ${Number(t.total_returned_sum).toFixed(2)}, оплачено ${Number(t.total_paid).toFixed(2)})</span>
+                            </span>
+                        `).join('');
+                        summaryRow.innerHTML = `<td colspan="${colCount}" style="padding: 10px 14px;"><div style="font-size:12px; color:#475569; margin-bottom:4px; font-weight:600;">ИТОГО ПО ПОСТАВЩИКАМ ЗА ВСЁ ВРЕМЯ:</div>${cardsHtml}</td>`;
+                        mainTableBody.appendChild(summaryRow);
+                    }
+                }
+            } catch (err) {
+                console.error('Не удалось загрузить сводку по поставщикам:', err);
+            }
+        }
 
         if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
             const monthNames = [

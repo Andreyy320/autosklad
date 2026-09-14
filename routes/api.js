@@ -5251,7 +5251,54 @@ router.get('/expenses_by_suppliers', async (req, res) => {
     }
 });
 
+router.get('/expenses_by_suppliers/totals', async (req, res) => {
+    try {
+        const { sklad_id } = req.query;
 
+        const query = `
+            WITH supplier_paid AS (
+                SELECT sp.supplier_id, SUM(sp.amount) AS total_paid
+                FROM supplier_payments sp
+                JOIN receipts rec ON sp.receipt_id = rec.id
+                WHERE ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
+                GROUP BY sp.supplier_id
+            )
+            SELECT 
+                p.id AS postavhik_id,
+                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
+                COALESCE(sp.total_paid, 0)::numeric AS total_paid,
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(sp.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
+            FROM receipts rec
+            JOIN postavhik p ON rec.supplier_id = p.id
+            LEFT JOIN (
+                SELECT receipt_id, SUM(total_rub) AS total_sum
+                FROM receipt_items GROUP BY receipt_id
+            ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN (
+                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.is_posted = true
+                GROUP BY ret.receipt_id
+            ) sub_ret ON rec.id = sub_ret.receipt_id
+            LEFT JOIN supplier_paid sp ON sp.supplier_id = p.id
+            WHERE rec.is_posted = true
+              AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
+            GROUP BY p.id, p.name, sp.total_paid
+            ORDER BY total_debt DESC;
+        `;
+
+        const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
+        const result = await pool.query(query, [sIdList]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('Ошибка получения общих долгов по поставщикам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 router.get('/expenses_by_receipts', async (req, res) => {
     try {
         const { sklad_id, postavhik_id, start_date, end_date } = req.query;
