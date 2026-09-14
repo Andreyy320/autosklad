@@ -2068,6 +2068,37 @@ const tableConfig = {
         `;
     }
     },
+    expenses_by_suppliers_totals: {
+    title: 'Долг по поставщикам (общий)',
+    columns: [
+        { field: 'postavhik_name', label: 'Поставщик', width: '200px' },
+        { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
+        { field: 'total_expense_sum', label: 'Сумма затрат', width: '120px', align: 'right' },
+        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'total_debt', label: 'Долг (всего)', width: '120px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
+    ],
+    render: (item) => {
+        const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const debtNum = Number(item.total_debt || 0);
+        const totalDebt = debtNum.toFixed(2);
+        const actionHtml = debtNum <= 0
+            ? `<span style="color:#64748b;font-weight:500;font-size:12px;">Оплачено</span>`
+            : `<button type="button" onclick="event.stopPropagation(); paySupplierTotalDebt('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500;">Оплатить</button>`;
+        return `
+            <td><span style="font-weight:600;color:#0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
+            <td style="text-align:center;color:#334155;">${item.total_receipts || 0}</td>
+            <td style="text-align:right;font-weight:600;color:#0f172a;">${expenseSum}</td>
+            <td style="text-align:right;color:#d97706;">${returnedSum}</td>
+            <td style="text-align:right;color:#334155;">${totalPaid}</td>
+            <td style="text-align:right;font-weight:600;color:${debtNum > 0 ? '#991b1b' : '#334155'};">${totalDebt}</td>
+            <td style="text-align:center;">${actionHtml}</td>
+        `;
+    }
+},
     expense_items: {
     title: 'Детали закупленных позиций',
     columns: [
@@ -8728,7 +8759,24 @@ async function loadData(entity, title, customParams = {}) {
     }
 }
 
-
+async function paySupplierTotalDebt(postavhikId, debtSum, postavhikName) {
+    const amount = prompt(`Оплата поставщику "${postavhikName}". Долг: ${debtSum}. Введите сумму оплаты:`, debtSum);
+    if (!amount) return;
+    try {
+        const response = await fetch(`/api/expenses_by_suppliers/${postavhikId}/pay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify({ amount: Number(amount), sklad_id: window.currentSkladId || null, comment: `Оплата общего долга: ${postavhikName}` })
+        });
+        const data = await response.json();
+        if (!response.ok) { alert(data.error || 'Ошибка оплаты'); return; }
+        alert(data.warning || 'Оплата проведена успешно');
+        loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
+    } catch (err) {
+        console.error(err);
+        alert('Ошибка сети при оплате');
+    }
+}
 function resetSharedUiForEntity(entity) {
     const printBtn = document.querySelector('button[onclick="printMainTable()"]');
     if (printBtn) {
@@ -9307,65 +9355,378 @@ async function submitPayment(event, postavhikId, monthStr) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
-async function loadExpenseDetailTable(fetchUrl) {
-  const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
-    if (detailToolbarEl) detailToolbarEl.style.display = 'none';
-  
-    const detailBody = document.getElementById('detail-body');
-    const detailTitle = document.getElementById('detail-title');
-    const detailHeaderTr = document.getElementById('detail-headers') || document.querySelector('#detail-container thead tr');
-    
-    const config = getConfig('expense_items');
-    if (detailTitle && config) detailTitle.innerText = config.title;
+async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
+    let currentExpenseView = entity;
+    resetSharedUiForEntity(entity);
+
+    if (['expenses_by_sklad', 'expenses_by_suppliers_totals', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+        currentEntity = currentExpenseView;
+    }
+
+    let fetchUrl = '';
+
+    const detailContainer = document.getElementById('detail-container');
+    const mainTableBody = document.getElementById('table-body');
+    const mainHeaderTr = document.getElementById('table-headers');
+
+    const btnAdd = document.getElementById('btn-add');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnDelete = document.getElementById('btn-delete');
+
+    let backBtn = document.getElementById('btn-back-expense') || document.getElementById('btn-back');
+    if (!backBtn) {
+    }
+
+    if (currentExpenseView === 'expenses_by_sklad' || currentExpenseView === 'expenses') {
+        currentExpenseView = 'expenses_by_sklad';
+        window.currentSkladId = null;
+        window.currentPostavhikId = null;
+        window.currentReceiptId = null;
+
+        fetchUrl = `/api/expenses_by_sklad`;
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) backBtnElement.style.display = 'none';
+    }
+    else if (currentExpenseView === 'expenses_by_suppliers_totals') {
+        // Уровень "общий долг по поставщику" — без привязки к месяцу.
+        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
+        if (skladId) window.currentSkladId = skladId;
+        window.currentPostavhikId = null;
+        window.currentReceiptId = null;
+
+        fetchUrl = `/api/expenses_by_suppliers_totals${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_sklad');
+        }
+    }
+    else if (currentExpenseView === 'expenses_by_suppliers') {
+        // Уровень "разбивка долга по месяцам" для ОДНОГО поставщика (пришли с уровня totals).
+        let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
+        if (skladId) window.currentSkladId = skladId;
+        window.currentReceiptId = null;
+
+        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : (window.currentPostavhikId || '');
+        if (postavhikId) window.currentPostavhikId = postavhikId;
+
+        fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${window.currentPostavhikId || ''}${window.currentSkladId ? '&sklad_id=' + window.currentSkladId : ''}`;
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
+        }
+    }
+    else if (currentExpenseView === 'expenses_by_receipts') {
+        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
+        if (postavhikId) window.currentPostavhikId = postavhikId;
+        window.currentReceiptId = null;
+
+        let skladId = window.currentSkladId || '';
+        let currentPostavhik = window.currentPostavhikId || '';
+
+        fetchUrl = `/api/expenses_by_receipts?postavhik_id=${currentPostavhik}${skladId ? '&sklad_id=' + skladId : ''}`;
+
+        if (parentId && typeof parentId === 'object' && parentId.month_str) {
+            const [year, month] = parentId.month_str.split('-').map(Number);
+            const startDate = `${parentId.month_str}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${parentId.month_str}-${String(lastDay).padStart(2, '0')}`;
+
+            fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        if (detailContainer) detailContainer.style.display = 'none';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+        }
+    }
+    else if (currentExpenseView === 'expense_items') {
+        let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
+
+        if (receiptId !== undefined && receiptId !== null && receiptId !== '') {
+            window.currentReceiptId = receiptId;
+        }
+
+        let skladId = window.currentSkladId || '';
+        let postavhikId = window.currentPostavhikId || '';
+        let currentReceipt = window.currentReceiptId || '';
+
+        fetchUrl = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
+
+        if (detailContainer) detailContainer.style.display = 'flex';
+
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_receipts', window.currentPostavhikId);
+        }
+
+        loadExpenseDetailTable(fetchUrl);
+        return;
+    }
+
+    if (['expenses_by_sklad', 'expenses_by_suppliers_totals', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+        currentEntity = currentExpenseView;
+    }
+
+    const config = getConfig(currentEntity);
 
     const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
-    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 5;
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
 
-    const existingFilterRow = document.getElementById('detail-filter-row');
-    if (existingFilterRow) existingFilterRow.remove();
-
-    const existingAlternativeRow = document.getElementById('detail-table-filter-row');
-    if (existingAlternativeRow) existingAlternativeRow.remove();
-
-    if (detailHeaderTr && visibleColumns.length > 0) {
-        detailHeaderTr.innerHTML = visibleColumns.map(col => {
+    if (mainHeaderTr && visibleColumns.length > 0) {
+        mainHeaderTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
-            return `<th style="padding: 6px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+            return `<th style="padding: 8px; border-bottom: 2px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
+        }).join('');
+
+        const thead = mainHeaderTr.closest('thead');
+        let filterRow = document.getElementById('table-filter-row');
+
+        if (!filterRow) {
+            filterRow = document.createElement('tr');
+            filterRow.id = 'table-filter-row';
+            thead.insertBefore(filterRow, mainHeaderTr);
+        } else {
+            thead.insertBefore(filterRow, mainHeaderTr);
+        }
+
+        window.applyExpenseTableFilter = function() {
+            const inputs = filterRow.querySelectorAll('input[data-column-index]');
+            const tbody = document.getElementById('table-body');
+            const groupHeaders = tbody.querySelectorAll('tr[id^="group-header-"]');
+
+            if (groupHeaders.length > 0) {
+                groupHeaders.forEach((headerTr, gIndex) => {
+                    const childRows = tbody.querySelectorAll(`.group-row-${gIndex}`);
+                    let visibleChildrenCount = 0;
+
+                    childRows.forEach(row => {
+                        let showRow = true;
+                        inputs.forEach(input => {
+                            const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                            const filterVal = input.value.toLowerCase().trim();
+                            if (!filterVal) return;
+
+                            const cell = row.children[colIdx];
+                            if (cell) {
+                                const cellText = cell.textContent.toLowerCase();
+                                if (!cellText.includes(filterVal)) {
+                                    showRow = false;
+                                }
+                            }
+                        });
+
+                        row.style.display = showRow ? '' : 'none';
+                        if (showRow) visibleChildrenCount++;
+                    });
+
+                    headerTr.style.display = visibleChildrenCount > 0 ? '' : 'none';
+                });
+            } else {
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    let showRow = true;
+                    inputs.forEach(input => {
+                        const colIdx = parseInt(input.getAttribute('data-column-index'), 10);
+                        const filterVal = input.value.toLowerCase().trim();
+                        if (!filterVal) return;
+
+                        const cell = row.children[colIdx];
+                        if (cell) {
+                            const cellText = cell.textContent.toLowerCase();
+                            if (!cellText.includes(filterVal)) {
+                                showRow = false;
+                            }
+                        }
+                    });
+                    row.style.display = showRow ? '' : 'none';
+                });
+            }
+        };
+
+        filterRow.innerHTML = visibleColumns.map((col, idx) => {
+            let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
+            if (col.style && col.style.includes('display: none')) {
+                return `<th style="display: none; padding: 4px;"></th>`;
+            }
+            return `
+                <th ${styleAttr}>
+                    <input type="text"
+                           data-column-index="${idx}"
+                           data-column="${col.field}"
+                           oninput="applyExpenseTableFilter()"
+                           placeholder="Фильтр..."
+                           style="width: 100%; padding: 4px; box-sizing: border-box; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+                </th>
+            `;
         }).join('');
     }
 
-    if (detailBody) detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка запчастей...</td></tr>`;
-
     try {
-        const response = await fetch(fetchUrl);
-        if (!response.ok) throw new Error(`Ошибка загрузки позиций (Статус: ${response.status})`);
-        
-        const items = await response.json();
+        const response = await fetch(fetchUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
 
-        if (!detailBody) return;
+        if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
-        if (!items || items.length === 0) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет запчастей в этой накладной</td></tr>`;
+        currentItems = await response.json();
+
+        if (!mainTableBody) {
             return;
         }
 
-        detailBody.innerHTML = '';
-        items.forEach((item, index) => {
-            const tr = document.createElement('tr');
-            if (config && typeof config.render === 'function') {
-                tr.innerHTML = config.render(item);
-            }
-            detailBody.appendChild(tr);
-        });
+        if (!currentItems || currentItems.length === 0) {
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Нет данных для отображения</td></tr>`;
+            return;
+        }
+
+        mainTableBody.innerHTML = '';
+
+        // Группировка по месяцам нужна только для помесячной разбивки одного поставщика
+        // и для списка накладных. Уровень "общий долг по поставщикам" (totals) — плоский список,
+        // сюда не попадает и рендерится в блоке else ниже.
+        if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
+            const monthNames = [
+                "января", "февраля", "марта", "апреля", "мая", "июня",
+                "июля", "августа", "сентября", "октября", "ноября", "декабря"
+            ];
+
+            const groups = {};
+            currentItems.forEach((item, idx) => {
+                const rawDate = item.date || item.created_at || item.receipt_date || item.month_str + '-01';
+                const dateObj = rawDate ? new Date(rawDate) : new Date();
+                const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
+                const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
+
+                const key = item.month_str || `${year}-${String(month + 1).padStart(2, '0')}`;
+                const title = `${monthNames[month]} ${year} года`;
+
+                if (!groups[key]) {
+                    groups[key] = {
+                        title: title,
+                        month_str: key,
+                        totalSum: 0,
+                        totalPaid: 0,
+                        totalDebt: 0,
+                        items: []
+                    };
+                }
+
+                groups[key].items.push(item);
+                groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
+                groups[key].totalPaid += Number(item.total_paid || 0);
+                groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
+                groups[key].totalReturned = (groups[key].totalReturned || 0) + Number(item.total_returned_sum || 0);
+            });
+
+            let groupIndex = 0;
+            Object.keys(groups).sort().reverse().forEach(key => {
+                const group = groups[key];
+                const currentGIdx = groupIndex++;
+
+                const headerTr = document.createElement('tr');
+                headerTr.id = `group-header-${currentGIdx}`;
+                headerTr.style.background = '#f1f5f9';
+                headerTr.style.cursor = 'pointer';
+                headerTr.style.fontWeight = 'bold';
+                headerTr.innerHTML = `
+                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+                        <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
+                        ${group.title} &nbsp;|&nbsp;
+                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp;
+                        Возврат: <span style="color:#d97706;">${(group.totalReturned || 0).toFixed(2)}</span> &nbsp;|&nbsp;
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp;
+                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
+                    </td>
+                `;
+                mainTableBody.appendChild(headerTr);
+
+                const childRows = [];
+                group.items.forEach((item, itemIdx) => {
+                    const tr = document.createElement('tr');
+                    const rowId = item.id || item.receipt_id || '';
+                    tr.dataset.id = rowId;
+                    tr.style.cursor = 'pointer';
+                    tr.className = `group-row-${currentGIdx}`;
+
+                    if (config && typeof config.render === 'function') {
+                        tr.innerHTML = config.render(item);
+                    }
+
+                    mainTableBody.appendChild(tr);
+                    childRows.push(tr);
+                });
+
+                headerTr.addEventListener('click', (e) => {
+                    const icon = document.getElementById(`icon-${currentGIdx}`);
+                    const isHidden = childRows[0].style.display === 'none';
+
+                    childRows.forEach(tr => {
+                        tr.style.display = isHidden ? '' : 'none';
+                    });
+
+                    icon.innerText = isHidden ? '[-]' : '[+]';
+                });
+            });
+
+        } else {
+            currentItems.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                const rowId = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
+
+                tr.dataset.id = rowId;
+                tr.style.cursor = 'pointer';
+
+                if (config && typeof config.render === 'function') {
+                    tr.innerHTML = config.render(item);
+                }
+
+                mainTableBody.appendChild(tr);
+            });
+        }
 
     } catch (err) {
-        if (detailBody) {
-            detailBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки спецификации: ${err.message}</td></tr>`;
+        if (mainTableBody) {
+            mainTableBody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных: ${err.message}</td></tr>`;
         }
     }
 }
-
 
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     let currentExpenseView = entity;
@@ -9412,7 +9773,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         window.currentPostavhikId = null;
         window.currentReceiptId = null;
 
-        fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+       let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : (window.currentPostavhikId || '');
+if (postavhikId) window.currentPostavhikId = postavhikId;
+
+fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${window.currentPostavhikId || ''}${window.currentSkladId ? '&sklad_id=' + window.currentSkladId : ''}`;
 
         if (detailContainer) detailContainer.style.display = 'none';
 
@@ -9593,7 +9957,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
-              currentItems = await response.json();
+        currentItems = await response.json();
 
         if (!mainTableBody) {
             return;
@@ -9605,32 +9969,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         }
 
         mainTableBody.innerHTML = '';
-
-        // Дополнительно — сводка "Итого по поставщику" за всё время (без разбивки по месяцам)
-        if (currentEntity === 'expenses_by_suppliers') {
-            try {
-                const totalsRes = await fetch(`/api/expenses_by_suppliers/totals${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`);
-                if (totalsRes.ok) {
-                    const totals = await totalsRes.json();
-                    if (totals.length > 0) {
-                        const summaryRow = document.createElement('tr');
-                        summaryRow.style.background = '#eef2ff';
-                        summaryRow.style.borderBottom = '2px solid #c7d2fe';
-                        const cardsHtml = totals.map(t => `
-                            <span style="display:inline-block; margin: 4px 16px 4px 0; padding: 6px 12px; background:#fff; border-radius:6px; border:1px solid #dbeafe;">
-                                <b style="color:#1e293b;">${t.postavhik_name}</b>:
-                                Долг <b style="color:${Number(t.total_debt) > 0 ? '#991b1b' : '#334155'};">${Number(t.total_debt).toFixed(2)}</b>
-                                <span style="color:#94a3b8; font-size:12px;">(куплено ${Number(t.total_expense_sum).toFixed(2)}, возврат ${Number(t.total_returned_sum).toFixed(2)}, оплачено ${Number(t.total_paid).toFixed(2)})</span>
-                            </span>
-                        `).join('');
-                        summaryRow.innerHTML = `<td colspan="${colCount}" style="padding: 10px 14px;"><div style="font-size:12px; color:#475569; margin-bottom:4px; font-weight:600;">ИТОГО ПО ПОСТАВЩИКАМ ЗА ВСЁ ВРЕМЯ:</div>${cardsHtml}</td>`;
-                        mainTableBody.appendChild(summaryRow);
-                    }
-                }
-            } catch (err) {
-                console.error('Не удалось загрузить сводку по поставщикам:', err);
-            }
-        }
 
         if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
             const monthNames = [
@@ -10705,7 +11043,7 @@ if (e.target.closest('button, [onclick]')) {
             else if (
                 activeEntity === 'expenses_by_sklad' || 
                 activeEntity === 'expenses_by_suppliers' || 
-                activeEntity === 'expenses_by_receipts'
+                activeEntity === 'expenses_by_receipts'|| activeEntity === 'expenses_by_suppliers_totals'
             ) {
                 const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
                 ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
@@ -10718,8 +11056,10 @@ if (e.target.closest('button, [onclick]')) {
                 if (actionButtonsBar) actionButtonsBar.style.display = 'none';
 
                 if (activeEntity === 'expenses_by_sklad') {
-                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
-                } else if (activeEntity === 'expenses_by_suppliers') {
+    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers_totals', selectedItem);
+} else if (activeEntity === 'expenses_by_suppliers_totals') {
+    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
+} else if (activeEntity === 'expenses_by_suppliers') {
                     if (typeof loadExpenseMainData === 'function') {
                         let payload = { ...selectedItem };
                         
