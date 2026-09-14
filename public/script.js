@@ -11761,7 +11761,7 @@ const navMap = {
     'События': 'accident_events',
     'Ремонт': 'repairs',
     'Возврат запчастей':'returns',
-    'Детали возврата':'returns_items',
+    'Детали возврата':'return_items',
     'История ремонта': 'repair_history', 
     'История запчастей':'receipts_history',
     'Запчасти ремонта': 'repair_items', 

@@ -3992,6 +3992,9 @@ router.get('/returns/available-items', async (req, res) => {
 
 
 
+
+
+
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
@@ -4226,7 +4229,7 @@ router.get('/money_receipts', async (req, res) => {
             ORDER BY date DESC;
         `;
 
-const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, debtor_warehouse_id || null]);
+    const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, debtor_warehouse_id || null]);
         let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
@@ -4392,24 +4395,22 @@ router.get('/money_receipts_by_customers', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-// ================================================================================
 
 
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
 
-// Приводим к числу ИЛИ null. Любой мусор (пустая строка, "undefined", "NaN", объект и т.д.)
-// теперь превращается в null, а не летит в Postgres как текст для ::integer.
-const toIntOrNull = (v) => {
+
+    const toIntOrNull = (v) => {
     if (v === undefined || v === null || v === '' || v === 'null' || v === 'undefined') return null;
     const n = parseInt(v, 10);
     return Number.isNaN(n) ? null : n;
-};
+    };
 
-const cleanRealizationId = toIntOrNull(realization_id);
-const cleanCustomerId = toIntOrNull(customer_id);
-const cleanSkladId = toIntOrNull(sklad_id);
+    const cleanRealizationId = toIntOrNull(realization_id);
+    const cleanCustomerId = toIntOrNull(customer_id);
+    const cleanSkladId = toIntOrNull(sklad_id);
 
 
         if (!cleanRealizationId && !cleanCustomerId && !cleanSkladId) {
@@ -4566,10 +4567,6 @@ const cleanSkladId = toIntOrNull(sklad_id);
 
 // --- 1. Эндпоинт для оплаты клиентских реализаций ---
 router.post('/realizations/:id/pay', async (req, res) => {
-    // Работаем через client + транзакцию: проверка остатка долга и сама вставка
-    // платежа теперь атомарны вместе — если два человека одновременно проведут
-    // оплату одного документа, второй увидит уже актуальный долг, а не устаревший,
-    // и переплата станет невозможна даже при одновременных запросах.
     const client = await pool.connect();
     try {
         const docId = parseInt(req.params.id);
@@ -5028,7 +5025,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
         client.release();
     }
 });
-// ================================================================================
+
 router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
     try {
         const { id } = req.params;
@@ -5099,7 +5096,7 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
                 COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
             FROM skladi sk
     LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
     LEFT JOIN postavhik p ON rec.supplier_id = p.id
@@ -5108,6 +5105,13 @@ router.get('/expenses_by_sklad', async (req, res) => {
     FROM receipt_items ri
     GROUP BY ri.receipt_id
     ) sub_i ON rec.id = sub_i.receipt_id
+    LEFT JOIN (
+    SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+    FROM return_items reti
+    JOIN returns ret ON reti.return_id = ret.id
+    WHERE ret.is_posted = true
+    GROUP BY ret.receipt_id
+    ) sub_ret ON rec.id = sub_ret.receipt_id
     LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
     WHERE sk.id = $1
     GROUP BY sk.id, sk.name, spay.total_paid;
@@ -5121,7 +5125,6 @@ router.get('/expenses_by_sklad', async (req, res) => {
 });
 
 
-// 2. Список поставщиков по месяцам для конкретного склада (уровень 2)
 router.get('/expenses_by_suppliers', async (req, res) => {
     try {
         const { sklad_id } = req.query;
@@ -5149,7 +5152,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
                 COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
             FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -5158,6 +5161,13 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 FROM receipt_items ri
                 GROUP BY ri.receipt_id
             ) sub_i ON rec.id = sub_i.receipt_id
+            LEFT JOIN (
+                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.is_posted = true
+                GROUP BY ret.receipt_id
+            ) sub_ret ON rec.id = sub_ret.receipt_id
             LEFT JOIN supplier_month_paid spay 
                 ON spay.supplier_id = p.id 
                 AND spay.payment_month = TO_CHAR(rec.date, 'YYYY-MM')
@@ -5182,7 +5192,8 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-// 3. Список накладных по поставщику и складу (уровень 3)
+
+
 router.get('/expenses_by_receipts', async (req, res) => {
     try {
         const { sklad_id, postavhik_id, start_date, end_date } = req.query;
@@ -5201,7 +5212,7 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
                 COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum,
                 COALESCE(pay.paid_sum, 0)::numeric AS total_paid,
-                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0))::numeric AS debt_sum
+                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0))::numeric AS debt_sum
             FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -5216,6 +5227,13 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 WHERE receipt_id IS NOT NULL
                 GROUP BY receipt_id
             ) pay ON rec.id = pay.receipt_id
+            LEFT JOIN (
+                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.is_posted = true
+                GROUP BY ret.receipt_id
+            ) sub_ret ON rec.id = sub_ret.receipt_id
             WHERE rec.is_posted = true
         `;
 
@@ -5412,9 +5430,7 @@ router.get('/expenses_by_receipts/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-// ==================== ИСТОРИЯ ВСЕХ ОПЛАТ КОНКРЕТНОМУ ПОСТАВЩИКУ ====================
-// В отличие от истории по одной накладной — тут все платежи этому поставщику
-// за всё время, с указанием, на какую именно накладную ушёл каждый платёж.
+
 router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
     try {
         const supplierId = parseInt(req.params.id);
@@ -5425,7 +5441,7 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
 
        const { month_str } = req.query;
 
-const query = `
+    const query = `
     SELECT 
         sp.id,
         sp.date,
@@ -5438,9 +5454,9 @@ const query = `
     WHERE sp.supplier_id = $1
       AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
     ORDER BY sp.date DESC, sp.id DESC;
-`;
+    `;
 
-const result = await pool.query(query, [supplierId, month_str || null]);
+    const result = await pool.query(query, [supplierId, month_str || null]);
         res.json(result.rows);
 
     } catch (err) {
@@ -5448,13 +5464,8 @@ const result = await pool.query(query, [supplierId, month_str || null]);
         res.status(500).json({ error: err.message });
     }
 });
-// ================================================================================
-// ==================== ОПЛАТА ДОЛГА ПОСТАВЩИКУ ЗА МЕСЯЦ (уровень 2) ====================
-// Сумма автоматически распределяется по накладным этого поставщика/месяца
-// от САМОЙ СТАРОЙ к самой новой (FIFO) — так каждая накладная получает
-// свою частичную/полную оплату, и на уровне 3 видно, что оплачено, а что нет.
-// Если передан receipt_ids — распределение идёт только среди этих накладных
-// (тоже по FIFO среди них), а не среди всех накладных месяца.
+
+
 router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -5547,8 +5558,6 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
         client.release();
     }
 });
-// ================================================================================
-
 
 
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
@@ -7424,6 +7433,10 @@ router.delete('/repair_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+
+
+
 // Функция для записи логов ремонта в таблицу repair_logs
 async function writeRepairLog(client, req, data) {
     try {
@@ -7457,6 +7470,234 @@ async function writeRepairLog(client, req, data) {
         console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
     }
 }
+
+
+
+
+// POST /api/return_items - добавление позиции в возврат с немедленным списанием со склада
+router.post('/return_items', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { return_id, receipt_item_id, quantity } = req.body;
+
+        if (!return_id || !receipt_item_id) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Не указан return_id или receipt_item_id.' });
+        }
+
+        const numQty = Number(quantity) || 0;
+        if (numQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество для возврата должно быть больше нуля.' });
+        }
+
+        const returnCheck = await client.query('SELECT * FROM returns WHERE id = $1 FOR UPDATE', [return_id]);
+        if (returnCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Документ возврата не найден.' });
+        }
+        const returnDoc = returnCheck.rows[0];
+        if (returnDoc.is_posted === true || returnDoc.is_posted === 'true') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя добавлять позиции в уже проведённый возврат!' });
+        }
+
+        const riCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1', [receipt_item_id]);
+        if (riCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция прихода не найдена.' });
+        }
+        const receiptItem = riCheck.rows[0];
+
+        if (!receiptItem.batch_id) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'У этой позиции прихода нет привязанной партии склада — возврат невозможен.' });
+        }
+
+        const batchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [receiptItem.batch_id]);
+        if (batchCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Партия склада не найдена.' });
+        }
+        const batch = batchCheck.rows[0];
+        const availableQty = Number(batch.quantity) || 0;
+
+        if (numQty > availableQty) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Нельзя вернуть ${numQty} шт. — на складе из этой партии доступно только ${availableQty} шт.` });
+        }
+
+        await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [numQty, batch.id]);
+
+        const priceRub = Number(receiptItem.price_rub) || 0;
+        const totalRub = priceRub * numQty;
+
+        const insertResult = await client.query(`
+            INSERT INTO return_items (return_id, receipt_item_id, zaphasti_id, batch_id, quantity, price_rub, total_rub)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *;
+        `, [return_id, receipt_item_id, receiptItem.zaphasti_id, batch.id, numQty, priceRub, totalRub]);
+
+        await client.query('COMMIT');
+        return res.status(201).json(insertResult.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ [/api/return_items POST] Ошибка:', err);
+        return res.status(500).json({ error: 'Ошибка сервера при добавлении позиции возврата', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// PUT /api/return_items/:id - изменение количества с пересчётом остатка партии
+router.put('/return_items/:id', async (req, res) => {
+    const itemId = req.params.id;
+    const { quantity } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const itemCheck = await client.query('SELECT * FROM return_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция возврата не найдена.' });
+        }
+        const currentItem = itemCheck.rows[0];
+        const oldQty = Number(currentItem.quantity) || 0;
+
+        const returnCheck = await client.query('SELECT is_posted FROM returns WHERE id = $1 FOR UPDATE', [currentItem.return_id]);
+        if (returnCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Документ возврата не найден.' });
+        }
+        if (returnCheck.rows[0].is_posted === true || returnCheck.rows[0].is_posted === 'true') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя изменять позиции уже проведённого возврата!' });
+        }
+
+        const newQty = quantity !== undefined ? Number(quantity) || 0 : oldQty;
+        if (newQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество должно быть больше нуля.' });
+        }
+
+        const batchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
+        if (batchCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Партия склада не найдена.' });
+        }
+        const batch = batchCheck.rows[0];
+
+        const availableAfterRestore = Number(batch.quantity) + oldQty;
+        if (newQty > availableAfterRestore) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: `Нельзя вернуть ${newQty} шт. — максимально доступно ${availableAfterRestore} шт.` });
+        }
+
+        const diff = newQty - oldQty;
+        await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [diff, batch.id]);
+
+        const priceRub = Number(currentItem.price_rub) || 0;
+        const totalRub = priceRub * newQty;
+
+        const updateResult = await client.query(
+            'UPDATE return_items SET quantity = $1, total_rub = $2 WHERE id = $3 RETURNING *',
+            [newQty, totalRub, itemId]
+        );
+
+        await client.query('COMMIT');
+        return res.status(200).json(updateResult.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ [/api/return_items PUT] Ошибка:', err);
+        return res.status(500).json({ error: 'Ошибка сервера при изменении позиции возврата', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE /api/return_items/:id - удаление позиции с восстановлением остатка на складе
+router.delete('/return_items/:id', async (req, res) => {
+    const itemId = req.params.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const itemCheck = await client.query('SELECT * FROM return_items WHERE id = $1 FOR UPDATE', [itemId]);
+        if (itemCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция возврата не найдена.' });
+        }
+        const currentItem = itemCheck.rows[0];
+
+        const returnCheck = await client.query('SELECT is_posted FROM returns WHERE id = $1 FOR UPDATE', [currentItem.return_id]);
+        if (returnCheck.rows.length > 0 && (returnCheck.rows[0].is_posted === true || returnCheck.rows[0].is_posted === 'true')) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалять позиции уже проведённого возврата!' });
+        }
+
+        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
+        await client.query('DELETE FROM return_items WHERE id = $1', [itemId]);
+
+        await client.query('COMMIT');
+        return res.status(200).json({ message: 'Позиция возврата удалена, остаток на складе восстановлен', id: itemId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ [/api/return_items DELETE] Ошибка:', err);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении позиции возврата', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE /api/returns/:id - удаление документа возврата с восстановлением остатков
+router.delete('/returns/:id', async (req, res) => {
+    const returnId = req.params.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const returnCheck = await client.query('SELECT is_posted FROM returns WHERE id = $1 FOR UPDATE', [returnId]);
+        if (returnCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Документ возврата не найден.' });
+        }
+        if (returnCheck.rows[0].is_posted === true || returnCheck.rows[0].is_posted === 'true') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалить уже проведённый документ возврата!' });
+        }
+
+        const itemsRes = await client.query('SELECT * FROM return_items WHERE return_id = $1 FOR UPDATE', [returnId]);
+        for (const item of itemsRes.rows) {
+            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [item.quantity, item.batch_id]);
+        }
+
+        await client.query('DELETE FROM return_items WHERE return_id = $1', [returnId]);
+        await client.query('DELETE FROM returns WHERE id = $1', [returnId]);
+
+        await client.query('COMMIT');
+        return res.status(200).json({ message: 'Документ возврата удалён, остатки на складе восстановлены', id: returnId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ [/api/returns DELETE] Ошибка:', err);
+        return res.status(500).json({ error: 'Ошибка сервера при удалении документа возврата', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
+
+
 
 
 
@@ -7565,7 +7806,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns'
         ];
  
         if (!allowedTables.includes(entity)) {
@@ -7767,7 +8008,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -8018,7 +8259,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
-            'customer_cars','part_discounts','service_discounts','realizations'
+            'customer_cars','part_discounts','service_discounts','realizations','returns'
         ];
 
         if (!allowedTables.includes(entity)) {
