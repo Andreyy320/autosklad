@@ -10756,10 +10756,11 @@ if (e.target.closest('button, [onclick]')) {
             }
 
             else if (
-                activeEntity === 'expenses_by_sklad' || 
-                activeEntity === 'expenses_by_suppliers' || 
-                activeEntity === 'expenses_by_receipts'
-            ) {
+    activeEntity === 'expenses_by_sklad' || 
+    activeEntity === 'expenses_by_suppliers_totals' || 
+    activeEntity === 'expenses_by_suppliers' || 
+    activeEntity === 'expenses_by_receipts'
+) {
                 const carTabsPanel = document.getElementById('car-tabs-panel') || document.getElementById('car-tabs-bar');
                 ['tabs-for-cars', 'tabs-for-accidents', 'tabs-for-repairs', 'tabs-for-realizations'].forEach(tabId => {
                     const el = document.getElementById(tabId);
