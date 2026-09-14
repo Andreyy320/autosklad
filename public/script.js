@@ -7514,6 +7514,9 @@ function editSelectedEntity() {
     } else if (currentEntity === 'accidents' && typeof openAccidentForm === 'function') {
     openAccidentForm('accidents', selectedItem);
     }
+     else if (currentEntity === 'returns' && typeof openReturnForm === 'function') {
+    openReturnForm('returns', selectedItem);
+}
     else {
         openEntityForm(currentEntity, selectedItem);
     }
