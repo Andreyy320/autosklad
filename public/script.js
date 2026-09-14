@@ -11320,7 +11320,9 @@ if (tableBody) {
     } else if (currentEntity === 'moves') {
     loadDetailData('move_items', itemId);
     } else if (currentEntity === 'returns') {
-    loadDetailData('return_items', itemId);
+    const detailToolbarTarget = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
+    if (detailToolbarTarget) detailToolbarTarget.style.display = 'none';
+    renderReturnItemsInline(selectedItem);
     } else if (currentEntity === 'postavhik') {
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
