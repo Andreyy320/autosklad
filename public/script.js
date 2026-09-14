@@ -7567,8 +7567,8 @@ async function renderReturnItemsInline(returnDoc) {
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Кол-во в приходе</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма возврата</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:center;">Возврат</th>
         `;
     }
 
@@ -7604,21 +7604,33 @@ async function renderReturnItemsInline(returnDoc) {
             const currentQty = existing ? Number(existing.quantity) : 0;
             const maxQty = Number(i.available_qty) + currentQty;
             const price = Number(i.price_rub) || 0;
+            const sum = (currentQty * price).toFixed(2);
+
+            const btnLabel = currentQty > 0 ? `Возврат: ${currentQty}` : 'Вернуть';
+            const btnColor = currentQty > 0 ? '#0ea5e9' : '#16a34a';
 
             return `
-                <tr data-receipt-item-id="${i.receipt_item_id}" data-return-item-id="${existing ? existing.id : ''}">
+                <tr data-receipt-item-id="${i.receipt_item_id}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
                     <td style="padding:6px;">${i.zaphasti_code || '—'}</td>
                     <td style="padding:6px;">${i.zaphasti_name || '—'}</td>
                     <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
                     <td style="padding:6px; text-align:right; color:#16a34a;">${maxQty.toFixed(2)}</td>
                     <td style="padding:6px; text-align:right;">${price.toFixed(2)}</td>
-                    <td style="padding:6px; text-align:right;">
-                        <input type="number" min="0" max="${maxQty}" step="0.01" value="${currentQty}"
-                               class="return-inline-qty" data-receipt-item-id="${i.receipt_item_id}"
-                               data-price="${price}" ${isPosted ? 'disabled' : ''}
-                               style="width:80px; padding:4px; border:1px solid #ccc; border-radius:4px; text-align:right;">
+                    <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${sum}</td>
+                    <td style="padding:6px; text-align:center;">
+                        <button type="button" class="return-open-drawer-btn"
+                                data-receipt-item-id="${i.receipt_item_id}"
+                                data-return-item-id="${existing ? existing.id : ''}"
+                                data-code="${i.zaphasti_code || ''}"
+                                data-name="${(i.zaphasti_name || '').replace(/"/g, '&quot;')}"
+                                data-max="${maxQty}"
+                                data-current="${currentQty}"
+                                data-price="${price}"
+                                ${isPosted ? 'disabled' : ''}
+                                style="background:${btnColor}; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:12px;">
+                            ${btnLabel}
+                        </button>
                     </td>
-                    <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${(currentQty * price).toFixed(2)}</td>
                 </tr>
             `;
         }).join('');
@@ -7626,11 +7638,8 @@ async function renderReturnItemsInline(returnDoc) {
         if (tbody) tbody.innerHTML = rowsHtml;
 
         if (!isPosted) {
-            tbody.querySelectorAll('.return-inline-qty').forEach(input => {
-                let timer = null;
-                const trigger = () => { clearTimeout(timer); timer = setTimeout(() => saveReturnQty(input, returnDoc), 500); };
-                input.addEventListener('input', trigger);
-                input.addEventListener('blur', () => { clearTimeout(timer); saveReturnQty(input, returnDoc); });
+            tbody.querySelectorAll('.return-open-drawer-btn').forEach(btn => {
+                btn.addEventListener('click', () => openReturnQtyDrawer(btn, returnDoc));
             });
         }
     } catch (err) {
@@ -7639,20 +7648,67 @@ async function renderReturnItemsInline(returnDoc) {
     }
 }
 
-async function saveReturnQty(input, returnDoc) {
-    if (input.dataset.saving === '1') return;
-    input.dataset.saving = '1';
+function openReturnQtyDrawer(btn, returnDoc) {
+    const receiptItemId = btn.dataset.receiptItemId;
+    const returnItemId = btn.dataset.returnItemId;
+    const maxQty = Number(btn.dataset.max) || 0;
+    const currentQty = Number(btn.dataset.current) || 0;
+    const price = Number(btn.dataset.price) || 0;
+    const code = btn.dataset.code;
+    const name = btn.dataset.name;
 
-    const row = input.closest('tr');
-    const receiptItemId = row.dataset.receiptItemId;
-    const returnItemId = row.dataset.returnItemId;
-    const price = Number(input.dataset.price) || 0;
-    const newQty = Number(input.value) || 0;
+    const drawer = getOrCreateDrawer();
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Возврат позиции</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div style="margin-bottom:16px; padding:12px; background:#f8fafc; border-radius:8px;">
+            <div style="font-weight:600; color:#0f172a;">${code} — ${name}</div>
+            <div style="font-size:13px; color:#64748b; margin-top:4px;">Доступно к возврату: ${maxQty.toFixed(2)} шт. · Цена: ${price.toFixed(2)} руб.</div>
+        </div>
+        <div style="margin-bottom:16px;">
+            <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Количество к возврату</label>
+            <input type="number" id="return-drawer-qty" min="0" max="${maxQty}" step="0.01" value="${currentQty}"
+                   style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size:16px;">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" id="return-drawer-save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
+            ${currentQty > 0 ? `<button type="button" id="return-drawer-remove-btn" style="background:#dc2626; color:white; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">Убрать</button>` : ''}
+            <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>
+        </div>
+    `;
+    openDrawer();
 
+    document.getElementById('return-drawer-save-btn').addEventListener('click', async () => {
+        const qtyInput = document.getElementById('return-drawer-qty');
+        const newQty = Number(qtyInput.value) || 0;
+
+        if (newQty <= 0) {
+            showAppNotification('Укажите количество больше нуля (или нажмите «Убрать»)', 'warning');
+            return;
+        }
+        if (newQty > maxQty) {
+            showAppNotification(`Максимум можно вернуть ${maxQty.toFixed(2)} шт.`, 'warning');
+            return;
+        }
+
+        await saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty });
+    });
+
+    const removeBtn = document.getElementById('return-drawer-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', async () => {
+            await saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty: 0 });
+        });
+    }
+}
+
+async function saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty }) {
     try {
         let response;
         if (newQty <= 0) {
-            if (!returnItemId) { input.dataset.saving = '0'; return; }
+            if (!returnItemId) { closeDrawer(); return; }
             response = await fetch(`/api/return_items/${returnItemId}`, { method: 'DELETE' });
         } else if (returnItemId) {
             response = await fetch(`/api/return_items/${returnItemId}`, {
@@ -7671,29 +7727,18 @@ async function saveReturnQty(input, returnDoc) {
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             showAppNotification(errData.error || 'Ошибка при сохранении возврата', 'error');
-            renderReturnItemsInline(returnDoc);
             return;
         }
 
-        if (newQty <= 0) {
-            row.dataset.returnItemId = '';
-        } else {
-            const result = await response.json();
-            row.dataset.returnItemId = result.id;
-        }
-
-        const sumCell = row.querySelector('.return-row-sum');
-        if (sumCell) sumCell.textContent = (newQty * price).toFixed(2);
+        closeDrawer();
+        showAppNotification(newQty <= 0 ? 'Позиция убрана из возврата' : 'Возврат сохранён', 'success');
+        renderReturnItemsInline(returnDoc);
 
     } catch (err) {
         console.error(err);
         showAppNotification('Ошибка соединения с сервером', 'error');
-        renderReturnItemsInline(returnDoc);
-    } finally {
-        input.dataset.saving = '0';
     }
 }
-
 
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
