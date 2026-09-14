@@ -7628,8 +7628,7 @@ async function renderReturnItemsInline(returnDoc) {
                                 data-current="${currentQty}"
                                 data-price="${price}"
                                 ${isPosted ? 'disabled' : ''}
-                                style="background:#fff; color:#475569; border:1px solid #cbd5e1; padding:5px 14px; border-radius:5px; cursor:pointer; font-size:12px;">
-                            ${btnLabel}
+                                style="background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; padding:6px 14px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">                            ${btnLabel}
                         </button>
                     </td>
                 </tr>
