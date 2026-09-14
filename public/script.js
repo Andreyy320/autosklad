@@ -6992,9 +6992,12 @@ async function openReturnForm(entity, item = null) {
         };
     }
 
+    const isPosted = item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1;
+    const fieldLock = isPosted ? 'disabled' : '';
+
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Возврат поставщику</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Возврат поставщику ${isPosted ? '<span style="color:#16a34a; font-size:12px; margin-left:8px;">(Проведён)</span>' : ''}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
         <form id="entity-form" data-entity="returns" data-item-id="${item.id || ''}" style="display: flex; flex-direction: column; gap: 14px;">
@@ -7009,16 +7012,19 @@ async function openReturnForm(entity, item = null) {
             <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
             <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Дата</label>
-                <input type="datetime-local" name="date" value="${item.date || currentDateTime}"
+                <input type="datetime-local" name="date" value="${item.date || currentDateTime}" ${fieldLock}
                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Комментарий</label>
-                <textarea name="comment" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;">${item.comment || ''}</textarea>
+                <textarea name="comment" ${fieldLock} style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;">${item.comment || ''}</textarea>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button type="submit" id="save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
-                <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>
+                ${isPosted
+                    ? `<button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Закрыть</button>`
+                    : `<button type="submit" id="save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
+                       <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>`
+                }
             </div>
         </form>
     `;

@@ -8083,8 +8083,8 @@ router.put('/:entity/:id', async (req, res) => {
         }
         const oldDoc = currentDocRes.rows[0];
 
-        const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations'];
-        if (docWithStatusTables.includes(entity)) {
+    const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations', 'returns'];     
+       if (docWithStatusTables.includes(entity)) {
             const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
             if (oldIsPosted) {
@@ -8284,8 +8284,7 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs') {
-            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
+        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs' || entity === 'returns') {            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
             // одного и того же документа прилетят одновременно, второй дождётся коммита первого
             // и увидит уже актуальный статус, а не устаревший "не проведён".
             const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
