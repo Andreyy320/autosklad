@@ -2080,14 +2080,12 @@ router.get('/part_movement_details', async (req, res) => {
     JOIN returns ret ON reti.return_id = ret.id
     LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
     LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
-    LEFT JOIN LATERAL (
+       LEFT JOIN LATERAL (
     SELECT u_ret.name AS mol_name
     FROM mol mm_ret
     LEFT JOIN users u_ret ON mm_ret.user_id = u_ret.id
     WHERE mm_ret.warehouse_id = ret.warehouse_id
-      AND mm_ret.date_assigned <= COALESCE(ret.fact_date, ret.date)
-      AND (mm_ret.date_removed IS NULL OR mm_ret.date_removed >= COALESCE(ret.fact_date, ret.date))
-    ORDER BY mm_ret.date_assigned DESC
+    ORDER BY mm_ret.id DESC
     LIMIT 1
     ) lm_ret ON true
     WHERE reti.zaphasti_id = $1 
