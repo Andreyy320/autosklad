@@ -11162,10 +11162,12 @@ if (tableBody) {
                 if (detailContainer) detailContainer.style.display = 'flex';
 
                 if (currentEntity === 'receipts') {
-                    loadDetailData('receipt_items', itemId);
-                } else if (currentEntity === 'moves') {
-                    loadDetailData('move_items', itemId);
-                } else if (currentEntity === 'postavhik') {
+    loadDetailData('receipt_items', itemId);
+    } else if (currentEntity === 'moves') {
+    loadDetailData('move_items', itemId);
+    } else if (currentEntity === 'returns') {
+    loadDetailData('return_items', itemId);
+    } else if (currentEntity === 'postavhik') {
                     loadDetailData('postavhik_contacts', itemId);
                 } else if (currentEntity === 'counterparties') {
                     loadDetailData('counterparty_contacts', itemId);
