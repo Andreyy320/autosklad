@@ -7540,6 +7540,12 @@ router.post('/return_items', async (req, res) => {
             RETURNING *;
         `, [return_id, receipt_item_id, receiptItem.zaphasti_id, batch.id, numQty, priceRub, totalRub]);
 
+    await client.query(`
+            UPDATE returns SET total_sum = (
+                SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+            ) WHERE id = $1
+        `, [return_id]);
+
         await client.query('COMMIT');
         return res.status(201).json(insertResult.rows[0]);
 
@@ -7608,7 +7614,11 @@ router.put('/return_items/:id', async (req, res) => {
             'UPDATE return_items SET quantity = $1, total_rub = $2 WHERE id = $3 RETURNING *',
             [newQty, totalRub, itemId]
         );
-
+        await client.query(`
+            UPDATE returns SET total_sum = (
+                SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+            ) WHERE id = $1
+        `, [currentItem.return_id]);
         await client.query('COMMIT');
         return res.status(200).json(updateResult.rows[0]);
 
@@ -7644,6 +7654,12 @@ router.delete('/return_items/:id', async (req, res) => {
 
         await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
         await client.query('DELETE FROM return_items WHERE id = $1', [itemId]);
+
+ await client.query(`
+            UPDATE returns SET total_sum = (
+                SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+            ) WHERE id = $1
+        `, [currentItem.return_id]);
 
         await client.query('COMMIT');
         return res.status(200).json({ message: 'Позиция возврата удалена, остаток на складе восстановлен', id: itemId });

@@ -7730,9 +7730,10 @@ async function saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQ
             return;
         }
 
-        closeDrawer();
+               closeDrawer();
         showAppNotification(newQty <= 0 ? 'Позиция убрана из возврата' : 'Возврат сохранён', 'success');
         renderReturnItemsInline(returnDoc);
+        if (typeof refreshData === 'function') refreshData();   // ← добавить эту строку
 
     } catch (err) {
         console.error(err);
