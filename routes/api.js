@@ -67,6 +67,7 @@ const DOC_NUMBER_CONFIG = {
     moves: 'ПМ-',
     repairs: 'РЕМ-',
     accidents: 'ДТП-',
+        returns: 'ВОЗ-',
     realizations: 'РЛ-'
 };
 
@@ -985,6 +986,97 @@ router.get('/statuses', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при получении статусов' });
     }
 });
+
+
+
+
+
+router.get('/returns', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                ret.*,
+                sk.name AS sklad_name,
+                COALESCE(p.name, 'Не указан') AS supplier_name,
+                rec.doc_number AS receipt_doc_number
+            FROM returns ret
+            LEFT JOIN skladi sk ON ret.warehouse_id = sk.id
+            LEFT JOIN postavhik p ON ret.supplier_id = p.id
+            LEFT JOIN receipts rec ON ret.receipt_id = rec.id
+            ORDER BY ret.date DESC, ret.id DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ [/api/returns] Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+    }
+});
+
+router.get('/return_items', async (req, res) => {
+    try {
+        const { return_id } = req.query;
+
+        if (!return_id) {
+            return res.status(400).json({ error: 'Не указан return_id' });
+        }
+
+        const query = `
+            SELECT 
+                ri.*,
+                z.code AS zaphasti_code,
+                z.name AS zaphasti_name
+            FROM return_items ri
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            WHERE ri.return_id = $1
+            ORDER BY ri.id ASC;
+        `;
+        const result = await pool.query(query, [return_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ [/api/return_items] Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+    }
+});
+
+router.put('/returns/:id/post', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM returns WHERE id = $1', [id]);
+        if (oldDocRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Документ не найден' });
+        }
+
+        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM return_items WHERE return_id = $1', [id]);
+        if (Number(itemsCheck.rows[0].cnt) === 0) {
+            return res.status(400).json({ error: 'Нельзя провести пустой документ возврата — добавьте хотя бы одну позицию' });
+        }
+
+        let factDate = oldDocRes.rows[0].fact_date;
+        if (!oldDocRes.rows[0].is_posted || !oldDocRes.rows[0].fact_date) {
+            factDate = getServerNowString();
+        }
+
+        const sumRes = await pool.query(
+            'SELECT COALESCE(SUM(total_rub), 0) AS total_sum FROM return_items WHERE return_id = $1',
+            [id]
+        );
+        const totalSum = sumRes.rows[0].total_sum;
+
+        const result = await pool.query(
+            'UPDATE returns SET is_posted = true, fact_date = $1, total_sum = $2 WHERE id = $3 RETURNING *',
+            [factDate, totalSum, id]
+        );
+
+        res.status(200).json(result.rows[0]);
+
+    } catch (err) {
+        console.error('❌ Ошибка при проведении возврата:', err);
+        res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    }
+});
+
 
 
 // ==================== ПОЛУЧИТЬ ВСЕ АВТОСЕРВИСЫ ====================
@@ -3864,6 +3956,39 @@ router.delete('/realization_works/:id', async (req, res) => {
         client.release();
     }
 });
+
+
+
+
+router.get('/returns/available-items', async (req, res) => {
+    try {
+        const { receipt_id } = req.query;
+        if (!receipt_id) return res.status(400).json({ error: 'Не указан receipt_id' });
+
+        const query = `
+            SELECT 
+                ri.id AS receipt_item_id,
+                ri.zaphasti_id,
+                z.code AS zaphasti_code,
+                z.name AS zaphasti_name,
+                ri.quantity AS original_qty,
+                ri.price_rub,
+                wb.id AS batch_id,
+                COALESCE(wb.quantity, 0) AS available_qty
+            FROM receipt_items ri
+            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+            LEFT JOIN warehouse_batches wb ON ri.batch_id = wb.id
+            WHERE ri.receipt_id = $1
+            ORDER BY ri.id ASC;
+        `;
+        const result = await pool.query(query, [receipt_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ [/api/returns/available-items] Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+    }
+});
+
 
 
 

@@ -693,6 +693,65 @@ const tableConfig = {
         `;
     }
     },
+
+    returns: {
+        title: 'Возврат поставщику',
+        columns: [
+            { field: 'doc_number', label: '№ Документа', width: '120px' },
+            { field: 'date', label: 'Дата', width: '110px' },
+            { field: 'sklad_name', label: 'Склад', width: '140px' },
+            { field: 'supplier_name', label: 'Поставщик', width: '160px' },
+            { field: 'receipt_doc_number', label: 'Из прихода', width: '120px' },
+            { field: 'total_sum', label: 'Сумма РУБ', width: '110px', align: 'right' },
+            { field: 'fact_date', label: 'Дата факт', width: '140px' },
+            { field: 'is_posted', label: 'Проведен', width: '110px', align: 'center' }
+        ],
+        render: (item) => {
+            const formattedDate = item.date ? new Date(item.date).toLocaleString() : '—';
+            const formattedFactDate = item.fact_date ? new Date(item.fact_date).toLocaleString() : '—';
+            const sum = Number(item.total_sum || 0).toFixed(2);
+            const isPosted = item.is_posted === true || item.is_posted === 'true';
+
+            return `
+                <td><span style="font-weight:600; color:#0f172a;">${item.doc_number || '—'}</span></td>
+                <td><span style="color:#475569;">${formattedDate}</span></td>
+                <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>
+                <td><span style="color:#0f172a;">${item.supplier_name || '—'}</span></td>
+                <td><span style="color:#475569;">${item.receipt_doc_number || '—'}</span></td>
+                <td style="text-align:right; font-weight:600; color:#0f172a;">${sum}</td>
+                <td><span style="color:#475569;">${formattedFactDate}</span></td>
+                <td style="text-align:center;">
+                    ${isPosted
+                        ? `<span style="color:#16a34a; font-weight:600;">Проведен</span>`
+                        : `<span style="color:#94a3b8;">Не проведен</span> <button type="button" onclick="event.stopPropagation(); postReturn(${item.id})" style="background:#16a34a;color:white;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px;">Провести</button>`
+                    }
+                </td>
+            `;
+        }
+    },
+        return_items: {
+        title: 'Спецификация возврата',
+        columns: [
+            { field: 'zaphasti_code', label: 'Код', width: '100px' },
+            { field: 'zaphasti_name', label: 'Наименование', width: '220px' },
+            { field: 'quantity', label: 'Кол-во', width: '90px', align: 'right' },
+            { field: 'price_rub', label: 'Цена', width: '100px', align: 'right' },
+            { field: 'total_rub', label: 'Сумма', width: '110px', align: 'right' }
+        ],
+        render: (item) => {
+            const qty = Number(item.quantity || 0).toFixed(2);
+            const price = Number(item.price_rub || 0).toFixed(2);
+            const sum = Number(item.total_rub || 0).toFixed(2);
+
+            return `
+                <td><span style="color:#475569;">${item.zaphasti_code || '—'}</span></td>
+                <td><span style="color:#0f172a;">${item.zaphasti_name || '—'}</span></td>
+                <td style="text-align:right; color:#334155;">${qty}</td>
+                <td style="text-align:right; color:#334155;">${price}</td>
+                <td style="text-align:right; font-weight:600; color:#0f172a;">${sum}</td>
+            `;
+        }
+    },
     car_cards: {
     title: 'Карточка авто',
     readonly: true, 
@@ -2242,7 +2301,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     } else if (entity === 'car_details' && parentId) {
         html += `<input type="hidden" name="car_id" value="${parentId}">`;
     } else if (entity === 'moves') {
-} 
+    } 
 
     async function renderField(col) {
         if (col.field === 'id' || col.field === 'dtp_id' || col.field === 'counterparty_id' || col.field === 'postavhik_id' || col.field === 'realization_id' || col.field === 'move_id' || col.field === 'repair_id' || col.field === 'receipt_id') return '';
@@ -6914,6 +6973,273 @@ async function openRealizationForm(entity, item = null) {
     });
 }
 
+async function openReturnForm(entity, item = null) {
+    const drawer = getOrCreateDrawer();
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    if (!item || !item.id) {
+        item = {
+            doc_number: '(будет присвоен автоматически)',
+            is_posted: false,
+            date: currentDateTime
+        };
+    }
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Возврат поставщику</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
+        </div>
+        <form id="entity-form" data-entity="returns" data-item-id="${item.id || ''}" style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Приход, из которого возвращаем *</label>
+                <select name="receipt_id" id="return-receipt-select" required ${item.id ? 'disabled' : ''}
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    <option value="">-- Загрузка приходов... --</option>
+                </select>
+            </div>
+            <input type="hidden" name="warehouse_id" id="return-warehouse-id" value="${item.warehouse_id || ''}">
+            <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
+            <div>
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Дата</label>
+                <input type="datetime-local" name="date" value="${item.date || currentDateTime}"
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Комментарий</label>
+                <textarea name="comment" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;">${item.comment || ''}</textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="submit" id="save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
+                <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>
+            </div>
+        </form>
+    `;
+
+    drawer.innerHTML = html;
+    openDrawer();
+
+    // Подгружаем список проведённых приходов — возврат имеет смысл только по уже реально принятому товару
+    try {
+        const res = await fetch('/api/receipts');
+        if (res.ok) {
+            const receipts = await res.json();
+            const select = document.getElementById('return-receipt-select');
+            select.innerHTML = '<option value="">-- Выберите приход --</option>';
+
+            const postedReceipts = receipts.filter(r => r.is_posted === true || r.is_posted === 'true');
+
+            postedReceipts.forEach(r => {
+                const option = document.createElement('option');
+                option.value = r.id;
+                option.textContent = `${r.doc_number} от ${r.date ? new Date(r.date).toLocaleDateString() : ''}`;
+                option.dataset.warehouseId = r.warehouse_id || '';
+                option.dataset.supplierId = r.supplier_id || '';
+                if (item.receipt_id && String(item.receipt_id) === String(r.id)) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+
+            select.addEventListener('change', () => {
+                const selectedOption = select.options[select.selectedIndex];
+                document.getElementById('return-warehouse-id').value = selectedOption.dataset.warehouseId || '';
+                document.getElementById('return-supplier-id').value = selectedOption.dataset.supplierId || '';
+            });
+
+            if (select.value) {
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+    } catch (err) {
+        console.error('Не удалось загрузить список приходов:', err);
+    }
+
+    let isSubmitting = false;
+    document.getElementById('entity-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        const saveButton = document.getElementById('save-btn');
+        if (saveButton) saveButton.disabled = true;
+
+        const form = e.target;
+        const formData = new FormData(form);
+        const data = {};
+        formData.forEach((value, key) => { data[key] = value; });
+
+        if (!data.receipt_id) {
+            showAppNotification('Выберите приход, из которого делается возврат', 'warning');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+            return;
+        }
+
+        try {
+            const isEdit = item && item.id;
+            const url = isEdit ? `/api/returns/${item.id}` : `/api/returns`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const currentUserId = localStorage.getItem('currentUserId') || '';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeDrawer();
+                showAppNotification('Документ возврата создан', 'success');
+                if (!isEdit) selectedItem = null;
+                refreshData();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                showAppNotification(errData.error || 'Ошибка при сохранении', 'error');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+            }
+        } catch (err) {
+            console.error(err);
+            showAppNotification('Ошибка соединения с сервером', 'error');
+            isSubmitting = false;
+            if (saveButton) saveButton.disabled = false;
+        }
+    });
+}
+
+async function openReturnItemsForm(itemToEdit, parentId) {
+    if (!selectedItem || !selectedItem.receipt_id) {
+        showAppNotification('Не удалось определить приход для этого возврата', 'error');
+        return;
+    }
+
+    if (selectedItem.is_posted) {
+        showAppNotification('Нельзя добавлять позиции в уже проведённый возврат', 'warning');
+        return;
+    }
+
+    const drawer = getOrCreateDrawer();
+    drawer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 16px; color: #333;">Добавить позицию возврата</h3>
+            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+        </div>
+        <div id="return-items-picker" style="text-align:center; color:#666; padding:20px;">Загрузка остатков прихода...</div>
+    `;
+    openDrawer();
+
+    try {
+        const res = await fetch(`/api/returns/available-items?receipt_id=${selectedItem.receipt_id}`);
+        if (!res.ok) throw new Error('Не удалось загрузить позиции прихода');
+
+        const items = await res.json();
+        const availableItems = items.filter(i => Number(i.available_qty) > 0);
+
+        if (availableItems.length === 0) {
+            document.getElementById('return-items-picker').innerHTML =
+                '<div style="color:#dc2626;">Возвращать нечего — весь товар из этого прихода уже разошёлся со склада.</div>';
+            return;
+        }
+
+        const rowsHtml = availableItems.map(i => `
+            <tr>
+                <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_code || '—'}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_name || '—'}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right; color:#16a34a; font-weight:600;">${Number(i.available_qty).toFixed(2)}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">
+                    <input type="number" min="0" max="${i.available_qty}" step="0.01" value="0"
+                           data-receipt-item-id="${i.receipt_item_id}"
+                           class="return-qty-input"
+                           style="width:90px; padding:5px; border:1px solid #ccc; border-radius:4px; text-align:right;">
+                </td>
+            </tr>
+        `).join('');
+
+        document.getElementById('return-items-picker').innerHTML = `
+            <table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:16px;">
+                <thead>
+                    <tr style="background:#f8fafc; text-align:left;">
+                        <th style="padding:8px;">Код</th>
+                        <th style="padding:8px;">Наименование</th>
+                        <th style="padding:8px; text-align:right;">Остаток</th>
+                        <th style="padding:8px; text-align:right;">Вернуть</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <button type="button" id="save-return-items-btn" style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Добавить в возврат</button>
+        `;
+
+        document.getElementById('save-return-items-btn').addEventListener('click', async () => {
+            const inputs = document.querySelectorAll('.return-qty-input');
+            const toSubmit = [];
+
+            inputs.forEach(input => {
+                const qty = Number(input.value);
+                if (qty > 0) {
+                    toSubmit.push({ receipt_item_id: input.dataset.receiptItemId, quantity: qty });
+                }
+            });
+
+            if (toSubmit.length === 0) {
+                showAppNotification('Укажите количество хотя бы для одной позиции', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('save-return-items-btn');
+            btn.disabled = true;
+            btn.textContent = 'Сохранение...';
+
+            let hadError = false;
+            for (const entry of toSubmit) {
+                try {
+                    const response = await fetch('/api/return_items', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            return_id: parentId,
+                            receipt_item_id: entry.receipt_item_id,
+                            quantity: entry.quantity
+                        })
+                    });
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        showAppNotification(errData.error || 'Ошибка при добавлении позиции', 'error');
+                        hadError = true;
+                        break;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showAppNotification('Ошибка соединения с сервером', 'error');
+                    hadError = true;
+                    break;
+                }
+            }
+
+            if (!hadError) {
+                closeDrawer();
+                showAppNotification('Позиции добавлены в возврат', 'success');
+                loadDetailData('return_items', parentId);
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Добавить в возврат';
+            }
+        });
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById('return-items-picker').innerHTML =
+            '<div style="color:#dc2626;">Ошибка при загрузке остатков прихода</div>';
+    }
+}
 
 document.addEventListener('click', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('td')) {
@@ -7174,7 +7500,14 @@ function openActiveEntityForm(action, item = null) {
                 openEntityForm(entity, actualItem);
             }
             break;
-
+        case 'Возврат запчастей':
+        case 'returns':
+            if (typeof openReturnForm === 'function') {
+                openReturnForm('returns', actualItem);
+            } else {
+                openEntityForm(entity, actualItem);
+            }
+            break;
         case 'Реализация':
         case 'realizations':
             if (typeof openRealizationForm === 'function') {
@@ -10215,6 +10548,10 @@ function getCurrentDetailEntity() {
         const res = 'move_items';
         return res;
     }
+    if (currentEntity === 'returns') {
+        const res = 'return_items';
+        return res;
+    }
     if (currentEntity === 'receipts') {
         const res = 'receipt_items';
         return res;
@@ -10445,6 +10782,8 @@ function openDetailForm(mode) {
     openAccidentForm(detailEntity, itemToEdit, parentId);
     } else if (detailEntity === 'receipt_items') {
         openReceiptItemsForm(itemToEdit, parentId);
+    }  else if (detailEntity === 'return_items') {
+        openReturnItemsForm(itemToEdit, parentId);
     } else if (detailEntity === 'move_items') {
         openMoveItemsForm(itemToEdit, parentId);
    } else if (detailEntity === 'repair_items') {
@@ -10665,6 +11004,7 @@ if (tableBody) {
         const entitiesWithDetails = [
             'receipts', 
             'moves', 
+            'returns',
             'cars', 
             'car_cards', 
             'accidents', 
@@ -11420,6 +11760,8 @@ const navMap = {
     'Оплатить счет': 'accident_payments',
     'События': 'accident_events',
     'Ремонт': 'repairs',
+    'Возврат запчастей':'returns',
+    'Детали возврата':'returns_items',
     'История ремонта': 'repair_history', 
     'История запчастей':'receipts_history',
     'Запчасти ремонта': 'repair_items', 
