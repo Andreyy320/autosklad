@@ -5231,8 +5231,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 AND spay.payment_month = TO_CHAR(rec.date, 'YYYY-MM')
                 AND (spay.warehouse_id = rec.warehouse_id OR spay.warehouse_id IS NULL)
             WHERE rec.is_posted = true
-  AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-  AND ($2::integer IS NULL OR p.id = $2::integer)
+              AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
             GROUP BY 
                 p.id, 
                 p.name, 
@@ -5243,8 +5242,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         `;
         
         const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
-       const pIdFilter = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
-const listResult = await pool.query(listQuery, [sIdList, pIdFilter]);
+        const listResult = await pool.query(listQuery, [sIdList]);
         res.json(listResult.rows);
 
     } catch (err) {
@@ -5665,63 +5663,7 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     }
 });
 
-router.post('/expenses_by_suppliers/:id/pay', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        const { id } = req.params;
-        const { amount, sklad_id, comment, receipt_ids } = req.body;
-        const paymentAmount = Number(amount);
-        if (!paymentAmount || paymentAmount <= 0) {
-            return res.status(400).json({ error: 'Некорректная сумма оплаты' });
-        }
-        const receiptIdsFilter = Array.isArray(receipt_ids) && receipt_ids.length > 0
-            ? receipt_ids.map(Number).filter(n => !isNaN(n)) : null;
 
-        await client.query('BEGIN');
-        const receiptsQuery = `
-            SELECT rec.id AS receipt_id,
-                COALESCE(sub_i.total_sum, 0) AS total_sum,
-                COALESCE(pay.paid_sum, 0) AS paid_sum,
-                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
-            FROM receipts rec
-            LEFT JOIN (SELECT receipt_id, SUM(total_rub) AS total_sum FROM receipt_items GROUP BY receipt_id) sub_i ON rec.id = sub_i.receipt_id
-            LEFT JOIN (SELECT receipt_id, SUM(amount) AS paid_sum FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id) pay ON rec.id = pay.receipt_id
-            WHERE rec.supplier_id = $1 AND rec.is_posted = true
-              AND ($2::integer IS NULL OR rec.warehouse_id = $2::integer)
-              AND ($3::int[] IS NULL OR rec.id = ANY($3::int[]))
-            ORDER BY rec.date ASC, rec.id ASC
-            FOR UPDATE OF rec
-        `;
-        const receiptsRes = await client.query(receiptsQuery, [id, sklad_id || null, receiptIdsFilter]);
-
-        let remaining = paymentAmount;
-        const appliedPayments = [];
-        for (const row of receiptsRes.rows) {
-            if (remaining <= 0) break;
-            const debt = Number(row.debt);
-            if (debt <= 0) continue;
-            const toApply = Math.min(remaining, debt);
-            await client.query(
-                `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, date) VALUES ($1, $2, $3, $4, $5, $6)`,
-                [id, row.receipt_id, toApply, comment || 'Оплата общего долга', req.headers['x-user-id'] || null, getServerNowString()]
-            );
-            appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
-            remaining -= toApply;
-        }
-        await client.query('COMMIT');
-
-        if (remaining > 0) {
-            return res.status(200).json({ success: true, warning: `Сумма превышает общий долг. Распределено: ${(paymentAmount - remaining).toFixed(2)}, остаток: ${remaining.toFixed(2)}`, appliedPayments });
-        }
-        res.status(200).json({ success: true, appliedPayments });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('❌ Ошибка при оплате общего долга:', err);
-        res.status(500).json({ error: 'Ошибка сервера при оплате' });
-    } finally {
-        client.release();
-    }
-});
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
 router.get('/get-receipt-logs', async (req, res) => {
     try {
