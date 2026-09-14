@@ -7895,9 +7895,9 @@ async function refreshData() {
     const lockedRepairId = window.currentRepairId;
       const lockedCustomerId = window.currentCustomerId;
     const lockedDebtorWarehouseId = window.currentDebtorWarehouseId;
-    const lockedReceiptsStartDate = window.currentReceiptsStartDate;
+       const lockedReceiptsStartDate = window.currentReceiptsStartDate;
     const lockedReceiptsEndDate = window.currentReceiptsEndDate;
-
+    const lockedExpenseMonthStr = window.currentExpenseMonthStr;
     if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad' || previousEntity === 'money_receipts_by_customers') {
         let parentParam = '';
         if (previousEntity === 'money_receipts_by_sklad') {
@@ -7915,22 +7915,25 @@ async function refreshData() {
         }
         await loadReceiptMainData(previousEntity, parentParam);
     }
-    else if (
+        else if (
         previousEntity === 'expenses_by_sklad' || 
+        previousEntity === 'expenses_by_suppliers_totals' ||
         previousEntity === 'expenses_by_suppliers' || 
         previousEntity === 'expenses_by_receipts' || 
         previousEntity === 'expense_items'
     ) {
         let parentParam = '';
-        if (previousEntity === 'expenses_by_suppliers') {
+        if (previousEntity === 'expenses_by_suppliers_totals') {
             parentParam = lockedSkladId || savedSelectedItem;
-        } else if (previousEntity === 'expenses_by_receipts') {
+        } else if (previousEntity === 'expenses_by_suppliers') {
             parentParam = lockedPostavhikId || savedSelectedItem;
+        } else if (previousEntity === 'expenses_by_receipts') {
+            parentParam = { postavhik_id: lockedPostavhikId, month_str: lockedExpenseMonthStr || null };
         } else if (previousEntity === 'expense_items') {
             parentParam = lockedReceiptId || savedSelectedItem;
         }
         await loadExpenseMainData(previousEntity, parentParam);
-    } 
+    }
     else {
         const activeLink = document.querySelector('.nav-link.active');
         const title = activeLink ? activeLink.innerText : 'Данные';
@@ -9508,10 +9511,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
         }
     } 
-    else if (currentExpenseView === 'expenses_by_receipts') {
+        else if (currentExpenseView === 'expenses_by_receipts') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
         if (postavhikId) window.currentPostavhikId = postavhikId;
         window.currentReceiptId = null;
+        window.currentExpenseMonthStr = (parentId && typeof parentId === 'object' && parentId.month_str) ? parentId.month_str : null;
 
         let skladId = window.currentSkladId || '';
         let currentPostavhik = window.currentPostavhikId || '';
