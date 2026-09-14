@@ -8360,7 +8360,7 @@ async function loadData(entity, title, customParams = {}) {
                 tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
                 tr.classList.add('selected-row');
 
-                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances'];
+                const entitiesWithDetails = ['receipts', 'moves', 'cars', 'car_cards', 'accidents', 'repairs', 'realizations', 'money_receipts', 'stock_movement', 'postavhik', 'counterparties', 'customers', 'expenses_by_receipts', 'stock_balances','returns'];
                 if (!entitiesWithDetails.includes(entity)) {
                     return;
                 }
@@ -8396,7 +8396,11 @@ async function loadData(entity, title, customParams = {}) {
                     loadDetailData('receipt_items', item.id);
                 } else if (entity === 'moves') {
                     loadDetailData('move_items', item.id);
-                } else if (entity === 'realizations') {
+                } 
+                 else if (entity === 'returns') {
+                loadDetailData('return_items', item.id);
+                }
+                else if (entity === 'realizations') {
                     const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                     loadDetailData(detailEntity, item.id);
