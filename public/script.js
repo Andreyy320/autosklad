@@ -5152,6 +5152,28 @@ async function openReceiptForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+                } else if (col.ref === 'postavhik') {
+            const refItems = await fetchReferenceData(col.ref);
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = refItem.name || refItem.title || refItem.name_full || `Запись #${refItem.id}`;
+                }
+            });
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => {
+                            const displayName = refItem.name || refItem.title || refItem.name_full || `Запись #${refItem.id}`;
+                            return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
         } else if (col.ref) {
             const refItems = await fetchReferenceData(col.ref);
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
@@ -5218,6 +5240,46 @@ async function openReceiptForm(entity, item = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
