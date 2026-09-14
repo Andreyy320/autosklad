@@ -7020,11 +7020,9 @@ async function openReturnForm(entity, item = null) {
                 <textarea name="comment" ${fieldLock} style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;">${item.comment || ''}</textarea>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
-                ${isPosted
-                    ? `<button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Закрыть</button>`
-                    : `<button type="submit" id="save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
-                       <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>`
-                }
+                ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
+                ${item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
+                <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #334151; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">${isPosted ? 'Закрыть' : 'Отмена'}</button>
             </div>
         </form>
     `;
@@ -7068,59 +7066,97 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список приходов:', err);
     }
 
+    // Удаление возврата прямо из формы (только для непроведённых — кнопка отсутствует в разметке для проведённых)
+    const deleteBtn = drawer.querySelector('#delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+            showConfirmModal(
+                'Подтверждение удаления',
+                'Вы уверены, что хотите удалить этот возврат?',
+                async () => {
+                    const currentUserId = localStorage.getItem('currentUserId') || '';
+                    try {
+                        const response = await fetch(`/api/returns/${item.id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-user-id': currentUserId
+                            }
+                        });
+
+                        if (response.ok) {
+                            closeDrawer();
+                            showAppNotification('Возврат успешно удалён', 'success');
+                            selectedItem = null;
+                            refreshData();
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showAppNotification(errData.error || 'Ошибка при удалении возврата', 'error');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showAppNotification('Ошибка соединения с сервером', 'error');
+                    }
+                }
+            );
+        });
+    }
+
     let isSubmitting = false;
-    document.getElementById('entity-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-        isSubmitting = true;
+    const entityForm = document.getElementById('entity-form');
+    if (entityForm) {
+        entityForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (isSubmitting) return;
+            isSubmitting = true;
 
-        const saveButton = document.getElementById('save-btn');
-        if (saveButton) saveButton.disabled = true;
+            const saveButton = document.getElementById('save-btn');
+            if (saveButton) saveButton.disabled = true;
 
-        const form = e.target;
-        const formData = new FormData(form);
-        const data = {};
-        formData.forEach((value, key) => { data[key] = value; });
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = {};
+            formData.forEach((value, key) => { data[key] = value; });
 
-        if (!data.receipt_id) {
-            showAppNotification('Выберите приход, из которого делается возврат', 'warning');
-            isSubmitting = false;
-            if (saveButton) saveButton.disabled = false;
-            return;
-        }
+            if (!data.receipt_id) {
+                showAppNotification('Выберите приход, из которого делается возврат', 'warning');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+                return;
+            }
 
-        try {
-            const isEdit = item && item.id;
-            const url = isEdit ? `/api/returns/${item.id}` : `/api/returns`;
-            const method = isEdit ? 'PUT' : 'POST';
-            const currentUserId = localStorage.getItem('currentUserId') || '';
+            try {
+                const isEdit = item && item.id;
+                const url = isEdit ? `/api/returns/${item.id}` : `/api/returns`;
+                const method = isEdit ? 'PUT' : 'POST';
+                const currentUserId = localStorage.getItem('currentUserId') || '';
 
-            const response = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId },
-                body: JSON.stringify(data)
-            });
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json', 'x-user-id': currentUserId },
+                    body: JSON.stringify(data)
+                });
 
-            if (response.ok) {
-                closeDrawer();
-                showAppNotification('Документ возврата создан', 'success');
-                if (!isEdit) selectedItem = null;
-                refreshData();
-            } else {
-                const errData = await response.json().catch(() => ({}));
-                showAppNotification(errData.error || 'Ошибка при сохранении', 'error');
+                if (response.ok) {
+                    closeDrawer();
+                    showAppNotification('Документ возврата создан', 'success');
+                    if (!isEdit) selectedItem = null;
+                    refreshData();
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    showAppNotification(errData.error || 'Ошибка при сохранении', 'error');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                showAppNotification('Ошибка соединения с сервером', 'error');
                 isSubmitting = false;
                 if (saveButton) saveButton.disabled = false;
             }
-        } catch (err) {
-            console.error(err);
-            showAppNotification('Ошибка соединения с сервером', 'error');
-            isSubmitting = false;
-            if (saveButton) saveButton.disabled = false;
-        }
-    });
+        });
+    }
 }
-
 async function openReturnItemsForm(itemToEdit, parentId) {
     if (!selectedItem || !selectedItem.receipt_id) {
         showAppNotification('Не удалось определить приход для этого возврата', 'error');
