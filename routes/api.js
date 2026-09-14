@@ -5581,7 +5581,6 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
     }
 });
 
-
 router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
