@@ -2030,6 +2030,7 @@ const tableConfig = {
         { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Сумма затрат', width: '110px', align: 'right' },
+        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
@@ -2037,6 +2038,7 @@ const tableConfig = {
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
@@ -2052,6 +2054,7 @@ const tableConfig = {
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
+            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
     ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
@@ -2089,7 +2092,7 @@ const tableConfig = {
     }
     },
 
-   expenses_by_receipts: {
+  expenses_by_receipts: {
     title: 'Список накладных (документов прихода)',
     columns: [
         { field: 'doc_number', label: '№ Документа', width: '120px' },
@@ -2098,12 +2101,14 @@ const tableConfig = {
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Сумма', width: '110px', align: 'right' },
+        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' }
     ],
     render: (item) => {
         const qty = Number(item.total_qty || 0).toFixed(2);
         const sum = Number(item.total_expense_sum || 0).toFixed(2);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
         const debtSumNum = Number(item.debt_sum || 0);
@@ -2120,6 +2125,7 @@ const tableConfig = {
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right; color: #334155;">${qty}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
+            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}

@@ -5198,17 +5198,17 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 JOIN receipts rec ON sp.receipt_id = rec.id
                 GROUP BY sp.supplier_id, rec.warehouse_id, TO_CHAR(rec.date, 'YYYY-MM')
             )
-            SELECT 
+                      SELECT 
                 p.id || '_' || TO_CHAR(rec.date, 'YYYY-MM') AS id,
                 p.id AS postavhik_id,
                 COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                 sk.name::text AS sklad_name,
-                -- Обязательно отдаем дату или месяц для группировки на фронте
                 MAX(rec.date) AS date,
                 TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
                 COALESCE(spay.total_paid, 0)::numeric AS total_paid,
                 (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
             FROM receipts rec
@@ -5267,8 +5267,9 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 rec.date,
                 TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
                 TO_CHAR(rec.date, 'Month YYYY') AS month_name_ru,
-                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
+                                COALESCE(sub_i.total_qty, 0)::numeric AS total_qty,
                 COALESCE(sub_i.total_sum, 0)::numeric AS total_expense_sum,
+                COALESCE(sub_ret.total_returned, 0)::numeric AS total_returned_sum,
                 COALESCE(pay.paid_sum, 0)::numeric AS total_paid,
                 (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0))::numeric AS debt_sum
             FROM receipts rec
