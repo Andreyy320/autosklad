@@ -11526,8 +11526,9 @@ if (tableBodyForDblClick) {
                 openRepairForm(currentEntity, item); 
             } else if (currentEntity === 'accidents') {
     openAccidentForm('accidents', item);
-            }
-            
+            } else if (currentEntity === 'returns' && typeof openReturnForm === 'function') {
+      openReturnForm(currentEntity, item);
+        }
             else if (currentEntity === 'receipts') {
                 openReceiptForm(currentEntity, item);
             } else if (currentEntity === 'moves') {
