@@ -2022,17 +2022,19 @@ const tableConfig = {
         `;
     }
     },
+   // Уровень 2: клик по поставщику -> список его месяцев.
    expenses_by_suppliers: {
-    title: 'Аналитика закупленных товаров по поставщикам',
+    title: 'Поставщик — по месяцам',
     columns: [
-        { field: 'postavhik_name', label: 'Поставщик', width: '180px' },
+        { field: 'month_str', label: 'Месяц', width: '90px' },
         { field: 'sklad_name', label: 'Склад поступления', width: '120px' },
         { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
-        { field: 'total_expense_sum', label: 'Сумма затрат', width: '110px', align: 'right' },
+        { field: 'total_expense_sum', label: 'Закупка за месяц', width: '110px', align: 'right' },
         { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
-        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
-        { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено за месяц', width: '110px', align: 'right' },
+        { field: 'total_debt', label: 'Долг за месяц', width: '110px', align: 'right' },
+        { field: 'cumulative_debt', label: 'Долг накопительно', width: '120px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
@@ -2042,14 +2044,16 @@ const tableConfig = {
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
+        const cumulativeDebtNum = Number(item.cumulative_debt || 0);
+        const cumulativeDebt = cumulativeDebtNum.toFixed(2);
        const actionHtml = debtNum <= 0 
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-    : `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить
       </button>`;
 
         return `
-            <td><span style="font-weight: 600; color: #0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
+            <td><span style="font-weight: 600; color: #0f172a;">${item.month_str || '—'}</span></td>
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
@@ -2057,10 +2061,13 @@ const tableConfig = {
             <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
+    ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
                 }
             </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
+            </td>
+            <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};">
+                ${cumulativeDebt}
             </td>
             <td style="text-align: center;">
                 ${actionHtml}
@@ -2091,7 +2098,45 @@ const tableConfig = {
         `;
     }
     },
+   // Уровень 1: Склад -> Поставщики. Одна строка на поставщика, долг НАКОПЛЕННЫЙ по всем месяцам сразу.
+    expenses_by_suppliers_totals: {
+    title: 'Поставщики — общий долг',
+    columns: [
+        { field: 'postavhik_name', label: 'Поставщик', width: '200px' },
+        { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
+        { field: 'total_expense_sum', label: 'Сумма закупок', width: '120px', align: 'right' },
+        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'total_debt', label: 'Долг (всего)', width: '120px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
+    ],
+    render: (item) => {
+        const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const debtNum = Number(item.total_debt || 0);
+        const totalDebt = debtNum.toFixed(2);
+        const actionHtml = debtNum <= 0
+            ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
+            : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name}', '')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить всё
+              </button>`;
 
+        return `
+            <td><span style="font-weight: 600; color: #0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
+            <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
+            <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
+            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
+            <td style="text-align: right; color: #334155;">${totalPaid}</td>
+            <td style="text-align: right; font-weight: 600; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
+                ${totalDebt}
+            </td>
+            <td style="text-align: center;">
+                ${actionHtml}
+            </td>
+        `;
+    }
+    },
   expenses_by_receipts: {
     title: 'Список накладных (документов прихода)',
     columns: [
@@ -9122,18 +9167,21 @@ async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) 
 
 async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     const drawer = getOrCreateDrawer();
-    
+    const isPayAll = !monthStr || monthStr === 'undefined' || monthStr === 'null';
+    const headerLabel = isPayAll ? `Оплата долга поставщику: ${titleLabel}` : `Оплата за месяц: ${titleLabel}`;
+    const amountLabel = isPayAll ? 'Общий накопленный долг' : 'Сумма долга за месяц';
+
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">Оплата за месяц: ${titleLabel}</h3>
+            <h3 style="margin: 0; font-size: 16px; color: #0f172a; font-weight: 600;">${headerLabel}</h3>
             <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">&times;</button>
         </div>
 
         <div id="pay-receipts-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
 
-        <form id="pay-form" onsubmit="submitPayment(event, '${postavhikId}', '${monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitPayment(event, '${postavhikId}', '${isPayAll ? '' : monthStr}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма долга за месяц: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">${amountLabel}: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>
                 <input type="number" step="0.01" id="payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
@@ -9154,13 +9202,18 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     openDrawer();
 
     try {
-        const [year, month] = monthStr.split('-').map(Number);
-        const startDate = `${monthStr}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
         const skladParam = window.currentSkladId ? `&sklad_id=${window.currentSkladId}` : '';
+        let fetchUrl = `/api/expenses_by_receipts?postavhik_id=${postavhikId}${skladParam}`;
 
-        const resp = await fetch(`/api/expenses_by_receipts?postavhik_id=${postavhikId}&start_date=${startDate}&end_date=${endDate}${skladParam}`);
+        if (!isPayAll) {
+            const [year, month] = monthStr.split('-').map(Number);
+            const startDate = `${monthStr}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+            fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        const resp = await fetch(fetchUrl);
         const listEl = document.getElementById('pay-receipts-list');
         if (!listEl) return;
 
@@ -9173,7 +9226,9 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
         const unpaid = (Array.isArray(receipts) ? receipts : []).filter(r => Number(r.debt_sum || 0) > 0);
 
         if (unpaid.length === 0) {
-            listEl.innerHTML = '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
+            listEl.innerHTML = isPayAll
+                ? '<span>Неоплаченных накладных у этого поставщика не найдено.</span>'
+                : '<span>Неоплаченных накладных за этот месяц не найдено.</span>';
             return;
         }
         window._payUnpaidReceipts = unpaid;
@@ -9294,10 +9349,13 @@ async function submitPayment(event, postavhikId, monthStr) {
             body: JSON.stringify(payload)
         });
 
-        if (response.ok) {
+                if (response.ok) {
             closeDrawer();
-            showAppNotification('Оплата за месяц успешно сохранена', 'success');
+            showAppNotification(monthStr ? 'Оплата за месяц успешно сохранена' : 'Оплата долга успешно сохранена', 'success');
             if (typeof loadTableData === 'function') loadTableData();
+            if (typeof loadExpenseMainData === 'function' && window._currentExpenseView) {
+                loadExpenseMainData(window._currentExpenseView, window._currentExpenseParentId);
+            }
         } else {
             const errData = await response.json().catch(() => ({}));
             showAppNotification(errData.error || 'Ошибка при сохранении платежа', 'error');
@@ -9371,7 +9429,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     let currentExpenseView = entity;
     resetSharedUiForEntity(entity);
 
-    if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+    window._currentExpenseView = entity;
+    window._currentExpenseParentId = parentId;
+
+    const EXPENSE_VIEWS = ['expenses_by_sklad', 'expenses_by_suppliers_totals', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'];
+    if (EXPENSE_VIEWS.includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
 
@@ -9406,16 +9468,15 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) backBtnElement.style.display = 'none';
     } 
-    else if (currentExpenseView === 'expenses_by_suppliers') {
+        else if (currentExpenseView === 'expenses_by_suppliers_totals') {
         let skladId = parentId && typeof parentId === 'object' ? (parentId.sklad_id || parentId.warehouse_id || parentId.id) : parentId;
         if (skladId) window.currentSkladId = skladId;
         window.currentPostavhikId = null;
         window.currentReceiptId = null;
 
-        fetchUrl = `/api/expenses_by_suppliers${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
+        fetchUrl = `/api/expenses_by_suppliers_totals${window.currentSkladId ? '?sklad_id=' + window.currentSkladId : ''}`;
 
         if (detailContainer) detailContainer.style.display = 'none';
-
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -9424,6 +9485,26 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
             backBtnElement.onclick = () => loadExpenseMainData('expenses_by_sklad');
+        }
+    }
+    else if (currentExpenseView === 'expenses_by_suppliers') {
+        let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
+        if (postavhikId) window.currentPostavhikId = postavhikId;
+        window.currentReceiptId = null;
+
+        let currentPostavhik = window.currentPostavhikId || '';
+
+        fetchUrl = `/api/expenses_by_suppliers?postavhik_id=${currentPostavhik}${window.currentSkladId ? '&sklad_id=' + window.currentSkladId : ''}`;
+
+        if (detailContainer) detailContainer.style.display = 'none';
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        const backBtnElement = document.getElementById('btn-back-expense');
+        if (backBtnElement) {
+            backBtnElement.style.display = 'inline-block';
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
         }
     } 
     else if (currentExpenseView === 'expenses_by_receipts') {
@@ -9441,12 +9522,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             const startDate = `${parentId.month_str}-01`;
             const lastDay = new Date(year, month, 0).getDate();
             const endDate = `${parentId.month_str}-${String(lastDay).padStart(2, '0')}`;
-            
             fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
         }
 
         if (detailContainer) detailContainer.style.display = 'none';
-
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -9454,9 +9533,9 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         const backBtnElement = document.getElementById('btn-back-expense');
         if (backBtnElement) {
             backBtnElement.style.display = 'inline-block';
-            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers', window.currentSkladId);
+            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers', window.currentPostavhikId);
         }
-    } 
+    }
     else if (currentExpenseView === 'expense_items') {
         let receiptId = parentId && typeof parentId === 'object' ? (parentId.receipt_id || parentId.id || parentId.document_id) : parentId;
         
@@ -9486,7 +9565,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         return; 
     }
 
-    if (['expenses_by_sklad', 'expenses_by_suppliers', 'expenses_by_receipts', 'expense_items'].includes(currentExpenseView)) {
+       if (EXPENSE_VIEWS.includes(currentExpenseView)) {
         currentEntity = currentExpenseView;
     }
 
@@ -10691,7 +10770,9 @@ if (e.target.closest('button, [onclick]')) {
                 const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
                 if (actionButtonsBar) actionButtonsBar.style.display = 'none';
 
-                if (activeEntity === 'expenses_by_sklad') {
+                                if (activeEntity === 'expenses_by_sklad') {
+                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers_totals', selectedItem);
+                } else if (activeEntity === 'expenses_by_suppliers_totals') {
                     if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
                 } else if (activeEntity === 'expenses_by_suppliers') {
                     if (typeof loadExpenseMainData === 'function') {

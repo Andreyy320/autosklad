@@ -5197,52 +5197,64 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 FROM supplier_payments sp
                 JOIN receipts rec ON sp.receipt_id = rec.id
                 GROUP BY sp.supplier_id, rec.warehouse_id, TO_CHAR(rec.date, 'YYYY-MM')
+            ),
+            monthly AS (
+                SELECT 
+                    p.id || '_' || TO_CHAR(rec.date, 'YYYY-MM') AS id,
+                    p.id AS postavhik_id,
+                    COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                    sk.name::text AS sklad_name,
+                    MAX(rec.date) AS date,
+                    TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
+                    COUNT(DISTINCT rec.id)::integer AS total_receipts,
+                    COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
+                    COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
+                    COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
+                    COALESCE(spay.total_paid, 0)::numeric AS total_paid,
+                    (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
+                FROM receipts rec
+                JOIN postavhik p ON rec.supplier_id = p.id
+                LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
+                LEFT JOIN (
+                    SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+                    FROM receipt_items ri
+                    GROUP BY ri.receipt_id
+                ) sub_i ON rec.id = sub_i.receipt_id
+                LEFT JOIN (
+                    SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+                    FROM return_items reti
+                    JOIN returns ret ON reti.return_id = ret.id
+                    WHERE ret.is_posted = true
+                    GROUP BY ret.receipt_id
+                ) sub_ret ON rec.id = sub_ret.receipt_id
+                LEFT JOIN supplier_month_paid spay 
+                    ON spay.supplier_id = p.id 
+                    AND spay.payment_month = TO_CHAR(rec.date, 'YYYY-MM')
+                    AND (spay.warehouse_id = rec.warehouse_id OR spay.warehouse_id IS NULL)
+                WHERE rec.is_posted = true
+                  AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
+                  AND ($2::integer IS NULL OR p.id = $2::integer)
+                GROUP BY 
+                    p.id, 
+                    p.name, 
+                    sk.name, 
+                    TO_CHAR(rec.date, 'YYYY-MM'),
+                    spay.total_paid
             )
-                      SELECT 
-                p.id || '_' || TO_CHAR(rec.date, 'YYYY-MM') AS id,
-                p.id AS postavhik_id,
-                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-                sk.name::text AS sklad_name,
-                MAX(rec.date) AS date,
-                TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
-                COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
-                COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
-            FROM receipts rec
-            JOIN postavhik p ON rec.supplier_id = p.id
-            LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
-            LEFT JOIN (
-                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-                FROM receipt_items ri
-                GROUP BY ri.receipt_id
-            ) sub_i ON rec.id = sub_i.receipt_id
-            LEFT JOIN (
-                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
-                FROM return_items reti
-                JOIN returns ret ON reti.return_id = ret.id
-                WHERE ret.is_posted = true
-                GROUP BY ret.receipt_id
-            ) sub_ret ON rec.id = sub_ret.receipt_id
-            LEFT JOIN supplier_month_paid spay 
-                ON spay.supplier_id = p.id 
-                AND spay.payment_month = TO_CHAR(rec.date, 'YYYY-MM')
-                AND (spay.warehouse_id = rec.warehouse_id OR spay.warehouse_id IS NULL)
-            WHERE rec.is_posted = true
-              AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-            GROUP BY 
-                p.id, 
-                p.name, 
-                sk.name, 
-                TO_CHAR(rec.date, 'YYYY-MM'),
-                spay.total_paid
+            SELECT 
+                *,
+                SUM(total_debt) OVER (
+                    PARTITION BY postavhik_id 
+                    ORDER BY month_str ASC 
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                )::numeric AS cumulative_debt
+            FROM monthly
             ORDER BY month_str DESC, total_expense_sum DESC;
         `;
         
         const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
-        const listResult = await pool.query(listQuery, [sIdList]);
+        const pIdList = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
+        const listResult = await pool.query(listQuery, [sIdList, pIdList]);
         res.json(listResult.rows);
 
     } catch (err) {
@@ -5573,28 +5585,21 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
 router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { id } = req.params; // id поставщика
+        const { id } = req.params;
         const { amount, month_str, sklad_id, comment, receipt_ids } = req.body;
         const paymentAmount = Number(amount);
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Некорректная сумма оплаты' });
         }
-        if (!month_str) {
-            return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
-        }
 
-        // Если пользователь отметил конкретные накладные — сузим выборку только до них.
-        // Если нет (null/пусто) — поведение как раньше: все накладные поставщика за месяц.
+        const monthFilter = (month_str && month_str !== '' && month_str !== 'undefined' && month_str !== 'null') ? month_str : null;
+
         const receiptIdsFilter = Array.isArray(receipt_ids) && receipt_ids.length > 0
             ? receipt_ids.map(Number).filter(n => !isNaN(n))
             : null;
 
         await client.query('BEGIN');
 
-        // Берём накладные этого поставщика за этот месяц (и склад, если указан),
-        // с суммой ДОЛГА по каждой (закупка минус уже оплаченное), от старых к новым.
-        // Если receiptIdsFilter задан — ограничиваемся только отмеченными накладными.
-        // FOR UPDATE — блокируем строки, чтобы два одновременных платежа не перепутали остатки долга.
         const receiptsQuery = `
             SELECT 
                 rec.id AS receipt_id,
@@ -5612,13 +5617,13 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
             ) pay ON rec.id = pay.receipt_id
             WHERE rec.supplier_id = $1
               AND rec.is_posted = true
-              AND TO_CHAR(rec.date, 'YYYY-MM') = $2
+              AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
               AND ($3::integer IS NULL OR rec.warehouse_id = $3::integer)
               AND ($4::int[] IS NULL OR rec.id = ANY($4::int[]))
             ORDER BY rec.date ASC, rec.id ASC
             FOR UPDATE OF rec
         `;
-        const receiptsRes = await client.query(receiptsQuery, [id, month_str, sklad_id || null, receiptIdsFilter]);
+        const receiptsRes = await client.query(receiptsQuery, [id, monthFilter, sklad_id || null, receiptIdsFilter]);
 
         let remaining = paymentAmount;
         const appliedPayments = [];
@@ -5626,14 +5631,14 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
         for (const row of receiptsRes.rows) {
             if (remaining <= 0) break;
             const debt = Number(row.debt);
-            if (debt <= 0) continue; // эта накладная уже полностью оплачена — пропускаем
+            if (debt <= 0) continue;
 
             const toApply = Math.min(remaining, debt);
 
-                        await client.query(
+            await client.query(
                 `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, date)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [id, row.receipt_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
+                [id, row.receipt_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
             );
 
             appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
@@ -5643,11 +5648,9 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
         await client.query('COMMIT');
 
         if (remaining > 0) {
-            // Внесённая сумма оказалась больше общего долга за этот месяц —
-            // уже распределённую часть не откатываем, просто сообщаем об остатке
             return res.status(200).json({
                 success: true,
-                warning: `Сумма превышает долг за месяц. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
+                warning: `Сумма превышает долг. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
                 appliedPayments
             });
         }
@@ -5656,13 +5659,12 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('❌ Ошибка при оплате за месяц (pay_month):', err);
+        console.error('❌ Ошибка при оплате (pay_month):', err);
         res.status(500).json({ error: 'Ошибка сервера при оплате' });
     } finally {
         client.release();
     }
 });
-
 
 // 1. Получение журнала операций для приходов из таблицы receipt_logs (GET)
 router.get('/get-receipt-logs', async (req, res) => {
