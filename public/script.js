@@ -11527,7 +11527,9 @@ async function loadDetailData(entity, parentId) {
     let fetchUrl = '';
 
     if (entity === 'move_items') {
-        queryParamName = 'move_id';
+    queryParamName = 'move_id';
+    } else if (entity === 'return_items') {
+    queryParamName = 'return_id';
     } else if (entity === 'expense_items') {
         queryParamName = 'receipt_id';
     } else if (entity === 'realization_items' || entity === 'realization_payments' || entity === 'realizations' || entity === 'realization_works') {
