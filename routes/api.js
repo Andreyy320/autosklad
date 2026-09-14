@@ -1887,6 +1887,218 @@ router.get('/stock_balances', async (req, res) => {
     }
 });
 
+router.get('/part_movement_details', async (req, res) => {
+    try {
+        const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
+
+        if (!zaphasti_id) {
+            return res.status(400).json({ error: "Не указан zaphasti_id" });
+        }
+
+        const queryParams = [zaphasti_id];
+        let paramIndex = 2;
+
+        let currentWarehouseId = null;
+        let warehouseCondition = '';
+
+        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
+            currentWarehouseId = parseInt(warehouse_id, 10);
+            queryParams.push(currentWarehouseId);
+            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
+            paramIndex++;
+        }
+
+        let dateCondition = '';
+        if (start_date && start_date.trim() !== '' && start_date !== 'undefined' && start_date !== 'null') {
+            queryParams.push(start_date.replace('T', ' '));
+            dateCondition += ` AND op_date >= $${paramIndex}::timestamp`;
+            paramIndex++;
+        }
+        if (end_date && end_date.trim() !== '' && end_date !== 'undefined' && end_date !== 'null') {
+            queryParams.push(end_date.replace('T', ' '));
+            dateCondition += ` AND op_date <= $${paramIndex}::timestamp`;
+            paramIndex++;
+        }
+
+        if (currentWarehouseId !== null) {
+            queryParams.push(currentWarehouseId);
+        }
+        const whParamIndex = currentWarehouseId !== null ? paramIndex++ : null;
+
+        const query = `
+            WITH all_ops AS (
+                -- 1. Приходы (Поставщик -> Склад)
+                SELECT 
+                    r.date AS op_date,
+                    r.doc_number AS doc_num,
+                    'Приход запчастей' AS doc_type,
+                    COALESCE(p.name, 'Поставщик не указан') AS source_info,
+                    CONCAT(COALESCE(s.name, 'Склад #' || r.warehouse_id), ' | МОЛ: ', COALESCE(u.name, 'не назначен')) AS dest_info,
+                    ri.quantity AS qty,
+                    COALESCE(ri.price_rub, ri.price, 0) AS price,
+                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum,
+                    ri.description,
+                    NULL::int AS warehouse_from_id,
+                    r.warehouse_id AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM receipt_items ri
+                JOIN receipts r ON ri.receipt_id = r.id
+                LEFT JOIN postavhik p ON r.supplier_id = p.id
+                LEFT JOIN skladi s ON r.warehouse_id = s.id
+                LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
+                LEFT JOIN users u ON m_mol.user_id = u.id
+                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL
+
+                UNION ALL
+
+                -- 2. Перемещения (Склад -> Склад) — цена берётся строго из последнего прихода на момент даты перемещения (без наценок)
+                SELECT 
+                    m.date AS op_date,
+                    m.doc_number AS doc_num,
+                    'Перемещение' AS doc_type,
+                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
+                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
+                    CASE 
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
+                        ELSE mi.quantity
+                    END AS qty,
+                    COALESCE(lr.price, mi.price, 0) AS price,
+                    CASE 
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(lr.price, mi.price, 0))
+                        ELSE (mi.quantity * COALESCE(lr.price, mi.price, 0))
+                    END AS sum,
+                    mi.description,
+                    m.warehouse_from_id,
+                    m.warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
+                LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
+                LEFT JOIN users u_from ON mol_from.user_id = u_from.id
+                LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
+                LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
+                LEFT JOIN users u_to ON mol_to.user_id = u_to.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = mi.zaphasti_id AND r_p.date <= m.date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr ON true
+                WHERE mi.zaphasti_id = $1 
+                  AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
+                  AND (m.is_posted::text IN ('true', '1', '2'))
+
+                UNION ALL
+
+                -- 3. Списания в ремонт (Склад -> Ремонт) — по чистой закупочной цене
+                SELECT 
+                    rep.doc_date AS op_date,
+                    rep.doc_number AS doc_num,
+                    'Списание в ремонт' AS doc_type,
+                    CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
+                    CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
+                    (-1 * ri_rep.quantity) AS qty,
+                    COALESCE(lr_rep.price, ri_rep.price, 0) AS price,
+                    (-1 * ri_rep.quantity * COALESCE(lr_rep.price, ri_rep.price, 0)) AS sum,
+                    ri_rep.description,
+                    rep.warehouse_id AS warehouse_from_id,
+                    NULL::int AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM repair_items ri_rep
+                JOIN repairs rep ON ri_rep.repair_id = rep.id
+                LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
+                LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
+                LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
+                LEFT JOIN cars car ON rep.car_id = car.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_rep.zaphast_id AND r_p.date <= rep.doc_date
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rep ON true
+                WHERE ri_rep.zaphast_id = $1 
+                  AND rep.warehouse_id IS NOT NULL 
+                  AND (rep.is_posted::text IN ('true', '1', '2'))
+
+                UNION ALL
+
+                -- 4. Реализации / Продажи (Склад -> Покупатель) — по чистой закупочной цене
+                SELECT 
+                    COALESCE(r_rel.doc_date, NOW()) AS op_date,
+                    CAST(r_rel.id AS VARCHAR) AS doc_num,
+                    'Реализация (продажа)' AS doc_type,
+                    CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
+                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
+                    (-1 * ri_rel.quantity) AS qty,
+                    COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
+                    ri_rel.description,
+                    r_rel.sklad_id AS warehouse_id,
+                    NULL::int AS warehouse_to_id,
+                    r_rel.sklad_id AS sklad_id
+                FROM realization_items ri_rel
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
+                LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
+                LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
+                LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
+                LEFT JOIN customers cust ON r_rel.customer_id = cust.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_rel.zaphasti_id AND r_p.date <= COALESCE(r_rel.doc_date, NOW())
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_rel ON true
+                WHERE ri_rel.zaphasti_id = $1 
+                  AND r_rel.sklad_id IS NOT NULL 
+                  AND (r_rel.is_posted::text IN ('true', '1', '2'))
+
+                UNION ALL
+
+                -- 5. Возвраты поставщику (Склад -> Поставщик) — списание происходит сразу при добавлении позиции возврата,
+                --    поэтому здесь, как и в блоке "Приходы", is_posted не проверяем
+                SELECT 
+                    COALESCE(ret.fact_date, ret.date) AS op_date,
+                    ret.doc_number AS doc_num,
+                    'Возврат поставщику' AS doc_type,
+                    CONCAT(COALESCE(s_ret.name, 'Склад'), ' | МОЛ: не указан') AS source_info,
+                    CONCAT('Поставщик: ', COALESCE(p_ret.name, 'Не указан')) AS dest_info,
+                    (-1 * reti.quantity) AS qty,
+                    COALESCE(reti.price_rub, 0) AS price,
+                    (-1 * reti.total_rub) AS sum,
+                    NULL AS description,
+                    ret.warehouse_id AS warehouse_from_id,
+                    NULL::int AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
+                LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
+                WHERE reti.zaphasti_id = $1 
+                  AND ret.warehouse_id IS NOT NULL
+            )
+            SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
+            FROM all_ops
+            WHERE 1=1 ${warehouseCondition} ${dateCondition}
+            ORDER BY op_date DESC;
+        `;
+
+        const result = await pool.query(query, queryParams);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error("Ошибка в /part_movement_details:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
@@ -2221,192 +2433,8 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-router.get('/part_movement_details', async (req, res) => {
-    try {
-        const { zaphasti_id, warehouse_id, start_date, end_date } = req.query;
 
-        if (!zaphasti_id) {
-            return res.status(400).json({ error: "Не указан zaphasti_id" });
-        }
 
-        const queryParams = [zaphasti_id];
-        let paramIndex = 2;
-
-        let currentWarehouseId = null;
-        let warehouseCondition = '';
-
-        if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
-            currentWarehouseId = parseInt(warehouse_id, 10);
-            queryParams.push(currentWarehouseId);
-            warehouseCondition += ` AND (warehouse_from_id = $${paramIndex}::int OR warehouse_to_id = $${paramIndex}::int OR sklad_id = $${paramIndex}::int)`;
-            paramIndex++;
-        }
-
-        let dateCondition = '';
-        if (start_date && start_date.trim() !== '' && start_date !== 'undefined' && start_date !== 'null') {
-            queryParams.push(start_date.replace('T', ' '));
-            dateCondition += ` AND op_date >= $${paramIndex}::timestamp`;
-            paramIndex++;
-        }
-        if (end_date && end_date.trim() !== '' && end_date !== 'undefined' && end_date !== 'null') {
-            queryParams.push(end_date.replace('T', ' '));
-            dateCondition += ` AND op_date <= $${paramIndex}::timestamp`;
-            paramIndex++;
-        }
-
-        if (currentWarehouseId !== null) {
-            queryParams.push(currentWarehouseId);
-        }
-        const whParamIndex = currentWarehouseId !== null ? paramIndex++ : null;
-
-        const query = `
-            WITH all_ops AS (
-                -- 1. Приходы (Поставщик -> Склад)
-                SELECT 
-                    r.date AS op_date,
-                    r.doc_number AS doc_num,
-                    'Приход запчастей' AS doc_type,
-                    COALESCE(p.name, 'Поставщик не указан') AS source_info,
-                    CONCAT(COALESCE(s.name, 'Склад #' || r.warehouse_id), ' | МОЛ: ', COALESCE(u.name, 'не назначен')) AS dest_info,
-                    ri.quantity AS qty,
-                    COALESCE(ri.price_rub, ri.price, 0) AS price,
-                    (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum,
-                    ri.description,
-                    NULL::int AS warehouse_from_id,
-                    r.warehouse_id AS warehouse_to_id,
-                    NULL::int AS sklad_id
-                FROM receipt_items ri
-                JOIN receipts r ON ri.receipt_id = r.id
-                LEFT JOIN postavhik p ON r.supplier_id = p.id
-                LEFT JOIN skladi s ON r.warehouse_id = s.id
-                LEFT JOIN mol m_mol ON r.mol_id = m_mol.id
-                LEFT JOIN users u ON m_mol.user_id = u.id
-                WHERE ri.zaphasti_id = $1 AND r.warehouse_id IS NOT NULL
-
-                UNION ALL
-
-                -- 2. Перемещения (Склад -> Склад) — цена берётся строго из последнего прихода на момент даты перемещения (без наценок)
-                SELECT 
-                    m.date AS op_date,
-                    m.doc_number AS doc_num,
-                    'Перемещение' AS doc_type,
-                    CONCAT(COALESCE(s_from.name, 'Склад'), ' | МОЛ: ', COALESCE(u_from.name, 'не указан')) AS source_info,
-                    CONCAT(COALESCE(s_to.name, 'Склад'), ' | МОЛ: ', COALESCE(u_to.name, 'не указан')) AS dest_info,
-                    CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
-                        ELSE mi.quantity
-                    END AS qty,
-                    COALESCE(lr.price, mi.price, 0) AS price,
-                    CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(lr.price, mi.price, 0))
-                        ELSE (mi.quantity * COALESCE(lr.price, mi.price, 0))
-                    END AS sum,
-                    mi.description,
-                    m.warehouse_from_id,
-                    m.warehouse_to_id,
-                    NULL::int AS sklad_id
-                FROM move_items mi
-                JOIN moves m ON mi.move_id = m.id
-                LEFT JOIN skladi s_from ON m.warehouse_from_id = s_from.id
-                LEFT JOIN mol mol_from ON m.mol_from_id = mol_from.id
-                LEFT JOIN users u_from ON mol_from.user_id = u_from.id
-                LEFT JOIN skladi s_to ON m.warehouse_to_id = s_to.id
-                LEFT JOIN mol mol_to ON m.mol_to_id = mol_to.id
-                LEFT JOIN users u_to ON mol_to.user_id = u_to.id
-                LEFT JOIN LATERAL (
-                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
-                    FROM receipt_items ri_p
-                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
-                    WHERE ri_p.zaphasti_id = mi.zaphasti_id AND r_p.date <= m.date
-                    ORDER BY r_p.date DESC, r_p.id DESC
-                    LIMIT 1
-                ) lr ON true
-                WHERE mi.zaphasti_id = $1 
-                  AND (m.warehouse_from_id IS NOT NULL OR m.warehouse_to_id IS NOT NULL) 
-                  AND (m.is_posted::text IN ('true', '1', '2'))
-
-                UNION ALL
-
-                -- 3. Списания в ремонт (Склад -> Ремонт) — по чистой закупочной цене
-                SELECT 
-                    rep.doc_date AS op_date,
-                    rep.doc_number AS doc_num,
-                    'Списание в ремонт' AS doc_type,
-                    CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
-                    CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
-                    (-1 * ri_rep.quantity) AS qty,
-                    COALESCE(lr_rep.price, ri_rep.price, 0) AS price,
-                    (-1 * ri_rep.quantity * COALESCE(lr_rep.price, ri_rep.price, 0)) AS sum,
-                    ri_rep.description,
-                    rep.warehouse_id AS warehouse_from_id,
-                    NULL::int AS warehouse_to_id,
-                    NULL::int AS sklad_id
-                FROM repair_items ri_rep
-                JOIN repairs rep ON ri_rep.repair_id = rep.id
-                LEFT JOIN skladi s_rep ON rep.warehouse_id = s_rep.id
-                LEFT JOIN mol mol_rep ON rep.mol_id = mol_rep.id
-                LEFT JOIN users u_rep ON mol_rep.user_id = u_rep.id
-                LEFT JOIN cars car ON rep.car_id = car.id
-                LEFT JOIN LATERAL (
-                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
-                    FROM receipt_items ri_p
-                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
-                    WHERE ri_p.zaphasti_id = ri_rep.zaphast_id AND r_p.date <= rep.doc_date
-                    ORDER BY r_p.date DESC, r_p.id DESC
-                    LIMIT 1
-                ) lr_rep ON true
-                WHERE ri_rep.zaphast_id = $1 
-                  AND rep.warehouse_id IS NOT NULL 
-                  AND (rep.is_posted::text IN ('true', '1', '2'))
-
-                UNION ALL
-
-                -- 4. Реализации / Продажи (Склад -> Покупатель) — по чистой закупочной цене
-                SELECT 
-                    COALESCE(r_rel.doc_date, NOW()) AS op_date,
-                    CAST(r_rel.id AS VARCHAR) AS doc_num,
-                    'Реализация (продажа)' AS doc_type,
-                    CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
-                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
-                    (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
-                    ri_rel.description,
-                    r_rel.sklad_id AS warehouse_id,
-                    NULL::int AS warehouse_to_id,
-                    r_rel.sklad_id AS sklad_id
-                FROM realization_items ri_rel
-                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
-                LEFT JOIN skladi s_rel ON r_rel.sklad_id = s_rel.id
-                LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
-                LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
-                LEFT JOIN customers cust ON r_rel.customer_id = cust.id
-                LEFT JOIN LATERAL (
-                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
-                    FROM receipt_items ri_p
-                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
-                    WHERE ri_p.zaphasti_id = ri_rel.zaphasti_id AND r_p.date <= COALESCE(r_rel.doc_date, NOW())
-                    ORDER BY r_p.date DESC, r_p.id DESC
-                    LIMIT 1
-                ) lr_rel ON true
-                WHERE ri_rel.zaphasti_id = $1 
-                  AND r_rel.sklad_id IS NOT NULL 
-                  AND (r_rel.is_posted::text IN ('true', '1', '2'))
-            )
-            SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
-            FROM all_ops
-            WHERE 1=1 ${warehouseCondition} ${dateCondition}
-            ORDER BY op_date DESC;
-        `;
-
-        const result = await pool.query(query, queryParams);
-        res.json(result.rows);
-
-    } catch (err) {
-        console.error("Ошибка в /part_movement_details:", err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 
 
