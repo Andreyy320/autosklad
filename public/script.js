@@ -9633,10 +9633,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     };
                 }
 
-                groups[key].items.push(item);
+                                groups[key].items.push(item);
                 groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
     groups[key].totalPaid += Number(item.total_paid || 0);
     groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
+    groups[key].totalReturned = (groups[key].totalReturned || 0) + Number(item.total_returned_sum || 0);
             });
 
             let groupIndex = 0;
@@ -9649,11 +9650,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 headerTr.style.background = '#f1f5f9';
                 headerTr.style.cursor = 'pointer';
                 headerTr.style.fontWeight = 'bold';
-                headerTr.innerHTML = `
+                                headerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                         <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
                         ${group.title} &nbsp;|&nbsp; 
                         Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
+                        Возврат: <span style="color:#d97706;">${(group.totalReturned || 0).toFixed(2)}</span> &nbsp;|&nbsp;
                         Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
                         Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
                     </td>
