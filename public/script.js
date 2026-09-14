@@ -4672,26 +4672,44 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;'
                 : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-            if (col.ref) {
+                        if (col.ref === 'cars') {
+                const refItems = await fetchReferenceData(col.ref);
+
+                const buildDisplayName = (refItem) => {
+                    const gos = refItem.gos_number || refItem.car_number || '';
+                    const mdl = refItem.model || refItem.car_model || '';
+                    return gos ? `${gos}${mdl ? ' (' + mdl + ')' : ''}` : `Авто #${refItem.id}`;
+                };
+
+                let selectedDisplayName = '';
+                refItems.forEach(refItem => {
+                    if (String(refItem.id) === String(val)) {
+                        selectedDisplayName = buildDisplayName(refItem);
+                    }
+                });
+
+                inputHtml = `
+                    <div class="searchable-select-container" style="position: relative;">
+                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                        <input type="hidden" name="${col.field}" id="accident-car-select" value="${val !== '' && val !== null ? val : ''}">
+                        <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                            <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                            ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                        </div>
+                    </div>
+                `;
+            } else if (col.ref) {
                 const refItems = await fetchReferenceData(col.ref);
                 let optionsHtml = `<option value="">-- Не выбрано --</option>`;
 
                 refItems.forEach(refItem => {
-                    let displayName = '';
-                    if (col.ref === 'cars') {
-                        const gos = refItem.gos_number || refItem.car_number || '';
-                        const mdl = refItem.model || refItem.car_model || '';
-                        displayName = gos ? `${gos}${mdl ? ' (' + mdl + ')' : ''}` : `Авто #${refItem.id}`;
-                    } else {
-                        displayName = refItem.name || refItem.title || `Запись #${refItem.id}`;
-                    }
+                    const displayName = refItem.name || refItem.title || `Запись #${refItem.id}`;
                     const selected = (val !== '' && val !== null && String(refItem.id) === String(val)) ? 'selected' : '';
                     optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
                 });
 
-                const extraAttributes = (col.field === 'car_id') ? 'id="accident-car-select"' : '';
-                inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-            } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
+                inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+            }else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
                 let formattedVal = '';
                 if (val) {
                     const d = new Date(val);
@@ -4735,6 +4753,45 @@ async function openAccidentForm(entity, item = null, parentId = null) {
         let rawFormElement = drawer.querySelector('#entity-form');
         const formElement = rawFormElement.cloneNode(true);
         rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+        formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+            const input = container.querySelector('.searchable-select-input');
+            const hiddenInput = container.querySelector('input[type="hidden"]');
+            const dropdown = container.querySelector('.searchable-select-dropdown');
+            const options = dropdown.querySelectorAll('.searchable-option');
+
+            input.addEventListener('focus', () => {
+                dropdown.style.display = 'block';
+            });
+
+            input.addEventListener('input', () => {
+                const filter = input.value.toLowerCase();
+                dropdown.style.display = 'block';
+                options.forEach(opt => {
+                    const text = opt.textContent.toLowerCase();
+                    if (text.includes(filter) || opt.dataset.id === '') {
+                        opt.style.display = 'block';
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+            });
+
+            options.forEach(opt => {
+                opt.addEventListener('click', () => {
+                    input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                    hiddenInput.value = opt.dataset.id;
+                    dropdown.style.display = 'none';
+                    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!container.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+        });
 
         const deleteBtn = drawer.querySelector('#delete-btn');
         if (deleteBtn) {
@@ -5980,6 +6037,34 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+                } else if (col.ref === 'repair_cars' || col.ref === 'customer_cars' || col.ref === 'cars') {
+            const referenceName = col.ref;
+            let refItems = await fetchReferenceData(referenceName);
+
+            const buildDisplayName = (refItem) => {
+                const gos = refItem.gos_number || refItem.car_number || '';
+                const mdl = refItem.model || refItem.car_model || '';
+                const brd = refItem.brand || refItem.car_brand || '';
+                return (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
+            };
+
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = buildDisplayName(refItem);
+                }
+            });
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" id="car-select" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                    </div>
+                </div>
+            `;
         } else if (col.ref) {
             const referenceName = col.ref;
             let refItems = await fetchReferenceData(referenceName);
@@ -5992,11 +6077,6 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     const art = refItem.article ? `[${refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
-                } else if (referenceName === 'repair_cars' || referenceName === 'customer_cars' || referenceName === 'cars') {
-                    const gos = refItem.gos_number || refItem.car_number || '';
-                    const mdl = refItem.model || refItem.car_model || '';
-                    const brd = refItem.brand || refItem.car_brand || '';
-                    displayName = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${refItem.id}`;
                 } else {
                     displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                 }
@@ -6054,7 +6134,44 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
 
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
 
@@ -6417,6 +6534,26 @@ async function openRealizationForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.field === 'customer_id' && col.ref) {
+            const refItems = await fetchReferenceData(col.ref);
+            const buildDisplayName = (refItem) => {
+                if (col.formatRef && typeof col.formatRef === 'function') return col.formatRef(refItem);
+                return refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
+            };
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) selectedDisplayName = buildDisplayName(refItem);
+            });
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" id="customer-select" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                    </div>
+                </div>
+            `;
         } else if (col.ref) {
             let refItems = [];
             if (col.ref === 'customer_cars' || col.field === 'car_id') {
@@ -6462,8 +6599,7 @@ async function openRealizationForm(entity, item = null) {
             });
 
             let extraAttributes = '';
-            if (col.field === 'customer_id') extraAttributes = 'id="customer-select"';
-            else if (col.field === 'car_id') extraAttributes = 'id="car-select"';
+            if (col.field === 'car_id') extraAttributes = 'id="car-select"';
             else if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'sklad_id') extraAttributes = `name="${col.field}" id="warehouse_id"`;
             else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = `name="${col.field}" id="mol_id"`;
 
@@ -6545,6 +6681,45 @@ async function openRealizationForm(entity, item = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
 
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
