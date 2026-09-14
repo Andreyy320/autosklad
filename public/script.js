@@ -1925,6 +1925,7 @@ const tableConfig = {
         { field: 'total_sum', label: 'Общая', width: '110px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
+        { field: 'cumulative_debt', label: 'Долг накопительно', width: '120px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '100px', align: 'center' }
     ],
     render: (item) => {
@@ -1960,6 +1961,38 @@ const tableConfig = {
         `;
     }
     },
+
+money_receipts_by_customers_totals: {
+    title: 'Покупатели — общий долг',
+    columns: [
+        { field: 'counterparty_name', label: 'Покупатель', width: '200px' },
+        { field: 'sklad_name', label: 'Склад', width: '140px' },
+        { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
+        { field: 'total_sum', label: 'Общая сумма', width: '120px', align: 'right' },
+        { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
+        { field: 'total_debt', label: 'Долг (всего)', width: '120px', align: 'right' },
+        { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
+    ],
+    render: (item) => {
+        const totalSum = Number(item.total_sum || 0).toFixed(2);
+        const totalPaid = Number(item.total_paid || 0).toFixed(2);
+        const debtNum = Number(item.total_debt || 0);
+        const totalDebt = debtNum.toFixed(2);
+        const actionHtml = debtNum <= 0
+            ? `<span style="color:#64748b;font-weight:500;font-size:12px;">Оплачено</span>`
+            : `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name}', '', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить всё</button>`;
+        return `
+            <td><span style="font-weight:600;color:#0f172a;">${item.counterparty_name || '—'}</span></td>
+            <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>
+            <td style="text-align:center;color:#334155;">${item.total_orders || 0}</td>
+            <td style="text-align:right;font-weight:600;color:#0f172a;">${totalSum}</td>
+            <td style="text-align:right;color:#334155;">${totalPaid}</td>
+            <td style="text-align:right;font-weight:600;color:${debtNum > 0 ? '#991b1b' : '#334155'};">${totalDebt}</td>
+            <td style="text-align:center;">${actionHtml}</td>
+        `;
+    }
+},
+
     money_receipts_works_detail: {
     title: 'Детализация: оказанные услуги и работы',
     columns: [
@@ -8941,14 +8974,17 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         const isWarehouseDebtor = String(groupKey).startsWith('wh_');
         const realId = isWarehouseDebtor ? String(groupKey).replace('wh_', '') : groupKey;
 
-        const [year, month] = monthStr.split('-').map(Number);
-        const startDate = `${monthStr}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
-        const skladParam = skladId ? `&sklad_id=${skladId}` : '';
-        const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
-
-        const requestUrl = `/api/money_receipts?${idParam}&start_date=${startDate}&end_date=${endDate}${skladParam}`;
+     const isPayAll = !monthStr || monthStr === 'undefined' || monthStr === 'null';
+const skladParam = skladId ? `&sklad_id=${skladId}` : '';
+const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
+let requestUrl = `/api/money_receipts?${idParam}${skladParam}`;
+if (!isPayAll) {
+    const [year, month] = monthStr.split('-').map(Number);
+    const startDate = `${monthStr}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+    requestUrl += `&start_date=${startDate}&end_date=${endDate}`;
+}
 
         const resp = await fetch(requestUrl);
         const listEl = document.getElementById('pay-docs-list');
@@ -9099,7 +9135,7 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) 
         }
 
         closeDrawer();
-        loadReceiptMainData('money_receipts_by_customers', window.currentSkladId);
+        loadReceiptMainData(monthStr ? 'money_receipts_by_customers' : 'money_receipts_by_customers_totals', monthStr ? { group_key: groupKey, sklad_id: skladId } : window.currentSkladId);
 
     } catch (err) {
         console.error(err);

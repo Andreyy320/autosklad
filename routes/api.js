@@ -4319,8 +4319,7 @@ router.get('/money_receipts', async (req, res) => {
 // просто группируем результат по (покупатель/склад-должник, месяц) — как в expenses_by_suppliers.
 router.get('/money_receipts_by_customers', async (req, res) => {
     try {
-        const { sklad_id } = req.query;
-
+    const { sklad_id, group_key } = req.query;
         const query = `
             WITH calc_data AS (
                 -- 1. Обычные реализации (покупатели)
@@ -4424,28 +4423,39 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                 ) m_p ON m.id = m_p.move_id
                 WHERE m.is_posted = true
                   AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+            ),
+            monthly AS (
+                SELECT
+                    COALESCE(customer_id::text, 'wh_' || debtor_warehouse_id::text) AS group_key,
+                    customer_id,
+                    debtor_warehouse_id,
+                    counterparty_name,
+                    sklad_name,
+                    TO_CHAR(date, 'YYYY-MM') AS month_str,
+                    COUNT(*)::integer AS total_orders,
+                    COALESCE(SUM(parts_qty), 0)::numeric AS total_qty,
+                    COALESCE(SUM(parts_sum), 0)::numeric AS total_parts_sum,
+                    COALESCE(SUM(works_sum), 0)::numeric AS total_works_sum,
+                    COALESCE(SUM(parts_profit), 0)::numeric AS total_parts_profit,
+                    COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
+                    COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
+                    (COALESCE(SUM(total_realization_sum), 0) - COALESCE(SUM(total_paid), 0))::numeric AS total_debt
+                FROM calc_data
+                GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name, TO_CHAR(date, 'YYYY-MM')
             )
             SELECT
-                COALESCE(customer_id::text, 'wh_' || debtor_warehouse_id::text) AS group_key,
-                customer_id,
-                debtor_warehouse_id,
-                counterparty_name,
-                sklad_name,
-                TO_CHAR(date, 'YYYY-MM') AS month_str,
-                COUNT(*)::integer AS total_orders,
-                COALESCE(SUM(parts_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(parts_sum), 0)::numeric AS total_parts_sum,
-                COALESCE(SUM(works_sum), 0)::numeric AS total_works_sum,
-                COALESCE(SUM(parts_profit), 0)::numeric AS total_parts_profit,
-                COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
-                COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
-                (COALESCE(SUM(total_realization_sum), 0) - COALESCE(SUM(total_paid), 0))::numeric AS total_debt
-            FROM calc_data
-            GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name, TO_CHAR(date, 'YYYY-MM')
+                *,
+                SUM(total_debt) OVER (
+                    PARTITION BY group_key
+                    ORDER BY month_str ASC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                )::numeric AS cumulative_debt
+            FROM monthly
+            WHERE ($2::text IS NULL OR group_key = $2)
             ORDER BY month_str DESC, counterparty_name ASC;
         `;
 
-        const result = await pool.query(query, [sklad_id || null]);
+        const result = await pool.query(query, [sklad_id || null, group_key || null]);
         res.json(result.rows);
 
     } catch (err) {
@@ -4454,7 +4464,87 @@ router.get('/money_receipts_by_customers', async (req, res) => {
     }
 });
 
+router.get('/money_receipts_by_customers_totals', async (req, res) => {
+    try {
+        const { sklad_id } = req.query;
 
+        const query = `
+            WITH calc_data AS (
+                -- 1. Обычные реализации (покупатели)
+                SELECT 
+                    real.id AS id,
+                    c.id AS customer_id,
+                    NULL::integer AS debtor_warehouse_id,
+                    COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
+                    sk.name::text AS sklad_name,
+                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid
+                FROM realizations real
+                JOIN customers c ON real.customer_id = c.id
+                LEFT JOIN skladi sk ON real.sklad_id = sk.id
+                LEFT JOIN (
+                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS parts_sum
+                    FROM realization_items GROUP BY realization_id
+                ) sub_i ON real.id = sub_i.realization_id
+                LEFT JOIN (
+                    SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS works_sum
+                    FROM realization_works GROUP BY realization_id
+                ) sub_w ON real.id = sub_w.realization_id
+                LEFT JOIN (
+                    SELECT realization_id, SUM(amount) AS paid_sum
+                    FROM customer_payments GROUP BY realization_id
+                ) sub_p ON real.id = sub_p.realization_id
+                WHERE real.is_posted = true
+                  AND ($1::integer IS NULL OR real.sklad_id = $1)
+
+                UNION ALL
+
+                -- 2. Перемещения
+                SELECT 
+                    m.id AS id,
+                    NULL::integer AS customer_id,
+                    sk_to.id AS debtor_warehouse_id,
+                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                    sk_from.name::text AS sklad_name,
+                    COALESCE(m_items.total_sum, 0)::numeric AS total_realization_sum,
+                    COALESCE(m_p.paid_sum, 0)::numeric AS total_paid
+                FROM moves m
+                LEFT JOIN skladi sk_from ON m.warehouse_from_id = sk_from.id
+                LEFT JOIN skladi sk_to ON m.warehouse_to_id = sk_to.id
+                LEFT JOIN (
+                    SELECT move_id, SUM(total_rub) AS total_sum
+                    FROM move_items GROUP BY move_id
+                ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments GROUP BY move_id
+                ) m_p ON m.id = m_p.move_id
+                WHERE m.is_posted = true
+                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+            )
+            SELECT
+                COALESCE(customer_id::text, 'wh_' || debtor_warehouse_id::text) AS group_key,
+                customer_id,
+                debtor_warehouse_id,
+                counterparty_name,
+                sklad_name,
+                COUNT(*)::integer AS total_orders,
+                COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
+                COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
+                (COALESCE(SUM(total_realization_sum), 0) - COALESCE(SUM(total_paid), 0))::numeric AS total_debt
+            FROM calc_data
+            GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name
+            ORDER BY counterparty_name ASC;
+        `;
+
+        const result = await pool.query(query, [sklad_id || null]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('❌ [/api/money_receipts_by_customers_totals] Ошибка:', err);
+        res.status(500).json({ error: 'Ошибка сервера', details: err.message });
+    }
+});
 router.get('/money_receipts_detail', async (req, res) => {
     try {
         let { realization_id, customer_id, sklad_id } = req.query;
@@ -4948,19 +5038,21 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const { amount, month_str, sklad_id, comment, doc_ids } = req.body;
+    const { amount, month_str, sklad_id, comment, doc_ids } = req.body;
         
         
         const paymentAmount = Number(amount);
         if (!paymentAmount || paymentAmount <= 0) {
             return res.status(400).json({ error: 'Некорректная сумма оплаты' });
         }
-        if (!month_str) {
-            return res.status(400).json({ error: 'Не указан месяц оплаты (ожидается формат YYYY-MM)' });
-        }
+
+        // Долг переносится с месяца на месяц (нарастающим итогом), поэтому месяц теперь необязателен:
+        // если он не передан — оплата гасит все неоплаченные накладные этого покупателя/склада целиком,
+        // от самых старых к новым.
+        const monthFilter = (month_str && month_str !== '' && month_str !== 'undefined' && month_str !== 'null') ? month_str : null;
 
         // Если пользователь выбрал конкретные накладные — платим только по ним.
-        // Если нет (null/пусто) — старое поведение: ФИФО по всем накладным месяца.
+        // Если нет (null/пусто) — старое поведение: ФИФО по всем накладным месяца (или по всем накладным вообще, если месяц не указан).
         const docIdsFilter = Array.isArray(doc_ids) && doc_ids.length > 0
             ? doc_ids.map(Number).filter(n => !isNaN(n))
             : null;
@@ -4994,13 +5086,13 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 ) pay ON m.id = pay.move_id
                 WHERE m.warehouse_to_id = $1
                   AND m.is_posted = true
-                  AND TO_CHAR(m.date, 'YYYY-MM') = $2
+                  AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
                   AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
                   AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
                 ORDER BY m.date ASC, m.id ASC
                 FOR UPDATE OF m
             `;
-            docsParams = [realId, month_str, sklad_id || null, docIdsFilter];
+            docsParams = [realId, monthFilter, sklad_id || null, docIdsFilter];
         } else {
             // Долг покупателя за реализации
             docsQuery = `
@@ -5024,13 +5116,13 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 ) pay ON real.id = pay.realization_id
                 WHERE real.customer_id = $1
                   AND real.is_posted = true
-                  AND TO_CHAR(real.doc_date, 'YYYY-MM') = $2
+                  AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') = $2)
                   AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
                   AND ($4::integer[] IS NULL OR real.id = ANY($4::integer[]))
                 ORDER BY real.doc_date ASC, real.id ASC
                 FOR UPDATE OF real
             `;
-            docsParams = [realId, month_str, sklad_id || null, docIdsFilter];
+            docsParams = [realId, monthFilter, sklad_id || null, docIdsFilter];
         }
 
         const docsRes = await client.query(docsQuery, docsParams);
@@ -5049,13 +5141,13 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 await client.query(
                     `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id, date)
                      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
+                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
                 );
             } else {
                 await client.query(
                     `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id, date)
                      VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [realId, row.doc_id, toApply, comment || `Оплата за ${month_str}`, req.headers['x-user-id'] || null, getServerNowString()]
+                    [realId, row.doc_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
                 );
             }
 
@@ -5068,7 +5160,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
         if (remaining > 0) {
             return res.status(200).json({
                 success: true,
-                warning: `Сумма превышает долг за месяц. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
+                warning: `Сумма превышает долг. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
                 appliedPayments
             });
         }
