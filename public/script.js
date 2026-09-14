@@ -10623,7 +10623,7 @@ if (tableBodyForReceipts) {
                 'money_receipts',
                 'expenses_by_sklad', 
                 'expenses_by_suppliers', 
-                'expenses_by_receipts'
+                'expenses_by_receipts','expenses_by_suppliers_totals'
             ];
 
             let activeEntity = typeof currentEntity !== 'undefined' ? currentEntity : window.currentEntity;
