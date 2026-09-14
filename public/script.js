@@ -7567,15 +7567,16 @@ async function renderReturnItemsInline(returnDoc) {
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Кол-во в приходе</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат, шт.</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма возврата</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:center;">Возврат</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:center;"></th>
         `;
     }
 
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
 
     if (!returnDoc.receipt_id) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан приход</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан приход</td></tr>`;
         return;
     }
 
@@ -7593,7 +7594,7 @@ async function renderReturnItemsInline(returnDoc) {
         returnedItems.forEach(ri => { returnedByReceiptItem[ri.receipt_item_id] = ri; });
 
         if (availableItems.length === 0) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#888; padding:20px;">В этом приходе нет позиций</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">В этом приходе нет позиций</td></tr>`;
             return;
         }
 
@@ -7606,8 +7607,7 @@ async function renderReturnItemsInline(returnDoc) {
             const price = Number(i.price_rub) || 0;
             const sum = (currentQty * price).toFixed(2);
 
-            const btnLabel = currentQty > 0 ? `Возврат: ${currentQty}` : 'Вернуть';
-            const btnColor = currentQty > 0 ? '#0ea5e9' : '#16a34a';
+            const btnLabel = currentQty > 0 ? 'Изменить' : 'Вернуть';
 
             return `
                 <tr data-receipt-item-id="${i.receipt_item_id}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
@@ -7616,6 +7616,7 @@ async function renderReturnItemsInline(returnDoc) {
                     <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
                     <td style="padding:6px; text-align:right; color:#16a34a;">${maxQty.toFixed(2)}</td>
                     <td style="padding:6px; text-align:right;">${price.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right; ${currentQty > 0 ? 'font-weight:600; color:#0f172a;' : 'color:#94a3b8;'}">${currentQty > 0 ? currentQty.toFixed(2) : '—'}</td>
                     <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${sum}</td>
                     <td style="padding:6px; text-align:center;">
                         <button type="button" class="return-open-drawer-btn"
@@ -7627,7 +7628,7 @@ async function renderReturnItemsInline(returnDoc) {
                                 data-current="${currentQty}"
                                 data-price="${price}"
                                 ${isPosted ? 'disabled' : ''}
-                                style="background:${btnColor}; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:12px;">
+                                style="background:#fff; color:#475569; border:1px solid #cbd5e1; padding:5px 14px; border-radius:5px; cursor:pointer; font-size:12px;">
                             ${btnLabel}
                         </button>
                     </td>
@@ -7644,7 +7645,7 @@ async function renderReturnItemsInline(returnDoc) {
         }
     } catch (err) {
         console.error(err);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
     }
 }
 
@@ -7730,10 +7731,10 @@ async function saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQ
             return;
         }
 
-               closeDrawer();
+        closeDrawer();
         showAppNotification(newQty <= 0 ? 'Позиция убрана из возврата' : 'Возврат сохранён', 'success');
         renderReturnItemsInline(returnDoc);
-        if (typeof refreshData === 'function') refreshData();   // ← добавить эту строку
+        if (typeof refreshData === 'function') refreshData();
 
     } catch (err) {
         console.error(err);
