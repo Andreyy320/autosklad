@@ -11124,7 +11124,34 @@ async function postReceipt(receiptId) {
     );
 }
 
+async function postReturn(returnId) {
+    showPostConfirmModal(
+        'Проведение документа',
+        'Вы действительно хотите провести этот документ возврата?',
+        async () => {
+            try {
+                const response = await fetch(`/api/returns/${returnId}/post`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_posted: true })
+                });
 
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Ошибка при проведении документа');
+                }
+
+                showAppNotification('Документ возврата успешно проведён', 'success');
+                refreshData();
+            } catch (err) {
+                console.error(err);
+                showAppNotification(err.message || 'Не удалось провести документ', 'error');
+            }
+        }
+    );
+}
 async function postRepair(repairId) {
     showPostConfirmModal(
         'Проведение документа',
