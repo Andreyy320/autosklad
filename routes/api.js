@@ -2067,7 +2067,7 @@ router.get('/part_movement_details', async (req, res) => {
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
                     'Возврат поставщику' AS doc_type,
-                    CONCAT(COALESCE(s_ret.name, 'Склад'), ' | МОЛ: не указан') AS source_info,
+                    CONCAT(COALESCE(s_ret.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_ret.mol_name, 'не назначен')) AS source_info,
                     CONCAT('Поставщик: ', COALESCE(p_ret.name, 'Не указан')) AS dest_info,
                     (-1 * reti.quantity) AS qty,
                     COALESCE(reti.price_rub, 0) AS price,
@@ -2077,11 +2077,21 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM return_items reti
-                JOIN returns ret ON reti.return_id = ret.id
-                LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
-                LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
-                WHERE reti.zaphasti_id = $1 
-                  AND ret.warehouse_id IS NOT NULL
+    JOIN returns ret ON reti.return_id = ret.id
+    LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
+    LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
+    LEFT JOIN LATERAL (
+    SELECT u_ret.name AS mol_name
+    FROM mol mm_ret
+    LEFT JOIN users u_ret ON mm_ret.user_id = u_ret.id
+    WHERE mm_ret.warehouse_id = ret.warehouse_id
+      AND mm_ret.date_assigned <= COALESCE(ret.fact_date, ret.date)
+      AND (mm_ret.date_removed IS NULL OR mm_ret.date_removed >= COALESCE(ret.fact_date, ret.date))
+    ORDER BY mm_ret.date_assigned DESC
+    LIMIT 1
+    ) lm_ret ON true
+    WHERE reti.zaphasti_id = $1 
+  AND ret.warehouse_id IS NOT NULL
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
