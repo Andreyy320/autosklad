@@ -2222,6 +2222,22 @@ router.get('/stock_batches', async (req, res) => {
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id
                 LEFT JOIN customers cust ON r_rel.customer_id = cust.id
                 WHERE ri_rel.zaphasti_id = $1
+
+                UNION ALL
+
+                -- 6. Возвраты поставщику
+                SELECT 
+                    reti.zaphasti_id,
+                    ret.warehouse_id AS warehouse_filter_id,
+                    CONCAT('Возврат поставщику ', ret.doc_number) AS document_name,
+                    COALESCE(ret.fact_date, ret.date) AS doc_date,
+                    NULL AS description,
+                    (-1 * reti.quantity) AS qty,
+                    reti.price_rub AS price,
+                    'Рубль ПМР' AS currency
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE reti.zaphasti_id = $1
             )
             SELECT 
                 z.article AS artikul,
@@ -2349,6 +2365,14 @@ router.get('/stock_movement', async (req, res) => {
                     LIMIT 1
                 ) lr_rel ON true
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
+
+                UNION ALL
+
+                -- 6. Возвраты поставщику (расход)
+                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty, reti.total_rub AS sum, 'out' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.warehouse_id IS NOT NULL
             ),
             -- Последний склад для каждой запчасти
             latest_warehouse AS (
@@ -2433,8 +2457,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
 
 
 
