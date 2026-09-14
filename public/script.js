@@ -2066,9 +2066,10 @@ const tableConfig = {
             </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
             </td>
-            <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};">
-                ${cumulativeDebt}
-            </td>
+          <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${totalDebt} (за этот месяц) + ${(cumulativeDebtNum - debtNum).toFixed(2)} (долг с прошлых месяцев)">
+    ${cumulativeDebt}
+    <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${totalDebt} + ${(cumulativeDebtNum - debtNum).toFixed(2)}</div>
+</td>
             <td style="text-align: center;">
                 ${actionHtml}
             </td>
