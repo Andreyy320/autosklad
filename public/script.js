@@ -1955,7 +1955,7 @@ const tableConfig = {
                 ${totalDebtNum > 0
     ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
-}
+    }
             </td>
         `;
     }
@@ -2042,7 +2042,7 @@ const tableConfig = {
         const totalDebt = debtNum.toFixed(2);
        const actionHtml = debtNum <= 0 
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-: `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+    : `<button type="button" onclick="openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить
       </button>`;
 
@@ -2054,7 +2054,7 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
+    ? `<span onclick="openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
                 }
             </td>            <td style="text-align: right; font-weight: 500; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
@@ -2126,7 +2126,7 @@ const tableConfig = {
             </td>
         `;
     }
-},
+    },
     expense_payments: {
     title: 'История всех оплат',
     columns: [
@@ -7545,6 +7545,156 @@ function openActiveEntityForm(action, item = null) {
     }
 }
 
+
+async function renderReturnItemsInline(returnDoc) {
+    selectedItem = returnDoc;
+
+    const tbody = document.getElementById('detail-body');
+    const headerTr = document.getElementById('detail-headers');
+    const titleEl = document.getElementById('detail-title');
+
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+
+    if (titleEl) {
+        titleEl.innerText = `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
+    }
+
+    if (headerTr) {
+        headerTr.innerHTML = `
+            <th style="padding:6px; border-bottom:1px solid #ddd;">Код</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd;">Наименование</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Кол-во в приходе</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма</th>
+        `;
+    }
+
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
+
+    if (!returnDoc.receipt_id) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан приход</td></tr>`;
+        return;
+    }
+
+    try {
+        const [availRes, returnedRes] = await Promise.all([
+            fetch(`/api/returns/available-items?receipt_id=${returnDoc.receipt_id}`),
+            fetch(`/api/return_items?return_id=${returnDoc.id}`)
+        ]);
+
+        if (!availRes.ok) throw new Error('Не удалось загрузить позиции прихода');
+        const availableItems = await availRes.json();
+        const returnedItems = returnedRes.ok ? await returnedRes.json() : [];
+
+        const returnedByReceiptItem = {};
+        returnedItems.forEach(ri => { returnedByReceiptItem[ri.receipt_item_id] = ri; });
+
+        if (availableItems.length === 0) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#888; padding:20px;">В этом приходе нет позиций</td></tr>`;
+            return;
+        }
+
+        const isPosted = returnDoc.is_posted === true || returnDoc.is_posted === 'true';
+
+        const rowsHtml = availableItems.map(i => {
+            const existing = returnedByReceiptItem[i.receipt_item_id];
+            const currentQty = existing ? Number(existing.quantity) : 0;
+            const maxQty = Number(i.available_qty) + currentQty;
+            const price = Number(i.price_rub) || 0;
+
+            return `
+                <tr data-receipt-item-id="${i.receipt_item_id}" data-return-item-id="${existing ? existing.id : ''}">
+                    <td style="padding:6px;">${i.zaphasti_code || '—'}</td>
+                    <td style="padding:6px;">${i.zaphasti_name || '—'}</td>
+                    <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right; color:#16a34a;">${maxQty.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right;">${price.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right;">
+                        <input type="number" min="0" max="${maxQty}" step="0.01" value="${currentQty}"
+                               class="return-inline-qty" data-receipt-item-id="${i.receipt_item_id}"
+                               data-price="${price}" ${isPosted ? 'disabled' : ''}
+                               style="width:80px; padding:4px; border:1px solid #ccc; border-radius:4px; text-align:right;">
+                    </td>
+                    <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${(currentQty * price).toFixed(2)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        if (tbody) tbody.innerHTML = rowsHtml;
+
+        if (!isPosted) {
+            tbody.querySelectorAll('.return-inline-qty').forEach(input => {
+                let timer = null;
+                const trigger = () => { clearTimeout(timer); timer = setTimeout(() => saveReturnQty(input, returnDoc), 500); };
+                input.addEventListener('input', trigger);
+                input.addEventListener('blur', () => { clearTimeout(timer); saveReturnQty(input, returnDoc); });
+            });
+        }
+    } catch (err) {
+        console.error(err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
+    }
+}
+
+async function saveReturnQty(input, returnDoc) {
+    if (input.dataset.saving === '1') return;
+    input.dataset.saving = '1';
+
+    const row = input.closest('tr');
+    const receiptItemId = row.dataset.receiptItemId;
+    const returnItemId = row.dataset.returnItemId;
+    const price = Number(input.dataset.price) || 0;
+    const newQty = Number(input.value) || 0;
+
+    try {
+        let response;
+        if (newQty <= 0) {
+            if (!returnItemId) { input.dataset.saving = '0'; return; }
+            response = await fetch(`/api/return_items/${returnItemId}`, { method: 'DELETE' });
+        } else if (returnItemId) {
+            response = await fetch(`/api/return_items/${returnItemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity: newQty })
+            });
+        } else {
+            response = await fetch('/api/return_items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ return_id: returnDoc.id, receipt_item_id: receiptItemId, quantity: newQty })
+            });
+        }
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            showAppNotification(errData.error || 'Ошибка при сохранении возврата', 'error');
+            renderReturnItemsInline(returnDoc);
+            return;
+        }
+
+        if (newQty <= 0) {
+            row.dataset.returnItemId = '';
+        } else {
+            const result = await response.json();
+            row.dataset.returnItemId = result.id;
+        }
+
+        const sumCell = row.querySelector('.return-row-sum');
+        if (sumCell) sumCell.textContent = (newQty * price).toFixed(2);
+
+    } catch (err) {
+        console.error(err);
+        showAppNotification('Ошибка соединения с сервером', 'error');
+        renderReturnItemsInline(returnDoc);
+    } finally {
+        input.dataset.saving = '0';
+    }
+}
+
+
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const login = document.getElementById('login').value;
@@ -8394,12 +8544,12 @@ async function loadData(entity, title, customParams = {}) {
                     loadDetailData('part_movement_details', item);
                 } else if (entity === 'receipts') {
                     loadDetailData('receipt_items', item.id);
-                } else if (entity === 'moves') {
-                    loadDetailData('move_items', item.id);
-                } 
-                 else if (entity === 'returns') {
-                loadDetailData('return_items', item.id);
-                }
+               } else if (entity === 'moves') {
+    loadDetailData('move_items', item.id);
+    } else if (entity === 'returns') {
+    detailToolbarTarget && (detailToolbarTarget.style.display = 'none'); // кнопки Добавить/Изменить снизу больше не нужны
+    renderReturnItemsInline(item);
+    }
                 else if (entity === 'realizations') {
                     const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                     const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
