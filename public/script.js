@@ -2083,7 +2083,7 @@ const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalDebt = debtNum.toFixed(2);
         const cumulativeDebtNum = Number(item.cumulative_debt || 0);
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
-       const actionHtml = debtNum <= 0 
+const actionHtml = cumulativeDebtNum <= 0
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить

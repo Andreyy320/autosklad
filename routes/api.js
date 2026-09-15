@@ -5283,7 +5283,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
     try {
         const { sklad_id, postavhik_id } = req.query;
 
-       const listQuery = `
+      const listQuery = `
     WITH monthly AS (
         SELECT 
             p.id || '_' || TO_CHAR(rec.date, 'YYYY-MM') AS id,
@@ -5296,11 +5296,17 @@ router.get('/expenses_by_suppliers', async (req, res) => {
             COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
             (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
             COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-            -- Оплачено за месяц: реальные деньги, без вычета возврата (возврат уменьшает не оплату, а сумму долга)
-            COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
-            -- Долг за месяц: (Закупка - Возвраты) минус Оплаты
+            -- Оплачено за месяц: не может быть больше самой закупки — остальное это переплата (см. net_balance)
+            LEAST(
+                COALESCE(SUM(sub_pay.total_paid), 0),
+                GREATEST(0, COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))
+            )::numeric AS total_paid,
+            -- Долг именно за этот месяц (изолированно, без учёта переплат с прошлых месяцев)
             GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) 
-                       - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
+                       - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt,
+            -- то же самое, но БЕЗ отсечения нуля — нужно, чтобы переплата "текла" в следующие месяцы
+            ((COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) 
+                       - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS net_balance
         FROM receipts rec
         JOIN postavhik p ON rec.supplier_id = p.id
         LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -5327,14 +5333,13 @@ router.get('/expenses_by_suppliers', async (req, res) => {
             sk.name, 
             TO_CHAR(rec.date, 'YYYY-MM')
     )
-    -- накопительный долг по месяцам, а не копия долга за месяц
     SELECT 
         *,
-        SUM(total_debt) OVER (
+        GREATEST(0, SUM(net_balance) OVER (
             PARTITION BY postavhik_id
             ORDER BY month_str ASC
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )::numeric AS cumulative_debt
+        ))::numeric AS cumulative_debt
     FROM monthly
     ORDER BY month_str DESC, total_expense_sum DESC;
 `;
