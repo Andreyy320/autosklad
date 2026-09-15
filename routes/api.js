@@ -5249,9 +5249,9 @@ router.get('/expenses_by_sklad', async (req, res) => {
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
                 COUNT(DISTINCT p.id)::integer AS total_suppliers,
                 COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
-                COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
+                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
+(COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
+(COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
             FROM skladi sk
     LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
     LEFT JOIN postavhik p ON rec.supplier_id = p.id
@@ -5305,10 +5305,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
                     COUNT(DISTINCT rec.id)::integer AS total_receipts,
                     COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                    COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
-                    COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                    COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-                    (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
+                    (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
+COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
+(COALESCE(spay.total_paid, 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
+(COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
                 FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -5369,11 +5369,11 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                 p.id AS postavhik_id,
                 COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
                 COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                COALESCE(SUM(sub_i.total_sum), 0)::numeric AS total_expense_sum,
-                COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
-                (COALESCE(SUM(sub_i.total_sum), 0)
+                (COALESCE(SUM(sub_i.total_qty), 0))::numeric AS total_qty,
+(COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
+COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
+(COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
+(COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
                     - COALESCE(SUM(sub_pay.total_paid), 0)
                     - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_debt
             FROM receipts rec
