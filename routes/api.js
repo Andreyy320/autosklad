@@ -5283,33 +5283,21 @@ router.get('/expenses_by_suppliers', async (req, res) => {
     try {
         const { sklad_id, postavhik_id } = req.query;
 
-      const listQuery = `
-    WITH monthly AS (
-        SELECT 
-            p.id || '_' || TO_CHAR(rec.date, 'YYYY-MM') AS id,
-            p.id AS postavhik_id,
-            COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-            sk.name::text AS sklad_name,
-            MAX(rec.date) AS date,
+const listQuery = `
+    WITH receipt_calc AS (
+        SELECT
+            rec.id AS receipt_id,
+            rec.supplier_id AS postavhik_id,
+            rec.warehouse_id,
+            rec.date,
             TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
-            COUNT(DISTINCT rec.id)::integer AS total_receipts,
-            COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-            (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
-            COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-            -- Оплачено за месяц: не может быть больше самой закупки — остальное это переплата (см. net_balance)
-            LEAST(
-                COALESCE(SUM(sub_pay.total_paid), 0),
-                GREATEST(0, COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))
-            )::numeric AS total_paid,
-            -- Долг именно за этот месяц (изолированно, без учёта переплат с прошлых месяцев)
-            GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) 
-                       - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt,
-            -- то же самое, но БЕЗ отсечения нуля — нужно, чтобы переплата "текла" в следующие месяцы
-            ((COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) 
-                       - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS net_balance
+            COALESCE(sub_i.total_qty, 0) AS qty,
+            (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS net_sum,
+            COALESCE(sub_ret.total_returned, 0) AS returned_sum,
+            COALESCE(sub_pay.total_paid, 0) AS paid_sum,
+            -- Долг именно ЭТОЙ накладной, никогда не отрицательный и не смешивается с другими
+            GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
         FROM receipts rec
-        JOIN postavhik p ON rec.supplier_id = p.id
-        LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
         LEFT JOIN (
             SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
             FROM receipt_items ri GROUP BY ri.receipt_id
@@ -5326,22 +5314,48 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         ) sub_pay ON rec.id = sub_pay.receipt_id
         WHERE rec.is_posted = true
           AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-          AND ($2::integer IS NULL OR p.id = $2::integer)
-        GROUP BY 
-            p.id, 
-            p.name, 
-            sk.name, 
-            TO_CHAR(rec.date, 'YYYY-MM')
+          AND ($2::integer IS NULL OR rec.supplier_id = $2::integer)
+    ),
+    monthly AS (
+        SELECT
+            postavhik_id || '_' || month_str AS id,
+            postavhik_id,
+            warehouse_id,
+            month_str,
+            MAX(date) AS date,
+            COUNT(DISTINCT receipt_id)::integer AS total_receipts,
+            SUM(qty)::numeric AS total_qty,
+            SUM(net_sum)::numeric AS total_expense_sum,
+            SUM(returned_sum)::numeric AS total_returned_sum,
+            SUM(paid_sum)::numeric AS total_paid,
+            -- Долг за месяц = сумма долгов по каждой накладной отдельно (без взаимозачёта между накладными)
+            SUM(receipt_debt)::numeric AS total_debt
+        FROM receipt_calc
+        GROUP BY postavhik_id, warehouse_id, month_str
     )
-    SELECT 
-        *,
-        GREATEST(0, SUM(net_balance) OVER (
-            PARTITION BY postavhik_id
-            ORDER BY month_str ASC
+    SELECT
+        m.id,
+        m.postavhik_id,
+        COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+        sk.name::text AS sklad_name,
+        m.date,
+        m.month_str,
+        m.total_receipts,
+        m.total_qty,
+        m.total_expense_sum,
+        m.total_returned_sum,
+        m.total_paid,
+        m.total_debt,
+        -- Долг накопительно = просто сумма долгов за все месяцы нарастающим итогом (без переплат в минус)
+        SUM(m.total_debt) OVER (
+            PARTITION BY m.postavhik_id
+            ORDER BY m.month_str ASC
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ))::numeric AS cumulative_debt
-    FROM monthly
-    ORDER BY month_str DESC, total_expense_sum DESC;
+        )::numeric AS cumulative_debt
+    FROM monthly m
+    JOIN postavhik p ON p.id = m.postavhik_id
+    LEFT JOIN skladi sk ON sk.id = m.warehouse_id
+    ORDER BY m.month_str DESC, m.total_expense_sum DESC;
 `;
         
         const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
