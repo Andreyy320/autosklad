@@ -5234,42 +5234,42 @@ router.get('/expenses_by_sklad', async (req, res) => {
         const skladId = req.query.sklad_id || 1;
 
         const query = `
-            WITH sklad_payments AS (
-                -- Считаем сколько всего денег отдали поставщикам по конкретному складу
-                SELECT rec.warehouse_id, SUM(sp.amount) AS total_paid
-                FROM supplier_payments sp
-                JOIN receipts rec ON sp.receipt_id = rec.id
-                WHERE rec.warehouse_id = $1
-                GROUP BY rec.warehouse_id
-            )
-            SELECT 
-                sk.id AS id,
-                sk.id AS sklad_id,
-                COALESCE(sk.name, 'Центральный')::text AS sklad_name,
-                COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                COUNT(DISTINCT p.id)::integer AS total_suppliers,
-                COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                                (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
-COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
-            FROM skladi sk
-    LEFT JOIN receipts rec ON rec.warehouse_id = sk.id AND rec.is_posted = true
-    LEFT JOIN postavhik p ON rec.supplier_id = p.id
+         WITH receipt_debts AS (
+    SELECT
+        rec.id AS receipt_id, rec.warehouse_id, rec.supplier_id,
+        COALESCE(sub_i.total_qty, 0) AS total_qty,
+        (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
+        COALESCE(sub_pay.paid_sum, 0) AS paid_sum,
+        GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.paid_sum, 0)) AS receipt_debt
+    FROM receipts rec
     LEFT JOIN (
-    SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-    FROM receipt_items ri
-    GROUP BY ri.receipt_id
+        SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+        FROM receipt_items ri GROUP BY ri.receipt_id
     ) sub_i ON rec.id = sub_i.receipt_id
     LEFT JOIN (
-    SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
-    FROM return_items reti
-    JOIN returns ret ON reti.return_id = ret.id
-    WHERE ret.is_posted = true
-    GROUP BY ret.receipt_id
+        SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+        FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
+        WHERE ret.is_posted = true GROUP BY ret.receipt_id
     ) sub_ret ON rec.id = sub_ret.receipt_id
-    LEFT JOIN sklad_payments spay ON sk.id = spay.warehouse_id
-    WHERE sk.id = $1
-    GROUP BY sk.id, sk.name, spay.total_paid;
+    LEFT JOIN (
+        SELECT receipt_id, SUM(amount) AS paid_sum
+        FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
+    ) sub_pay ON rec.id = sub_pay.receipt_id
+    WHERE rec.warehouse_id = $1 AND rec.is_posted = true
+)
+SELECT 
+    sk.id AS id, sk.id AS sklad_id,
+    COALESCE(sk.name, 'Центральный')::text AS sklad_name,
+    COUNT(DISTINCT rd.receipt_id)::integer AS total_receipts,
+    COUNT(DISTINCT rd.supplier_id)::integer AS total_suppliers,
+    COALESCE(SUM(rd.total_qty), 0)::numeric AS total_qty,
+    COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
+    COALESCE(SUM(rd.paid_sum), 0)::numeric AS total_paid,
+    COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
+FROM skladi sk
+LEFT JOIN receipt_debts rd ON rd.warehouse_id = sk.id
+WHERE sk.id = $1
+GROUP BY sk.id, sk.name;
         `;
         const result = await pool.query(query, [skladId]);
         res.json(result.rows);
@@ -5365,34 +5365,44 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
     try {
         const { sklad_id } = req.query;
         const listQuery = `
-            SELECT 
-                p.id AS postavhik_id,
-                COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-                COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                (COALESCE(SUM(sub_i.total_qty), 0))::numeric AS total_qty,
-(COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
-COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
-GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
-            FROM receipts rec
-            JOIN postavhik p ON rec.supplier_id = p.id
-            LEFT JOIN (
-                SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-                FROM receipt_items ri GROUP BY ri.receipt_id
-            ) sub_i ON rec.id = sub_i.receipt_id
-            LEFT JOIN (
-                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
-                FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
-                WHERE ret.is_posted = true GROUP BY ret.receipt_id
-            ) sub_ret ON rec.id = sub_ret.receipt_id
-            LEFT JOIN (
-                SELECT receipt_id, SUM(amount) AS total_paid
-                FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
-            ) sub_pay ON rec.id = sub_pay.receipt_id
-            WHERE rec.is_posted = true
-              AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-            GROUP BY p.id, p.name
-            ORDER BY total_debt DESC;
+           WITH receipt_debts AS (
+    SELECT
+        rec.id AS receipt_id, rec.supplier_id,
+        COALESCE(sub_i.total_qty, 0) AS total_qty,
+        (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
+        COALESCE(sub_ret.total_returned, 0) AS returned_sum,
+        COALESCE(sub_pay.total_paid, 0) AS paid_sum,
+        GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
+    FROM receipts rec
+    LEFT JOIN (
+        SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+        FROM receipt_items ri GROUP BY ri.receipt_id
+    ) sub_i ON rec.id = sub_i.receipt_id
+    LEFT JOIN (
+        SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+        FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
+        WHERE ret.is_posted = true GROUP BY ret.receipt_id
+    ) sub_ret ON rec.id = sub_ret.receipt_id
+    LEFT JOIN (
+        SELECT receipt_id, SUM(amount) AS total_paid
+        FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
+    ) sub_pay ON rec.id = sub_pay.receipt_id
+    WHERE rec.is_posted = true
+      AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
+)
+SELECT
+    p.id AS postavhik_id,
+    COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+    COUNT(DISTINCT rd.receipt_id)::integer AS total_receipts,
+    COALESCE(SUM(rd.total_qty), 0)::numeric AS total_qty,
+    COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
+    COALESCE(SUM(rd.returned_sum), 0)::numeric AS total_returned_sum,
+    COALESCE(SUM(rd.paid_sum), 0)::numeric AS total_paid,
+    COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
+FROM postavhik p
+JOIN receipt_debts rd ON rd.supplier_id = p.id
+GROUP BY p.id, p.name
+ORDER BY total_debt DESC;
         `;
         const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
         const listResult = await pool.query(listQuery, [sIdList]);
