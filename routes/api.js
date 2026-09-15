@@ -5309,12 +5309,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
             payment_totals AS (
                 SELECT 
                     sp.supplier_id,
-                    rec_p.warehouse_id,
                     TO_CHAR(sp.date, 'YYYY-MM') AS pay_month,
                     SUM(sp.amount) AS paid_sum
                 FROM supplier_payments sp
-                LEFT JOIN receipts rec_p ON sp.receipt_id = rec_p.id
-                GROUP BY sp.supplier_id, rec_p.warehouse_id, TO_CHAR(sp.date, 'YYYY-MM')
+                GROUP BY sp.supplier_id, TO_CHAR(sp.date, 'YYYY-MM')
             ),
             monthly_grouped AS (
                 SELECT 
@@ -5327,17 +5325,17 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     SUM(rt.qty)::numeric AS total_qty,
                     SUM(rt.expense_sum - rt.returned_sum)::numeric AS total_expense_sum,
                     SUM(rt.returned_sum)::numeric AS total_returned_sum,
-                    COALESCE(SUM(pt.paid_sum), 0)::numeric AS total_paid
+                    -- Берем оплаты строго по месяцу самого платежа для этого поставщика
+                    COALESCE(pt.paid_sum, 0)::numeric AS total_paid
                 FROM receipt_totals rt
                 JOIN postavhik p ON rt.supplier_id = p.id
                 LEFT JOIN skladi sk ON rt.warehouse_id = sk.id
                 LEFT JOIN payment_totals pt 
                     ON pt.supplier_id = rt.supplier_id 
                     AND pt.pay_month = rt.month_str
-                    AND (pt.warehouse_id = rt.warehouse_id OR pt.warehouse_id IS NULL)
                 WHERE ($1::integer IS NULL OR rt.warehouse_id = $1::integer)
                   AND ($2::integer IS NULL OR rt.supplier_id = $2::integer)
-                GROUP BY rt.supplier_id, p.name, sk.name, rt.month_str
+                GROUP BY rt.supplier_id, p.name, sk.name, rt.month_str, pt.paid_sum
             )
             SELECT 
                 postavhik_id || '_' || month_str AS id,
@@ -5364,12 +5362,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const pIdList = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
         const listResult = await pool.query(listQuery, [sIdList, pIdList]);
         res.json(listResult.rows);
-
-    } catch (err) {
-        console.error('Ошибка получения расходов по поставщикам:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
 
 router.get('/expenses_by_suppliers_totals', async (req, res) => {
     try {
