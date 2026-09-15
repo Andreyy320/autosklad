@@ -5696,12 +5696,13 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
 
         await client.query('BEGIN');
 
-        const receiptsQuery = `
+                const receiptsQuery = `
             SELECT 
                 rec.id AS receipt_id,
                 COALESCE(sub_i.total_sum, 0) AS total_sum,
                 COALESCE(pay.paid_sum, 0) AS paid_sum,
-                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
+                COALESCE(sub_ret.total_returned, 0) AS total_returned,
+                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS debt
             FROM receipts rec
             LEFT JOIN (
                 SELECT receipt_id, SUM(total_rub) AS total_sum
@@ -5711,6 +5712,13 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
                 SELECT receipt_id, SUM(amount) AS paid_sum
                 FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
             ) pay ON rec.id = pay.receipt_id
+            LEFT JOIN (
+                SELECT ret.receipt_id, SUM(reti.total_rub) AS total_returned
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.is_posted = true
+                GROUP BY ret.receipt_id
+            ) sub_ret ON rec.id = sub_ret.receipt_id
             WHERE rec.supplier_id = $1
               AND rec.is_posted = true
               AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
