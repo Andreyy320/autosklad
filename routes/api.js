@@ -5265,7 +5265,8 @@ SELECT
     COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
     -- ИСПРАВЛЕНИЕ: из общей суммы оплат вычитаем общую сумму возвратов по складу
     (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0))::numeric AS total_paid,
-    GREATEST(0, COALESCE(SUM(rd.expense_sum), 0) - (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0)))::numeric AS total_debtFROM skladi sk
+    GREATEST(0, COALESCE(SUM(rd.expense_sum), 0) - (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0)))::numeric AS total_debt
+FROM skladi sk
 LEFT JOIN receipt_debts rd ON rd.warehouse_id = sk.id
 WHERE sk.id = $1
 GROUP BY sk.id, sk.name;
@@ -5327,10 +5328,12 @@ const listQuery = `
             SUM(net_sum)::numeric AS total_expense_sum,
             SUM(returned_sum)::numeric AS total_returned_sum,
             SUM(paid_sum)::numeric AS total_paid,
-            -- Долг за месяц = сумма долгов по каждой накладной отдельно (без взаимозачёта между накладными)
-                GREATEST(0, SUM(net_sum) - SUM(paid_sum))::numeric AS total_debt
-    FROM receipt_calc
-    GROUP BY postavhik_id, warehouse_id, month_str
+            -- Долг за месяц = разница между суммарной закупкой и суммарной оплатой месяца
+            -- (floor применяется ПОСЛЕ суммирования, чтобы переплата по одной накладной
+            -- корректно гасила долг по другой накладной в том же месяце)
+            GREATEST(0, SUM(net_sum) - SUM(paid_sum))::numeric AS total_debt
+        FROM receipt_calc
+        GROUP BY postavhik_id, warehouse_id, month_str
     )
     SELECT
         m.id,
@@ -5406,7 +5409,7 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                 COALESCE(SUM(rd.returned_sum), 0)::numeric AS total_returned_sum,
                 -- ИСПРАВЛЕНИЕ: из общей суммы оплат вычитаем сумму возвратов, чтобы всё сходилось
                 (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0))::numeric AS total_paid,
-                COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
+                GREATEST(0, COALESCE(SUM(rd.expense_sum), 0) - (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0)))::numeric AS total_debt
             FROM postavhik p
             JOIN receipt_debts rd ON rd.supplier_id = p.id
             GROUP BY p.id, p.name
