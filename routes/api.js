@@ -5308,7 +5308,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                                         (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
 COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
 COALESCE(spay.total_paid, 0)::numeric AS total_paid,
-((COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
+GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(spay.total_paid, 0))::numeric AS total_debt
                 FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
