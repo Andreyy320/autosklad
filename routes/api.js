@@ -5647,7 +5647,7 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
         const { month_str } = req.query;
 
         const query = `
-            -- 1. Оплаты поставщику
+            -- 1. Оплаты поставщику (плюсовые суммы)
             SELECT 
                 sp.id,
                 sp.date,
@@ -5668,11 +5668,11 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
 
             UNION ALL
 
-            -- 2. Возвраты товаров поставщику (выступают как уменьшение долга/расхода)
+            -- 2. Возвраты товаров поставщику (отрицательные суммы, чтобы фронтенд распознал как возврат)
             SELECT 
-                ret.id + 1000000 AS id, -- искусственный сдвиг ID, чтобы не пересекался с платежами
+                ret.id + 1000000 AS id, 
                 ret.date,
-                sub_ret.total_rub AS amount,
+                (-1 * sub_ret.total_rub) AS amount, -- МИНУС, чтобы сработал isReturn = rawAmount < 0
                 COALESCE(ret.comment, 'Возврат по накладной') AS comment,
                 rec.doc_number,
                 rec.id AS receipt_id,
