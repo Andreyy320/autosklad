@@ -326,9 +326,9 @@ const tableConfig = {
             { field: 'toplivo_id', label: 'Топливо', ref: 'toplivo' },
             { field: 'year', label: 'Год' },
             { field: 'color', label: 'Цвет' },
-            { field: 'vin', label: 'VIN-номер' },
-            { field: 'description', label: 'Описание' },
-            { field: 'sklad_id', label: 'Склад', ref: 'skladi' }
+             { field: 'vin', label: 'VIN-номер' },
+            { field: 'sklad_id', label: 'Склад', ref: 'skladi' },
+            { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td><b>${item.gos_number || ''}</b></td>
@@ -338,9 +338,9 @@ const tableConfig = {
             <td><b>${item.toplivo_name || '—'}</b></td>
             <td>${item.year || ''}</td>
             <td>${item.color || ''}</td>
-            <td>${item.vin || ''}</td>
-            <td>${item.description || ''}</td>
+                       <td>${item.vin || ''}</td>
             <td><b>${item.sklad_name || '—'}</b></td>
+            <td>${item.description || ''}</td>
         `
     },
     car_details: {
