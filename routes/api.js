@@ -5341,10 +5341,10 @@ COALESCE(spay.total_paid, 0)::numeric AS total_paid,
             SELECT 
                 *,
                 SUM(total_debt) OVER (
-    PARTITION BY postavhik_id 
-    ORDER BY month_str ASC 
-    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-)::numeric AS cumulative_debt
+                    PARTITION BY postavhik_id 
+                    ORDER BY month_str ASC 
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                )::numeric AS cumulative_debt
             FROM monthly
             ORDER BY month_str DESC, total_expense_sum DESC;
         `;
