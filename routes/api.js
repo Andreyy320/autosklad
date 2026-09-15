@@ -1695,13 +1695,12 @@ router.get('/repair_history', async (req, res) => {
         }
 
         // 3. Собираем итоговую структуру с работами
-        const dataWithItems = repairs.map(repair => {
-            const repairWorks = allWorks.filter(work => work.repair_id === repair.id);
-            return {
-                ...repair,
-                items: repairWorks
-            };
-        });
+                const dataWithItems = repairs
+            .map(repair => {
+                const repairWorks = allWorks.filter(work => work.repair_id === repair.id);
+                return { ...repair, items: repairWorks };
+            })
+            .filter(repair => repair.items.length > 0);
 
         res.json(dataWithItems);
 
