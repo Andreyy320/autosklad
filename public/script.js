@@ -1957,7 +1957,8 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${totalDebt} (за этот месяц) + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)} (долг с прошлых месяцев)">
                 ${cumulativeDebt}
                 <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${totalDebt} + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)}</div>
-            </td>            <td style="text-align: center;">
+            </td>            
+            <td style="text-align: center;">
                 ${totalDebtNum > 0
     ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
@@ -7980,11 +7981,12 @@ async function refreshData() {
         await loadData(previousEntity, title);
     }
 
-    if (savedSelectedItem && savedId) {
+        if (savedSelectedItem && savedId) {
         const rows = document.querySelectorAll('#table-body tr');
         let foundRow = null;
         
         rows.forEach(row => {
+            row.classList.remove('selected-row');
             if (row.dataset.id == String(savedId)) {
                 foundRow = row;
             }
