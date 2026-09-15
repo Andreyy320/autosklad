@@ -5380,7 +5380,8 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                 COALESCE(SUM(rd.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
                 COALESCE(SUM(rd.returned_sum), 0)::numeric AS total_returned_sum,
-                COALESCE(SUM(rd.paid_sum), 0)::numeric AS total_paid,
+                -- ИСПРАВЛЕНИЕ: из общей суммы оплат вычитаем сумму возвратов, чтобы всё сходилось
+                (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0))::numeric AS total_paid,
                 COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
             FROM postavhik p
             JOIN receipt_debts rd ON rd.supplier_id = p.id
@@ -5395,7 +5396,6 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 router.get('/expenses_by_receipts', async (req, res) => {
     try {
