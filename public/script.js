@@ -7078,12 +7078,14 @@ async function openReturnForm(entity, item = null) {
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
         <form id="entity-form" data-entity="returns" data-item-id="${item.id || ''}" style="display: flex; flex-direction: column; gap: 14px;">
-            <div>
+                        <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Приход, из которого возвращаем *</label>
-                <select name="receipt_id" id="return-receipt-select" required ${item.id ? 'disabled' : ''}
-                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
-                    <option value="">-- Загрузка приходов... --</option>
-                </select>
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder="🔍 Загрузка приходов..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    <input type="hidden" name="receipt_id" id="return-receipt-select" required value="${item.receipt_id || ''}">
+                    <div class="searchable-select-dropdown" id="return-receipt-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                </div>
             </div>
             <input type="hidden" name="warehouse_id" id="return-warehouse-id" value="${item.warehouse_id || ''}">
             <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
@@ -7108,41 +7110,66 @@ async function openReturnForm(entity, item = null) {
     openDrawer();
 
     // Подгружаем список проведённых приходов — возврат имеет смысл только по уже реально принятому товару
-    try {
+      try {
         const res = await fetch('/api/receipts');
         if (res.ok) {
             const receipts = await res.json();
-            const select = document.getElementById('return-receipt-select');
-            select.innerHTML = '<option value="">-- Выберите приход --</option>';
+            const hiddenInput = document.getElementById('return-receipt-select');
+            const searchInput = document.getElementById('return-receipt-input');
+            const dropdown = document.getElementById('return-receipt-dropdown');
 
             const postedReceipts = receipts.filter(r => r.is_posted === true || r.is_posted === 'true');
+            searchInput.placeholder = '🔍 Начните ввод для поиска приход...';
 
-            postedReceipts.forEach(r => {
-                const option = document.createElement('option');
-                option.value = r.id;
-                option.textContent = `${r.doc_number} от ${r.date ? new Date(r.date).toLocaleDateString() : ''}`;
-                option.dataset.warehouseId = r.warehouse_id || '';
-                option.dataset.supplierId = r.supplier_id || '';
-                if (item.receipt_id && String(item.receipt_id) === String(r.id)) {
-                    option.selected = true;
+            function applyReceipt(r) {
+                hiddenInput.value = r ? r.id : '';
+                searchInput.value = r ? `${r.doc_number} от ${r.date ? new Date(r.date).toLocaleDateString() : ''}` : '';
+                document.getElementById('return-warehouse-id').value = r ? (r.warehouse_id || '') : '';
+                document.getElementById('return-supplier-id').value = r ? (r.supplier_id || '') : '';
+            }
+
+            function renderDropdown(filterText) {
+                const filter = (filterText || '').toLowerCase().trim();
+                const matches = postedReceipts.filter(r => {
+                    const label = `${r.doc_number} от ${r.date ? new Date(r.date).toLocaleDateString() : ''}`.toLowerCase();
+                    return !filter || label.includes(filter);
+                });
+
+                dropdown.innerHTML = matches.map(r => `
+                    <div class="searchable-option" data-id="${r.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;">
+                        ${r.doc_number} от ${r.date ? new Date(r.date).toLocaleDateString() : ''}
+                    </div>
+                `).join('') || '<div style="padding: 8px 12px; color: #94a3b8; font-size: 13px;">Ничего не найдено</div>';
+
+                dropdown.querySelectorAll('.searchable-option').forEach(opt => {
+                    opt.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const r = postedReceipts.find(x => String(x.id) === opt.dataset.id);
+                        applyReceipt(r);
+                        dropdown.style.display = 'none';
+                        searchInput.blur();
+                    });
+                });
+
+                dropdown.style.display = 'block';
+            }
+
+            searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+            searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.searchable-select-container') || !dropdown.contains(e.target) && e.target !== searchInput) {
+                    if (e.target !== searchInput) dropdown.style.display = 'none';
                 }
-                select.appendChild(option);
             });
 
-            select.addEventListener('change', () => {
-                const selectedOption = select.options[select.selectedIndex];
-                document.getElementById('return-warehouse-id').value = selectedOption.dataset.warehouseId || '';
-                document.getElementById('return-supplier-id').value = selectedOption.dataset.supplierId || '';
-            });
-
-            if (select.value) {
-                select.dispatchEvent(new Event('change'));
+            if (item.receipt_id) {
+                const preselected = postedReceipts.find(r => String(r.id) === String(item.receipt_id));
+                if (preselected) applyReceipt(preselected);
             }
         }
     } catch (err) {
         console.error('Не удалось загрузить список приходов:', err);
     }
-
     // Удаление возврата прямо из формы (только для непроведённых — кнопка отсутствует в разметке для проведённых)
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
