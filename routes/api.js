@@ -5313,6 +5313,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
                 LEFT JOIN (
                     SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
+                    SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                     FROM receipt_items ri
                     GROUP BY ri.receipt_id
                 ) sub_i ON rec.id = sub_i.receipt_id
@@ -5661,24 +5662,24 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
             return res.status(400).json({ error: 'Некорректный ID поставщика' });
         }
 
-       const { month_str } = req.query;
+        const { month_str } = req.query;
 
-    const query = `
-    SELECT 
-        sp.id,
-        sp.date,
-        sp.amount,
-        sp.comment,
-        rec.doc_number,
-        rec.id AS receipt_id
-    FROM supplier_payments sp
-    LEFT JOIN receipts rec ON sp.receipt_id = rec.id
-    WHERE sp.supplier_id = $1
-      AND ($2::text IS NULL OR TO_CHAR(sp.date, 'YYYY-MM') = $2)
-    ORDER BY sp.date DESC, sp.id DESC;
-    `;
+        const query = `
+            SELECT 
+                sp.id,
+                sp.date,
+                sp.amount,
+                sp.comment,
+                rec.doc_number,
+                rec.id AS receipt_id
+            FROM supplier_payments sp
+            LEFT JOIN receipts rec ON sp.receipt_id = rec.id
+            WHERE sp.supplier_id = $1
+              AND ($2::text IS NULL OR TO_CHAR(sp.date, 'YYYY-MM') = $2)
+            ORDER BY sp.date DESC, sp.id DESC;
+        `;
 
-    const result = await pool.query(query, [supplierId, month_str || null]);
+        const result = await pool.query(query, [supplierId, month_str || null]);
         res.json(result.rows);
 
     } catch (err) {
