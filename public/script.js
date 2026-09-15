@@ -7269,8 +7269,8 @@ async function openReturnItemsForm(itemToEdit, parentId) {
         }
 
         const rowsHtml = availableItems.map(i => `
-            <tr>
-                <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_code || '—'}</td>
+    <tr data-search-text="${`${i.zaphasti_code || ''} ${i.zaphasti_name || ''}`.toLowerCase()}">
+        <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_code || '—'}</td>
                 <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_name || '—'}</td>
                 <td style="padding:8px; border-bottom:1px solid #eee; text-align:right; color:#16a34a; font-weight:600;">${Number(i.available_qty).toFixed(2)}</td>
                 <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">
@@ -7283,7 +7283,10 @@ async function openReturnItemsForm(itemToEdit, parentId) {
         `).join('');
 
         document.getElementById('return-items-picker').innerHTML = `
-            <table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:16px;">
+    <input type="text" id="return-item-search-input" placeholder="🔍 Начните вводить код или наименование запчасти..." autocomplete="off"
+           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; margin-bottom:10px; color:#0f172a;">
+    <div id="return-item-no-results" style="display:none; color:#94a3b8; font-size:13px; padding:8px 0;">Ничего не найдено</div>
+    <table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:16px;">
                 <thead>
                     <tr style="background:#f8fafc; text-align:left;">
                         <th style="padding:8px;">Код</th>
@@ -7292,11 +7295,24 @@ async function openReturnItemsForm(itemToEdit, parentId) {
                         <th style="padding:8px; text-align:right;">Вернуть</th>
                     </tr>
                 </thead>
-                <tbody>${rowsHtml}</tbody>
-            </table>
+                <tbody id="return-items-tbody">${rowsHtml}</tbody>            </table>
             <button type="button" id="save-return-items-btn" style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Добавить в возврат</button>
         `;
+const searchInput = document.getElementById('return-item-search-input');
+const tbody = document.getElementById('return-items-tbody');
+const noResultsEl = document.getElementById('return-item-no-results');
+const allRows = Array.from(tbody.querySelectorAll('tr'));
 
+searchInput.addEventListener('input', () => {
+    const filter = searchInput.value.trim().toLowerCase();
+    let visibleCount = 0;
+    allRows.forEach(row => {
+        const matches = !filter || row.dataset.searchText.includes(filter);
+        row.style.display = matches ? '' : 'none';
+        if (matches) visibleCount++;
+    });
+    noResultsEl.style.display = visibleCount === 0 ? 'block' : 'none';
+});
         document.getElementById('save-return-items-btn').addEventListener('click', async () => {
             const inputs = document.querySelectorAll('.return-qty-input');
             const toSubmit = [];
