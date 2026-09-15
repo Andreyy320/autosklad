@@ -2681,12 +2681,14 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
         });
 
-        options.forEach(opt => {
-            opt.addEventListener('click', () => {
+               options.forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -4927,12 +4929,14 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 });
             });
 
-            options.forEach(opt => {
-                opt.addEventListener('click', () => {
+                        options.forEach(opt => {
+                opt.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
                     input.value = opt.dataset.id === '' ? '' : opt.textContent;
                     hiddenInput.value = opt.dataset.id;
                     dropdown.style.display = 'none';
                     hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.blur();
                 });
             });
 
@@ -5473,12 +5477,14 @@ async function openReceiptForm(entity, item = null) {
             });
         });
 
-        options.forEach(opt => {
-            opt.addEventListener('click', () => {
+               options.forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -6210,12 +6216,12 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             });
 
             inputHtml = `
-                <div class="searchable-select-container" style="position: relative;">
+                                <div class="searchable-select-container" id="car-select-container" style="position: relative;">
                     <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" id="car-select" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
-                        ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                        ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" data-sklad-id="${refItem.sklad_id || refItem.warehouse_id || ''}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
                     </div>
                 </div>
             `;
@@ -6311,12 +6317,14 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             });
         });
 
-        options.forEach(opt => {
-            opt.addEventListener('click', () => {
+                options.forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
@@ -6406,67 +6414,42 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             }
         });
 
-        const skladCarPairs = [
-            { sklad: formElement.querySelector('[name="sklad_id"]') || formElement.querySelector('[name="warehouse_id"]'), car: formElement.querySelector('[name="car_id"]') }
-        ];
+                const carSelectContainer = formElement.querySelector('#car-select-container');
+        const skladForCarSelect = formElement.querySelector('[name="sklad_id"]') || formElement.querySelector('[name="warehouse_id"]');
 
-        skladCarPairs.forEach(({ sklad, car }) => {
-            if (!sklad || !car) return;
+        if (carSelectContainer && skladForCarSelect) {
+            const carHiddenInput = carSelectContainer.querySelector('#car-select');
+            const carVisibleInput = carSelectContainer.querySelector('.searchable-select-input');
+            const carOptions = carSelectContainer.querySelectorAll('.searchable-option');
 
-            async function filterCarsBySklad(isUserChange = false) {
-                const selectedSkladId = sklad.value;
-                const currentCarValue = car.value;
+            function filterCarOptionsBySklad(isUserChange = false) {
+                const selectedSkladId = skladForCarSelect.value;
+                let currentCarStillValid = !selectedSkladId;
 
-                try {
-                    let carRes = await fetch('/api/cars');
-                    if (!carRes.ok) {
-                        carRes = await fetch('/api/repair_cars');
-                    }
-                    if (!carRes.ok) {
-                        console.warn('[filterCarsBySklad] Не удалось загрузить список автомобилей');
+                carOptions.forEach(opt => {
+                    if (opt.dataset.id === '') {
+                        opt.style.display = 'block';
                         return;
                     }
-                    const cars = await carRes.json();
-
-                    car.innerHTML = '<option value="">-- Не выбрано --</option>';
-                    let isCurrentCarStillValid = false;
-
-                    cars.forEach(c => {
-                        const cSkladId = c.sklad_id || c.warehouse_id;
-                        const match = !selectedSkladId || String(cSkladId) === String(selectedSkladId);
-
-                        if (match) {
-                            const option = document.createElement('option');
-                            option.value = c.id;
-                            const gos = c.gos_number || c.car_number || '';
-                            const mdl = c.model || c.car_model || '';
-                            const brd = c.brand || c.car_brand || '';
-                            option.textContent = (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${c.id}`;
-
-                            if (String(c.id) === String(currentCarValue)) {
-                                option.selected = true;
-                                isCurrentCarStillValid = true;
-                            }
-                            car.appendChild(option);
-                        }
-                    });
-
-                    if (isUserChange && !isCurrentCarStillValid) {
-                        car.value = '';
+                    const match = !selectedSkladId || String(opt.dataset.skladId) === String(selectedSkladId);
+                    opt.style.display = match ? 'block' : 'none';
+                    if (match && String(opt.dataset.id) === String(carHiddenInput.value)) {
+                        currentCarStillValid = true;
                     }
-                } catch (err) {
-                    console.error('Ошибка при фильтрации автомобилей по складу:', err);
+                });
+
+                if (isUserChange && !currentCarStillValid) {
+                    carHiddenInput.value = '';
+                    carVisibleInput.value = '';
                 }
             }
 
-            sklad.addEventListener('change', () => {
-                filterCarsBySklad(true);
-            });
+            skladForCarSelect.addEventListener('change', () => filterCarOptionsBySklad(true));
 
-            if (sklad.value) {
-                filterCarsBySklad(false);
+            if (skladForCarSelect.value) {
+                filterCarOptionsBySklad(false);
             }
-        });
+        }
     }
 
     const deleteBtn = drawer.querySelector('#delete-btn');
@@ -6857,12 +6840,14 @@ async function openRealizationForm(entity, item = null) {
             });
         });
 
-        options.forEach(opt => {
-            opt.addEventListener('click', () => {
+                options.forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
                 input.value = opt.dataset.id === '' ? '' : opt.textContent;
                 hiddenInput.value = opt.dataset.id;
                 dropdown.style.display = 'none';
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
             });
         });
 
