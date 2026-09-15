@@ -5227,18 +5227,17 @@ router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
 });
 
 
-
-
 router.get('/expenses_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
 
         const query = `
-         WITH receipt_debts AS (
+           WITH receipt_debts AS (
     SELECT
         rec.id AS receipt_id, rec.warehouse_id, rec.supplier_id,
         COALESCE(sub_i.total_qty, 0) AS total_qty,
         (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
+        COALESCE(sub_ret.total_returned, 0) AS returned_sum,
         COALESCE(sub_pay.paid_sum, 0) AS paid_sum,
         GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.paid_sum, 0)) AS receipt_debt
     FROM receipts rec
@@ -5264,7 +5263,8 @@ SELECT
     COUNT(DISTINCT rd.supplier_id)::integer AS total_suppliers,
     COALESCE(SUM(rd.total_qty), 0)::numeric AS total_qty,
     COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
-    COALESCE(SUM(rd.paid_sum), 0)::numeric AS total_paid,
+    -- ИСПРАВЛЕНИЕ: из общей суммы оплат вычитаем общую сумму возвратов по складу
+    (COALESCE(SUM(rd.paid_sum), 0) - COALESCE(SUM(rd.returned_sum), 0))::numeric AS total_paid,
     COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
 FROM skladi sk
 LEFT JOIN receipt_debts rd ON rd.warehouse_id = sk.id
