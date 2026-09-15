@@ -9749,9 +9749,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
     try {
         const response = await fetch(fetchUrl, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store'
+});
 
         if (!response.ok) throw new Error(`Ошибка загрузки (Статус: ${response.status})`);
 
