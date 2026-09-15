@@ -5325,7 +5325,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     SUM(rt.qty)::numeric AS total_qty,
                     SUM(rt.expense_sum - rt.returned_sum)::numeric AS total_expense_sum,
                     SUM(rt.returned_sum)::numeric AS total_returned_sum,
-                    -- Берем оплаты строго по месяцу самого платежа для этого поставщика
                     COALESCE(pt.paid_sum, 0)::numeric AS total_paid
                 FROM receipt_totals rt
                 JOIN postavhik p ON rt.supplier_id = p.id
@@ -5362,6 +5361,12 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const pIdList = (postavhik_id && postavhik_id !== '' && postavhik_id !== 'undefined') ? postavhik_id : null;
         const listResult = await pool.query(listQuery, [sIdList, pIdList]);
         res.json(listResult.rows);
+
+    } catch (err) {
+        console.error('Ошибка получения расходов по поставщикам:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 
 router.get('/expenses_by_suppliers_totals', async (req, res) => {
     try {
