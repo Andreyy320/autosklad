@@ -5292,6 +5292,8 @@ const listQuery = `
             rec.date,
             TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
             COALESCE(sub_i.total_qty, 0) AS qty,
+            COALESCE(sub_i.total_sum, 0) AS gross_sum,
+
             (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS net_sum,
             COALESCE(sub_ret.total_returned, 0) AS returned_sum,
             COALESCE(sub_pay.total_paid, 0) AS paid_sum,
@@ -5325,6 +5327,8 @@ const listQuery = `
             MAX(date) AS date,
             COUNT(DISTINCT receipt_id)::integer AS total_receipts,
             SUM(qty)::numeric AS total_qty,
+            SUM(gross_sum)::numeric AS total_expense_sum_gross,
+
             SUM(net_sum)::numeric AS total_expense_sum,
             SUM(returned_sum)::numeric AS total_returned_sum,
 SUM(paid_sum)::numeric AS total_paid,
