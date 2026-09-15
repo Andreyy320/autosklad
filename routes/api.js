@@ -5721,7 +5721,7 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
             ) sub_ret ON rec.id = sub_ret.receipt_id
             WHERE rec.supplier_id = $1
               AND rec.is_posted = true
-              AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
+AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') <= $2)
               AND ($3::integer IS NULL OR rec.warehouse_id = $3::integer)
               AND ($4::int[] IS NULL OR rec.id = ANY($4::int[]))
             ORDER BY rec.date ASC, rec.id ASC
