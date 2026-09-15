@@ -2091,11 +2091,12 @@ money_receipts_by_customers_totals: {
             ? `${totalDebt} + ${prevMonthsAmount.toFixed(2)}`
             : `${totalDebt} − ${Math.abs(prevMonthsAmount).toFixed(2)}`;
 
-        const actionHtml = cumulativeDebtNum <= 0
-            ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">${debtNum > 0 ? 'Покрыто переплатой' : 'Оплачено'}</span>`
-            : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                Оплатить
-              </button>`;
+        // СТАЛО (кнопка снова смотрит только на долг именно этого месяца):
+const actionHtml = debtNum <= 0
+    ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
+    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+        Оплатить
+      </button>`;
 
         return `
             <td><span style="font-weight: 600; color: #0f172a;">${item.month_str || '—'}</span></td>
