@@ -5284,21 +5284,17 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const { sklad_id, postavhik_id } = req.query;
 
         const listQuery = `
-            WITH monthly_raw AS (
+            WITH receipt_totals AS (
                 SELECT 
-                    p.id AS postavhik_id,
-                    COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
-                    sk.name::text AS sklad_name,
+                    rec.id AS receipt_id,
+                    rec.supplier_id,
+                    rec.warehouse_id,
+                    rec.date AS receipt_date,
                     TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
-                    MAX(rec.date) AS date,
-                    COUNT(DISTINCT rec.id)::integer AS total_receipts,
-                    COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
-                    (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
-                    COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                    COALESCE(pay_m.paid_sum, 0)::numeric AS total_paid
+                    COALESCE(sub_i.total_qty, 0) AS qty,
+                    COALESCE(sub_i.total_sum, 0) AS expense_sum,
+                    COALESCE(sub_ret.total_returned, 0) AS returned_sum
                 FROM receipts rec
-                JOIN postavhik p ON rec.supplier_id = p.id
-                LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
                 LEFT JOIN (
                     SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                     FROM receipt_items ri GROUP BY ri.receipt_id
@@ -5308,43 +5304,43 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
                     WHERE ret.is_posted = true GROUP BY ret.receipt_id
                 ) sub_ret ON rec.id = sub_ret.receipt_id
-                LEFT JOIN (
-                    SELECT 
-                        sp.supplier_id, 
-                        rec_p.warehouse_id,
-                        TO_CHAR(sp.date, 'YYYY-MM') AS pay_month,
-                        SUM(sp.amount) AS paid_sum
-                    FROM supplier_payments sp
-                    LEFT JOIN receipts rec_p ON sp.receipt_id = rec_p.id
-                    GROUP BY sp.supplier_id, rec_p.warehouse_id, TO_CHAR(sp.date, 'YYYY-MM')
-                ) pay_m ON pay_m.supplier_id = p.id 
-                       AND pay_m.pay_month = TO_CHAR(rec.date, 'YYYY-MM')
-                       AND (pay_m.warehouse_id = rec.warehouse_id OR pay_m.warehouse_id IS NULL)
                 WHERE rec.is_posted = true
-                  AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
-                  AND ($2::integer IS NULL OR p.id = $2::integer)
-                GROUP BY p.id, p.name, sk.name, TO_CHAR(rec.date, 'YYYY-MM')
             ),
-            calculated AS (
+            payment_totals AS (
                 SELECT 
-                    postavhik_id || '_' || month_str AS id,
-                    postavhik_id,
-                    postavhik_name,
-                    sklad_name,
-                    date,
-                    month_str,
-                    total_receipts,
-                    total_qty,
-                    total_expense_sum,
-                    total_returned_sum,
-                    total_paid,
-                    GREATEST(0, total_expense_sum - total_paid)::numeric AS total_debt,
-                    total_expense_sum AS exp_sum,
-                    total_paid AS p_sum
-                FROM monthly_raw
+                    sp.supplier_id,
+                    rec_p.warehouse_id,
+                    TO_CHAR(sp.date, 'YYYY-MM') AS pay_month,
+                    SUM(sp.amount) AS paid_sum
+                FROM supplier_payments sp
+                LEFT JOIN receipts rec_p ON sp.receipt_id = rec_p.id
+                GROUP BY sp.supplier_id, rec_p.warehouse_id, TO_CHAR(sp.date, 'YYYY-MM')
+            ),
+            monthly_grouped AS (
+                SELECT 
+                    rt.supplier_id AS postavhik_id,
+                    COALESCE(p.name, 'Основной поставщик')::text AS postavhik_name,
+                    sk.name::text AS sklad_name,
+                    rt.month_str,
+                    MAX(rt.receipt_date) AS date,
+                    COUNT(DISTINCT rt.receipt_id)::integer AS total_receipts,
+                    SUM(rt.qty)::numeric AS total_qty,
+                    SUM(rt.expense_sum - rt.returned_sum)::numeric AS total_expense_sum,
+                    SUM(rt.returned_sum)::numeric AS total_returned_sum,
+                    COALESCE(SUM(pt.paid_sum), 0)::numeric AS total_paid
+                FROM receipt_totals rt
+                JOIN postavhik p ON rt.supplier_id = p.id
+                LEFT JOIN skladi sk ON rt.warehouse_id = sk.id
+                LEFT JOIN payment_totals pt 
+                    ON pt.supplier_id = rt.supplier_id 
+                    AND pt.pay_month = rt.month_str
+                    AND (pt.warehouse_id = rt.warehouse_id OR pt.warehouse_id IS NULL)
+                WHERE ($1::integer IS NULL OR rt.warehouse_id = $1::integer)
+                  AND ($2::integer IS NULL OR rt.supplier_id = $2::integer)
+                GROUP BY rt.supplier_id, p.name, sk.name, rt.month_str
             )
             SELECT 
-                id,
+                postavhik_id || '_' || month_str AS id,
                 postavhik_id,
                 postavhik_name,
                 sklad_name,
@@ -5355,12 +5351,12 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 total_expense_sum,
                 total_returned_sum,
                 total_paid,
-                total_debt,
+                GREATEST(0, total_expense_sum - total_paid)::numeric AS total_debt,
                 GREATEST(0, 
-                    SUM(exp_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC) - 
-                    SUM(p_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC)
+                    SUM(total_expense_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC) - 
+                    SUM(total_paid) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC)
                 )::numeric AS cumulative_debt
-            FROM calculated
+            FROM monthly_grouped
             ORDER BY month_str DESC, total_expense_sum DESC;
         `;
         
