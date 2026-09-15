@@ -4088,7 +4088,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (теперь полноценно учитывают сумму из move_items)
+                -- 2. Перемещения (теперь полноценно учитывают сумму из move_items,
+                --    и реально оплаченную сумму из warehouse_debt_payments — а не "всегда оплачено")
                 SELECT 
                     m.id,
                     m.warehouse_from_id AS sklad_id,
@@ -4096,13 +4097,19 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     COALESCE(m_items.total_sum, 0) AS parts_sum,
                     0 AS works_sum,
                     COALESCE(m_items.total_sum, 0) AS total_sum,
-                    COALESCE(m_items.total_sum, 0) AS paid_sum -- Если перемещения считаются сразу оплаченными/закрытыми внутренне
+                    COALESCE(m_p.paid_sum, 0) AS paid_sum
                 FROM moves m
                 LEFT JOIN (
                     SELECT move_id, SUM(quantity) AS total_qty, SUM(total_rub) AS total_sum
                     FROM move_items
                     GROUP BY move_id
                 ) m_items ON m.id = m_items.move_id
+                LEFT JOIN (
+                    SELECT move_id, SUM(amount) AS paid_sum
+                    FROM warehouse_debt_payments
+                    WHERE move_id IS NOT NULL
+                    GROUP BY move_id
+                ) m_p ON m.id = m_p.move_id
                 WHERE m.is_posted = true
             )
             SELECT 
