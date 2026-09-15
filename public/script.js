@@ -1935,7 +1935,7 @@ const tableConfig = {
         const totalSum = Number(item.total_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const totalPaid = totalPaidNum.toFixed(2);
-                const totalDebtNum = Number(item.total_debt || 0);
+        const totalDebtNum = Number(item.total_debt || 0);
         const totalDebt = totalDebtNum.toFixed(2);
         const cumulativeDebtNum = Number(item.cumulative_debt || 0);
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
@@ -1954,8 +1954,10 @@ const tableConfig = {
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${totalSum}</td>
             <td style="text-align: right; color: #334155;">${paidHtml}</td>
                        <td style="text-align: right; font-weight: 500; color: ${totalDebtNum > 0 ? '#991b1b' : '#334155'};">${totalDebt}</td>
-            <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};">${cumulativeDebt}</td>
-            <td style="text-align: center;">
+            <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${totalDebt} (за этот месяц) + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)} (долг с прошлых месяцев)">
+                ${cumulativeDebt}
+                <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${totalDebt} + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)}</div>
+            </td>            <td style="text-align: center;">
                 ${totalDebtNum > 0
     ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
