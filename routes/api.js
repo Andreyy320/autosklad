@@ -5295,10 +5295,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                     (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
                     COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                    -- Оплачено за месяц: только чистые деньги, которые реально внесли
-                    COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
-                    -- Долг за месяц: (Закупка - Возвраты) МИНУС Чистые оплаты
-                    GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
+                    -- Оплачено за месяц: реальные оплаты МИНУС возвраты (чтобы сумма сходилась с историей и копейка в копейку совпадала)
+                    (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
+                    -- Долг за месяц: (Закупка - Возвраты) МИНУС (Оплаты - Возвраты)
+                    GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0)))::numeric AS total_debt
                 FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
