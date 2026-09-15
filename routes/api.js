@@ -5296,8 +5296,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                     (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
                     COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                    COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
-                    GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
+                    -- Оплачено за месяц: реальные оплаты МИНУС возвраты товаров (чтобы возвраты уменьшали сумму погашения)
+                    (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
+                    -- Долг за месяц: (Сумма закупки - Возвраты) МИНУС (Оплаты - Возвраты)
+                    GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0)))::numeric AS total_debt
                 FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
@@ -5340,7 +5342,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         console.error('Ошибка получения расходов по поставщикам:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
-});
+});;
 
 router.get('/expenses_by_suppliers_totals', async (req, res) => {
     try {
