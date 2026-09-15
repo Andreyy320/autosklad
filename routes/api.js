@@ -5295,7 +5295,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     COALESCE(SUM(sub_i.total_qty), 0)::numeric AS total_qty,
                     (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
                     COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
-                    -- Реальные оплаты, совершенные в этом календарном месяце
                     COALESCE(pay_m.paid_sum, 0)::numeric AS total_paid
                 FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
@@ -5309,7 +5308,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
                     WHERE ret.is_posted = true GROUP BY ret.receipt_id
                 ) sub_ret ON rec.id = sub_ret.receipt_id
-                -- Оплаты, сгруппированные строго по месяцу платежа
                 LEFT JOIN (
                     SELECT 
                         sp.supplier_id, 
@@ -5340,11 +5338,9 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     total_expense_sum,
                     total_returned_sum,
                     total_paid,
-                    -- Долг конкретно за этот месяц (закуп minus оплата за этот же месяц)
                     GREATEST(0, total_expense_sum - total_paid)::numeric AS total_debt,
-                    -- Накопительный итог (все закупки до текущего месяца минус все оплаты до текущего месяца)
-                    SUM(total_expense_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC) - 
-                    SUM(total_paid) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC) AS running_balance
+                    total_expense_sum AS exp_sum,
+                    total_paid AS p_sum
                 FROM monthly_raw
             )
             SELECT 
@@ -5360,7 +5356,10 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 total_returned_sum,
                 total_paid,
                 total_debt,
-                GREATEST(0, running_balance)::numeric AS cumulative_debt
+                GREATEST(0, 
+                    SUM(exp_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC) - 
+                    SUM(p_sum) OVER (PARTITION BY postavhik_id ORDER BY month_str ASC)
+                )::numeric AS cumulative_debt
             FROM calculated
             ORDER BY month_str DESC, total_expense_sum DESC;
         `;
