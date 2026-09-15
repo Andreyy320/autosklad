@@ -2070,7 +2070,6 @@ money_receipts_by_customers_totals: {
         { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Закупка за месяц', width: '110px', align: 'right' },
-        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено за месяц', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг за месяц', width: '110px', align: 'right' },
         { field: 'cumulative_debt', label: 'Долг накопительно', width: '120px', align: 'right' },
@@ -2078,8 +2077,7 @@ money_receipts_by_customers_totals: {
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
-        const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
-        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
+        const expenseSum = (Number(item.total_expense_sum || 0) - Number(item.total_returned_sum || 0)).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
@@ -2097,7 +2095,6 @@ money_receipts_by_customers_totals: {
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
-            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
     ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
@@ -2145,7 +2142,6 @@ money_receipts_by_customers_totals: {
         { field: 'postavhik_name', label: 'Поставщик', width: '200px' },
         { field: 'total_receipts', label: 'Закупок', width: '70px', align: 'center' },
         { field: 'total_expense_sum', label: 'Сумма закупок', width: '120px', align: 'right' },
-        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг (всего)', width: '120px', align: 'right' },
         { field: 'actions', label: 'Действие', width: '110px', align: 'center' }
@@ -2166,7 +2162,6 @@ money_receipts_by_customers_totals: {
             <td><span style="font-weight: 600; color: #0f172a;">${item.postavhik_name || 'Основной поставщик'}</span></td>
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
-            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">${totalPaid}</td>
             <td style="text-align: right; font-weight: 600; color: ${debtNum > 0 ? '#991b1b' : '#334155'};">
                 ${totalDebt}
@@ -9758,11 +9753,10 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     };
                 }
                 
-                groups[key].items.push(item);
-                groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
+                                groups[key].items.push(item);
+                groups[key].totalSum += (Number(item.total_expense_sum || item.sum || 0) - Number(item.total_returned_sum || 0));
                 groups[key].totalPaid += Number(item.total_paid || 0);
                 groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
-                groups[key].totalReturned = (groups[key].totalReturned || 0) + Number(item.total_returned_sum || 0);
             });
 
             let groupIndex = 0;
@@ -9779,9 +9773,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                     <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                         <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
                         ${group.title} &nbsp;|&nbsp; 
-                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
-                        Возврат: <span style="color:#d97706;">${(group.totalReturned || 0).toFixed(2)}</span> &nbsp;|&nbsp;
-                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
+                                               Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
+                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp;
                         Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
                     </td>
                 `;
@@ -9817,12 +9810,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
                 } else if (currentEntity === 'expenses_by_suppliers') {
             // Уровень "Месяцы поставщика": без плашек по месяцам — одна общая плашка "Итого"
-            let totalSum = 0, totalPaid = 0, totalDebt = 0, totalReturned = 0;
+                       let totalSum = 0, totalPaid = 0, totalDebt = 0;
             currentItems.forEach(item => {
-                totalSum += Number(item.total_expense_sum || 0);
+                totalSum += (Number(item.total_expense_sum || 0) - Number(item.total_returned_sum || 0));
                 totalPaid += Number(item.total_paid || 0);
                 totalDebt += Number(item.total_debt || 0);
-                totalReturned += Number(item.total_returned_sum || 0);
             });
 
             const summaryTr = document.createElement('tr');
@@ -9832,7 +9824,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                     Итого &nbsp;|&nbsp; 
                     Сумма закупок: <span style="color:#d97706;">${totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
-                    Возврат: <span style="color:#d97706;">${totalReturned.toFixed(2)}</span> &nbsp;|&nbsp;
                     Оплачено: <span style="color:#16a34a;">${totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
                     Долг: <span style="color:#dc2626;">${totalDebt.toFixed(2)}</span>
                 </td>
