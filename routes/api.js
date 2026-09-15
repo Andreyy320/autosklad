@@ -1772,13 +1772,12 @@ router.get('/receipts_history', async (req, res) => {
         }
 
         // 3. Собираем итоговую структуру с вложенными запчастями (itemы) для каждого ремонта
-        const dataWithItems = repairs.map(repair => {
-            const repairItems = allItems.filter(item => item.repair_id === repair.id);
-            return {
-                ...repair,
-                items: repairItems
-            };
-        });
+                const dataWithItems = repairs
+            .map(repair => {
+                const repairItems = allItems.filter(item => item.repair_id === repair.id);
+                return { ...repair, items: repairItems };
+            })
+            .filter(repair => repair.items.length > 0);
 
         res.json(dataWithItems);
 
