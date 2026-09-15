@@ -5648,7 +5648,7 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
         const { month_str } = req.query;
 
         const query = `
-            -- 1. Оплаты поставщику (плюсовые суммы)
+            -- 1. Оплаты поставщику, сделанные именно в этом месяце
             SELECT 
                 sp.id,
                 sp.date,
@@ -5663,17 +5663,16 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
               AND (
                   $2::text IS NULL 
                   OR TO_CHAR(sp.date, 'YYYY-MM') = $2
-                  OR TO_CHAR(rec.date, 'YYYY-MM') = $2
                   OR sp.comment LIKE '%' || $2 || '%'
               )
 
             UNION ALL
 
-            -- 2. Возвраты товаров поставщику (отрицательные суммы, чтобы фронтенд распознал как возврат)
+            -- 2. Возвраты товаров поставщику, сделанные именно в этом месяце
             SELECT 
                 ret.id + 1000000 AS id, 
                 ret.date,
-                (-1 * sub_ret.total_rub) AS amount, -- МИНУС, чтобы сработал isReturn = rawAmount < 0
+                (-1 * sub_ret.total_rub) AS amount, 
                 COALESCE(ret.comment, 'Возврат по накладной') AS comment,
                 rec.doc_number,
                 rec.id AS receipt_id,
@@ -5690,7 +5689,6 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
               AND (
                   $2::text IS NULL 
                   OR TO_CHAR(ret.date, 'YYYY-MM') = $2
-                  OR TO_CHAR(rec.date, 'YYYY-MM') = $2
               )
 
             ORDER BY date DESC, id DESC;
