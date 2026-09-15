@@ -5676,7 +5676,9 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
             WHERE sp.supplier_id = $1
               AND (
                   $2::text IS NULL 
-                  OR TO_CHAR(COALESCE(rec.date, sp.date), 'YYYY-MM') = $2
+                  OR TO_CHAR(sp.date, 'YYYY-MM') = $2
+                  OR TO_CHAR(rec.date, 'YYYY-MM') = $2
+                  OR sp.comment LIKE '%' || $2 || '%'
               )
             ORDER BY sp.date DESC, sp.id DESC;
         `;

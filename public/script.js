@@ -8903,7 +8903,6 @@ function resetSharedUiForEntity(entity) {
     const rowCount = document.getElementById('row-count');
     if (rowCount) rowCount.innerText = '';
 }
-
 async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) {
     const drawer = getOrCreateDrawer();
 
@@ -8932,14 +8931,25 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
 
         let rowsHtml = payments.map(p => {
             const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
-            const pAmount = Number(p.amount || 0).toFixed(2);
+            const rawAmount = Number(p.amount || 0);
+            const pAmount = rawAmount.toFixed(2);
             const pDoc = p.doc_number || '—';
-            const pComment = p.comment || '—';
+            
+            // Проверяем: если сумма меньше нуля, это возврат
+            const isReturn = rawAmount < 0;
+            const amountColor = isReturn ? '#dc2626' : '#16a34a';
+            
+            let pComment = p.comment || '';
+            if (isReturn && !pComment.toLowerCase().includes('возврат')) {
+                pComment = pComment ? `Возврат: ${pComment}` : 'Возврат';
+            }
+            if (!pComment) pComment = '—';
+
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
                     <td style="padding: 10px; color: #0f172a;">${pDoc}</td>
-                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">${pAmount} </td>
+                    <td style="padding: 10px; font-weight: bold; color: ${amountColor}; text-align: right;">${pAmount}</td>
                     <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
                 </tr>
             `;
@@ -8947,7 +8957,7 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
 
         drawer.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}${monthLabel}</h3>
+                <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${postavhikName}${monthLabel}</h3>
                 <button onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
             </div>
             
