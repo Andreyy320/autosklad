@@ -5296,10 +5296,12 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_expense_sum,
                     COALESCE(SUM(sub_ret.total_returned), 0)::numeric AS total_returned_sum,
                     -- Оплачено за месяц: реальные оплаты МИНУС возвраты (чтобы сумма сходилась с историей и копейка в копейку совпадала)
-                    (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0))::numeric AS total_paid,
-                    -- Долг за месяц: (Закупка - Возвраты) МИНУС (Оплаты - Возвраты)
-                    GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) - (COALESCE(SUM(sub_pay.total_paid), 0) - COALESCE(SUM(sub_ret.total_returned), 0)))::numeric AS total_debt
-                FROM receipts rec
+                  // СТАЛО:
+COALESCE(SUM(sub_pay.total_paid), 0)::numeric AS total_paid,
+
+GREATEST(0, (COALESCE(SUM(sub_i.total_sum), 0) - COALESCE(SUM(sub_ret.total_returned), 0)) 
+           - COALESCE(SUM(sub_pay.total_paid), 0))::numeric AS total_debt
+                    FROM receipts rec
                 JOIN postavhik p ON rec.supplier_id = p.id
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
                 LEFT JOIN (
@@ -5325,11 +5327,16 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                     sk.name, 
                     TO_CHAR(rec.date, 'YYYY-MM')
             )
-            SELECT 
-                *,
-                total_debt AS cumulative_debt
-            FROM monthly
-            ORDER BY month_str DESC, total_expense_sum DESC;
+          // вместо "total_debt AS cumulative_debt" в финальном SELECT:
+SELECT 
+    *,
+    SUM(total_debt) OVER (
+        PARTITION BY postavhik_id
+        ORDER BY month_str ASC
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    )::numeric AS cumulative_debt
+FROM monthly
+ORDER BY month_str DESC, total_expense_sum DESC;
         `;
         
         const sIdList = (sklad_id && sklad_id !== '' && sklad_id !== 'undefined') ? sklad_id : null;
