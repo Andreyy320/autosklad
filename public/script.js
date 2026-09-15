@@ -2077,7 +2077,7 @@ money_receipts_by_customers_totals: {
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
-        const expenseSum = (Number(item.total_expense_sum || 0) - Number(item.total_returned_sum || 0)).toFixed(2);
+const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
@@ -9786,7 +9786,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
             // Уровень "Месяцы поставщика": без плашек по месяцам — одна общая плашка "Итого"
                        let totalSum = 0, totalPaid = 0, totalDebt = 0;
             currentItems.forEach(item => {
-                totalSum += (Number(item.total_expense_sum || 0) - Number(item.total_returned_sum || 0));
+totalSum += Number(item.total_expense_sum || 0);
                 totalPaid += Number(item.total_paid || 0);
                 totalDebt += Number(item.total_debt || 0);
             });
