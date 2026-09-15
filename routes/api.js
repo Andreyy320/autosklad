@@ -5239,6 +5239,7 @@ router.get('/expenses_by_sklad', async (req, res) => {
         (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
         COALESCE(sub_ret.total_returned, 0) AS returned_sum,
         COALESCE(sub_pay.paid_sum, 0) AS paid_sum,
+        (COALESCE(sub_pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS paid_netto,
         GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.paid_sum, 0)) AS receipt_debt
     FROM receipts rec
     LEFT JOIN (
