@@ -5288,11 +5288,11 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 SELECT 
                     sp.supplier_id, 
                     rec.warehouse_id, 
-                    TO_CHAR(rec.date, 'YYYY-MM') AS payment_month,
+                    COALESCE(TO_CHAR(sp.date, 'YYYY-MM'), TO_CHAR(rec.date, 'YYYY-MM')) AS payment_month,
                     SUM(sp.amount) AS total_paid
                 FROM supplier_payments sp
-                JOIN receipts rec ON sp.receipt_id = rec.id
-                GROUP BY sp.supplier_id, rec.warehouse_id, TO_CHAR(rec.date, 'YYYY-MM')
+                LEFT JOIN receipts rec ON sp.receipt_id = rec.id
+                GROUP BY sp.supplier_id, rec.warehouse_id, COALESCE(TO_CHAR(sp.date, 'YYYY-MM'), TO_CHAR(rec.date, 'YYYY-MM'))
             ),
             monthly AS (
                 SELECT 
@@ -5352,12 +5352,11 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const listResult = await pool.query(listQuery, [sIdList, pIdList]);
         res.json(listResult.rows);
 
-    } catch (err) {
+    }كان err => {
         console.error('Ошибка получения расходов по поставщикам:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 router.get('/expenses_by_suppliers_totals', async (req, res) => {
     try {
