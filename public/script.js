@@ -5253,9 +5253,11 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 body: JSON.stringify(data)
             });
 
-            if (response.ok) {
+                        if (response.ok) {
+                const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
+                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 if (parentId) loadDetailData(entity, parentId); 
                 
                 else refreshData();
@@ -5632,9 +5634,13 @@ async function openReceiptForm(entity, item = null) {
                 body: JSON.stringify(data)
             });
 
-            if (response.ok) {
+                        if (response.ok) {
+                const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
+                if (!isEdit && savedDoc && savedDoc.id) {
+                    selectedItem = savedDoc;
+                }
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -6028,15 +6034,13 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
                 body: JSON.stringify(data)
             });
 
-            if (response.ok) {
+                        if (response.ok) {
+                const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
-                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
-                // выделение строки, иначе после обновления списка подсветится не только
-                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
-                if (!isEdit) {
-                    selectedItem = null;
+                if (!isEdit && savedDoc && savedDoc.id) {
+                    selectedItem = savedDoc;
                 }
 
                 if (entity === 'move_items' && parentId) {
@@ -6547,15 +6551,13 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 body: JSON.stringify(data)
             });
 
-            if (response.ok) {
+                        if (response.ok) {
+                const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
-                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
-                // выделение строки, иначе после обновления списка подсветится не только
-                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
-                if (!isEdit) {
-                    selectedItem = null;
+                if (!isEdit && savedDoc && savedDoc.id) {
+                    selectedItem = savedDoc;
                 }
 
                 if (entity === 'repair_items' && parentId) {
@@ -7046,9 +7048,11 @@ async function openRealizationForm(entity, item = null) {
                 body: JSON.stringify(data)
             });
 
-            if (response.ok) {
+                        if (response.ok) {
+                const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Реализация успешно сохранена', 'success');
+                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -7981,7 +7985,7 @@ async function refreshData() {
         await loadData(previousEntity, title);
     }
 
-        if (savedSelectedItem && savedId) {
+            if (savedSelectedItem && savedId) {
         const rows = document.querySelectorAll('#table-body tr');
         let foundRow = null;
         
