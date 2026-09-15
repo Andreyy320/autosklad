@@ -5352,7 +5352,7 @@ router.get('/expenses_by_suppliers', async (req, res) => {
         const listResult = await pool.query(listQuery, [sIdList, pIdList]);
         res.json(listResult.rows);
 
-    }كان err => {
+    } catch (err) {
         console.error('Ошибка получения расходов по поставщикам:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
