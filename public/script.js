@@ -9525,7 +9525,7 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 if (backBtnElement) {
     backBtnElement.style.display = 'inline-block';
     backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
-}
+}   
     }
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
