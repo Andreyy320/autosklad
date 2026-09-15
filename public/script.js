@@ -9521,11 +9521,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
         if (btnEdit) btnEdit.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
 
-        const backBtnElement = document.getElementById('btn-back-expense');
-        if (backBtnElement) {
-            backBtnElement.style.display = 'inline-block';
-            backBtnElement.onclick = () => loadExpenseMainData('expenses_by_sklad');
-        }
+       const backBtnElement = document.getElementById('btn-back-expense');
+if (backBtnElement) {
+    backBtnElement.style.display = 'inline-block';
+    backBtnElement.onclick = () => loadExpenseMainData('expenses_by_suppliers_totals', window.currentSkladId);
+}
     }
     else if (currentExpenseView === 'expenses_by_suppliers') {
         let postavhikId = parentId && typeof parentId === 'object' ? (parentId.postavhik_id || parentId.id) : parentId;
@@ -10851,7 +10851,10 @@ if (e.target.closest('button, [onclick]')) {
                                 if (activeEntity === 'expenses_by_sklad') {
                     if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers_totals', selectedItem);
                 } else if (activeEntity === 'expenses_by_suppliers_totals') {
-                    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_suppliers', selectedItem);
+    // Раньше клик по поставщику вёл на разбивку по месяцам (expenses_by_suppliers).
+    // Убрали этот шаг — сразу открываем общий список накладных поставщика
+    // (без деления по месяцам, только общая сводка сверху).
+    if (typeof loadExpenseMainData === 'function') loadExpenseMainData('expenses_by_receipts', selectedItem);
                 } else if (activeEntity === 'expenses_by_suppliers') {
                     if (typeof loadExpenseMainData === 'function') {
                         let payload = { ...selectedItem };
