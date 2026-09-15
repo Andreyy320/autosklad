@@ -2069,8 +2069,7 @@ money_receipts_by_customers_totals: {
         { field: 'sklad_name', label: 'Склад поступления', width: '120px' },
         { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
-        { field: 'total_expense_sum_gross', label: 'Закупка (валовая)', width: '110px', align: 'right' },
-{ field: 'total_expense_sum', label: 'К оплате', width: '100px', align: 'right' },
+        { field: 'total_expense_sum', label: 'Закупка за месяц', width: '110px', align: 'right' },
         { field: 'total_returned_sum', label: 'Возврат за месяц', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено за месяц', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг за месяц', width: '110px', align: 'right' },
@@ -2083,7 +2082,6 @@ money_receipts_by_customers_totals: {
         const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
-        const grossSum = Number(item.total_expense_sum_gross || 0).toFixed(2);
         const totalDebt = debtNum.toFixed(2);
         const cumulativeDebtNum = Number(item.cumulative_debt || 0);
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
@@ -2108,7 +2106,6 @@ const actionHtml = debtNum <= 0
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
-            <td style="text-align: right; color: #64748b;">${grossSum}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: ${Number(item.total_returned_sum || 0) > 0 ? '#b45309' : '#94a3b8'};">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">

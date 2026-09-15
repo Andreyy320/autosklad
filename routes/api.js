@@ -5292,8 +5292,6 @@ const listQuery = `
             rec.date,
             TO_CHAR(rec.date, 'YYYY-MM') AS month_str,
             COALESCE(sub_i.total_qty, 0) AS qty,
-            COALESCE(sub_i.total_sum, 0) AS gross_sum,
-
             (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS net_sum,
             COALESCE(sub_ret.total_returned, 0) AS returned_sum,
             COALESCE(sub_pay.total_paid, 0) AS paid_sum,
@@ -5327,13 +5325,10 @@ const listQuery = `
             MAX(date) AS date,
             COUNT(DISTINCT receipt_id)::integer AS total_receipts,
             SUM(qty)::numeric AS total_qty,
-            SUM(gross_sum)::numeric AS total_expense_sum_gross,
-
             SUM(net_sum)::numeric AS total_expense_sum,
             SUM(returned_sum)::numeric AS total_returned_sum,
-SUM(paid_sum)::numeric AS total_paid,
--- Долг за месяц = взаимозачёт между накладными этого поставщика/месяца/склада
-GREATEST(0, SUM(net_sum) - SUM(paid_sum))::numeric AS total_debt
+SUM(paid_sum)::numeric AS total_paid,            -- Долг за месяц = сумма долгов по каждой накладной отдельно (без взаимозачёта между накладными)
+            SUM(receipt_debt)::numeric AS total_debt
         FROM receipt_calc
         GROUP BY postavhik_id, warehouse_id, month_str
     )
@@ -5384,6 +5379,7 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                     (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
                     COALESCE(sub_ret.total_returned, 0) AS returned_sum,
                     COALESCE(sub_pay.total_paid, 0) AS paid_sum,
+                    (COALESCE(sub_pay.total_paid, 0) - COALESCE(sub_ret.total_returned, 0)) AS paid_netto,
                     GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
                 FROM receipts rec
                 LEFT JOIN (
@@ -5409,8 +5405,8 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                 COALESCE(SUM(rd.total_qty), 0)::numeric AS total_qty,
                 COALESCE(SUM(rd.expense_sum), 0)::numeric AS total_expense_sum,
                 COALESCE(SUM(rd.returned_sum), 0)::numeric AS total_returned_sum,
-COALESCE(SUM(rd.paid_sum), 0)::numeric AS total_paid,
-GREATEST(0, COALESCE(SUM(rd.expense_sum), 0) - COALESCE(SUM(rd.paid_sum), 0))::numeric AS total_debt
+                COALESCE(SUM(rd.paid_netto), 0)::numeric AS total_paid,
+                COALESCE(SUM(rd.receipt_debt), 0)::numeric AS total_debt
             FROM postavhik p
             JOIN receipt_debts rd ON rd.supplier_id = p.id
             GROUP BY p.id, p.name
