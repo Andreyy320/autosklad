@@ -5700,7 +5700,7 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
                 COALESCE(sub_i.total_sum, 0) AS total_sum,
                 COALESCE(pay.paid_sum, 0) AS paid_sum,
                 COALESCE(sub_ret.total_returned, 0) AS total_returned,
-                (COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS debt
+(COALESCE(sub_i.total_sum, 0) - COALESCE(pay.paid_sum, 0)) AS debt
             FROM receipts rec
             LEFT JOIN (
                 SELECT receipt_id, SUM(total_rub) AS total_sum
