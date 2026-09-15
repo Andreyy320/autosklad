@@ -2542,8 +2542,10 @@ async function openEntityForm(entity, item = null, parentId = null) {
                             const art = refItem.article ? `[${refItem.article}] ` : '';
                             const nm = refItem.name || refItem.title || '';
                             displayName = `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
-                        } else if (referenceName === 'mol') {
+                                              } else if (referenceName === 'mol') {
                             displayName = refItem.user_fio || refItem.name || refItem.login || (refItem.description && !refItem.description.includes('#') ? refItem.description : '') || `МОЛ #${refItem.id}`;
+                        } else if (referenceName === 'ed_izmereniya') {
+                            displayName = refItem.short_name || refItem.name || `Ед.изм. #${refItem.id}`;
                         } else {
                             displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || (`Запись #${refItem.id}`);
                         }
