@@ -2070,7 +2070,6 @@ money_receipts_by_customers_totals: {
         { field: 'total_receipts', label: 'Закупок', width: '60px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'total_expense_sum', label: 'Закупка за месяц', width: '110px', align: 'right' },
-        { field: 'total_returned_sum', label: 'Возврат за месяц', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено за месяц', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг за месяц', width: '110px', align: 'right' },
         { field: 'cumulative_debt', label: 'Долг накопительно', width: '120px', align: 'right' },
@@ -2079,7 +2078,6 @@ money_receipts_by_customers_totals: {
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
         const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
-        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
@@ -2107,7 +2105,6 @@ const actionHtml = debtNum <= 0
             <td style="text-align: center; color: #334155;">${item.total_receipts || 0}</td>
             <td style="text-align: right; color: #334155;">${totalQty}</td>
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
-            <td style="text-align: right; color: ${Number(item.total_returned_sum || 0) > 0 ? '#b45309' : '#94a3b8'};">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
                     ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
