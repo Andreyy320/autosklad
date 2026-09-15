@@ -5647,13 +5647,15 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
         const { month_str } = req.query;
 
         const query = `
+            -- 1. Оплаты поставщику
             SELECT 
                 sp.id,
                 sp.date,
                 sp.amount,
                 sp.comment,
                 rec.doc_number,
-                rec.id AS receipt_id
+                rec.id AS receipt_id,
+                'payment' AS type
             FROM supplier_payments sp
             LEFT JOIN receipts rec ON sp.receipt_id = rec.id
             WHERE sp.supplier_id = $1
@@ -5663,14 +5665,41 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
                   OR TO_CHAR(rec.date, 'YYYY-MM') = $2
                   OR sp.comment LIKE '%' || $2 || '%'
               )
-            ORDER BY sp.date DESC, sp.id DESC;
+
+            UNION ALL
+
+            -- 2. Возвраты товаров поставщику (выступают как уменьшение долга/расхода)
+            SELECT 
+                ret.id + 1000000 AS id, -- искусственный сдвиг ID, чтобы не пересекался с платежами
+                ret.date,
+                sub_ret.total_rub AS amount,
+                COALESCE(ret.comment, 'Возврат по накладной') AS comment,
+                rec.doc_number,
+                rec.id AS receipt_id,
+                'return' AS type
+            FROM returns ret
+            JOIN receipts rec ON ret.receipt_id = rec.id
+            JOIN (
+                SELECT reti.return_id, SUM(reti.total_rub) AS total_rub
+                FROM return_items reti
+                GROUP BY reti.return_id
+            ) sub_ret ON ret.id = sub_ret.return_id
+            WHERE rec.supplier_id = $1
+              AND ret.is_posted = true
+              AND (
+                  $2::text IS NULL 
+                  OR TO_CHAR(ret.date, 'YYYY-MM') = $2
+                  OR TO_CHAR(rec.date, 'YYYY-MM') = $2
+              )
+
+            ORDER BY date DESC, id DESC;
         `;
 
         const result = await pool.query(query, [supplierId, month_str || null]);
         res.json(result.rows);
 
     } catch (err) {
-        console.error('❌ Ошибка получения истории оплат поставщика:', err);
+        console.error('❌ Ошибка получения истории оплат и возвратов поставщика:', err);
         res.status(500).json({ error: err.message });
     }
 });
