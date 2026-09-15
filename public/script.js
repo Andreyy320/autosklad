@@ -9389,9 +9389,14 @@ async function submitPayment(event, postavhikId, monthStr) {
             body: JSON.stringify(payload)
         });
 
-                if (response.ok) {
+                               if (response.ok) {
+            const result = await response.json().catch(() => ({}));
             closeDrawer();
-            showAppNotification(monthStr ? 'Оплата за месяц успешно сохранена' : 'Оплата долга успешно сохранена', 'success');
+            if (result.warning) {
+                showAppNotification(result.warning, 'warning');
+            } else {
+                showAppNotification(monthStr ? 'Оплата за месяц успешно сохранена' : 'Оплата долга успешно сохранена', 'success');
+            }
             if (typeof loadTableData === 'function') loadTableData();
             if (typeof loadExpenseMainData === 'function' && window._currentExpenseView) {
                 loadExpenseMainData(window._currentExpenseView, window._currentExpenseParentId);
@@ -9726,8 +9731,8 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         mainTableBody.innerHTML = '';
 
-        if (currentEntity === 'expenses_by_receipts' || currentEntity === 'expenses_by_suppliers') {
-            const monthNames = [
+        if (currentEntity === 'expenses_by_receipts') {
+                        const monthNames = [
                 "января", "февраля", "марта", "апреля", "мая", "июня", 
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"
             ];
@@ -9752,12 +9757,12 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                         items: []
                     };
                 }
-
-                                groups[key].items.push(item);
+                
+                groups[key].items.push(item);
                 groups[key].totalSum += Number(item.total_expense_sum || item.sum || 0);
-    groups[key].totalPaid += Number(item.total_paid || 0);
-    groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
-    groups[key].totalReturned = (groups[key].totalReturned || 0) + Number(item.total_returned_sum || 0);
+                groups[key].totalPaid += Number(item.total_paid || 0);
+                groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
+                groups[key].totalReturned = (groups[key].totalReturned || 0) + Number(item.total_returned_sum || 0);
             });
 
             let groupIndex = 0;
@@ -9810,10 +9815,44 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 });
             });
 
-        } else {
-            currentItems.forEach((item, index) => {
+                } else if (currentEntity === 'expenses_by_suppliers') {
+            // Уровень "Месяцы поставщика": без плашек по месяцам — одна общая плашка "Итого"
+            let totalSum = 0, totalPaid = 0, totalDebt = 0, totalReturned = 0;
+            currentItems.forEach(item => {
+                totalSum += Number(item.total_expense_sum || 0);
+                totalPaid += Number(item.total_paid || 0);
+                totalDebt += Number(item.total_debt || 0);
+                totalReturned += Number(item.total_returned_sum || 0);
+            });
+
+            const summaryTr = document.createElement('tr');
+            summaryTr.style.background = '#f1f5f9';
+            summaryTr.style.fontWeight = 'bold';
+            summaryTr.innerHTML = `
+                <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+                    Итого &nbsp;|&nbsp; 
+                    Сумма закупок: <span style="color:#d97706;">${totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
+                    Возврат: <span style="color:#d97706;">${totalReturned.toFixed(2)}</span> &nbsp;|&nbsp;
+                    Оплачено: <span style="color:#16a34a;">${totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
+                    Долг: <span style="color:#dc2626;">${totalDebt.toFixed(2)}</span>
+                </td>
+            `;
+            mainTableBody.appendChild(summaryTr);
+
+            currentItems.forEach(item => {
                 const tr = document.createElement('tr');
-                const rowId = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
+                const rowId = item.id || item.receipt_id || '';
+                tr.dataset.id = rowId;
+                tr.style.cursor = 'pointer';
+
+                if (config && typeof config.render === 'function') {
+                    tr.innerHTML = config.render(item);
+                }
+
+                mainTableBody.appendChild(tr);
+            });
+
+        } else {
                 
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
