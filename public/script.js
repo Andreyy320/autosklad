@@ -9726,89 +9726,21 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
 
         mainTableBody.innerHTML = '';
 
-        if (currentEntity === 'expenses_by_receipts') {
-                        const monthNames = [
-                "января", "февраля", "марта", "апреля", "мая", "июня", 
-                "июля", "августа", "сентября", "октября", "ноября", "декабря"
-            ];
+       if (currentEntity === 'expenses_by_receipts') {
+    currentItems.forEach((item) => {
+        const tr = document.createElement('tr');
+        const rowId = item.id || item.receipt_id || '';
+        tr.dataset.id = rowId;
+        tr.style.cursor = 'pointer';
 
-            const groups = {};
-            currentItems.forEach((item, idx) => {
-                const rawDate = item.date || item.created_at || item.receipt_date || item.month_str + '-01';
-                const dateObj = rawDate ? new Date(rawDate) : new Date();
-                const month = isNaN(dateObj.getMonth()) ? 0 : dateObj.getMonth();
-                const year = isNaN(dateObj.getFullYear()) ? new Date().getFullYear() : dateObj.getFullYear();
-                
-                const key = item.month_str || `${year}-${String(month + 1).padStart(2, '0')}`;
-                const title = `${monthNames[month]} ${year} года`;
+        if (config && typeof config.render === 'function') {
+            tr.innerHTML = config.render(item);
+        }
 
-                if (!groups[key]) {
-                    groups[key] = {
-                        title: title,
-                        month_str: key,
-                        totalSum: 0,
-                        totalPaid: 0,
-                        totalDebt: 0,
-                        items: []
-                    };
-                }
-                
-                                groups[key].items.push(item);
-                groups[key].totalSum += (Number(item.total_expense_sum || item.sum || 0) - Number(item.total_returned_sum || 0));
-                groups[key].totalPaid += Number(item.total_paid || 0);
-                groups[key].totalDebt += Number(item.debt_sum ?? item.total_debt ?? 0);
-            });
+        mainTableBody.appendChild(tr);
+    });
 
-            let groupIndex = 0;
-            Object.keys(groups).sort().reverse().forEach(key => {
-                const group = groups[key];
-                const currentGIdx = groupIndex++;
-
-                const headerTr = document.createElement('tr');
-                headerTr.id = `group-header-${currentGIdx}`;
-                headerTr.style.background = '#f1f5f9';
-                headerTr.style.cursor = 'pointer';
-                headerTr.style.fontWeight = 'bold';
-                                headerTr.innerHTML = `
-                    <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
-                        <span id="icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
-                        ${group.title} &nbsp;|&nbsp; 
-                                               Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
-                        Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp;
-                        Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
-                    </td>
-                `;
-                mainTableBody.appendChild(headerTr);
-
-                const childRows = [];
-                group.items.forEach((item, itemIdx) => {
-                    const tr = document.createElement('tr');
-                    const rowId = item.id || item.receipt_id || '';
-                    tr.dataset.id = rowId;
-                    tr.style.cursor = 'pointer';
-                    tr.className = `group-row-${currentGIdx}`;
-                    
-                    if (config && typeof config.render === 'function') {
-                        tr.innerHTML = config.render(item);
-                    }
-                    
-                    mainTableBody.appendChild(tr);
-                    childRows.push(tr);
-                });
-
-                headerTr.addEventListener('click', (e) => {
-                    const icon = document.getElementById(`icon-${currentGIdx}`);
-                    const isHidden = childRows[0].style.display === 'none';
-                    
-                    childRows.forEach(tr => {
-                        tr.style.display = isHidden ? '' : 'none';
-                    });
-                    
-                    icon.innerText = isHidden ? '[-]' : '[+]';
-                });
-            });
-
-                } else if (currentEntity === 'expenses_by_suppliers') {
+} else if (currentEntity === 'expenses_by_suppliers') {
             // Уровень "Месяцы поставщика": без плашек по месяцам — одна общая плашка "Итого"
                        let totalSum = 0, totalPaid = 0, totalDebt = 0;
             currentItems.forEach(item => {
@@ -10639,6 +10571,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
     }
 }
+
+
+
+
 
 let currentDetailController = null;
 
