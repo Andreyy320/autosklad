@@ -5327,7 +5327,8 @@ const listQuery = `
             SUM(qty)::numeric AS total_qty,
             SUM(net_sum)::numeric AS total_expense_sum,
             SUM(returned_sum)::numeric AS total_returned_sum,
-SUM(paid_sum)::numeric AS total_paid,            -- Долг за месяц = сумма долгов по каждой накладной отдельно (без взаимозачёта между накладными)
+            SUM(paid_netto)::numeric AS total_paid,
+            -- Долг за месяц = сумма долгов по каждой накладной отдельно (без взаимозачёта между накладными)
             SUM(receipt_debt)::numeric AS total_debt
         FROM receipt_calc
         GROUP BY postavhik_id, warehouse_id, month_str
