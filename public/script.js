@@ -9852,8 +9852,11 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
                 mainTableBody.appendChild(tr);
             });
 
-        } else {
-                
+               } else {
+            currentItems.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                const rowId = item.id || item.receipt_id || item.sklad_id || item.postavhik_id || '';
+
                 tr.dataset.id = rowId;
                 tr.style.cursor = 'pointer';
                 
