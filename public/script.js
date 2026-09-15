@@ -7931,7 +7931,7 @@ async function refreshData() {
        const lockedReceiptsStartDate = window.currentReceiptsStartDate;
     const lockedReceiptsEndDate = window.currentReceiptsEndDate;
     const lockedExpenseMonthStr = window.currentExpenseMonthStr;
-    if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad' || previousEntity === 'money_receipts_by_customers') {
+       if (previousEntity === 'money_receipts' || previousEntity === 'money_receipts_by_sklad' || previousEntity === 'money_receipts_by_customers_totals' || previousEntity === 'money_receipts_by_customers') {
         let parentParam = '';
         if (previousEntity === 'money_receipts_by_sklad') {
             parentParam = '';
@@ -7943,6 +7943,8 @@ async function refreshData() {
                 start_date: lockedReceiptsStartDate,
                 end_date: lockedReceiptsEndDate
             };
+        } else if (previousEntity === 'money_receipts_by_customers') {
+            parentParam = { group_key: window.currentGroupKey, sklad_id: lockedSkladId };
         } else {
             parentParam = lockedSkladId || savedSelectedItem;
         }
@@ -10007,6 +10009,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
     if (currentReceiptView === 'money_receipts_by_sklad') {
         window.currentSkladId = null;
         window.currentCustomerId = null;
+        window.currentGroupKey = null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
@@ -10023,7 +10026,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             btnBackExpense.onclick = null;
         }
         }
-    else if (currentReceiptView === 'money_receipts_by_customers') {
+    else if (currentReceiptView === 'money_receipts_by_customers_totals') {
         let skladId = '';
         if (parentId && typeof parentId === 'object') {
             skladId = parentId.sklad_id || parentId.warehouse_id || parentId.id;
@@ -10034,11 +10037,12 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
         if (skladId) window.currentSkladId = skladId;
 
+        window.currentGroupKey = null;
         window.currentCustomerId = null;
         window.currentRealizationId = null;
         window.currentRepairId = null;
 
-        fetchUrl = `/api/money_receipts_by_customers` + (skladId ? `?sklad_id=${skladId}` : '');
+        fetchUrl = `/api/money_receipts_by_customers_totals` + (skladId ? `?sklad_id=${skladId}` : '');
 
         if (detailContainer) detailContainer.style.display = 'none';
         if (btnAdd) btnAdd.style.display = 'none';
@@ -10049,6 +10053,32 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
             btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
                 loadReceiptMainData('money_receipts_by_sklad', '');
+            };
+        }
+    }
+    else if (currentReceiptView === 'money_receipts_by_customers') {
+        let groupKey = '';
+        if (parentId && typeof parentId === 'object') {
+            groupKey = parentId.group_key || '';
+        }
+        if (groupKey) window.currentGroupKey = groupKey;
+        const skladId = window.currentSkladId;
+
+        window.currentCustomerId = null;
+        window.currentRealizationId = null;
+        window.currentRepairId = null;
+
+        fetchUrl = `/api/money_receipts_by_customers?group_key=${window.currentGroupKey || ''}` + (skladId ? `&sklad_id=${skladId}` : '');
+
+        if (detailContainer) detailContainer.style.display = 'none';
+        if (btnAdd) btnAdd.style.display = 'none';
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+
+        if (btnBackExpense) {
+            btnBackExpense.style.display = 'inline-block';
+            btnBackExpense.onclick = () => {
+                loadReceiptMainData('money_receipts_by_customers_totals', window.currentSkladId);
             };
         }
     }
@@ -10116,8 +10146,10 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         if (btnBackExpense) {
             btnBackExpense.style.display = 'inline-block';
             btnBackExpense.onclick = () => {
-                if (window.currentSkladId) {
-                    loadReceiptMainData('money_receipts_by_customers', window.currentSkladId);
+                if (window.currentGroupKey) {
+                    loadReceiptMainData('money_receipts_by_customers', { group_key: window.currentGroupKey });
+                } else if (window.currentSkladId) {
+                    loadReceiptMainData('money_receipts_by_customers_totals', window.currentSkladId);
                 } else {
                     loadReceiptMainData('money_receipts_by_sklad', '');
                 }
@@ -10548,7 +10580,9 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.classList.add('selected-row');
 
                 selectedItem = item;
-                                        if (currentEntity === 'money_receipts_by_sklad') {
+                   if (currentEntity === 'money_receipts_by_sklad') {
+                        loadReceiptMainData('money_receipts_by_customers_totals', item);
+                    } else if (currentEntity === 'money_receipts_by_customers_totals') {
                         loadReceiptMainData('money_receipts_by_customers', item);
                     } else if (currentEntity === 'money_receipts_by_customers') {
                         let payload = { sklad_id: window.currentSkladId };
@@ -10751,7 +10785,11 @@ if (e.target.closest('button, [onclick]')) {
             }
 
         
-                        if (activeEntity === 'money_receipts_by_sklad') {
+                                         if (activeEntity === 'money_receipts_by_sklad') {
+                if (typeof loadReceiptMainData === 'function') {
+                    loadReceiptMainData('money_receipts_by_customers_totals', selectedItem);
+                }
+            } else if (activeEntity === 'money_receipts_by_customers_totals') {
                 if (typeof loadReceiptMainData === 'function') {
                     loadReceiptMainData('money_receipts_by_customers', selectedItem);
                 }
