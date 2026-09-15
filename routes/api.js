@@ -5674,7 +5674,7 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
     FROM supplier_payments sp
     LEFT JOIN receipts rec ON sp.receipt_id = rec.id
     WHERE sp.supplier_id = $1
-      AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') = $2)
+      AND ($2::text IS NULL OR TO_CHAR(sp.date, 'YYYY-MM') = $2)
     ORDER BY sp.date DESC, sp.id DESC;
     `;
 
