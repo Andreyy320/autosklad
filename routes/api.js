@@ -5313,7 +5313,6 @@ router.get('/expenses_by_suppliers', async (req, res) => {
                 LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
                 LEFT JOIN (
                     SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
-                    SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
                     FROM receipt_items ri
                     GROUP BY ri.receipt_id
                 ) sub_i ON rec.id = sub_i.receipt_id
