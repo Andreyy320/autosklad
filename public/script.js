@@ -2085,7 +2085,7 @@ money_receipts_by_customers_totals: {
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
        const actionHtml = debtNum <= 0 
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+   : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить
       </button>`;
 
@@ -9240,12 +9240,11 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
         const skladParam = window.currentSkladId ? `&sklad_id=${window.currentSkladId}` : '';
         let fetchUrl = `/api/expenses_by_receipts?postavhik_id=${postavhikId}${skladParam}`;
 
-        if (!isPayAll) {
+              if (!isPayAll) {
             const [year, month] = monthStr.split('-').map(Number);
-            const startDate = `${monthStr}-01`;
             const lastDay = new Date(year, month, 0).getDate();
             const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
-            fetchUrl += `&start_date=${startDate}&end_date=${endDate}`;
+            fetchUrl += `&end_date=${endDate}`;
         }
 
         const resp = await fetch(fetchUrl);
