@@ -2061,8 +2061,7 @@ money_receipts_by_customers_totals: {
         `;
     }
     },
-   // Уровень 2: клик по поставщику -> список его месяцев.
-   expenses_by_suppliers: {
+      expenses_by_suppliers: {
     title: 'Поставщик — по месяцам',
     columns: [
         { field: 'month_str', label: 'Месяц', width: '90px' },
@@ -2077,14 +2076,13 @@ money_receipts_by_customers_totals: {
     ],
     render: (item) => {
         const totalQty = Number(item.total_qty || 0).toFixed(2);
-const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
+        const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
         const totalPaid = Number(item.total_paid || 0).toFixed(2);
         const debtNum = Number(item.total_debt || 0);
         const totalDebt = debtNum.toFixed(2);
-                const cumulativeDebtNum = Number(item.cumulative_debt || 0);
+        const cumulativeDebtNum = Number(item.cumulative_debt || 0);
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
 
-        // ДОБАВИТЬ ЭТИ 3 СТРОКИ:
         const prevMonthsAmount = cumulativeDebtNum - debtNum;
         const prevMonthsLabel = prevMonthsAmount >= 0
             ? `${totalDebt} (за этот месяц) + ${prevMonthsAmount.toFixed(2)} (долг с прошлых месяцев)`
@@ -2093,12 +2091,11 @@ const expenseSum = Number(item.total_expense_sum || 0).toFixed(2);
             ? `${totalDebt} + ${prevMonthsAmount.toFixed(2)}`
             : `${totalDebt} − ${Math.abs(prevMonthsAmount).toFixed(2)}`;
 
-const actionHtml = cumulativeDebtNum <= 0
-    ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-   : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')"        style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-        Оплатить
-      </button>`;
-
+        const actionHtml = cumulativeDebtNum <= 0
+            ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">${debtNum > 0 ? 'Покрыто переплатой' : 'Оплачено'}</span>`
+            : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                Оплатить
+              </button>`;
 
         return `
             <td><span style="font-weight: 600; color: #0f172a;">${item.month_str || '—'}</span></td>
@@ -2108,16 +2105,17 @@ const actionHtml = cumulativeDebtNum <= 0
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-    ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`                    : totalPaid
+                    ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
+                    : totalPaid
                 }
-          // СТАЛО:
-</td>            <td style="text-align: right; font-weight: 500; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};">
-    ${totalDebt}
-</td>
-<td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${prevMonthsLabel}">
-    ${cumulativeDebt}
-    <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${prevMonthsSubtext}</div>
-</td>
+            </td>
+            <td style="text-align: right; font-weight: 500; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};">
+                ${totalDebt}
+            </td>
+            <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${prevMonthsLabel}">
+                ${cumulativeDebt}
+                <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${prevMonthsSubtext}</div>
+            </td>
             <td style="text-align: center;">
                 ${actionHtml}
             </td>
