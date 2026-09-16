@@ -5445,8 +5445,8 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 -- Итоговая сумма расходов с уменьшением на сумму возврата
                 (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0))::numeric AS total_expense_sum,
 GREATEST(0, COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0))::numeric AS total_paid,
-                GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(pay.paid_sum, 0))::numeric AS debt_sum
-            FROM receipts rec
+GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - GREATEST(0, COALESCE(pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0)))::numeric AS debt_sum
+                FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
             LEFT JOIN (
