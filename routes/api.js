@@ -4259,7 +4259,11 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) AS parts_sum,
                     COALESCE(sub_w.works_sum, 0) AS works_sum,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
-                    COALESCE(sub_p.paid_sum, 0) AS paid_sum,
+                    -- Оплата не может быть больше, чем сумма документа после вычета возврата (иначе "Оплачено" > "Итого")
+                    LEAST(
+                        COALESCE(sub_p.paid_sum, 0),
+                        (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))
+                    ) AS paid_sum,
                     COALESCE(ret_i.returned_sum, 0) AS returned_sum
                 FROM realizations real
                 LEFT JOIN (
@@ -4362,6 +4366,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
+
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id, start_date, end_date, customer_id, debtor_warehouse_id } = req.query;
@@ -4385,7 +4390,11 @@ router.get('/money_receipts', async (req, res) => {
                     GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
-                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    -- Оплата не может быть больше, чем сумма документа после вычета возврата
+                    LEAST(
+                        COALESCE(sub_p.paid_sum, 0),
+                        (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))
+                    )::numeric AS total_paid,
                     COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
                     
                     -- Полная потенциальная прибыль документа (если всё оплатят)
@@ -4421,9 +4430,7 @@ router.get('/money_receipts', async (req, res) => {
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
                 LEFT JOIN (
-                    -- Возврат от розничного покупателя (по реализации): считаем и сумму продажи,
-                    -- и закупочную себестоимость возвращённых штук (берём прямо из realization_items,
-                    -- там purchase_price уже есть, в отличие от move_items не нужен доп. join к приходу)
+                    -- Возврат от розничного покупателя (по реализации): сумма продажи + закупочная себестоимость
                     SELECT
                         ret.realization_id,
                         SUM(reti.quantity) AS returned_qty,
@@ -4607,7 +4614,11 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
-                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    -- Оплата не может быть больше, чем сумма документа после вычета возврата
+                    LEAST(
+                        COALESCE(sub_p.paid_sum, 0),
+                        (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))
+                    )::numeric AS total_paid,
                     COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
                     ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0))::numeric AS parts_profit,
@@ -4783,7 +4794,11 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
-                    COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
+                    -- Оплата не может быть больше, чем сумма документа после вычета возврата
+                    LEAST(
+                        COALESCE(sub_p.paid_sum, 0),
+                        (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))
+                    )::numeric AS total_paid,
                     COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
