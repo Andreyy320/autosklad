@@ -1849,7 +1849,6 @@ router.get('/receipts_history', async (req, res) => {
 
 
 
-// ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ИСТОРИЧЕСКИЙ СРЕЗ НА ДАТУ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1862,14 +1861,12 @@ router.get('/stock_balances', async (req, res) => {
         let molFilterClause = '';
         let dateFilterClause = '';
 
-        // 1. Фильтр по дате: берем срез на конец выбранного дня (до 23:59:59 включительно)
         if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
             queryParams.push(date);
             dateFilterClause = ` AND wb.created_at <= ($${paramIndex}::date + INTERVAL '1 day' - INTERVAL '1 second')`;
             paramIndex++;
         }
 
-        // 2. Фильтр по конкретному складу
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
             queryParams.push(warehouse_id);
             warehouseFilterForBatches = ` AND wb.warehouse_id = $${paramIndex}`;
@@ -1877,7 +1874,6 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
-        // 3. Фильтр по МОЛ (материально ответственному лицу)
         if (mol_id && mol_id.trim() !== '' && mol_id !== 'undefined' && mol_id !== 'null') {
             queryParams.push(mol_id);
             molFilterClause = ` AND s.id IN (
@@ -1892,7 +1888,6 @@ router.get('/stock_balances', async (req, res) => {
 
         const query = `
             WITH aggregated_stocks AS (
-                -- Суммируем остатки партий на выбранную историческую дату
                 SELECT 
                     wb.zaphasti_id,
                     wb.warehouse_id,
@@ -1904,7 +1899,6 @@ router.get('/stock_balances', async (req, res) => {
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
             ),
             latest_mol AS (
-                -- Берем последнюю привязку МОЛ к складу
                 SELECT DISTINCT ON (warehouse_id)
                     warehouse_id,
                     user_id
@@ -2150,6 +2144,7 @@ router.get('/part_movement_details', async (req, res) => {
                 WHERE reti.zaphasti_id = $1 
                   AND ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
+                  AND reti.realization_item_id IS NULL
 
                 UNION ALL
 
@@ -2191,6 +2186,39 @@ router.get('/part_movement_details', async (req, res) => {
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NOT NULL
                   AND ret.warehouse_id IS NOT NULL
+
+                UNION ALL
+
+                -- 7. Возвраты от розничного покупателя (по реализации) — приход на склад реализации
+                SELECT 
+                    COALESCE(ret.fact_date, ret.date) AS op_date,
+                    ret.doc_number AS doc_num,
+                    'Возврат от покупателя (реализация)' AS doc_type,
+                    CONCAT('Покупатель: ', COALESCE(cust_ret.name_full, cust_ret.name_short, 'Розничный покупатель')) AS source_info,
+                    CONCAT(COALESCE(s_relret.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_relret.mol_name, 'не назначен')) AS dest_info,
+                    reti.quantity AS qty,
+                    COALESCE(reti.price_rub, 0) AS price,
+                    reti.total_rub AS sum,
+                    NULL AS description,
+                    NULL::int AS warehouse_from_id,
+                    real_ret.sklad_id AS warehouse_to_id,
+                    real_ret.sklad_id AS sklad_id
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
+                JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                LEFT JOIN customers cust_ret ON real_ret.customer_id = cust_ret.id
+                LEFT JOIN skladi s_relret ON real_ret.sklad_id = s_relret.id
+                LEFT JOIN LATERAL (
+                    SELECT u_relret.name AS mol_name
+                    FROM mol mm_relret
+                    LEFT JOIN users u_relret ON mm_relret.user_id = u_relret.id
+                    WHERE mm_relret.warehouse_id = real_ret.sklad_id
+                    ORDER BY mm_relret.id DESC
+                    LIMIT 1
+                ) lm_relret ON true
+                WHERE reti.zaphasti_id = $1
+                  AND reti.realization_item_id IS NOT NULL
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2342,6 +2370,7 @@ router.get('/stock_batches', async (req, res) => {
                 JOIN returns ret ON reti.return_id = ret.id
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NULL
+                  AND reti.realization_item_id IS NULL
 
                 UNION ALL
 
@@ -2379,6 +2408,25 @@ router.get('/stock_batches', async (req, res) => {
                 LEFT JOIN move_items mi_ret4 ON reti.move_item_id = mi_ret4.id
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации
+                SELECT 
+                    reti.zaphasti_id,
+                    real_ret.sklad_id AS warehouse_filter_id,
+                    CONCAT('Возврат от покупателя ', ret.doc_number, ' (реализация)') AS document_name,
+                    COALESCE(ret.fact_date, ret.date) AS doc_date,
+                    NULL AS description,
+                    reti.quantity AS qty,
+                    reti.price_rub AS price,
+                    'Рубль ПМР' AS currency
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
+                JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                WHERE reti.zaphasti_id = $1
+                  AND reti.realization_item_id IS NOT NULL
             )
             SELECT 
                 z.article AS artikul,
@@ -2513,6 +2561,7 @@ router.get('/stock_movement', async (req, res) => {
                 JOIN returns ret ON reti.return_id = ret.id
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
+                  AND reti.realization_item_id IS NULL
 
                 UNION ALL
 
@@ -2537,6 +2586,18 @@ router.get('/stock_movement', async (req, res) => {
                 JOIN moves mv2 ON ret.move_id = mv2.id
                 LEFT JOIN move_items mi_ret4 ON reti.move_item_id = mi_ret4.id
                 WHERE reti.move_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 9. Возвраты от покупателя (по реализации, приход)
+                SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
+                       reti.quantity AS qty, reti.total_rub AS sum, 'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
+                JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                WHERE real_ret.sklad_id IS NOT NULL
+                  AND reti.realization_item_id IS NOT NULL
             ),
             latest_warehouse AS (
                 SELECT DISTINCT ON (zaphasti_id) zaphasti_id, warehouse_id
@@ -2617,7 +2678,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
