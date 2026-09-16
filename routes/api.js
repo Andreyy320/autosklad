@@ -3229,13 +3229,14 @@ router.get('/get-realization-logs', async (req, res) => {
                 c.gos_number AS car_number,
                 COALESCE(c.model, '—') AS car_model,
                 COALESCE(cust.name_full, cust.name_short) AS customer_name,
-                u.name AS user_name
+                                COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
             FROM realization_logs rl
             LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
             LEFT JOIN zaphasti z ON rl.zaphasti_id::text = z.id::text
             LEFT JOIN cars c ON rl.car_id::text = c.id::text
             LEFT JOIN customers cust ON rl.customer_id::text = cust.id::text
-            LEFT JOIN users u ON rl.user_id::text = u.id::text
+            LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
+            LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id::text = e.id::text
             ORDER BY rl.created_at DESC
             LIMIT 500;
         `;
@@ -6360,8 +6361,11 @@ router.get('/get-receipt-logs', async (req, res) => {
                 rl.receipt_id AS doc_id,
                 COALESCE(r.doc_number, '—') AS doc_number,
                 rl.created_at AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
-                s.name AS warehouse_to,
+                COALESCE(
+                    CASE WHEN rl.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END,
+                    'Система'
+                ) AS user_name,
+                                 s.name AS warehouse_to,
                 NULL AS warehouse_from,
                 p.name AS counterparty,
                 COALESCE(z.name, 'Документ прихода') AS part_name,
@@ -6385,8 +6389,9 @@ router.get('/get-receipt-logs', async (req, res) => {
             LEFT JOIN zaphasti z ON rl.zaphasti_id = z.id
             LEFT JOIN skladi s ON rl.warehouse_id = s.id
             LEFT JOIN postavhik p ON rl.supplier_id = p.id
-            LEFT JOIN users u ON rl.user_id = u.id
-            ORDER BY rl.created_at DESC
+            LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id = u.id
+            LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id = e.id
+                        ORDER BY rl.created_at DESC
             LIMIT 200
         `;
 
@@ -6405,12 +6410,13 @@ router.get('/get-move-logs', async (req, res) => {
                 ml.*,
                 z.name AS part_name,
                 z.article AS part_article,
-                u.name AS user_name,
+                                COALESCE(CASE WHEN ml.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name,
                 wh_from.name AS warehouse_from_name,
                 wh_to.name AS warehouse_to_name
             FROM move_logs ml
             LEFT JOIN zaphasti z ON ml.zaphasti_id = z.id
-            LEFT JOIN users u ON ml.user_id = u.id
+            LEFT JOIN users u ON ml.user_type = 'user' AND ml.user_id = u.id
+            LEFT JOIN employees e ON ml.user_type = 'employee' AND ml.user_id = e.id
             LEFT JOIN skladi wh_from ON ml.warehouse_from_id = wh_from.id
             LEFT JOIN skladi wh_to ON ml.warehouse_to_id = wh_to.id
             ORDER BY ml.created_at DESC
@@ -6435,12 +6441,13 @@ router.get('/get-repair-logs', async (req, res) => {
                 COALESCE(z.article, z.code, '—') AS part_article,
                 c.gos_number AS car_number,
                 COALESCE(c.model, '—') AS car_model,
-                u.name AS user_name
+                               COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
             FROM repair_logs rl
             LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
             LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
             LEFT JOIN cars c ON rl.car_id::text = c.id::text
-            LEFT JOIN users u ON rl.user_id::text = u.id::text
+            LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
+            LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id::text = e.id::text
             ORDER BY rl.created_at DESC
             LIMIT 500;
         `;
