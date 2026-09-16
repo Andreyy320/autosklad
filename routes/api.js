@@ -1886,6 +1886,8 @@ router.get('/stock_balances', async (req, res) => {
             paramIndex++;
         }
 
+        // Примечание: этот эндпоинт не пересчитывает движения, а суммирует уже готовую
+        // таблицу warehouse_batches, поэтому правка цены "возврата по реализации" сюда не относится.
         const query = `
             WITH aggregated_stocks AS (
                 SELECT 
@@ -2189,7 +2191,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 7. Возвраты от розничного покупателя (по реализации) — приход на склад реализации
+                -- 7. Возвраты от розничного покупателя (по реализации) — приход на склад реализации,
+                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
                 SELECT 
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
@@ -2197,8 +2200,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT('Покупатель: ', COALESCE(cust_ret.name_full, cust_ret.name_short, 'Розничный покупатель')) AS source_info,
                     CONCAT(COALESCE(s_relret.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_relret.mol_name, 'не назначен')) AS dest_info,
                     reti.quantity AS qty,
-                    COALESCE(reti.price_rub, 0) AS price,
-                    reti.total_rub AS sum,
+                    COALESCE(lr_relret.price, reti.price_rub, 0) AS price,
+                    (reti.quantity * COALESCE(lr_relret.price, reti.price_rub, 0)) AS sum,
                     NULL AS description,
                     NULL::int AS warehouse_from_id,
                     real_ret.sklad_id AS warehouse_to_id,
@@ -2217,6 +2220,14 @@ router.get('/part_movement_details', async (req, res) => {
                     ORDER BY mm_relret.id DESC
                     LIMIT 1
                 ) lm_relret ON true
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_relret.zaphasti_id AND r_p.date <= COALESCE(ret.fact_date, ret.date)
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_relret ON true
                 WHERE reti.zaphasti_id = $1
                   AND reti.realization_item_id IS NOT NULL
             )
@@ -2411,7 +2422,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации
+                -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации,
+                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
                 SELECT 
                     reti.zaphasti_id,
                     real_ret.sklad_id AS warehouse_filter_id,
@@ -2419,12 +2431,20 @@ router.get('/stock_batches', async (req, res) => {
                     COALESCE(ret.fact_date, ret.date) AS doc_date,
                     NULL AS description,
                     reti.quantity AS qty,
-                    reti.price_rub AS price,
+                    COALESCE(lr_relret9.price, reti.price_rub, 0) AS price,
                     'Рубль ПМР' AS currency
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
                 JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_relret.zaphasti_id AND r_p.date <= COALESCE(ret.fact_date, ret.date)
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_relret9 ON true
                 WHERE reti.zaphasti_id = $1
                   AND reti.realization_item_id IS NOT NULL
             )
@@ -2589,13 +2609,22 @@ router.get('/stock_movement', async (req, res) => {
 
                 UNION ALL
 
-                -- 9. Возвраты от покупателя (по реализации, приход)
+                -- 9. Возвраты от покупателя (по реализации, приход) —
+                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
                 SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
-                       reti.quantity AS qty, reti.total_rub AS sum, 'in' as op_type
+                       reti.quantity AS qty, (reti.quantity * COALESCE(lr_relret_mv.price, reti.price_rub, 0)) AS sum, 'in' as op_type
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
                 JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
+                    FROM receipt_items ri_p
+                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
+                    WHERE ri_p.zaphasti_id = ri_relret.zaphasti_id AND r_p.date <= COALESCE(ret.fact_date, ret.date)
+                    ORDER BY r_p.date DESC, r_p.id DESC
+                    LIMIT 1
+                ) lr_relret_mv ON true
                 WHERE real_ret.sklad_id IS NOT NULL
                   AND reti.realization_item_id IS NOT NULL
             ),
