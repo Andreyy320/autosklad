@@ -5438,20 +5438,40 @@ router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
             query = `
                 SELECT 
                     wdp.id, wdp.date, wdp.amount, wdp.comment,
-                    m.doc_number AS doc_number
+                    m.doc_number AS doc_number,
+                    'payment' AS row_type
                 FROM warehouse_debt_payments wdp
                 LEFT JOIN moves m ON wdp.move_id = m.id
                 WHERE wdp.warehouse_to_id = $1
                   AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
                   AND ($3::integer IS NULL OR wdp.warehouse_from_id = $3::integer)
-                ORDER BY wdp.date DESC, wdp.id DESC;
+
+                UNION ALL
+
+                SELECT
+                    (-reti.id) AS id,
+                    COALESCE(ret.fact_date, ret.date) AS date,
+                    (-COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS amount,
+                    CONCAT('Возврат по документу ', m.doc_number)::text AS comment,
+                    m.doc_number AS doc_number,
+                    'return' AS row_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN moves m ON ret.move_id = m.id
+                WHERE ret.is_posted = true
+                  AND m.warehouse_to_id = $1
+                  AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
+                  AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
+
+                ORDER BY date DESC, id DESC;
             `;
             params = [realId, month_str || null, sklad_id || null];
         } else {
             query = `
                 SELECT 
                     cp.id, cp.date, cp.amount, cp.comment,
-                    r.doc_number AS doc_number
+                    r.doc_number AS doc_number,
+                    'payment' AS row_type
                 FROM customer_payments cp
                 LEFT JOIN realizations r ON cp.realization_id = r.id
                 WHERE cp.customer_id = $1

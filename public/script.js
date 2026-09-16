@@ -9322,16 +9322,19 @@ async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) 
             return;
         }
 
-        let rowsHtml = payments.map(p => {
+               let rowsHtml = payments.map(p => {
             const pDate = p.date ? new Date(p.date).toLocaleDateString() : '—';
-            const pAmount = Number(p.amount || 0).toFixed(2);
+            const pAmountNum = Number(p.amount || 0);
+            const isReturn = p.row_type === 'return' || pAmountNum < 0;
+            const pAmount = pAmountNum.toFixed(2);
             const pDoc = p.doc_number || '—';
             const pComment = p.comment || '—';
+            const amountColor = isReturn ? '#dc2626' : '#16a34a';
             return `
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 10px; color: #4b5563;">${pDate}</td>
                     <td style="padding: 10px; color: #0f172a;">${pDoc}</td>
-                    <td style="padding: 10px; font-weight: bold; color: #16a34a; text-align: right;">${pAmount}</td>
+                    <td style="padding: 10px; font-weight: bold; color: ${amountColor}; text-align: right;">${pAmount}</td>
                     <td style="padding: 10px; color: #6b7280; font-size: 13px;">${pComment}</td>
                 </tr>
             `;
