@@ -9524,17 +9524,23 @@ router.delete('/:entity/:id', async (req, res) => {
                         );
                     }
 
-                    const dst = await client.query(
+                                        const dst = await client.query(
                         'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
                         [warehouseToId, item.zaphasti_id, receiptId]
                     );
-                    if (dst.rows.length > 0) {
-                        const dstQty = Number(dst.rows[0].quantity) || 0;
-                        if (dstQty <= qty) {
-                            await client.query('DELETE FROM warehouse_batches WHERE id = $1', [dst.rows[0].id]);
-                        } else {
-                            await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [qty, dst.rows[0].id]);
-                        }
+                    const dstQty = dst.rows.length > 0 ? (Number(dst.rows[0].quantity) || 0) : 0;
+
+                    if (dstQty < qty) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({
+                            error: `Нельзя удалить документ перемещения: часть товара (${qty - dstQty} шт. из ${qty} шт.) уже была списана со склада-получателя в другие документы.`
+                        });
+                    }
+
+                    if (dstQty === qty) {
+                        await client.query('DELETE FROM warehouse_batches WHERE id = $1', [dst.rows[0].id]);
+                    } else {
+                        await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [qty, dst.rows[0].id]);
                     }
                 }
             }
