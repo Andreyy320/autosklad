@@ -7092,8 +7092,8 @@ async function openReturnForm(entity, item = null) {
     const fieldLock = isPosted ? 'disabled' : '';
     const isEdit = !!item.id;
 
-    // Тип возврата: определяем по наличию move_id у редактируемого документа, иначе по умолчанию "поставщику"
-    const initialType = item.move_id ? 'from_customer' : 'to_supplier';
+    // Тип возврата: определяем по наличию move_id / realization_id у редактируемого документа, иначе по умолчанию "поставщику"
+    const initialType = item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier');
     const typeLocked = isEdit; // при редактировании тип менять нельзя
 
     let html = `
@@ -7105,7 +7105,7 @@ async function openReturnForm(entity, item = null) {
 
             <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:6px;">Тип возврата *</label>
-                <div style="display:flex; gap:16px;">
+                <div style="display:flex; flex-wrap:wrap; gap:16px;">
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
                         <input type="radio" name="return_type_ui" value="to_supplier" id="return-type-supplier"
                                ${initialType === 'to_supplier' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
@@ -7115,6 +7115,11 @@ async function openReturnForm(entity, item = null) {
                         <input type="radio" name="return_type_ui" value="from_customer" id="return-type-customer"
                                ${initialType === 'from_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
                         От покупателя (по перемещению)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
+                        <input type="radio" name="return_type_ui" value="from_retail_customer" id="return-type-retail-customer"
+                               ${initialType === 'from_retail_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
+                        От покупателя (по реализации)
                     </label>
                 </div>
             </div>
@@ -7140,6 +7145,17 @@ async function openReturnForm(entity, item = null) {
                 <div style="font-size:12px; color:#64748b; margin-top:4px;">Товар спишется со склада-получателя и вернётся на ваш склад-источник этого перемещения.</div>
             </div>
 
+            <div id="return-realization-block" style="display:${initialType === 'from_retail_customer' ? 'block' : 'none'};">
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Реализация, по которой возвращаем *</label>
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" id="return-realization-input" placeholder="🔍 Загрузка реализаций..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    <input type="hidden" name="realization_id" id="return-realization-select" value="${item.realization_id || ''}">
+                    <div class="searchable-select-dropdown" id="return-realization-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div style="font-size:12px; color:#64748b; margin-top:4px;">Товар вернётся на склад, с которого была продажа.</div>
+            </div>
+
             <input type="hidden" name="warehouse_id" id="return-warehouse-id" value="${item.warehouse_id || ''}">
             <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
             <div>
@@ -7162,21 +7178,27 @@ async function openReturnForm(entity, item = null) {
     drawer.innerHTML = html;
     openDrawer();
 
-    // Переключение блоков "приход" / "перемещение"
+    // Переключение блоков "приход" / "перемещение" / "реализация"
     const supplierBlock = document.getElementById('return-supplier-block');
     const moveBlock = document.getElementById('return-move-block');
+    const realizationBlock = document.getElementById('return-realization-block');
     document.querySelectorAll('input[name="return_type_ui"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
-            if (e.target.value === 'to_supplier') {
-                supplierBlock.style.display = 'block';
-                moveBlock.style.display = 'none';
-                document.getElementById('return-move-select').value = '';
-                document.getElementById('return-move-input').value = '';
-            } else {
-                supplierBlock.style.display = 'none';
-                moveBlock.style.display = 'block';
+            supplierBlock.style.display = e.target.value === 'to_supplier' ? 'block' : 'none';
+            moveBlock.style.display = e.target.value === 'from_customer' ? 'block' : 'none';
+            realizationBlock.style.display = e.target.value === 'from_retail_customer' ? 'block' : 'none';
+
+            if (e.target.value !== 'to_supplier') {
                 document.getElementById('return-receipt-select').value = '';
                 document.getElementById('return-receipt-input').value = '';
+            }
+            if (e.target.value !== 'from_customer') {
+                document.getElementById('return-move-select').value = '';
+                document.getElementById('return-move-input').value = '';
+            }
+            if (e.target.value !== 'from_retail_customer') {
+                document.getElementById('return-realization-select').value = '';
+                document.getElementById('return-realization-input').value = '';
             }
             // сбрасываем склад/поставщика при смене типа
             document.getElementById('return-warehouse-id').value = '';
@@ -7311,6 +7333,70 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список перемещений:', err);
     }
 
+    // Подгружаем список проведённых реализаций
+    try {
+        const res = await fetch('/api/realizations');
+        if (res.ok) {
+            const realizations = await res.json();
+            const hiddenInput = document.getElementById('return-realization-select');
+            const searchInput = document.getElementById('return-realization-input');
+            const dropdown = document.getElementById('return-realization-dropdown');
+
+            const postedRealizations = realizations.filter(r => r.is_posted === true || r.is_posted === 'true');
+            searchInput.placeholder = '🔍 Начните ввод для поиска реализацию...';
+
+            function realizationLabel(r) {
+                const dateStr = r.doc_date ? new Date(r.doc_date).toLocaleDateString() : '';
+                return `${r.doc_number} от ${dateStr} — ${r.customer_name || 'Розничный покупатель'} (${r.sklad_name || '?'})`;
+            }
+
+            function applyRealization(r) {
+                hiddenInput.value = r ? r.id : '';
+                searchInput.value = r ? realizationLabel(r) : '';
+                document.getElementById('return-warehouse-id').value = r ? (r.sklad_id || '') : '';
+                document.getElementById('return-supplier-id').value = '';
+            }
+
+            function renderDropdown(filterText) {
+                const filter = (filterText || '').toLowerCase().trim();
+                const matches = postedRealizations.filter(r => realizationLabel(r).toLowerCase().includes(filter));
+
+                dropdown.innerHTML = matches.map(r => `
+                    <div class="searchable-option" data-id="${r.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;">
+                        ${realizationLabel(r)}
+                    </div>
+                `).join('') || '<div style="padding: 8px 12px; color: #94a3b8; font-size: 13px;">Ничего не найдено</div>';
+
+                dropdown.querySelectorAll('.searchable-option').forEach(opt => {
+                    opt.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const r = postedRealizations.find(x => String(x.id) === opt.dataset.id);
+                        applyRealization(r);
+                        dropdown.style.display = 'none';
+                        searchInput.blur();
+                    });
+                });
+
+                dropdown.style.display = 'block';
+            }
+
+            searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+            searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.searchable-select-container') || !dropdown.contains(e.target) && e.target !== searchInput) {
+                    if (e.target !== searchInput) dropdown.style.display = 'none';
+                }
+            });
+
+            if (item.realization_id) {
+                const preselected = postedRealizations.find(r => String(r.id) === String(item.realization_id));
+                if (preselected) applyRealization(preselected);
+            }
+        }
+    } catch (err) {
+        console.error('Не удалось загрузить список реализаций:', err);
+    }
+
     // Удаление возврата прямо из формы
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
@@ -7364,21 +7450,32 @@ async function openReturnForm(entity, item = null) {
             formData.forEach((value, key) => { data[key] = value; });
 
             const selectedType = form.querySelector('input[name="return_type_ui"]:checked')?.value
-                || (item.move_id ? 'from_customer' : 'to_supplier');
+                || (item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier'));
             delete data.return_type_ui;
 
             if (selectedType === 'to_supplier') {
                 delete data.move_id;
+                delete data.realization_id;
                 if (!data.receipt_id) {
                     showAppNotification('Выберите приход, из которого делается возврат', 'warning');
                     isSubmitting = false;
                     if (saveButton) saveButton.disabled = false;
                     return;
                 }
-            } else {
+            } else if (selectedType === 'from_customer') {
                 delete data.receipt_id;
+                delete data.realization_id;
                 if (!data.move_id) {
                     showAppNotification('Выберите перемещение, по которому делается возврат', 'warning');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
+            } else {
+                delete data.receipt_id;
+                delete data.move_id;
+                if (!data.realization_id) {
+                    showAppNotification('Выберите реализацию, по которой делается возврат', 'warning');
                     isSubmitting = false;
                     if (saveButton) saveButton.disabled = false;
                     return;
@@ -7420,118 +7517,6 @@ async function openReturnForm(entity, item = null) {
 
 
 
-
-async function renderReturnItemsInline(returnDoc) {
-    selectedItem = returnDoc;
-
-    const tbody = document.getElementById('detail-body');
-    const headerTr = document.getElementById('detail-headers');
-    const titleEl = document.getElementById('detail-title');
-
-    const existingFilterRow = document.getElementById('detail-filter-row');
-    if (existingFilterRow) existingFilterRow.remove();
-
-    const isMoveReturn = !!returnDoc.move_id;
-
-    if (titleEl) {
-        titleEl.innerText = isMoveReturn
-            ? `Возврат ${returnDoc.doc_number || ''} — позиции из перемещения ${returnDoc.move_doc_number || ''}`
-            : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
-    }
-
-    if (headerTr) {
-        headerTr.innerHTML = `
-            <th style="padding:6px; border-bottom:1px solid #ddd;">Код</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd;">Наименование</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">${isMoveReturn ? 'Кол-во в перемещении' : 'Кол-во в приходе'}</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат, шт.</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма возврата</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:center;"></th>
-        `;
-    }
-
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
-
-    const sourceId = isMoveReturn ? returnDoc.move_id : returnDoc.receipt_id;
-    if (!sourceId) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${isMoveReturn ? 'документ перемещения' : 'приход'}</td></tr>`;
-        return;
-    }
-
-    const idField = isMoveReturn ? 'move_item_id' : 'receipt_item_id';
-    const availQueryParam = isMoveReturn ? 'move_id' : 'receipt_id';
-
-    try {
-        const [availRes, returnedRes] = await Promise.all([
-            fetch(`/api/returns/available-items?${availQueryParam}=${sourceId}`),
-            fetch(`/api/return_items?return_id=${returnDoc.id}`)
-        ]);
-
-        if (!availRes.ok) throw new Error('Не удалось загрузить позиции источника');
-        const availableItems = await availRes.json();
-        const returnedItems = returnedRes.ok ? await returnedRes.json() : [];
-
-        const returnedByItem = {};
-        returnedItems.forEach(ri => { returnedByItem[ri[idField]] = ri; });
-
-        if (availableItems.length === 0) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${isMoveReturn ? 'В этом перемещении нет позиций' : 'В этом приходе нет позиций'}</td></tr>`;
-            return;
-        }
-
-        const isPosted = returnDoc.is_posted === true || returnDoc.is_posted === 'true';
-
-        const rowsHtml = availableItems.map(i => {
-            const itemId = i[idField];
-            const existing = returnedByItem[itemId];
-            const currentQty = existing ? Number(existing.quantity) : 0;
-            const maxQty = Number(i.available_qty) + currentQty;
-            const price = Number(i.price_rub) || 0;
-            const sum = (currentQty * price).toFixed(2);
-
-            const btnLabel = currentQty > 0 ? 'Изменить' : 'Вернуть';
-
-            return `
-                <tr data-item-id="${itemId}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
-                    <td style="padding:6px;">${i.zaphasti_code || '—'}</td>
-                    <td style="padding:6px;">${i.zaphasti_name || '—'}</td>
-                    <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
-                    <td style="padding:6px; text-align:right; color:#16a34a;">${maxQty.toFixed(2)}</td>
-                    <td style="padding:6px; text-align:right;">${price.toFixed(2)}</td>
-                    <td style="padding:6px; text-align:right; ${currentQty > 0 ? 'font-weight:600; color:#0f172a;' : 'color:#94a3b8;'}">${currentQty > 0 ? currentQty.toFixed(2) : '—'}</td>
-                    <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${sum}</td>
-                    <td style="padding:6px; text-align:center;">
-                        <button type="button" class="return-open-drawer-btn"
-                                data-item-id="${itemId}"
-                                data-item-type="${isMoveReturn ? 'move' : 'receipt'}"
-                                data-return-item-id="${existing ? existing.id : ''}"
-                                data-code="${i.zaphasti_code || ''}"
-                                data-name="${(i.zaphasti_name || '').replace(/"/g, '&quot;')}"
-                                data-max="${maxQty}"
-                                data-current="${currentQty}"
-                                data-price="${price}"
-                                ${isPosted ? 'disabled' : ''}
-                                style="background:#16a34a; color:#fff; border:none; padding:6px 14px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">                            ${btnLabel}
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-        if (tbody) tbody.innerHTML = rowsHtml;
-
-        if (!isPosted) {
-            tbody.querySelectorAll('.return-open-drawer-btn').forEach(btn => {
-                btn.addEventListener('click', () => openReturnQtyDrawer(btn, returnDoc));
-            });
-        }
-    } catch (err) {
-        console.error(err);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
-    }
-}
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -7820,18 +7805,23 @@ async function renderReturnItemsInline(returnDoc) {
     if (existingFilterRow) existingFilterRow.remove();
 
     const isMoveReturn = !!returnDoc.move_id;
+    const isRealizationReturn = !isMoveReturn && !!returnDoc.realization_id;
 
     if (titleEl) {
         titleEl.innerText = isMoveReturn
             ? `Возврат ${returnDoc.doc_number || ''} — позиции из перемещения ${returnDoc.move_doc_number || ''}`
-            : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
+            : isRealizationReturn
+                ? `Возврат ${returnDoc.doc_number || ''} — позиции из реализации ${returnDoc.realization_doc_number || ''}`
+                : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
     }
+
+    const sourceColLabel = isMoveReturn ? 'Кол-во в перемещении' : (isRealizationReturn ? 'Кол-во в реализации' : 'Кол-во в приходе');
 
     if (headerTr) {
         headerTr.innerHTML = `
             <th style="padding:6px; border-bottom:1px solid #ddd;">Код</th>
             <th style="padding:6px; border-bottom:1px solid #ddd;">Наименование</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">${isMoveReturn ? 'Кол-во в перемещении' : 'Кол-во в приходе'}</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">${sourceColLabel}</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат, шт.</th>
@@ -7842,14 +7832,16 @@ async function renderReturnItemsInline(returnDoc) {
 
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
 
-    const sourceId = isMoveReturn ? returnDoc.move_id : returnDoc.receipt_id;
+    const sourceId = isMoveReturn ? returnDoc.move_id : (isRealizationReturn ? returnDoc.realization_id : returnDoc.receipt_id);
     if (!sourceId) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${isMoveReturn ? 'документ перемещения' : 'приход'}</td></tr>`;
+        const missingLabel = isMoveReturn ? 'документ перемещения' : (isRealizationReturn ? 'документ реализации' : 'приход');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${missingLabel}</td></tr>`;
         return;
     }
 
-    const idField = isMoveReturn ? 'move_item_id' : 'receipt_item_id';
-    const availQueryParam = isMoveReturn ? 'move_id' : 'receipt_id';
+    const idField = isMoveReturn ? 'move_item_id' : (isRealizationReturn ? 'realization_item_id' : 'receipt_item_id');
+    const availQueryParam = isMoveReturn ? 'move_id' : (isRealizationReturn ? 'realization_id' : 'receipt_id');
+    const itemTypeAttr = isMoveReturn ? 'move' : (isRealizationReturn ? 'realization' : 'receipt');
 
     try {
         const [availRes, returnedRes] = await Promise.all([
@@ -7865,7 +7857,8 @@ async function renderReturnItemsInline(returnDoc) {
         returnedItems.forEach(ri => { returnedByItem[ri[idField]] = ri; });
 
         if (availableItems.length === 0) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${isMoveReturn ? 'В этом перемещении нет позиций' : 'В этом приходе нет позиций'}</td></tr>`;
+            const emptyLabel = isMoveReturn ? 'В этом перемещении нет позиций' : (isRealizationReturn ? 'В этой реализации нет позиций' : 'В этом приходе нет позиций');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${emptyLabel}</td></tr>`;
             return;
         }
 
@@ -7893,7 +7886,7 @@ async function renderReturnItemsInline(returnDoc) {
                     <td style="padding:6px; text-align:center;">
                         <button type="button" class="return-open-drawer-btn"
                                 data-item-id="${itemId}"
-                                data-item-type="${isMoveReturn ? 'move' : 'receipt'}"
+                                data-item-type="${itemTypeAttr}"
                                 data-return-item-id="${existing ? existing.id : ''}"
                                 data-code="${i.zaphasti_code || ''}"
                                 data-name="${(i.zaphasti_name || '').replace(/"/g, '&quot;')}"
@@ -7920,9 +7913,10 @@ async function renderReturnItemsInline(returnDoc) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
     }
 }
+
 function openReturnQtyDrawer(btn, returnDoc) {
     const itemId = btn.dataset.itemId;
-    const itemType = btn.dataset.itemType; // 'receipt' | 'move'
+    const itemType = btn.dataset.itemType; // 'receipt' | 'move' | 'realization'
     const returnItemId = btn.dataset.returnItemId;
     const maxQty = Number(btn.dataset.max) || 0;
     const currentQty = Number(btn.dataset.current) || 0;
@@ -7990,9 +7984,14 @@ async function saveReturnQtyValue({ returnDoc, itemId, itemType, returnItemId, n
                 body: JSON.stringify({ quantity: newQty })
             });
         } else {
-            const body = itemType === 'move'
-                ? { return_id: returnDoc.id, move_item_id: itemId, quantity: newQty }
-                : { return_id: returnDoc.id, receipt_item_id: itemId, quantity: newQty };
+            let body;
+            if (itemType === 'move') {
+                body = { return_id: returnDoc.id, move_item_id: itemId, quantity: newQty };
+            } else if (itemType === 'realization') {
+                body = { return_id: returnDoc.id, realization_item_id: itemId, quantity: newQty };
+            } else {
+                body = { return_id: returnDoc.id, receipt_item_id: itemId, quantity: newQty };
+            }
 
             response = await fetch('/api/return_items', {
                 method: 'POST',

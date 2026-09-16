@@ -1000,23 +1000,34 @@ router.get('/returns', async (req, res) => {
                 COALESCE(p.name, 'Не указан') AS supplier_name,
                 rec.doc_number AS receipt_doc_number,
 
-                -- Новое: данные по возврату от покупателя (по перемещению)
+                -- Возврат от покупателя-склада (по перемещению)
                 mv.doc_number AS move_doc_number,
                 mv.date AS move_date,
                 mv.warehouse_from_id AS move_warehouse_from_id,
                 mv.warehouse_to_id AS move_warehouse_to_id,
                 sk_from.name AS move_warehouse_from_name,
                 sk_to.name AS move_warehouse_to_name,
+
+                -- Возврат от розничного покупателя (по реализации)
+                real.doc_number AS realization_doc_number,
+                real.doc_date AS realization_date,
+                real.sklad_id AS realization_sklad_id,
+                cust.name_full AS realization_customer_full_name,
+                cust.name_short AS realization_customer_short_name,
+
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN 'from_customer'
+                    WHEN ret.realization_id IS NOT NULL THEN 'from_retail_customer'
                     ELSE 'to_supplier'
                 END AS return_type,
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN COALESCE(sk_to.name, 'Не указан')
+                    WHEN ret.realization_id IS NOT NULL THEN COALESCE(cust.name_full, cust.name_short, 'Розничный покупатель')
                     ELSE COALESCE(p.name, 'Не указан')
                 END AS counterparty_name,
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN mv.doc_number
+                    WHEN ret.realization_id IS NOT NULL THEN real.doc_number
                     ELSE rec.doc_number
                 END AS source_doc_number
             FROM returns ret
@@ -1026,6 +1037,8 @@ router.get('/returns', async (req, res) => {
             LEFT JOIN moves mv ON ret.move_id = mv.id
             LEFT JOIN skladi sk_from ON mv.warehouse_from_id = sk_from.id
             LEFT JOIN skladi sk_to ON mv.warehouse_to_id = sk_to.id
+            LEFT JOIN realizations real ON ret.realization_id = real.id
+            LEFT JOIN customers cust ON real.customer_id = cust.id
             ORDER BY ret.date DESC, ret.id DESC;
         `;
         const result = await pool.query(query);
@@ -4134,9 +4147,9 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/returns/available-items', async (req, res) => {
     try {
-        const { receipt_id, move_id } = req.query;
-        if (!receipt_id && !move_id) {
-            return res.status(400).json({ error: 'Не указан receipt_id или move_id' });
+        const { receipt_id, move_id, realization_id } = req.query;
+        if (!receipt_id && !move_id && !realization_id) {
+            return res.status(400).json({ error: 'Не указан receipt_id, move_id или realization_id' });
         }
 
         if (move_id) {
@@ -4173,6 +4186,37 @@ router.get('/returns/available-items', async (req, res) => {
             return res.json(result.rows);
         }
 
+        if (realization_id) {
+            // Возврат от розничного покупателя (по реализации): у realization_items нет
+            // своего batch_id (позиция могла списаться сразу с нескольких партий по FIFO),
+            // поэтому "доступно к возврату" считаем как остаток самой позиции реализации:
+            // продано минус уже возвращено (по всем return_items этой позиции).
+            const query = `
+                SELECT
+                    ri.id AS realization_item_id,
+                    ri.zaphasti_id,
+                    z.code AS zaphasti_code,
+                    z.name AS zaphasti_name,
+                    ri.quantity AS original_qty,
+                    ri.price AS price_rub,
+                    ri.income_document_id AS receipt_id,
+                    real.sklad_id AS warehouse_id,
+                    GREATEST(ri.quantity - COALESCE(sub_ret.returned_qty, 0), 0) AS available_qty
+                FROM realization_items ri
+                JOIN realizations real ON ri.realization_id = real.id
+                LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
+                LEFT JOIN (
+                    SELECT realization_item_id, SUM(quantity) AS returned_qty
+                    FROM return_items
+                    GROUP BY realization_item_id
+                ) sub_ret ON sub_ret.realization_item_id = ri.id
+                WHERE ri.realization_id = $1
+                ORDER BY ri.id ASC;
+            `;
+            const result = await pool.query(query, [realization_id]);
+            return res.json(result.rows);
+        }
+
         const query = `
             SELECT 
                 ri.id AS receipt_item_id,
@@ -4201,7 +4245,6 @@ router.get('/returns/available-items', async (req, res) => {
 
 
 
-
 router.get('/money_receipts_by_sklad', async (req, res) => {
     try {
         const skladId = req.query.sklad_id || 1;
@@ -4213,11 +4256,11 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     real.id,
                     real.sklad_id,
                     COALESCE(sub_i.total_qty, 0) AS total_qty,
-                    COALESCE(sub_i.parts_sum, 0) AS parts_sum,
+                    GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) AS parts_sum,
                     COALESCE(sub_w.works_sum, 0) AS works_sum,
-                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0)) AS total_sum,
                     COALESCE(sub_p.paid_sum, 0) AS paid_sum,
-                    0 AS returned_sum
+                    COALESCE(ret_i.returned_sum, 0) AS returned_sum
                 FROM realizations real
                 LEFT JOIN (
                     SELECT ri.realization_id, SUM(ri.quantity) AS total_qty, SUM(COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity, 0)) AS parts_sum
@@ -4234,6 +4277,17 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     FROM customer_payments cp
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
+                LEFT JOIN (
+                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    SELECT
+                        ret.realization_id,
+                        SUM(reti.quantity) AS returned_qty,
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                    FROM return_items reti
+                    JOIN returns ret ON reti.return_id = ret.id
+                    WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
+                    GROUP BY ret.realization_id
+                ) ret_i ON real.id = ret_i.realization_id
                 WHERE real.is_posted = true
 
                 UNION ALL
@@ -4329,17 +4383,17 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
                     COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
                     COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
-                    COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                    GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
-                    0::numeric AS returned_sum,
+                    COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
                     
                     -- Полная потенциальная прибыль документа (если всё оплатят)
-                    ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
                     
                     -- Потенциальный плюс по запчастям и работам отдельно
-                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
@@ -4367,6 +4421,17 @@ router.get('/money_receipts', async (req, res) => {
                     FROM customer_payments cp
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
+                LEFT JOIN (
+                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    SELECT
+                        ret.realization_id,
+                        SUM(reti.quantity) AS returned_qty,
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                    FROM return_items reti
+                    JOIN returns ret ON reti.return_id = ret.id
+                    WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
+                    GROUP BY ret.realization_id
+                ) ret_i ON real.id = ret_i.realization_id
                 WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
                   AND ($2::date IS NULL OR real.doc_date::date >= $2::date)
@@ -4536,13 +4601,13 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
                     COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
                     COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
-                    COALESCE(sub_i.parts_sum, 0)::numeric AS parts_sum,
+                    GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
-                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
-                    0::numeric AS returned_sum,
-                    ((COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
-                    (COALESCE(sub_i.parts_sum, 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
+                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
@@ -4570,6 +4635,17 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     FROM customer_payments cp
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
+                LEFT JOIN (
+                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    SELECT
+                        ret.realization_id,
+                        SUM(reti.quantity) AS returned_qty,
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                    FROM return_items reti
+                    JOIN returns ret ON reti.return_id = ret.id
+                    WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
+                    GROUP BY ret.realization_id
+                ) ret_i ON real.id = ret_i.realization_id
                 WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
 
@@ -4701,9 +4777,9 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     NULL::integer AS debtor_warehouse_id,
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
-                    (COALESCE(sub_i.parts_sum, 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
-                    0::numeric AS returned_sum
+                    COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
                 LEFT JOIN skladi sk ON real.sklad_id = sk.id
@@ -4719,6 +4795,17 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     SELECT realization_id, SUM(amount) AS paid_sum
                     FROM customer_payments GROUP BY realization_id
                 ) sub_p ON real.id = sub_p.realization_id
+                LEFT JOIN (
+                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    SELECT
+                        ret.realization_id,
+                        SUM(reti.quantity) AS returned_qty,
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                    FROM return_items reti
+                    JOIN returns ret ON reti.return_id = ret.id
+                    WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
+                    GROUP BY ret.realization_id
+                ) ret_i ON real.id = ret_i.realization_id
                 WHERE real.is_posted = true
                   AND ($1::integer IS NULL OR real.sklad_id = $1)
 
@@ -7994,17 +8081,17 @@ async function writeRepairLog(client, req, data) {
 
 
 
-// POST /api/return_items - позиция возврата: по приходу (поставщику) или по перемещению (от покупателя)
+// POST /api/return_items - позиция возврата: по приходу (поставщику), по перемещению (от покупателя-склада) или по реализации (от розничного покупателя)
 router.post('/return_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const { return_id, receipt_item_id, move_item_id, quantity } = req.body;
+        const { return_id, receipt_item_id, move_item_id, realization_item_id, quantity } = req.body;
 
-        if (!return_id || (!receipt_item_id && !move_item_id)) {
+        if (!return_id || (!receipt_item_id && !move_item_id && !realization_item_id)) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Не указан return_id и ни receipt_item_id, ни move_item_id.' });
+            return res.status(400).json({ error: 'Не указан return_id и ни receipt_item_id, ни move_item_id, ни realization_item_id.' });
         }
 
         const numQty = Number(quantity) || 0;
@@ -8121,6 +8208,92 @@ router.post('/return_items', async (req, res) => {
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *;
             `, [return_id, move_item_id, mi.zaphasti_id, usedBatchId, numQty, priceWithMarkup, totalRub]);
+
+            await client.query(`
+                UPDATE returns SET total_sum = (
+                    SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+                ) WHERE id = $1
+            `, [return_id]);
+
+            await client.query('COMMIT');
+            return res.status(201).json(insertResult.rows[0]);
+        }
+
+        // ========== ВЕТКА 3: ВОЗВРАТ ОТ РОЗНИЧНОГО ПОКУПАТЕЛЯ (по реализации) ==========
+        if (realization_item_id) {
+            const riRes = await client.query(`
+                SELECT ri.*, real.id AS realization_id, real.sklad_id, real.is_posted AS realization_posted
+                FROM realization_items ri
+                JOIN realizations real ON ri.realization_id = real.id
+                WHERE ri.id = $1
+                FOR UPDATE OF ri
+            `, [realization_item_id]);
+
+            if (riRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Позиция реализации не найдена.' });
+            }
+            const ri = riRes.rows[0];
+
+            if (returnDoc.realization_id && Number(returnDoc.realization_id) !== Number(ri.realization_id)) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Эта позиция принадлежит другому документу реализации.' });
+            }
+            if (!ri.sklad_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'В документе реализации не указан склад.' });
+            }
+            if (!ri.income_document_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'У позиции реализации нет income_document_id — партию не найти.' });
+            }
+
+            // Сколько уже вернули по этой позиции ранее
+            const doneRes = await client.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS qty FROM return_items WHERE realization_item_id = $1',
+                [realization_item_id]
+            );
+            const alreadyReturned = Number(doneRes.rows[0].qty) || 0;
+            const leftByDoc = (Number(ri.quantity) || 0) - alreadyReturned;
+
+            if (numQty > leftByDoc) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `По этой позиции можно вернуть ещё ${leftByDoc} шт. (продано ${ri.quantity}, уже возвращено ${alreadyReturned}).` });
+            }
+
+            // Приходуем обратно на склад реализации, в ту же партию (по receipt_id = income_document_id)
+            const priceRub = Number(ri.purchase_price) || 0;
+
+            const batchRes = await client.query(`
+                SELECT id FROM warehouse_batches
+                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                ORDER BY id ASC LIMIT 1
+                FOR UPDATE
+            `, [ri.sklad_id, ri.zaphasti_id, ri.income_document_id]);
+
+            let usedBatchId = null;
+            if (batchRes.rows.length > 0) {
+                usedBatchId = batchRes.rows[0].id;
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2',
+                    [numQty, usedBatchId]);
+            } else {
+                const insertBatch = await client.query(`
+                    INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                    RETURNING id
+                `, [ri.sklad_id, ri.zaphasti_id, ri.income_document_id, priceRub, numQty]);
+                usedBatchId = insertBatch.rows[0].id;
+            }
+
+            // Сумма возврата считается по цене, по которой товар был продан (ri.price), а не закупочной
+            const soldPrice = Number(ri.price) || 0;
+            const totalRub = Number((soldPrice * numQty).toFixed(2));
+
+            const insertResult = await client.query(`
+                INSERT INTO return_items (return_id, realization_item_id, zaphasti_id, batch_id, quantity, price_rub, total_rub)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *;
+            `, [return_id, realization_item_id, ri.zaphasti_id, usedBatchId, numQty, soldPrice, totalRub]);
 
             await client.query(`
                 UPDATE returns SET total_sum = (
