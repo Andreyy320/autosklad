@@ -8604,6 +8604,39 @@ router.put('/return_items/:id', async (req, res) => {
                 }
             }
 
+               // ========== ВЕТКА: ВОЗВРАТ ОТ РОЗНИЧНОГО ПОКУПАТЕЛЯ (по реализации) ==========
+        } else if (currentItem.realization_item_id) {
+            const riRes = await client.query('SELECT quantity FROM realization_items WHERE id = $1', [currentItem.realization_item_id]);
+            if (riRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Позиция реализации не найдена.' });
+            }
+
+            // Сколько по этой позиции реализации уже возвращено другими строками (не считая текущую)
+            const doneRes = await client.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS qty FROM return_items WHERE realization_item_id = $1 AND id != $2',
+                [currentItem.realization_item_id, itemId]
+            );
+            const otherReturned = Number(doneRes.rows[0].qty) || 0;
+            const leftByDoc = (Number(riRes.rows[0].quantity) || 0) - otherReturned;
+            if (newQty > leftByDoc) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `По этой позиции реализации можно вернуть максимум ${leftByDoc} шт.` });
+            }
+
+            // При создании товар ПРИХОДОВАЛИ (+), значит увеличение возврата = ещё приход, уменьшение = списание
+            if (diff > 0) {
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [diff, currentItem.batch_id]);
+            } else if (diff < 0) {
+                const batchCheck = await client.query('SELECT quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
+                const availableQty = batchCheck.rows.length > 0 ? Number(batchCheck.rows[0].quantity) || 0 : 0;
+                if (-diff > availableQty) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: `Нельзя уменьшить возврат — на складе сейчас только ${availableQty} шт., часть уже продали.` });
+                }
+                await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [-diff, currentItem.batch_id]);
+            }
+
         // ========== ВЕТКА: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
         } else {
             const batchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
@@ -8668,7 +8701,7 @@ router.delete('/return_items/:id', async (req, res) => {
         }
 
         if (currentItem.move_item_id) {
-            // ВОЗВРАТ ОТ ПОКУПАТЕЛЯ: откатываем обе стороны обратного перемещения
+            // ВОЗВРАТ ПО ПЕРЕМЕЩЕНИЮ: откатываем обе стороны обратного перемещения
             const miRes = await client.query(`
                 SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
                 FROM move_items mi WHERE mi.id = $1
@@ -8689,6 +8722,18 @@ router.delete('/return_items/:id', async (req, res) => {
                         [currentItem.quantity, fromBatchRes.rows[0].id]);
                 }
             }
+        } else if (currentItem.realization_item_id) {
+            // ВОЗВРАТ ОТ РОЗНИЧНОГО ПОКУПАТЕЛЯ (по реализации): при создании товар ПРИХОДОВАЛИ на склад,
+            // значит откат — это списание, а не прибавление
+            const batchCheck = await client.query('SELECT quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
+            const availableQty = batchCheck.rows.length > 0 ? Number(batchCheck.rows[0].quantity) || 0 : 0;
+
+            if (Number(currentItem.quantity) > availableQty) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `Нельзя откатить возврат: на складе из этой партии сейчас только ${availableQty} шт. (нужно списать ${currentItem.quantity}) — часть уже продали.` });
+            }
+
+            await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
         } else {
             // ВОЗВРАТ ПОСТАВЩИКУ — как было
             await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
@@ -8737,7 +8782,7 @@ router.delete('/returns/:id', async (req, res) => {
 
         for (const item of itemsRes.rows) {
             if (item.move_item_id) {
-                // ВОЗВРАТ ОТ ПОКУПАТЕЛЯ: откатываем обе стороны обратного перемещения
+                // ВОЗВРАТ ПО ПЕРЕМЕЩЕНИЮ: откатываем обе стороны обратного перемещения
                 const miRes = await client.query(`
                     SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
                     FROM move_items mi WHERE mi.id = $1
@@ -8758,6 +8803,17 @@ router.delete('/returns/:id', async (req, res) => {
                             [item.quantity, fromBatchRes.rows[0].id]);
                     }
                 }
+            } else if (item.realization_item_id) {
+                // ВОЗВРАТ ОТ РОЗНИЧНОГО ПОКУПАТЕЛЯ (по реализации): откат = списание, товар при создании приходовали
+                const batchCheck = await client.query('SELECT quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [item.batch_id]);
+                const availableQty = batchCheck.rows.length > 0 ? Number(batchCheck.rows[0].quantity) || 0 : 0;
+
+                if (Number(item.quantity) > availableQty) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: `Нельзя удалить документ: на складе из партии позиции ${item.id} сейчас только ${availableQty} шт. (нужно списать ${item.quantity}) — часть уже продали.` });
+                }
+
+                await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [item.quantity, item.batch_id]);
             } else {
                 // ВОЗВРАТ ПОСТАВЩИКУ — как было
                 await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [item.quantity, item.batch_id]);
@@ -8778,8 +8834,6 @@ router.delete('/returns/:id', async (req, res) => {
         client.release();
     }
 });
-
-
 
 
 
@@ -9167,6 +9221,30 @@ router.put('/:entity/:id', async (req, res) => {
             }
         }
 
+        // ==================== ЗАЩИТА: НЕЛЬЗЯ СМЕНИТЬ ИСТОЧНИК ВОЗВРАТА, ЕСЛИ УЖЕ ЕСТЬ ПОЗИЦИИ ====================
+        // У returns ровно один из receipt_id / move_id / realization_id определяет тип и источник
+        // документа. Если позиции (return_items) уже добавлены — они физически привязаны к конкретной
+        // партии/приходу/перемещению/реализации. Смена источника в шапке "подменит" контекст, но не
+        // тронет ни warehouse_batches, ни уже посчитанные суммы в кассах — данные разъедутся.
+        if (entity === 'returns') {
+            const sourceFields = ['receipt_id', 'move_id', 'realization_id'];
+            const changesSource = sourceFields.some(f =>
+                req.body[f] !== undefined && String(req.body[f] || '') !== String(oldDoc[f] || '')
+            );
+            if (changesSource) {
+                const itemsCountRes = await client.query(
+                    'SELECT COUNT(*) AS cnt FROM return_items WHERE return_id = $1', [id]
+                );
+                if (Number(itemsCountRes.rows[0].cnt) > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        error: 'Нельзя сменить приход/перемещение/реализацию — в этом возврате уже есть позиции. Сначала удалите все позиции возврата (остатки на складе восстановятся автоматически), потом меняйте источник.'
+                    });
+                }
+            }
+        }
+        // ============================================================================================================
+
         if (entity === 'repair_works') {
             const targetRepairId = req.body.repair_id || oldDoc.repair_id;
 
@@ -9318,8 +9396,6 @@ router.put('/:entity/:id', async (req, res) => {
         client.release();
     }
 });
-
-
 
 // ==========================================
 // УНИВЕРСАЛЬНЫЙ DELETE (ПРОФЕССИОНАЛЬНЫЙ С ЛОГИРОВАНИЕМ И ЗАЩИТОЙ)
