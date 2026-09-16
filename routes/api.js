@@ -5294,8 +5294,8 @@ router.post('/realizations/:id/pay', async (req, res) => {
         const currentUserType = req.headers['x-user-type'] || 'user';
  
         const insertQuery = `
-            INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
-            VALUES ($1, $2, $3, $4, $5)
+                       INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id, user_type)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *;
         `;
         
@@ -5304,7 +5304,8 @@ router.post('/realizations/:id/pay', async (req, res) => {
             docId, 
             paymentAmount, 
             comment || 'Оплата по реализации',
-            currentUserId
+            currentUserId,
+            currentUserType
         ]);
  
         // Записываем в общий журнал аудита — этот роут раньше был "невидимым" для /logs
@@ -5415,8 +5416,8 @@ router.post('/moves/:id/pay', async (req, res) => {
         const currentUserId = req.headers['x-user-id'] || null;
  const currentUserType = req.headers['x-user-type'] || 'user';
         const insertMoveQuery = `
-            INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
+                        INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id, user_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *;
         `;
  
@@ -5426,9 +5427,9 @@ router.post('/moves/:id/pay', async (req, res) => {
             moveData.warehouse_to_id,
             paymentAmount,
             comment || 'Погашение долга по перемещению',
-            currentUserId
+            currentUserId,
+            currentUserType
         ]);
- 
         try {
                       await client.query(
                 `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity, user_type) 
@@ -5640,15 +5641,15 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
 
                           if (isWarehouseDebtor) {
                 await client.query(
-                    `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id, date)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
+                                     `INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id, date, user_type)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [row.doc_id, row.warehouse_from_id, row.warehouse_to_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString(), req.headers['x-user-type'] || 'user']
                 );
             } else {
                 await client.query(
-                    `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id, date)
-                     VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [realId, row.doc_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
+                                       `INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id, date, user_type)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [realId, row.doc_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString(), req.headers['x-user-type'] || 'user']
                 );
             }
 
@@ -6119,8 +6120,8 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
 
         // 2. Вставляем запись об оплате в твою таблицу supplier_payments
         const insertQuery = `
-            INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id)
-            VALUES ($1, $2, $3, $4, $5)
+                   INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, user_type)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *;
         `;
         
@@ -6129,7 +6130,8 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
             receiptId, 
             paymentAmount, 
             comment || 'Оплата по накладной',
-            currentUserId
+            currentUserId,
+            currentUserType
         ];
 
         const result = await pool.query(insertQuery, values);
@@ -6320,9 +6322,9 @@ AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') <= $2)
             const toApply = Math.min(remaining, debt);
 
             await client.query(
-                `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, date)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [id, row.receipt_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString()]
+                               `INSERT INTO supplier_payments (supplier_id, receipt_id, amount, comment, user_id, date, user_type)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [id, row.receipt_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString(), req.headers['x-user-type'] || 'user']
             );
 
             appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
@@ -6470,14 +6472,15 @@ router.get('/get-customer-payment-logs', async (req, res) => {
                 cp.id AS doc_id,
                 COALESCE(r.doc_number, '—') AS doc_number,
                 cp.date AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
+                COALESCE(CASE WHEN cp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система') AS user_name,
                 COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty,
                 cp.amount AS total_amount,
                 cp.comment AS reason
             FROM customer_payments cp
             LEFT JOIN realizations r ON cp.realization_id = r.id
             LEFT JOIN customers c ON cp.customer_id = c.id
-            LEFT JOIN users u ON cp.user_id = u.id
+            LEFT JOIN users u ON cp.user_type = 'user' AND cp.user_id = u.id
+            LEFT JOIN employees e ON cp.user_type = 'employee' AND cp.user_id = e.id
             ORDER BY cp.date DESC, cp.id DESC;
         `;
         const result = await pool.query(query);
@@ -6498,14 +6501,15 @@ router.get('/get-supplier-payment-logs', async (req, res) => {
                 sp.id AS doc_id,
                 COALESCE(r.doc_number, '—') AS doc_number,
                 sp.date AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
+                COALESCE(CASE WHEN sp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система') AS user_name,
                 p.name AS counterparty,
                 sp.amount AS total_amount,
                 sp.comment AS reason
             FROM supplier_payments sp
             LEFT JOIN receipts r ON sp.receipt_id = r.id
             LEFT JOIN postavhik p ON sp.supplier_id = p.id
-            LEFT JOIN users u ON sp.user_id = u.id
+            LEFT JOIN users u ON sp.user_type = 'user' AND sp.user_id = u.id
+            LEFT JOIN employees e ON sp.user_type = 'employee' AND sp.user_id = e.id
             ORDER BY sp.date DESC, sp.id DESC;
         `;
         const result = await pool.query(query);
@@ -6526,14 +6530,15 @@ router.get('/get-move-payment-logs', async (req, res) => {
                 wdp.id AS doc_id,
                 COALESCE(m.doc_number, '—') AS doc_number,
                 wdp.date AS created_at,
-                COALESCE(u.name, u.login, 'Система') AS user_name,
+                COALESCE(CASE WHEN wdp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система') AS user_name,
                 COALESCE(sk.name, 'Склад-получатель') AS counterparty,
                 wdp.amount AS total_amount,
                 wdp.comment AS reason
             FROM warehouse_debt_payments wdp
             LEFT JOIN moves m ON wdp.move_id = m.id
             LEFT JOIN skladi sk ON m.warehouse_to_id = sk.id
-            LEFT JOIN users u ON wdp.user_id = u.id
+            LEFT JOIN users u ON wdp.user_type = 'user' AND wdp.user_id = u.id
+            LEFT JOIN employees e ON wdp.user_type = 'employee' AND wdp.user_id = e.id
             ORDER BY wdp.date DESC, wdp.id DESC;
         `;
         const result = await pool.query(query);
@@ -6543,7 +6548,6 @@ router.get('/get-move-payment-logs', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // Функция записи лога приходов
 async function writeReceiptLog(client, req, data = {}) {
     try {
