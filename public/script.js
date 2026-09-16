@@ -1959,8 +1959,8 @@ const tableConfig = {
                 <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${totalDebt} + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)}</div>
             </td>            
             <td style="text-align: center;">
-               ${cumulativeDebtNum > 0
-    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" ...>Оплатить</button>`
+              ${cumulativeDebtNum > 0
+    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
 }
             </td>
@@ -9011,7 +9011,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
         <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-<label ...>Сумма к оплате (с учётом прошлых месяцев): <span ...>${debtSum}</span></label>
+    <label ...>Сумма к оплате (с учётом прошлых месяцев): <span ...>${debtSum}</span></label>
                 <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
