@@ -4362,7 +4362,6 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 router.get('/money_receipts', async (req, res) => {
     try {
         const { sklad_id, start_date, end_date, customer_id, debtor_warehouse_id } = req.query;
@@ -4381,7 +4380,7 @@ router.get('/money_receipts', async (req, res) => {
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
                     COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
-                    COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0)::numeric AS total_purchase_sum,
                     COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
                     GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
@@ -4390,10 +4389,10 @@ router.get('/money_receipts', async (req, res) => {
                     COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
                     
                     -- Полная потенциальная прибыль документа (если всё оплатят)
-                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
                     
                     -- Потенциальный плюс по запчастям и работам отдельно
-                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
@@ -4422,13 +4421,17 @@ router.get('/money_receipts', async (req, res) => {
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
                 LEFT JOIN (
-                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    -- Возврат от розничного покупателя (по реализации): считаем и сумму продажи,
+                    -- и закупочную себестоимость возвращённых штук (берём прямо из realization_items,
+                    -- там purchase_price уже есть, в отличие от move_items не нужен доп. join к приходу)
                     SELECT
                         ret.realization_id,
                         SUM(reti.quantity) AS returned_qty,
-                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum,
+                        SUM(COALESCE(ri_rel.purchase_price, 0) * reti.quantity) AS returned_purchase_sum
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
+                    LEFT JOIN realization_items ri_rel ON reti.realization_item_id = ri_rel.id
                     WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
                     GROUP BY ret.realization_id
                 ) ret_i ON real.id = ret_i.realization_id
@@ -4599,15 +4602,15 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     sk.name::text AS sklad_name,
                     1 AS total_orders,
                     COALESCE(sub_i.parts_qty, 0)::numeric AS parts_qty,
-                    COALESCE(sub_i.total_purchase_sum, 0)::numeric AS total_purchase_sum,
+                    GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0)::numeric AS total_purchase_sum,
                     COALESCE(sub_i.total_retail_sum, 0)::numeric AS total_retail_sum,
                     GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
                     COALESCE(sub_p.paid_sum, 0)::numeric AS total_paid,
                     COALESCE(ret_i.returned_sum, 0)::numeric AS returned_sum,
-                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
-                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - COALESCE(sub_i.total_purchase_sum, 0))::numeric AS parts_profit,
+                    ((GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0)) + COALESCE(sub_w.works_sum, 0))::numeric AS full_net_profit,
+                    (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) - GREATEST(COALESCE(sub_i.total_purchase_sum, 0) - COALESCE(ret_i.returned_purchase_sum, 0), 0))::numeric AS parts_profit,
                     COALESCE(sub_w.works_sum, 0)::numeric AS works_profit
                 FROM realizations real
                 JOIN customers c ON real.customer_id = c.id
@@ -4636,13 +4639,15 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     GROUP BY cp.realization_id
                 ) sub_p ON real.id = sub_p.realization_id
                 LEFT JOIN (
-                    -- Возврат от розничного покупателя (по реализации) — аналог m_ret ниже, только для realizations
+                    -- Возврат от розничного покупателя (по реализации): сумма продажи + закупочная себестоимость
                     SELECT
                         ret.realization_id,
                         SUM(reti.quantity) AS returned_qty,
-                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum
+                        SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS returned_sum,
+                        SUM(COALESCE(ri_rel.purchase_price, 0) * reti.quantity) AS returned_purchase_sum
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
+                    LEFT JOIN realization_items ri_rel ON reti.realization_item_id = ri_rel.id
                     WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
                     GROUP BY ret.realization_id
                 ) ret_i ON real.id = ret_i.realization_id
