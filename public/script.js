@@ -1959,10 +1959,10 @@ const tableConfig = {
                 <div style="font-weight: 400; font-size: 11px; color: #94a3b8;">${totalDebt} + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)}</div>
             </td>            
             <td style="text-align: center;">
-                ${totalDebtNum > 0
-    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
+               ${cumulativeDebtNum > 0
+    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" ...>Оплатить</button>`
     : ''
-    }
+}
             </td>
         `;
     }
@@ -9011,7 +9011,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
         <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма долга за месяц: <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>
+<label ...>Сумма к оплате (с учётом прошлых месяцев): <span ...>${debtSum}</span></label>
                 <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
@@ -9035,17 +9035,15 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
         const realId = isWarehouseDebtor ? String(groupKey).replace('wh_', '') : groupKey;
 
      const isPayAll = !monthStr || monthStr === 'undefined' || monthStr === 'null';
-const skladParam = skladId ? `&sklad_id=${skladId}` : '';
-const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
-let requestUrl = `/api/money_receipts?${idParam}${skladParam}`;
-if (!isPayAll) {
+    const skladParam = skladId ? `&sklad_id=${skladId}` : '';
+    const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
+    let requestUrl = `/api/money_receipts?${idParam}${skladParam}`;
+    if (!isPayAll) {
     const [year, month] = monthStr.split('-').map(Number);
-    const startDate = `${monthStr}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
-    requestUrl += `&start_date=${startDate}&end_date=${endDate}`;
-}
-
+    requestUrl += `&end_date=${endDate}`;
+    }
         const resp = await fetch(requestUrl);
         const listEl = document.getElementById('pay-docs-list');
         if (!listEl) return;

@@ -5091,7 +5091,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 ) pay ON m.id = pay.move_id
                 WHERE m.warehouse_to_id = $1
                   AND m.is_posted = true
-                  AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
+AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') <= $2)
                   AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
                   AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
                 ORDER BY m.date ASC, m.id ASC
@@ -5121,7 +5121,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 ) pay ON real.id = pay.realization_id
                 WHERE real.customer_id = $1
                   AND real.is_posted = true
-                  AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') = $2)
+AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') <= $2)
                   AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
                   AND ($4::integer[] IS NULL OR real.id = ANY($4::integer[]))
                 ORDER BY real.doc_date ASC, real.id ASC
