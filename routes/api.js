@@ -2084,8 +2084,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 5. Возвраты поставщику (Склад -> Поставщик) — списание происходит сразу при добавлении позиции возврата,
-                --    поэтому здесь, как и в блоке "Приходы", is_posted не проверяем
+                -- 5. Возвраты поставщику (Склад -> Поставщик)
                 SELECT 
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
@@ -2117,16 +2116,23 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 6. Возвраты от покупателя (по перемещению) — по исходной закупочной цене, без наценки
+                -- 6. Возвраты от покупателя (по перемещению) — знак зависит от того, какой склад выбран в фильтре:
+                --    склад покупателя (mv.warehouse_to_id) видит расход, свой склад (ret.warehouse_id) — приход
                 SELECT 
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
                     'Возврат от покупателя' AS doc_type,
                     CONCAT('Склад-получатель: ', COALESCE(s_to.name, 'Не указан')) AS source_info,
                     CONCAT(COALESCE(s_ret2.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_ret2.mol_name, 'не назначен')) AS dest_info,
-                    reti.quantity AS qty,
+                    CASE 
+                        WHEN ${whParamIndex ? `mv.warehouse_to_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * reti.quantity)
+                        ELSE reti.quantity
+                    END AS qty,
                     COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub) AS price,
-                    (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
+                    CASE 
+                        WHEN ${whParamIndex ? `mv.warehouse_to_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub))
+                        ELSE (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub))
+                    END AS sum,
                     NULL AS description,
                     mv.warehouse_to_id AS warehouse_from_id,
                     ret.warehouse_id AS warehouse_to_id,
@@ -2164,11 +2170,9 @@ router.get('/part_movement_details', async (req, res) => {
     }
 });
 
-// ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
     try {
         let { zaphasti_id, warehouse_id, date } = req.query;
-
 
         if (!zaphasti_id) {
             return res.status(400).json({ error: 'Не указан zaphasti_id' });
@@ -2190,18 +2194,15 @@ router.get('/stock_batches', async (req, res) => {
         }
 
         if (hasDate) {
-            // Превращаем переданную дату (например "01.09.2026 10:59") в нормальный формат YYYY-MM-DD
             let cleanDate = date.trim();
             if (cleanDate.includes('.')) {
-                const parts = cleanDate.split(' ')[0].split('.'); // Разбираем DD.MM.YYYY
+                const parts = cleanDate.split(' ')[0].split('.');
                 if (parts.length === 3) {
                     cleanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
                 }
             } else {
                 cleanDate = cleanDate.substring(0, 10);
             }
-
-            // Фильтруем строго по конец выбранного дня, чтобы отсечь 2 и 3 число
             dateCondition = ` AND m.doc_date <= ($${paramIndex}::timestamp + INTERVAL '1 day' - INTERVAL '1 second')`;
             queryParams.push(cleanDate);
             paramIndex++;
@@ -2305,9 +2306,9 @@ router.get('/stock_batches', async (req, res) => {
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NULL
 
-                              UNION ALL
+                UNION ALL
 
-                -- 7. Возвраты от покупателя (по перемещению) — по исходной закупочной цене, без наценки
+                -- 7. Возвраты от покупателя — ПРИХОД на свой склад (без наценки)
                 SELECT 
                     reti.zaphasti_id,
                     ret.warehouse_id AS warehouse_filter_id,
@@ -2320,6 +2321,25 @@ router.get('/stock_batches', async (req, res) => {
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
+                WHERE reti.zaphasti_id = $1
+                  AND reti.move_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 8. Возвраты от покупателя — РАСХОД со склада покупателя (без наценки)
+                SELECT 
+                    reti.zaphasti_id,
+                    mv2.warehouse_to_id AS warehouse_filter_id,
+                    CONCAT('Возврат от покупателя ', ret.doc_number) AS document_name,
+                    COALESCE(ret.fact_date, ret.date) AS doc_date,
+                    NULL AS description,
+                    (-1 * reti.quantity) AS qty,
+                    COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret4.markup_percent, 0) / 100, 0), reti.price_rub) AS price,
+                    'Рубль ПМР' AS currency
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN moves mv2 ON ret.move_id = mv2.id
+                LEFT JOIN move_items mi_ret4 ON reti.move_item_id = mi_ret4.id
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NOT NULL
             )
@@ -2344,7 +2364,6 @@ router.get('/stock_batches', async (req, res) => {
         `;
 
         const result = await pool.query(query, queryParams);
-        
         res.json(result.rows);
 
     } catch (err) {
@@ -2353,11 +2372,9 @@ router.get('/stock_batches', async (req, res) => {
     }
 });
 
-// ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
         const { start_date, end_date, warehouse_id } = req.query;
-
 
         const queryParams = [];
         let paramIndex = 1;
@@ -2389,7 +2406,7 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход) — по цене последнего прихода на момент перемещения
+                -- 2. Перемещения (приход)
                 SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_in.price, mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
@@ -2405,7 +2422,7 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход) — по цене последнего прихода на момент перемещения
+                -- 3. Перемещения (расход)
                 SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_out.price, mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
@@ -2421,7 +2438,7 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 4. Списания в ремонт — по цене последнего прихода на момент списания
+                -- 4. Списания в ремонт
                 SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(lr_rep.price, rep_i.price, 0)) AS sum, 'out' as op_type
                 FROM repair_items rep_i 
                 JOIN repairs rep ON rep_i.repair_id = rep.id 
@@ -2437,7 +2454,7 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 5. Реализации (продажи) — по цене последнего прихода на момент реализации
+                -- 5. Реализации (продажи)
                 SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
@@ -2460,9 +2477,9 @@ router.get('/stock_movement', async (req, res) => {
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
 
-                               UNION ALL
+                UNION ALL
 
-                -- 7. Возвраты от покупателя (приход) — по исходной закупочной цене, без наценки
+                -- 7. Возвраты от покупателя — ПРИХОД на свой склад (без наценки)
                 SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty,
                        (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret3.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
                        'in' as op_type
@@ -2471,14 +2488,24 @@ router.get('/stock_movement', async (req, res) => {
                 LEFT JOIN move_items mi_ret3 ON reti.move_item_id = mi_ret3.id
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 8. Возвраты от покупателя — РАСХОД со склада покупателя (без наценки)
+                SELECT reti.zaphasti_id, mv2.warehouse_to_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty,
+                       (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret4.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
+                       'out' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN moves mv2 ON ret.move_id = mv2.id
+                LEFT JOIN move_items mi_ret4 ON reti.move_item_id = mi_ret4.id
+                WHERE reti.move_item_id IS NOT NULL
             ),
-            -- Последний склад для каждой запчасти
             latest_warehouse AS (
                 SELECT DISTINCT ON (zaphasti_id) zaphasti_id, warehouse_id
                 FROM all_operations
                 ORDER BY zaphasti_id, date DESC
             ),
-            -- Остатки на начало периода
             opening_balance AS (
                 SELECT 
                     zaphasti_id,
@@ -2490,7 +2517,6 @@ router.get('/stock_movement', async (req, res) => {
                 ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),
-            -- Обороты за период
             turnover_period AS (
                 SELECT 
                     zaphasti_id,
@@ -2506,7 +2532,6 @@ router.get('/stock_movement', async (req, res) => {
                 ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),
-            -- Сбор всех уникальных пар запчасть-склад, участвующих в отчете
             combined_keys AS (
                 SELECT zaphasti_id, warehouse_id FROM opening_balance
                 UNION
@@ -2555,6 +2580,8 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
