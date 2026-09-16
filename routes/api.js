@@ -5289,7 +5289,8 @@ router.post('/realizations/:id/pay', async (req, res) => {
  
         // Кто провёл оплату — берём из проверенного токена (authMiddleware подставляет
         // сюда настоящий id пользователя, а не то, что прислал клиент в заголовке).
-        const currentUserId = req.headers['x-user-id'] || null;
+                const currentUserId = req.headers['x-user-id'] || null;
+        const currentUserType = req.headers['x-user-type'] || 'user';
  
         const insertQuery = `
             INSERT INTO customer_payments (customer_id, realization_id, amount, comment, user_id)
@@ -5307,16 +5308,17 @@ router.post('/realizations/:id/pay', async (req, res) => {
  
         // Записываем в общий журнал аудита — этот роут раньше был "невидимым" для /logs
         try {
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                       await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity, user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
                     currentUserId,
                     'PAYMENT',
                     'customer_payments',
                     result.rows[0].id,
                     JSON.stringify({ customer_id: customerId, realization_id: docId, amount: paymentAmount }),
-                    'customer_payments'
+                    'customer_payments',
+                    currentUserType
                 ]
             );
         } catch (logErr) {
@@ -5410,7 +5412,7 @@ router.post('/moves/:id/pay', async (req, res) => {
  
         // Кто провёл погашение — берём из проверенного токена
         const currentUserId = req.headers['x-user-id'] || null;
- 
+ const currentUserType = req.headers['x-user-type'] || 'user';
         const insertMoveQuery = `
             INSERT INTO warehouse_debt_payments (move_id, warehouse_from_id, warehouse_to_id, amount, comment, user_id)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -5427,16 +5429,17 @@ router.post('/moves/:id/pay', async (req, res) => {
         ]);
  
         try {
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                      await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity, user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
                     currentUserId,
                     'PAYMENT',
                     'warehouse_debt_payments',
                     result.rows[0].id,
                     JSON.stringify({ move_id: docId, amount: paymentAmount }),
-                    'warehouse_debt_payments'
+                    'warehouse_debt_payments',
+                    currentUserType
                 ]
             );
         } catch (logErr) {
@@ -6110,7 +6113,8 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
         const supplierId = postavhik_id ? parseInt(postavhik_id) : receiptCheck.rows[0].supplier_id;
 
         // Кто провёл оплату — берём из проверенного токена
-        const currentUserId = req.headers['x-user-id'] || null;
+                const currentUserId = req.headers['x-user-id'] || null;
+        const currentUserType = req.headers['x-user-type'] || 'user';
 
         // 2. Вставляем запись об оплате в твою таблицу supplier_payments
         const insertQuery = `
@@ -6130,16 +6134,17 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
         const result = await pool.query(insertQuery, values);
 
         try {
-            await pool.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+                      await pool.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, entity, user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
                 [
                     currentUserId,
                     'PAYMENT',
                     'supplier_payments',
                     result.rows[0].id,
                     JSON.stringify({ supplier_id: supplierId, receipt_id: receiptId, amount: paymentAmount }),
-                    'supplier_payments'
+                    'supplier_payments',
+                    currentUserType
                 ]
             );
         } catch (logErr) {
@@ -7528,14 +7533,15 @@ async function writeMoveLog(client, req, data) {
     try {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+              const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO move_logs (
                 action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
                 zaphasti_id, quantity, price, currency, price_rub, total_rub, 
-                income_document_id, description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+                income_document_id, description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
             [
                 data.action,
                 data.move_id,
@@ -7551,7 +7557,8 @@ async function writeMoveLog(client, req, data) {
                 data.income_document_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -7702,14 +7709,15 @@ async function writeMoveLog(client, req, data) {
     try {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+               const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO move_logs (
                 action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
                 zaphasti_id, quantity, price, currency, price_rub, total_rub, 
-                income_document_id, description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+                income_document_id, description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
             [
                 data.action,
                 data.move_id,
@@ -7725,7 +7733,8 @@ async function writeMoveLog(client, req, data) {
                 data.income_document_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -7887,14 +7896,15 @@ async function writeRepairLog(client, req, data) {
     try {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+               const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO repair_logs (
                 action, repair_id, document_number, warehouse_id, car_id, 
                 zaphast_id, quantity, price, total, receipt_id, 
-                description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
             [
                 data.action,
                 data.repair_id,
@@ -7908,7 +7918,8 @@ async function writeRepairLog(client, req, data) {
                 data.receipt_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -8119,14 +8130,15 @@ async function writeRepairLog(client, req, data) {
     try {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+                const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO repair_logs (
                 action, repair_id, document_number, warehouse_id, car_id, 
                 zaphast_id, quantity, price, total, receipt_id, 
-                description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
             [
                 data.action,
                 data.repair_id,
@@ -8140,7 +8152,8 @@ async function writeRepairLog(client, req, data) {
                 data.receipt_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -9718,9 +9731,9 @@ router.delete('/:entity/:id', async (req, res) => {
                 detailsJson = '{}';
             }
 
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                        await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity, user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)`,
                 [
                     userId,
                     'DELETE',
@@ -9728,7 +9741,8 @@ router.delete('/:entity/:id', async (req, res) => {
                     id,
                     detailsJson,
                     clientIp,
-                    entity
+                    entity,
+                    currentUserType
                 ]
             );
         } catch (logErr) {
