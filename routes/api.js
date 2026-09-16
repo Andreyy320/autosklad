@@ -8702,9 +8702,11 @@ router.delete('/return_items/:id', async (req, res) => {
 
         if (currentItem.move_item_id) {
             // ВОЗВРАТ ПО ПЕРЕМЕЩЕНИЮ: откатываем обе стороны обратного перемещения
-            const miRes = await client.query(`
-                SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
-                FROM move_items mi WHERE mi.id = $1
+                     const miRes = await client.query(`
+                SELECT m.warehouse_from_id, m.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE mi.id = $1
             `, [currentItem.move_item_id]);
 
             // 1. Возвращаем товар назад на склад-получатель (откуда списывали при возврате)
@@ -8783,9 +8785,11 @@ router.delete('/returns/:id', async (req, res) => {
         for (const item of itemsRes.rows) {
             if (item.move_item_id) {
                 // ВОЗВРАТ ПО ПЕРЕМЕЩЕНИЮ: откатываем обе стороны обратного перемещения
-                const miRes = await client.query(`
-                    SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
-                    FROM move_items mi WHERE mi.id = $1
+                               const miRes = await client.query(`
+                    SELECT m.warehouse_from_id, m.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
+                    FROM move_items mi
+                    JOIN moves m ON mi.move_id = m.id
+                    WHERE mi.id = $1
                 `, [item.move_item_id]);
 
                 // 1. Возвращаем товар назад на склад-получатель (откуда списывали при возврате)
