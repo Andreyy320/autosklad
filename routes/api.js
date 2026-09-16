@@ -1810,6 +1810,8 @@ router.get('/receipts_history', async (req, res) => {
     }
 });
 
+
+
 // ==================== ОСТАТКИ ЗАПЧАСТЕЙ (ИСТОРИЧЕСКИЙ СРЕЗ НА ДАТУ) ====================
 router.get('/stock_balances', async (req, res) => {
     try {
@@ -2098,19 +2100,53 @@ router.get('/part_movement_details', async (req, res) => {
                     NULL::int AS warehouse_to_id,
                     NULL::int AS sklad_id
                 FROM return_items reti
-    JOIN returns ret ON reti.return_id = ret.id
-    LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
-    LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
-       LEFT JOIN LATERAL (
-    SELECT u_ret.name AS mol_name
-    FROM mol mm_ret
-    LEFT JOIN users u_ret ON mm_ret.user_id = u_ret.id
-    WHERE mm_ret.warehouse_id = ret.warehouse_id
-    ORDER BY mm_ret.id DESC
-    LIMIT 1
-    ) lm_ret ON true
-    WHERE reti.zaphasti_id = $1 
-  AND ret.warehouse_id IS NOT NULL
+                JOIN returns ret ON reti.return_id = ret.id
+                LEFT JOIN skladi s_ret ON ret.warehouse_id = s_ret.id
+                LEFT JOIN postavhik p_ret ON ret.supplier_id = p_ret.id
+                LEFT JOIN LATERAL (
+                    SELECT u_ret.name AS mol_name
+                    FROM mol mm_ret
+                    LEFT JOIN users u_ret ON mm_ret.user_id = u_ret.id
+                    WHERE mm_ret.warehouse_id = ret.warehouse_id
+                    ORDER BY mm_ret.id DESC
+                    LIMIT 1
+                ) lm_ret ON true
+                WHERE reti.zaphasti_id = $1 
+                  AND ret.warehouse_id IS NOT NULL
+                  AND reti.move_item_id IS NULL
+
+                UNION ALL
+
+                -- 6. Возвраты от покупателя (по перемещению) — приход обратно на свой склад
+                SELECT 
+                    COALESCE(ret.fact_date, ret.date) AS op_date,
+                    ret.doc_number AS doc_num,
+                    'Возврат от покупателя' AS doc_type,
+                    CONCAT('Склад-получатель: ', COALESCE(s_to.name, 'Не указан')) AS source_info,
+                    CONCAT(COALESCE(s_ret2.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_ret2.mol_name, 'не назначен')) AS dest_info,
+                    reti.quantity AS qty,
+                    COALESCE(reti.price_rub, 0) AS price,
+                    reti.total_rub AS sum,
+                    NULL AS description,
+                    mv.warehouse_to_id AS warehouse_from_id,
+                    ret.warehouse_id AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN moves mv ON ret.move_id = mv.id
+                LEFT JOIN skladi s_ret2 ON ret.warehouse_id = s_ret2.id
+                LEFT JOIN skladi s_to ON mv.warehouse_to_id = s_to.id
+                LEFT JOIN LATERAL (
+                    SELECT u_ret2.name AS mol_name
+                    FROM mol mm_ret2
+                    LEFT JOIN users u_ret2 ON mm_ret2.user_id = u_ret2.id
+                    WHERE mm_ret2.warehouse_id = ret.warehouse_id
+                    ORDER BY mm_ret2.id DESC
+                    LIMIT 1
+                ) lm_ret2 ON true
+                WHERE reti.zaphasti_id = $1
+                  AND reti.move_item_id IS NOT NULL
+                  AND ret.warehouse_id IS NOT NULL
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2126,7 +2162,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ==================== ИСТОРИЯ ДВИЖЕНИЙ ТОВАРА (НИЖНЯЯ ТАБЛИЦА) ====================
 router.get('/stock_batches', async (req, res) => {
@@ -2267,6 +2302,24 @@ router.get('/stock_batches', async (req, res) => {
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 WHERE reti.zaphasti_id = $1
+                  AND reti.move_item_id IS NULL
+
+                UNION ALL
+
+                -- 7. Возвраты от покупателя (по перемещению) — приход обратно на свой склад
+                SELECT 
+                    reti.zaphasti_id,
+                    ret.warehouse_id AS warehouse_filter_id,
+                    CONCAT('Возврат от покупателя ', ret.doc_number) AS document_name,
+                    COALESCE(ret.fact_date, ret.date) AS doc_date,
+                    NULL AS description,
+                    reti.quantity AS qty,
+                    reti.price_rub AS price,
+                    'Рубль ПМР' AS currency
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE reti.zaphasti_id = $1
+                  AND reti.move_item_id IS NOT NULL
             )
             SELECT 
                 z.article AS artikul,
@@ -2297,6 +2350,7 @@ router.get('/stock_batches', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ДВИЖЕНИЕ ЗАПЧАСТЕЙ (ОБОРОТНАЯ ВЕДОМОСТЬ) ====================
 router.get('/stock_movement', async (req, res) => {
     try {
@@ -2402,6 +2456,16 @@ router.get('/stock_movement', async (req, res) => {
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 WHERE ret.warehouse_id IS NOT NULL
+                  AND reti.move_item_id IS NULL
+
+                UNION ALL
+
+                -- 7. Возвраты от покупателя (приход)
+                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty, reti.total_rub AS sum, 'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.warehouse_id IS NOT NULL
+                  AND reti.move_item_id IS NOT NULL
             ),
             -- Последний склад для каждой запчасти
             latest_warehouse AS (
@@ -2486,9 +2550,6 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
-
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
