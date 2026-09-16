@@ -2117,7 +2117,7 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 6. Возвраты от покупателя (по перемещению) — приход обратно на свой склад
+                -- 6. Возвраты от покупателя (по перемещению) — по исходной закупочной цене, без наценки
                 SELECT 
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
@@ -2125,8 +2125,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT('Склад-получатель: ', COALESCE(s_to.name, 'Не указан')) AS source_info,
                     CONCAT(COALESCE(s_ret2.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_ret2.mol_name, 'не назначен')) AS dest_info,
                     reti.quantity AS qty,
-                    COALESCE(reti.price_rub, 0) AS price,
-                    reti.total_rub AS sum,
+                    COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub) AS price,
+                    (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret2.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
                     NULL AS description,
                     mv.warehouse_to_id AS warehouse_from_id,
                     ret.warehouse_id AS warehouse_to_id,
@@ -2134,6 +2134,7 @@ router.get('/part_movement_details', async (req, res) => {
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 JOIN moves mv ON ret.move_id = mv.id
+                LEFT JOIN move_items mi_ret2 ON reti.move_item_id = mi_ret2.id
                 LEFT JOIN skladi s_ret2 ON ret.warehouse_id = s_ret2.id
                 LEFT JOIN skladi s_to ON mv.warehouse_to_id = s_to.id
                 LEFT JOIN LATERAL (
@@ -2304,9 +2305,9 @@ router.get('/stock_batches', async (req, res) => {
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NULL
 
-                UNION ALL
+                              UNION ALL
 
-                -- 7. Возвраты от покупателя (по перемещению) — приход обратно на свой склад
+                -- 7. Возвраты от покупателя (по перемещению) — по исходной закупочной цене, без наценки
                 SELECT 
                     reti.zaphasti_id,
                     ret.warehouse_id AS warehouse_filter_id,
@@ -2314,10 +2315,11 @@ router.get('/stock_batches', async (req, res) => {
                     COALESCE(ret.fact_date, ret.date) AS doc_date,
                     NULL AS description,
                     reti.quantity AS qty,
-                    reti.price_rub AS price,
+                    COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret.markup_percent, 0) / 100, 0), reti.price_rub) AS price,
                     'Рубль ПМР' AS currency
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
+                LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NOT NULL
             )
@@ -2458,12 +2460,15 @@ router.get('/stock_movement', async (req, res) => {
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
 
-                UNION ALL
+                               UNION ALL
 
-                -- 7. Возвраты от покупателя (приход)
-                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty, reti.total_rub AS sum, 'in' as op_type
+                -- 7. Возвраты от покупателя (приход) — по исходной закупочной цене, без наценки
+                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty,
+                       (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret3.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
+                       'in' as op_type
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
+                LEFT JOIN move_items mi_ret3 ON reti.move_item_id = mi_ret3.id
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NOT NULL
             ),
