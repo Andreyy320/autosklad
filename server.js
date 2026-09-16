@@ -9,6 +9,7 @@ require('dotenv').config();
 
 types.setTypeParser(1114, (val) => val); // timestamp without time zone
 types.setTypeParser(1082, (val) => val); // date
+types.setTypeParser(1184, (val) => val); // timestamp with time zone (виновник)
 // =================================================================================
 
 const app = express();
