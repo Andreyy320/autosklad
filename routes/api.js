@@ -246,11 +246,11 @@ router.get('/employees', async (req, res) => {
 router.post('/employees', async (req, res) => {
     try {
         const { login, password_hash, name, description } = req.body;
-        bcrypt.hash(password_hash, 10)
-            const newRecord = await pool.query(
+        const finalPasswordHash = await bcrypt.hash(password_hash, 10);
+        const newRecord = await pool.query(
             'INSERT INTO employees (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING id, login, name, description',
-            [login, password_hash, name, description]
-        );      
+            [login, finalPasswordHash, name, description]
+        );
         res.json(newRecord.rows[0]);
     } catch (err) {
         res.status(500).send('Ошибка сервера');
