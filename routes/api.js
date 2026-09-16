@@ -6965,6 +6965,12 @@ router.delete('/receipt_items/:id', async (req, res) => {
         const warehouseId = receiptData.warehouse_id;
         const isPosted = receiptData.is_posted;
 
+        // НОВОЕ: если приход уже проведён — удалять из него позиции нельзя
+        if (isPosted) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного прихода. Сначала отмените проведение документа.' });
+        }
+
                // 3. Находим СВОЮ конкретную партию по batch_id — точно, без путаницы с другими строками той же запчасти в этом же приходе
         let batchCheck;
         if (currentItem.batch_id) {
@@ -7322,11 +7328,20 @@ router.put('/move_items/:id', async (req, res) => {
 
             if (targetBatchCheck.rows.length > 0) {
                 const targetBatch = targetBatchCheck.rows[0];
-                if (Number(targetBatch.quantity) <= oldQuantity) {
-                    // Если на получателе стало меньше или равно, удаляем эту партию
+                const targetQty = Number(targetBatch.quantity) || 0;
+
+                // НОВОЕ: если на получателе осталось МЕНЬШЕ, чем было перемещено — часть уже ушла
+                // дальше по цепочке (ремонт/реализация/другое перемещение), тихо удалять нельзя
+                if (targetQty < oldQuantity) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        error: `Нельзя изменить позицию: часть перемещённого товара (${oldQuantity - targetQty} шт. из ${oldQuantity} шт.) уже была использована на складе-получателе (списана в ремонт, реализацию или другое перемещение).`
+                    });
+                } else if (targetQty === oldQuantity) {
+                    // Ровно столько и было — партию можно удалить целиком
                     await client.query('DELETE FROM warehouse_batches WHERE id = $1', [targetBatch.id]);
                 } else {
-                    // Иначе просто уменьшаем
+                    // Осталось больше, чем было — просто уменьшаем
                     await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [oldQuantity, targetBatch.id]);
                 }
             }
@@ -7353,10 +7368,18 @@ router.put('/move_items/:id', async (req, res) => {
             });
         }
 
-        // Берем по FIFO подходящую партию (или ту же самую старую, если в ней хватает места)
+        // Берем подходящую партию — но только если в НЕЙ САМОЙ реально хватает нужного количества,
+        // а не просто хватает суммарного остатка по складу (иначе партия уходит в минус)
         let chosenBatch = batches.find(b => b.receipt_id === oldReceiptId && Number(b.quantity) >= requestedQty);
         if (!chosenBatch) {
-            chosenBatch = batches[0]; // Берем самую старую доступную партию по FIFO
+            chosenBatch = batches.find(b => Number(b.quantity) >= requestedQty); // Самая старая партия, в которой хватает целиком
+        }
+
+        if (!chosenBatch) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: `Нужное количество (${requestedQty} шт.) есть на складе только по частям из нескольких разных партий поступления. Сейчас перемещение одной позицией списывает только из одной партии — уменьшите количество до размера одной партии или создайте отдельную позицию перемещения.`
+            });
         }
 
         const basePrice = Number(chosenBatch.price_rub);
@@ -7588,11 +7611,18 @@ router.delete('/move_items/:id', async (req, res) => {
                 const targetBatch = targetBatchCheck.rows[0];
                 const targetQty = Number(targetBatch.quantity) || 0;
 
-                if (targetQty <= quantityToReturn) {
-                    // Если на складе-получателе оставалось столько же или меньше, полностью удаляем эту партию-дублер
+                // НОВОЕ: если на получателе осталось МЕНЬШЕ, чем было перемещено — часть уже ушла
+                // дальше по цепочке (ремонт/реализация/другое перемещение), тихо удалять партию нельзя
+                if (targetQty < quantityToReturn) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        error: `Нельзя удалить позицию: часть перемещённого товара (${quantityToReturn - targetQty} шт. из ${quantityToReturn} шт.) уже была использована на складе-получателе (списана в ремонт, реализацию или другое перемещение).`
+                    });
+                } else if (targetQty === quantityToReturn) {
+                    // Ровно столько и было — партию можно удалить целиком
                     await client.query('DELETE FROM warehouse_batches WHERE id = $1', [targetBatch.id]);
                 } else {
-                    // Иначе просто уменьшаем количество
+                    // Осталось больше, чем было — просто уменьшаем количество
                     await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [quantityToReturn, targetBatch.id]);
                 }
             }
