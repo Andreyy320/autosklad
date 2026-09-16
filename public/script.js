@@ -2325,6 +2325,7 @@ function closeDrawer() {
     
     if (drawer) {
         drawer.style.right = '-440px';
+        drawer.style.width = '420px';
     }
     if (backdrop) {
         backdrop.style.opacity = '0';
@@ -2332,7 +2333,6 @@ function closeDrawer() {
     }
 
 }
-
 
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
@@ -9303,6 +9303,7 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) 
 
 async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) {
     const drawer = getOrCreateDrawer();
+    drawer.style.width = '680px';
     drawer.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="margin: 0; font-size: 16px; color: #333;">История оплат: ${counterpartyName} (${monthStr || ''})</h3>
