@@ -160,7 +160,6 @@ const loginLimiter = rateLimit({
         }
     });
 
-
 function authMiddleware(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -172,13 +171,13 @@ function authMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
+        req.headers['x-user-id'] = decoded.id;
         req.headers['x-user-type'] = decoded.type || 'user';
                 next();
     } catch (err) {
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
     }
 }
-
 router.use(authMiddleware);
 
     
