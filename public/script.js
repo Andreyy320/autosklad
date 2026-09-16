@@ -694,15 +694,16 @@ const tableConfig = {
     }
     },
 
-    returns: {
-        title: 'Возврат поставщику',
+       returns: {
+        title: 'Возврат запчастей',
         columns: [
-            { field: 'doc_number', label: '№ Документа', width: '120px' },
+            { field: 'doc_number', label: '№ Документа', width: '110px' },
             { field: 'date', label: 'Дата', width: '110px' },
-            { field: 'sklad_name', label: 'Склад', width: '140px' },
-            { field: 'supplier_name', label: 'Поставщик', width: '160px' },
-            { field: 'receipt_doc_number', label: 'Из прихода', width: '120px' },
-            { field: 'total_sum', label: 'Сумма РУБ', width: '110px', align: 'right' },
+            { field: 'return_type', label: 'Тип', width: '110px' },
+            { field: 'sklad_name', label: 'Склад', width: '130px' },
+            { field: 'counterparty_name', label: 'Контрагент', width: '160px' },
+            { field: 'source_doc_number', label: 'Документ-основание', width: '130px' },
+            { field: 'total_sum', label: 'Сумма РУБ', width: '100px', align: 'right' },
             { field: 'fact_date', label: 'Дата факт', width: '140px' },
             { field: 'is_posted', label: 'Проведен', width: '110px', align: 'center' }
         ],
@@ -711,13 +712,19 @@ const tableConfig = {
             const formattedFactDate = item.fact_date ? new Date(item.fact_date).toLocaleString() : '—';
             const sum = Number(item.total_sum || 0).toFixed(2);
             const isPosted = item.is_posted === true || item.is_posted === 'true';
+            const isFromCustomer = item.return_type === 'from_customer';
 
             return `
                 <td><span style="font-weight:600; color:#0f172a;">${item.doc_number || '—'}</span></td>
                 <td><span style="color:#475569;">${formattedDate}</span></td>
+                <td>
+                    <span style="padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; ${isFromCustomer ? 'background:#dbeafe; color:#1d4ed8;' : 'background:#fef3c7; color:#b45309;'}">
+                        ${isFromCustomer ? 'От покупателя' : 'Поставщику'}
+                    </span>
+                </td>
                 <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>
-                <td><span style="color:#0f172a;">${item.supplier_name || '—'}</span></td>
-                <td><span style="color:#475569;">${item.receipt_doc_number || '—'}</span></td>
+                <td><span style="color:#0f172a;">${item.counterparty_name || '—'}</span></td>
+                <td><span style="color:#475569;">${item.source_doc_number || '—'}</span></td>
                 <td style="text-align:right; font-weight:600; color:#0f172a;">${sum}</td>
                 <td><span style="color:#475569;">${formattedFactDate}</span></td>
                 <td style="text-align:center;">
@@ -7812,15 +7819,19 @@ async function renderReturnItemsInline(returnDoc) {
     const existingFilterRow = document.getElementById('detail-filter-row');
     if (existingFilterRow) existingFilterRow.remove();
 
+    const isMoveReturn = !!returnDoc.move_id;
+
     if (titleEl) {
-        titleEl.innerText = `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
+        titleEl.innerText = isMoveReturn
+            ? `Возврат ${returnDoc.doc_number || ''} — позиции из перемещения ${returnDoc.move_doc_number || ''}`
+            : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
     }
 
     if (headerTr) {
         headerTr.innerHTML = `
             <th style="padding:6px; border-bottom:1px solid #ddd;">Код</th>
             <th style="padding:6px; border-bottom:1px solid #ddd;">Наименование</th>
-            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Кол-во в приходе</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">${isMoveReturn ? 'Кол-во в перемещении' : 'Кол-во в приходе'}</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
             <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат, шт.</th>
@@ -7831,33 +7842,38 @@ async function renderReturnItemsInline(returnDoc) {
 
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
 
-    if (!returnDoc.receipt_id) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан приход</td></tr>`;
+    const sourceId = isMoveReturn ? returnDoc.move_id : returnDoc.receipt_id;
+    if (!sourceId) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${isMoveReturn ? 'документ перемещения' : 'приход'}</td></tr>`;
         return;
     }
 
+    const idField = isMoveReturn ? 'move_item_id' : 'receipt_item_id';
+    const availQueryParam = isMoveReturn ? 'move_id' : 'receipt_id';
+
     try {
         const [availRes, returnedRes] = await Promise.all([
-            fetch(`/api/returns/available-items?receipt_id=${returnDoc.receipt_id}`),
+            fetch(`/api/returns/available-items?${availQueryParam}=${sourceId}`),
             fetch(`/api/return_items?return_id=${returnDoc.id}`)
         ]);
 
-        if (!availRes.ok) throw new Error('Не удалось загрузить позиции прихода');
+        if (!availRes.ok) throw new Error('Не удалось загрузить позиции источника');
         const availableItems = await availRes.json();
         const returnedItems = returnedRes.ok ? await returnedRes.json() : [];
 
-        const returnedByReceiptItem = {};
-        returnedItems.forEach(ri => { returnedByReceiptItem[ri.receipt_item_id] = ri; });
+        const returnedByItem = {};
+        returnedItems.forEach(ri => { returnedByItem[ri[idField]] = ri; });
 
         if (availableItems.length === 0) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">В этом приходе нет позиций</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${isMoveReturn ? 'В этом перемещении нет позиций' : 'В этом приходе нет позиций'}</td></tr>`;
             return;
         }
 
         const isPosted = returnDoc.is_posted === true || returnDoc.is_posted === 'true';
 
         const rowsHtml = availableItems.map(i => {
-            const existing = returnedByReceiptItem[i.receipt_item_id];
+            const itemId = i[idField];
+            const existing = returnedByItem[itemId];
             const currentQty = existing ? Number(existing.quantity) : 0;
             const maxQty = Number(i.available_qty) + currentQty;
             const price = Number(i.price_rub) || 0;
@@ -7866,7 +7882,7 @@ async function renderReturnItemsInline(returnDoc) {
             const btnLabel = currentQty > 0 ? 'Изменить' : 'Вернуть';
 
             return `
-                <tr data-receipt-item-id="${i.receipt_item_id}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
+                <tr data-item-id="${itemId}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
                     <td style="padding:6px;">${i.zaphasti_code || '—'}</td>
                     <td style="padding:6px;">${i.zaphasti_name || '—'}</td>
                     <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
@@ -7876,7 +7892,8 @@ async function renderReturnItemsInline(returnDoc) {
                     <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${sum}</td>
                     <td style="padding:6px; text-align:center;">
                         <button type="button" class="return-open-drawer-btn"
-                                data-receipt-item-id="${i.receipt_item_id}"
+                                data-item-id="${itemId}"
+                                data-item-type="${isMoveReturn ? 'move' : 'receipt'}"
                                 data-return-item-id="${existing ? existing.id : ''}"
                                 data-code="${i.zaphasti_code || ''}"
                                 data-name="${(i.zaphasti_name || '').replace(/"/g, '&quot;')}"
@@ -7903,7 +7920,6 @@ async function renderReturnItemsInline(returnDoc) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
     }
 }
-
 function openReturnQtyDrawer(btn, returnDoc) {
     const itemId = btn.dataset.itemId;
     const itemType = btn.dataset.itemType; // 'receipt' | 'move'
