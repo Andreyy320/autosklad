@@ -998,11 +998,34 @@ router.get('/returns', async (req, res) => {
                 ret.*,
                 sk.name AS sklad_name,
                 COALESCE(p.name, 'Не указан') AS supplier_name,
-                rec.doc_number AS receipt_doc_number
+                rec.doc_number AS receipt_doc_number,
+
+                -- Новое: данные по возврату от покупателя (по перемещению)
+                mv.doc_number AS move_doc_number,
+                mv.date AS move_date,
+                mv.warehouse_from_id AS move_warehouse_from_id,
+                mv.warehouse_to_id AS move_warehouse_to_id,
+                sk_from.name AS move_warehouse_from_name,
+                sk_to.name AS move_warehouse_to_name,
+                CASE 
+                    WHEN ret.move_id IS NOT NULL THEN 'from_customer'
+                    ELSE 'to_supplier'
+                END AS return_type,
+                CASE 
+                    WHEN ret.move_id IS NOT NULL THEN COALESCE(sk_to.name, 'Не указан')
+                    ELSE COALESCE(p.name, 'Не указан')
+                END AS counterparty_name,
+                CASE 
+                    WHEN ret.move_id IS NOT NULL THEN mv.doc_number
+                    ELSE rec.doc_number
+                END AS source_doc_number
             FROM returns ret
             LEFT JOIN skladi sk ON ret.warehouse_id = sk.id
             LEFT JOIN postavhik p ON ret.supplier_id = p.id
             LEFT JOIN receipts rec ON ret.receipt_id = rec.id
+            LEFT JOIN moves mv ON ret.move_id = mv.id
+            LEFT JOIN skladi sk_from ON mv.warehouse_from_id = sk_from.id
+            LEFT JOIN skladi sk_to ON mv.warehouse_to_id = sk_to.id
             ORDER BY ret.date DESC, ret.id DESC;
         `;
         const result = await pool.query(query);
@@ -4018,8 +4041,44 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/returns/available-items', async (req, res) => {
     try {
-        const { receipt_id } = req.query;
-        if (!receipt_id) return res.status(400).json({ error: 'Не указан receipt_id' });
+        const { receipt_id, move_id } = req.query;
+        if (!receipt_id && !move_id) {
+            return res.status(400).json({ error: 'Не указан receipt_id или move_id' });
+        }
+
+        if (move_id) {
+            // Возврат по перемещению: товар лежит на СКЛАДЕ-ПОЛУЧАТЕЛЕ (m.warehouse_to_id).
+            // У move_items нет своего batch_id — партия на складе-получателе ищется
+            // по тройке (warehouse_id, zaphasti_id, receipt_id=income_document_id),
+            // т.к. именно так она создаётся в POST /move_items.
+            const query = `
+                SELECT
+                    mi.id AS move_item_id,
+                    mi.zaphasti_id,
+                    z.code AS zaphasti_code,
+                    z.name AS zaphasti_name,
+                    mi.quantity AS original_qty,
+                    mi.price_rub,
+                    mi.income_document_id AS receipt_id,
+                    m.warehouse_to_id,
+                    m.warehouse_from_id,
+                    COALESCE(sub_wb.available_qty, 0) AS available_qty
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
+                LEFT JOIN (
+                    SELECT warehouse_id, zaphasti_id, receipt_id, SUM(quantity) AS available_qty
+                    FROM warehouse_batches
+                    GROUP BY warehouse_id, zaphasti_id, receipt_id
+                ) sub_wb ON sub_wb.warehouse_id = m.warehouse_to_id
+                        AND sub_wb.zaphasti_id = mi.zaphasti_id
+                        AND sub_wb.receipt_id = mi.income_document_id
+                WHERE mi.move_id = $1
+                ORDER BY mi.id ASC;
+            `;
+            const result = await pool.query(query, [move_id]);
+            return res.json(result.rows);
+        }
 
         const query = `
             SELECT 
@@ -4044,7 +4103,6 @@ router.get('/returns/available-items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-
 
 
 
@@ -7730,17 +7788,17 @@ async function writeRepairLog(client, req, data) {
 
 
 
-// POST /api/return_items - добавление позиции в возврат с немедленным списанием со склада
+// POST /api/return_items - позиция возврата: по приходу (поставщику) или по перемещению (от покупателя)
 router.post('/return_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const { return_id, receipt_item_id, quantity } = req.body;
+        const { return_id, receipt_item_id, move_item_id, quantity } = req.body;
 
-        if (!return_id || !receipt_item_id) {
+        if (!return_id || (!receipt_item_id && !move_item_id)) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Не указан return_id или receipt_item_id.' });
+            return res.status(400).json({ error: 'Не указан return_id и ни receipt_item_id, ни move_item_id.' });
         }
 
         const numQty = Number(quantity) || 0;
@@ -7760,6 +7818,115 @@ router.post('/return_items', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя добавлять позиции в уже проведённый возврат!' });
         }
 
+        // ========== ВЕТКА 1: ВОЗВРАТ ОТ ПОКУПАТЕЛЯ (по документу перемещения) ==========
+        if (move_item_id) {
+            const miRes = await client.query(`
+                SELECT mi.*, m.id AS move_id, m.warehouse_from_id, m.warehouse_to_id, m.is_posted AS move_posted
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE mi.id = $1
+                FOR UPDATE OF mi
+            `, [move_item_id]);
+
+            if (miRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
+            }
+            const mi = miRes.rows[0];
+
+            if (returnDoc.move_id && Number(returnDoc.move_id) !== Number(mi.move_id)) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Эта позиция принадлежит другому документу перемещения.' });
+            }
+            if (!mi.warehouse_from_id || !mi.warehouse_to_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'В документе перемещения не указаны склады.' });
+            }
+            if (!mi.income_document_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'У позиции перемещения нет income_document_id — партию не найти.' });
+            }
+
+            // Сколько уже вернули по этой позиции ранее
+            const doneRes = await client.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS qty FROM return_items WHERE move_item_id = $1',
+                [move_item_id]
+            );
+            const alreadyReturned = Number(doneRes.rows[0].qty) || 0;
+            const leftByDoc = (Number(mi.quantity) || 0) - alreadyReturned;
+
+            if (numQty > leftByDoc) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `По перемещению можно вернуть ещё ${leftByDoc} шт. (перемещено ${mi.quantity}, уже возвращено ${alreadyReturned}).` });
+            }
+
+            // Партия на складе-получателе (у покупателя) — с неё списываем
+            const toBatchRes = await client.query(`
+                SELECT id, quantity FROM warehouse_batches
+                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                ORDER BY id ASC
+                FOR UPDATE
+            `, [mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id]);
+
+            const availableOnTo = toBatchRes.rows.reduce((s, b) => s + (Number(b.quantity) || 0), 0);
+            if (numQty > availableOnTo) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `На складе-получателе доступно только ${availableOnTo} шт. из этой партии.` });
+            }
+
+            // Списываем со склада-получателя (партию не удаляем — на неё ссылается return_items.batch_id)
+            let toDeduct = numQty;
+            let usedBatchId = null;
+            for (const b of toBatchRes.rows) {
+                if (toDeduct <= 0) break;
+                const take = Math.min(toDeduct, Number(b.quantity) || 0);
+                if (take <= 0) continue;
+                await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [take, b.id]);
+                if (!usedBatchId) usedBatchId = b.id;
+                toDeduct -= take;
+            }
+
+            // Приходуем обратно на МОЙ склад (склад-источник перемещения)
+            const markupPercent = Number(mi.markup_percent) || 0;
+            const priceWithMarkup = Number(mi.price_rub) || 0;
+            const basePrice = Number((priceWithMarkup / (1 + markupPercent / 100)).toFixed(2));
+
+            const fromBatchRes = await client.query(`
+                SELECT id FROM warehouse_batches
+                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                ORDER BY id ASC LIMIT 1
+                FOR UPDATE
+            `, [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id]);
+
+            if (fromBatchRes.rows.length > 0) {
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2',
+                    [numQty, fromBatchRes.rows[0].id]);
+            } else {
+                await client.query(`
+                    INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                `, [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id, basePrice, numQty]);
+            }
+
+            const totalRub = Number((priceWithMarkup * numQty).toFixed(2));
+
+            const insertResult = await client.query(`
+                INSERT INTO return_items (return_id, move_item_id, zaphasti_id, batch_id, quantity, price_rub, total_rub)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *;
+            `, [return_id, move_item_id, mi.zaphasti_id, usedBatchId, numQty, priceWithMarkup, totalRub]);
+
+            await client.query(`
+                UPDATE returns SET total_sum = (
+                    SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+                ) WHERE id = $1
+            `, [return_id]);
+
+            await client.query('COMMIT');
+            return res.status(201).json(insertResult.rows[0]);
+        }
+
+        // ========== ВЕТКА 2: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
         const riCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1', [receipt_item_id]);
         if (riCheck.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -7796,7 +7963,7 @@ router.post('/return_items', async (req, res) => {
             RETURNING *;
         `, [return_id, receipt_item_id, receiptItem.zaphasti_id, batch.id, numQty, priceRub, totalRub]);
 
-    await client.query(`
+        await client.query(`
             UPDATE returns SET total_sum = (
                 SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
             ) WHERE id = $1
@@ -7813,6 +7980,7 @@ router.post('/return_items', async (req, res) => {
         client.release();
     }
 });
+
 
 // PUT /api/return_items/:id - изменение количества с пересчётом остатка партии
 router.put('/return_items/:id', async (req, res) => {
@@ -7847,21 +8015,82 @@ router.put('/return_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество должно быть больше нуля.' });
         }
 
-        const batchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
-        if (batchCheck.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Партия склада не найдена.' });
-        }
-        const batch = batchCheck.rows[0];
+        const diff = newQty - oldQty; // > 0 — вернуть ещё, < 0 — уменьшить возврат
 
-        const availableAfterRestore = Number(batch.quantity) + oldQty;
-        if (newQty > availableAfterRestore) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ error: `Нельзя вернуть ${newQty} шт. — максимально доступно ${availableAfterRestore} шт.` });
-        }
+        // ========== ВЕТКА: ВОЗВРАТ ОТ ПОКУПАТЕЛЯ (по перемещению) ==========
+        if (currentItem.move_item_id) {
+            const miRes = await client.query(`
+                SELECT mi.*, m.warehouse_from_id, m.warehouse_to_id
+                FROM move_items mi
+                JOIN moves m ON mi.move_id = m.id
+                WHERE mi.id = $1
+                FOR UPDATE OF mi
+            `, [currentItem.move_item_id]);
+            if (miRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
+            }
+            const mi = miRes.rows[0];
 
-        const diff = newQty - oldQty;
-        await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [diff, batch.id]);
+            // Сколько по документу перемещения ещё можно вернуть (не считая текущую позицию)
+            const doneRes = await client.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS qty FROM return_items WHERE move_item_id = $1 AND id != $2',
+                [currentItem.move_item_id, itemId]
+            );
+            const otherReturned = Number(doneRes.rows[0].qty) || 0;
+            const leftByDoc = (Number(mi.quantity) || 0) - otherReturned;
+            if (newQty > leftByDoc) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `По перемещению можно вернуть максимум ${leftByDoc} шт.` });
+            }
+
+            if (diff > 0) {
+                // Увеличиваем возврат: списываем ещё diff со склада-получателя
+                const toBatchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
+                const availableOnTo = toBatchCheck.rows.length > 0 ? Number(toBatchCheck.rows[0].quantity) || 0 : 0;
+                if (diff > availableOnTo) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: `На складе-получателе доступно только ${availableOnTo} шт. для увеличения возврата.` });
+                }
+                await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [diff, currentItem.batch_id]);
+            } else if (diff < 0) {
+                // Уменьшаем возврат: возвращаем |diff| обратно на склад-получатель
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [-diff, currentItem.batch_id]);
+            }
+
+            // Приход на мой склад (склад-источник) меняем на diff (может быть отрицательным)
+            if (diff !== 0) {
+                const fromBatchRes = await client.query(
+                    'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                    [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id]
+                );
+                if (fromBatchRes.rows.length > 0) {
+                    await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [diff, fromBatchRes.rows[0].id]);
+                } else if (diff > 0) {
+                    await client.query(`
+                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                        VALUES ($1, $2, $3, $4, $5, NOW())
+                    `, [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id, Number(currentItem.price_rub) || 0, diff]);
+                }
+            }
+
+        // ========== ВЕТКА: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
+        } else {
+            const batchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [currentItem.batch_id]);
+            if (batchCheck.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Партия склада не найдена.' });
+            }
+            const batch = batchCheck.rows[0];
+
+            const availableAfterRestore = Number(batch.quantity) + oldQty;
+            if (newQty > availableAfterRestore) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `Нельзя вернуть ${newQty} шт. — максимально доступно ${availableAfterRestore} шт.` });
+            }
+
+            await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [diff, batch.id]);
+        }
 
         const priceRub = Number(currentItem.price_rub) || 0;
         const totalRub = priceRub * newQty;
@@ -7908,10 +8137,36 @@ router.delete('/return_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя удалять позиции уже проведённого возврата!' });
         }
 
-        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
+        if (currentItem.move_item_id) {
+            // ВОЗВРАТ ОТ ПОКУПАТЕЛЯ: откатываем обе стороны обратного перемещения
+            const miRes = await client.query(`
+                SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
+                FROM move_items mi WHERE mi.id = $1
+            `, [currentItem.move_item_id]);
+
+            // 1. Возвращаем товар назад на склад-получатель (откуда списывали при возврате)
+            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
+
+            // 2. Убираем товар с моего склада (куда приходовали при возврате)
+            if (miRes.rows.length > 0) {
+                const mi = miRes.rows[0];
+                const fromBatchRes = await client.query(
+                    'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                    [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id]
+                );
+                if (fromBatchRes.rows.length > 0) {
+                    await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+                        [currentItem.quantity, fromBatchRes.rows[0].id]);
+                }
+            }
+        } else {
+            // ВОЗВРАТ ПОСТАВЩИКУ — как было
+            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, currentItem.batch_id]);
+        }
+
         await client.query('DELETE FROM return_items WHERE id = $1', [itemId]);
 
- await client.query(`
+        await client.query(`
             UPDATE returns SET total_sum = (
                 SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
             ) WHERE id = $1
@@ -7928,6 +8183,7 @@ router.delete('/return_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 
 // DELETE /api/returns/:id - удаление документа возврата с восстановлением остатков
 router.delete('/returns/:id', async (req, res) => {
@@ -7948,8 +8204,34 @@ router.delete('/returns/:id', async (req, res) => {
         }
 
         const itemsRes = await client.query('SELECT * FROM return_items WHERE return_id = $1 FOR UPDATE', [returnId]);
+
         for (const item of itemsRes.rows) {
-            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [item.quantity, item.batch_id]);
+            if (item.move_item_id) {
+                // ВОЗВРАТ ОТ ПОКУПАТЕЛЯ: откатываем обе стороны обратного перемещения
+                const miRes = await client.query(`
+                    SELECT mi.warehouse_from_id, mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id
+                    FROM move_items mi WHERE mi.id = $1
+                `, [item.move_item_id]);
+
+                // 1. Возвращаем товар назад на склад-получатель (откуда списывали при возврате)
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [item.quantity, item.batch_id]);
+
+                // 2. Убираем товар с моего склада (куда приходовали при возврате)
+                if (miRes.rows.length > 0) {
+                    const mi = miRes.rows[0];
+                    const fromBatchRes = await client.query(
+                        'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                        [mi.warehouse_from_id, mi.zaphasti_id, mi.income_document_id]
+                    );
+                    if (fromBatchRes.rows.length > 0) {
+                        await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+                            [item.quantity, fromBatchRes.rows[0].id]);
+                    }
+                }
+            } else {
+                // ВОЗВРАТ ПОСТАВЩИКУ — как было
+                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [item.quantity, item.batch_id]);
+            }
         }
 
         await client.query('DELETE FROM return_items WHERE return_id = $1', [returnId]);

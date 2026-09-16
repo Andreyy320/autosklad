@@ -7083,22 +7083,56 @@ async function openReturnForm(entity, item = null) {
 
     const isPosted = item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1;
     const fieldLock = isPosted ? 'disabled' : '';
+    const isEdit = !!item.id;
+
+    // Тип возврата: определяем по наличию move_id у редактируемого документа, иначе по умолчанию "поставщику"
+    const initialType = item.move_id ? 'from_customer' : 'to_supplier';
+    const typeLocked = isEdit; // при редактировании тип менять нельзя
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Возврат поставщику ${isPosted ? '<span style="color:#16a34a; font-size:12px; margin-left:8px;">(Проведён)</span>' : ''}</h3>
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item.id ? 'Редактировать' : 'Добавить'}: Возврат запчастей ${isPosted ? '<span style="color:#16a34a; font-size:12px; margin-left:8px;">(Проведён)</span>' : ''}</h3>
             <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 4px; line-height: 1;">&times;</button>
         </div>
         <form id="entity-form" data-entity="returns" data-item-id="${item.id || ''}" style="display: flex; flex-direction: column; gap: 14px;">
-                        <div>
+
+            <div>
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:6px;">Тип возврата *</label>
+                <div style="display:flex; gap:16px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
+                        <input type="radio" name="return_type_ui" value="to_supplier" id="return-type-supplier"
+                               ${initialType === 'to_supplier' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
+                        Поставщику (из прихода)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
+                        <input type="radio" name="return_type_ui" value="from_customer" id="return-type-customer"
+                               ${initialType === 'from_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
+                        От покупателя (по перемещению)
+                    </label>
+                </div>
+            </div>
+
+            <div id="return-supplier-block" style="display:${initialType === 'to_supplier' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Приход, из которого возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
                     <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder="🔍 Загрузка приходов..." autocomplete="off" ${item.id ? 'disabled' : ''}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
-                    <input type="hidden" name="receipt_id" id="return-receipt-select" required value="${item.receipt_id || ''}">
+                    <input type="hidden" name="receipt_id" id="return-receipt-select" value="${item.receipt_id || ''}">
                     <div class="searchable-select-dropdown" id="return-receipt-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
                 </div>
             </div>
+
+            <div id="return-move-block" style="display:${initialType === 'from_customer' ? 'block' : 'none'};">
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Перемещение, по которому возвращаем *</label>
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" id="return-move-input" placeholder="🔍 Загрузка перемещений..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    <input type="hidden" name="move_id" id="return-move-select" value="${item.move_id || ''}">
+                    <div class="searchable-select-dropdown" id="return-move-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div style="font-size:12px; color:#64748b; margin-top:4px;">Товар спишется со склада-получателя и вернётся на ваш склад-источник этого перемещения.</div>
+            </div>
+
             <input type="hidden" name="warehouse_id" id="return-warehouse-id" value="${item.warehouse_id || ''}">
             <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
             <div>
@@ -7121,8 +7155,30 @@ async function openReturnForm(entity, item = null) {
     drawer.innerHTML = html;
     openDrawer();
 
-    // Подгружаем список проведённых приходов — возврат имеет смысл только по уже реально принятому товару
-      try {
+    // Переключение блоков "приход" / "перемещение"
+    const supplierBlock = document.getElementById('return-supplier-block');
+    const moveBlock = document.getElementById('return-move-block');
+    document.querySelectorAll('input[name="return_type_ui"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'to_supplier') {
+                supplierBlock.style.display = 'block';
+                moveBlock.style.display = 'none';
+                document.getElementById('return-move-select').value = '';
+                document.getElementById('return-move-input').value = '';
+            } else {
+                supplierBlock.style.display = 'none';
+                moveBlock.style.display = 'block';
+                document.getElementById('return-receipt-select').value = '';
+                document.getElementById('return-receipt-input').value = '';
+            }
+            // сбрасываем склад/поставщика при смене типа
+            document.getElementById('return-warehouse-id').value = '';
+            document.getElementById('return-supplier-id').value = '';
+        });
+    });
+
+    // Подгружаем список проведённых приходов
+    try {
         const res = await fetch('/api/receipts');
         if (res.ok) {
             const receipts = await res.json();
@@ -7182,7 +7238,73 @@ async function openReturnForm(entity, item = null) {
     } catch (err) {
         console.error('Не удалось загрузить список приходов:', err);
     }
-    // Удаление возврата прямо из формы (только для непроведённых — кнопка отсутствует в разметке для проведённых)
+
+    // Подгружаем список проведённых перемещений
+    try {
+        const res = await fetch('/api/moves');
+        if (res.ok) {
+            const moves = await res.json();
+            const hiddenInput = document.getElementById('return-move-select');
+            const searchInput = document.getElementById('return-move-input');
+            const dropdown = document.getElementById('return-move-dropdown');
+
+            const postedMoves = moves.filter(m => m.is_posted === true || m.is_posted === 'true');
+            searchInput.placeholder = '🔍 Начните ввод для поиска перемещение...';
+
+            function moveLabel(m) {
+                const dateStr = m.date ? new Date(m.date).toLocaleDateString() : '';
+                return `${m.doc_number} от ${dateStr} (${m.warehouse_from_name || '?'} → ${m.warehouse_to_name || '?'})`;
+            }
+
+            function applyMove(m) {
+                hiddenInput.value = m ? m.id : '';
+                searchInput.value = m ? moveLabel(m) : '';
+                // Возврат от покупателя приходуется на МОЙ склад — склад-источник перемещения
+                document.getElementById('return-warehouse-id').value = m ? (m.warehouse_from_id || '') : '';
+                document.getElementById('return-supplier-id').value = '';
+            }
+
+            function renderDropdown(filterText) {
+                const filter = (filterText || '').toLowerCase().trim();
+                const matches = postedMoves.filter(m => moveLabel(m).toLowerCase().includes(filter));
+
+                dropdown.innerHTML = matches.map(m => `
+                    <div class="searchable-option" data-id="${m.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;">
+                        ${moveLabel(m)}
+                    </div>
+                `).join('') || '<div style="padding: 8px 12px; color: #94a3b8; font-size: 13px;">Ничего не найдено</div>';
+
+                dropdown.querySelectorAll('.searchable-option').forEach(opt => {
+                    opt.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const m = postedMoves.find(x => String(x.id) === opt.dataset.id);
+                        applyMove(m);
+                        dropdown.style.display = 'none';
+                        searchInput.blur();
+                    });
+                });
+
+                dropdown.style.display = 'block';
+            }
+
+            searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+            searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.searchable-select-container') || !dropdown.contains(e.target) && e.target !== searchInput) {
+                    if (e.target !== searchInput) dropdown.style.display = 'none';
+                }
+            });
+
+            if (item.move_id) {
+                const preselected = postedMoves.find(m => String(m.id) === String(item.move_id));
+                if (preselected) applyMove(preselected);
+            }
+        }
+    } catch (err) {
+        console.error('Не удалось загрузить список перемещений:', err);
+    }
+
+    // Удаление возврата прямо из формы
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -7234,17 +7356,32 @@ async function openReturnForm(entity, item = null) {
             const data = {};
             formData.forEach((value, key) => { data[key] = value; });
 
-            if (!data.receipt_id) {
-                showAppNotification('Выберите приход, из которого делается возврат', 'warning');
-                isSubmitting = false;
-                if (saveButton) saveButton.disabled = false;
-                return;
+            const selectedType = form.querySelector('input[name="return_type_ui"]:checked')?.value
+                || (item.move_id ? 'from_customer' : 'to_supplier');
+            delete data.return_type_ui;
+
+            if (selectedType === 'to_supplier') {
+                delete data.move_id;
+                if (!data.receipt_id) {
+                    showAppNotification('Выберите приход, из которого делается возврат', 'warning');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
+            } else {
+                delete data.receipt_id;
+                if (!data.move_id) {
+                    showAppNotification('Выберите перемещение, по которому делается возврат', 'warning');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
             }
 
             try {
-                const isEdit = item && item.id;
-                const url = isEdit ? `/api/returns/${item.id}` : `/api/returns`;
-                const method = isEdit ? 'PUT' : 'POST';
+                const isEditReq = item && item.id;
+                const url = isEditReq ? `/api/returns/${item.id}` : `/api/returns`;
+                const method = isEditReq ? 'PUT' : 'POST';
                 const currentUserId = localStorage.getItem('currentUserId') || '';
 
                 const response = await fetch(url, {
@@ -7256,7 +7393,7 @@ async function openReturnForm(entity, item = null) {
                 if (response.ok) {
                     closeDrawer();
                     showAppNotification('Документ возврата создан', 'success');
-                    if (!isEdit) selectedItem = null;
+                    if (!isEditReq) selectedItem = null;
                     refreshData();
                 } else {
                     const errData = await response.json().catch(() => ({}));
@@ -7273,179 +7410,121 @@ async function openReturnForm(entity, item = null) {
         });
     }
 }
-async function openReturnItemsForm(itemToEdit, parentId) {
-    if (!selectedItem || !selectedItem.receipt_id) {
-        showAppNotification('Не удалось определить приход для этого возврата', 'error');
+
+
+
+
+async function renderReturnItemsInline(returnDoc) {
+    selectedItem = returnDoc;
+
+    const tbody = document.getElementById('detail-body');
+    const headerTr = document.getElementById('detail-headers');
+    const titleEl = document.getElementById('detail-title');
+
+    const existingFilterRow = document.getElementById('detail-filter-row');
+    if (existingFilterRow) existingFilterRow.remove();
+
+    const isMoveReturn = !!returnDoc.move_id;
+
+    if (titleEl) {
+        titleEl.innerText = isMoveReturn
+            ? `Возврат ${returnDoc.doc_number || ''} — позиции из перемещения ${returnDoc.move_doc_number || ''}`
+            : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
+    }
+
+    if (headerTr) {
+        headerTr.innerHTML = `
+            <th style="padding:6px; border-bottom:1px solid #ddd;">Код</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd;">Наименование</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">${isMoveReturn ? 'Кол-во в перемещении' : 'Кол-во в приходе'}</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Доступно</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Цена</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Возврат, шт.</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:right;">Сумма возврата</th>
+            <th style="padding:6px; border-bottom:1px solid #ddd; text-align:center;"></th>
+        `;
+    }
+
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
+
+    const sourceId = isMoveReturn ? returnDoc.move_id : returnDoc.receipt_id;
+    if (!sourceId) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${isMoveReturn ? 'документ перемещения' : 'приход'}</td></tr>`;
         return;
     }
 
-    if (selectedItem.is_posted) {
-        showAppNotification('Нельзя добавлять позиции в уже проведённый возврат', 'warning');
-        return;
-    }
-
-    const drawer = getOrCreateDrawer();
-    drawer.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: #333;">Добавить позицию возврата</h3>
-            <button type="button" onclick="closeDrawer()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
-        </div>
-        <div id="return-items-picker" style="text-align:center; color:#666; padding:20px;">Загрузка остатков прихода...</div>
-    `;
-    openDrawer();
+    const idField = isMoveReturn ? 'move_item_id' : 'receipt_item_id';
+    const availQueryParam = isMoveReturn ? 'move_id' : 'receipt_id';
 
     try {
-        const res = await fetch(`/api/returns/available-items?receipt_id=${selectedItem.receipt_id}`);
-        if (!res.ok) throw new Error('Не удалось загрузить позиции прихода');
+        const [availRes, returnedRes] = await Promise.all([
+            fetch(`/api/returns/available-items?${availQueryParam}=${sourceId}`),
+            fetch(`/api/return_items?return_id=${returnDoc.id}`)
+        ]);
 
-        const items = await res.json();
-        const availableItems = items.filter(i => Number(i.available_qty) > 0);
+        if (!availRes.ok) throw new Error('Не удалось загрузить позиции источника');
+        const availableItems = await availRes.json();
+        const returnedItems = returnedRes.ok ? await returnedRes.json() : [];
+
+        const returnedByItem = {};
+        returnedItems.forEach(ri => { returnedByItem[ri[idField]] = ri; });
 
         if (availableItems.length === 0) {
-            document.getElementById('return-items-picker').innerHTML =
-                '<div style="color:#dc2626;">Возвращать нечего — весь товар из этого прихода уже разошёлся со склада.</div>';
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${isMoveReturn ? 'В этом перемещении нет позиций' : 'В этом приходе нет позиций'}</td></tr>`;
             return;
         }
 
-        const rowsHtml = availableItems.map(i => `
-    <tr data-search-text="${`${i.zaphasti_code || ''} ${i.zaphasti_name || ''}`.toLowerCase()}">
-        <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_code || '—'}</td>
-                <td style="padding:8px; border-bottom:1px solid #eee;">${i.zaphasti_name || '—'}</td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right; color:#16a34a; font-weight:600;">${Number(i.available_qty).toFixed(2)}</td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">
-                    <input type="number" min="0" max="${i.available_qty}" step="0.01" value="0"
-                           data-receipt-item-id="${i.receipt_item_id}"
-                           class="return-qty-input"
-                           style="width:90px; padding:5px; border:1px solid #ccc; border-radius:4px; text-align:right;">
-                </td>
-            </tr>
-        `).join('');
+        const isPosted = returnDoc.is_posted === true || returnDoc.is_posted === 'true';
 
-        document.getElementById('return-items-picker').innerHTML = `
-    <input type="text" id="return-item-search-input" placeholder="🔍 Начните вводить код или наименование запчасти..." autocomplete="off"
-           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; margin-bottom:10px; color:#0f172a;">
-    <div id="return-item-no-results" style="display:none; color:#94a3b8; font-size:13px; padding:8px 0;">Ничего не найдено</div>
-    <table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:16px;">
-                <thead>
-                    <tr style="background:#f8fafc; text-align:left;">
-                        <th style="padding:8px;">Код</th>
-                        <th style="padding:8px;">Наименование</th>
-                        <th style="padding:8px; text-align:right;">Остаток</th>
-                        <th style="padding:8px; text-align:right;">Вернуть</th>
-                    </tr>
-                </thead>
-                <tbody id="return-items-tbody">${rowsHtml}</tbody>            </table>
-            <button type="button" id="save-return-items-btn" style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Добавить в возврат</button>
-        `;
-const searchInput = document.getElementById('return-item-search-input');
-const tbody = document.getElementById('return-items-tbody');
-const noResultsEl = document.getElementById('return-item-no-results');
-const allRows = Array.from(tbody.querySelectorAll('tr'));
+        const rowsHtml = availableItems.map(i => {
+            const itemId = i[idField];
+            const existing = returnedByItem[itemId];
+            const currentQty = existing ? Number(existing.quantity) : 0;
+            const maxQty = Number(i.available_qty) + currentQty;
+            const price = Number(i.price_rub) || 0;
+            const sum = (currentQty * price).toFixed(2);
 
-searchInput.addEventListener('input', () => {
-    const filter = searchInput.value.trim().toLowerCase();
-    let visibleCount = 0;
-    allRows.forEach(row => {
-        const matches = !filter || row.dataset.searchText.includes(filter);
-        row.style.display = matches ? '' : 'none';
-        if (matches) visibleCount++;
-    });
-    noResultsEl.style.display = visibleCount === 0 ? 'block' : 'none';
-});
-        document.getElementById('save-return-items-btn').addEventListener('click', async () => {
-            const inputs = document.querySelectorAll('.return-qty-input');
-            const toSubmit = [];
+            const btnLabel = currentQty > 0 ? 'Изменить' : 'Вернуть';
 
-            inputs.forEach(input => {
-                const qty = Number(input.value);
-                if (qty > 0) {
-                    toSubmit.push({ receipt_item_id: input.dataset.receiptItemId, quantity: qty });
-                }
+            return `
+                <tr data-item-id="${itemId}" data-return-item-id="${existing ? existing.id : ''}" class="return-row">
+                    <td style="padding:6px;">${i.zaphasti_code || '—'}</td>
+                    <td style="padding:6px;">${i.zaphasti_name || '—'}</td>
+                    <td style="padding:6px; text-align:right;">${Number(i.original_qty).toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right; color:#16a34a;">${maxQty.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right;">${price.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:right; ${currentQty > 0 ? 'font-weight:600; color:#0f172a;' : 'color:#94a3b8;'}">${currentQty > 0 ? currentQty.toFixed(2) : '—'}</td>
+                    <td class="return-row-sum" style="padding:6px; text-align:right; font-weight:600;">${sum}</td>
+                    <td style="padding:6px; text-align:center;">
+                        <button type="button" class="return-open-drawer-btn"
+                                data-item-id="${itemId}"
+                                data-item-type="${isMoveReturn ? 'move' : 'receipt'}"
+                                data-return-item-id="${existing ? existing.id : ''}"
+                                data-code="${i.zaphasti_code || ''}"
+                                data-name="${(i.zaphasti_name || '').replace(/"/g, '&quot;')}"
+                                data-max="${maxQty}"
+                                data-current="${currentQty}"
+                                data-price="${price}"
+                                ${isPosted ? 'disabled' : ''}
+                                style="background:#16a34a; color:#fff; border:none; padding:6px 14px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">                            ${btnLabel}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        if (tbody) tbody.innerHTML = rowsHtml;
+
+        if (!isPosted) {
+            tbody.querySelectorAll('.return-open-drawer-btn').forEach(btn => {
+                btn.addEventListener('click', () => openReturnQtyDrawer(btn, returnDoc));
             });
-
-            if (toSubmit.length === 0) {
-                showAppNotification('Укажите количество хотя бы для одной позиции', 'warning');
-                return;
-            }
-
-            const btn = document.getElementById('save-return-items-btn');
-            btn.disabled = true;
-            btn.textContent = 'Сохранение...';
-
-            let hadError = false;
-            for (const entry of toSubmit) {
-                try {
-                    const response = await fetch('/api/return_items', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            return_id: parentId,
-                            receipt_item_id: entry.receipt_item_id,
-                            quantity: entry.quantity
-                        })
-                    });
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        showAppNotification(errData.error || 'Ошибка при добавлении позиции', 'error');
-                        hadError = true;
-                        break;
-                    }
-                } catch (err) {
-                    console.error(err);
-                    showAppNotification('Ошибка соединения с сервером', 'error');
-                    hadError = true;
-                    break;
-                }
-            }
-
-            if (!hadError) {
-                closeDrawer();
-                showAppNotification('Позиции добавлены в возврат', 'success');
-                loadDetailData('return_items', parentId);
-            } else {
-                btn.disabled = false;
-                btn.textContent = 'Добавить в возврат';
-            }
-        });
-
+        }
     } catch (err) {
         console.error(err);
-        document.getElementById('return-items-picker').innerHTML =
-            '<div style="color:#dc2626;">Ошибка при загрузке остатков прихода</div>';
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
     }
 }
-
-document.addEventListener('click', function(e) {
-    if (e.target.tagName === 'IMG' && e.target.closest('td')) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const img = e.target;
-        if (img.src) {
-            let modal = document.getElementById('image-viewer-modal');
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'image-viewer-modal';
-                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; cursor: pointer;';
-                modal.innerHTML = `
-                    <div style="position: relative; max-width: 90%; max-height: 90%;">
-                        <img id="modal-image-content" style="width: 100%; height: auto; max-height: 90vh; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                        <span style="position: absolute; top: -40px; right: 0; color: white; font-size: 32px; font-weight: bold; cursor: pointer;">&times;</span>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-
-                modal.addEventListener('click', () => {
-                    modal.style.display = 'none';
-                });
-            }
-            const modalImg = modal.querySelector('#modal-image-content');
-            modalImg.src = img.src;
-            modal.style.display = 'flex';
-        }
-    }
-});
-
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -7826,7 +7905,8 @@ async function renderReturnItemsInline(returnDoc) {
 }
 
 function openReturnQtyDrawer(btn, returnDoc) {
-    const receiptItemId = btn.dataset.receiptItemId;
+    const itemId = btn.dataset.itemId;
+    const itemType = btn.dataset.itemType; // 'receipt' | 'move'
     const returnItemId = btn.dataset.returnItemId;
     const maxQty = Number(btn.dataset.max) || 0;
     const currentQty = Number(btn.dataset.current) || 0;
@@ -7870,18 +7950,18 @@ function openReturnQtyDrawer(btn, returnDoc) {
             return;
         }
 
-        await saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty });
+        await saveReturnQtyValue({ returnDoc, itemId, itemType, returnItemId, newQty });
     });
 
     const removeBtn = document.getElementById('return-drawer-remove-btn');
     if (removeBtn) {
         removeBtn.addEventListener('click', async () => {
-            await saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty: 0 });
+            await saveReturnQtyValue({ returnDoc, itemId, itemType, returnItemId, newQty: 0 });
         });
     }
 }
 
-async function saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQty }) {
+async function saveReturnQtyValue({ returnDoc, itemId, itemType, returnItemId, newQty }) {
     try {
         let response;
         if (newQty <= 0) {
@@ -7894,10 +7974,14 @@ async function saveReturnQtyValue({ returnDoc, receiptItemId, returnItemId, newQ
                 body: JSON.stringify({ quantity: newQty })
             });
         } else {
+            const body = itemType === 'move'
+                ? { return_id: returnDoc.id, move_item_id: itemId, quantity: newQty }
+                : { return_id: returnDoc.id, receipt_item_id: itemId, quantity: newQty };
+
             response = await fetch('/api/return_items', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ return_id: returnDoc.id, receipt_item_id: receiptItemId, quantity: newQty })
+                body: JSON.stringify(body)
             });
         }
 
