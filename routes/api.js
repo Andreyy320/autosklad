@@ -8910,12 +8910,16 @@ router.delete('/returns/:id', async (req, res) => {
 router.get('/get-audit-logs', async (req, res) => {
     const client = await pool.connect();
     try {
-        const query = `
+             const query = `
             SELECT 
                 al.*,
-                u.name AS user_name
+                COALESCE(
+                    CASE WHEN al.user_type = 'employee' THEN e.name ELSE u.name END,
+                    'Система'
+                ) AS user_name
             FROM audit_logs al
-            LEFT JOIN users u ON al.user_id::text = u.id::text
+            LEFT JOIN users u ON al.user_type = 'user' AND al.user_id::text = u.id::text
+            LEFT JOIN employees e ON al.user_type = 'employee' AND al.user_id::text = e.id::text
             ORDER BY al.created_at DESC
             LIMIT 500;
         `;
@@ -9073,6 +9077,7 @@ router.post('/:entity', async (req, res) => {
  
         // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и realizations
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+                const currentUserType = req.headers['x-user-type'] || 'user';
         if (!req.body.user_id && currentUserId && (entity === 'receipts' || entity === 'moves' || entity === 'repairs' || entity === 'realizations')) {
             req.body.user_id = currentUserId;
         }
@@ -9148,9 +9153,9 @@ router.post('/:entity', async (req, res) => {
                 detailsJson = '{}';
             }
  
-            await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                        await client.query(
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity, user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)`,
                 [
                     userId,
                     'INSERT',
@@ -9158,7 +9163,8 @@ router.post('/:entity', async (req, res) => {
                     newRecord.id || null,
                     detailsJson,
                     clientIp,
-                    entity
+                    entity,
+                    currentUserType
                 ]
             );
         } catch (logErr) {
@@ -9392,6 +9398,7 @@ router.put('/:entity/:id', async (req, res) => {
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
             const userId = currentUserId || req.body.user_id || oldDoc.user_id || null;
+                        const currentUserType = req.headers['x-user-type'] || 'user';
             const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
             // Сравниваем старые и новые значения по измененным полям
@@ -9429,8 +9436,8 @@ router.put('/:entity/:id', async (req, res) => {
 
             // Проверяем структуру таблицы audit_logs и записываем лог через тот же client с явным приведением к jsonb
             await client.query(
-                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity) 
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+                `INSERT INTO audit_logs (user_id, action, table_name, record_id, details, ip_address, entity,user_type) 
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7,$8)`,
                 [
                     userId,
                     'UPDATE',
@@ -9438,7 +9445,8 @@ router.put('/:entity/:id', async (req, res) => {
                     id,
                     detailsJson,
                     clientIp,
-                    entity
+                    entity,
+                    currentUserType
                 ]
             );
         } catch (logErr) {
@@ -9694,6 +9702,7 @@ router.delete('/:entity/:id', async (req, res) => {
         // ==================== АВТОМАТИЧЕСКАЯ ЗАПИСЬ ЛОГА (DELETE) ====================
         try {
             const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+                        const currentUserType = req.headers['x-user-type'] || 'user';
             const deletedData = result.rows[0];
             // Никогда не сохраняем хеш пароля в логах аудита и не отдаём его в ответе
             if (entity === 'users' && deletedData && deletedData.password_hash !== undefined) {
