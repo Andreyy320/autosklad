@@ -2428,8 +2428,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
-       if (entity === 'users' && col.field === 'password_hash' && item && item.id) return '';
-
+       if ((entity === 'users' || entity === 'employees') && col.field === 'password_hash' && item && item.id) return '';
         let val = '';
         if (item) {
             const possibleKeys = [
