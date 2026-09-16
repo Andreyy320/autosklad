@@ -1222,6 +1222,30 @@ router.put('/moves/:id', async (req, res) => {
             boolIsPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1';
         }
 
+        // ==================== ЗАЩИТА СКЛАДОВ ОТ ИЗМЕНЕНИЯ ====================
+        // Партии на складе уже привязаны к тем warehouse_from_id/warehouse_to_id,
+        // которые были в документе на момент добавления позиций. Смена склада
+        // "на лету" оставит остатки висеть не на том складе.
+        const oldIsPostedBool = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
+
+        const whFromChanging = warehouse_from_id !== undefined && parseInt(warehouse_from_id, 10) !== oldDoc.warehouse_from_id;
+        const whToChanging = warehouse_to_id !== undefined && parseInt(warehouse_to_id, 10) !== oldDoc.warehouse_to_id;
+
+        if (whFromChanging || whToChanging) {
+            // Уже проведённый документ — склады менять нельзя вообще
+            if (oldIsPostedBool) {
+                return res.status(400).json({ error: 'Нельзя менять склады уже проведённого документа перемещения!' });
+            }
+
+            // Не проведён, но в нём уже есть позиции — тоже нельзя, т.к. остатки
+            // уже привязаны к старым складам
+            const itemsCheck = await pool.query('SELECT 1 FROM move_items WHERE move_id = $1 LIMIT 1', [id]);
+            if (itemsCheck.rows.length > 0) {
+                return res.status(400).json({ error: 'Нельзя сменить склад — в документе уже есть позиции. Сначала удалите все позиции, затем смените склад.' });
+            }
+        }
+        // ================================================================================
+
         // 3. Фактическая дата
         let factDate = oldDoc.fact_date;
         if (boolIsPosted) {
@@ -1246,7 +1270,7 @@ router.put('/moves/:id', async (req, res) => {
         return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())} ${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`;
     }
     return val;
-}
+    }
 
         const finalDate = toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date);
         const finalWhFrom = warehouse_from_id ? parseInt(warehouse_from_id, 10) : oldDoc.warehouse_from_id;
@@ -9239,7 +9263,8 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs' || entity === 'returns') {            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
+        if (entity === 'realizations' || entity === 'receipts' || entity === 'moves' || entity === 'accidents' || entity === 'repairs' || entity === 'returns') {
+            // FOR UPDATE блокирует строку на время транзакции — если два запроса на удаление
             // одного и того же документа прилетят одновременно, второй дождётся коммита первого
             // и увидит уже актуальный статус, а не устаревший "не проведён".
             const docCheck = await client.query(`SELECT is_posted FROM "${entity}" WHERE id = $1 FOR UPDATE`, [id]);
@@ -9269,12 +9294,151 @@ router.delete('/:entity/:id', async (req, res) => {
         }
 
         if (entity === 'receipts') {
-            await client.query('DELETE FROM receipt_items WHERE receipt_id = $1', [id]);
+            // Приход сам СОЗДАЁТ партию на складе, поэтому при удалении документа
+            // партию нужно удалить (а не просто выбросить строки receipt_items).
+            const receiptInfo = await client.query('SELECT warehouse_id FROM receipts WHERE id = $1', [id]);
+            const warehouseId = receiptInfo.rows[0]?.warehouse_id;
+            const itemsRes = await client.query('SELECT * FROM receipt_items WHERE receipt_id = $1 FOR UPDATE', [id]);
+
+            for (const item of itemsRes.rows) {
+                const initialQty = Number(item.quantity) || 0;
+                let batchRow = null;
+
+                if (item.batch_id) {
+                    const b = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [item.batch_id]);
+                    batchRow = b.rows[0] || null;
+                } else {
+                    const b = await client.query(
+                        'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                        [warehouseId, item.zaphasti_id, id]
+                    );
+                    batchRow = b.rows[0] || null;
+                }
+
+                if (batchRow) {
+                    const currentBatchQty = Number(batchRow.quantity) || 0;
+                    if (currentBatchQty < initialQty) {
+                        await client.query('ROLLBACK');
+                        return res.status(400).json({
+                            error: `Нельзя удалить документ прихода: часть товара (${initialQty - currentBatchQty} шт. из ${initialQty} шт.) уже была списана со склада в другие документы.`
+                        });
+                    }
+                    // Сначала строка прихода (ссылается на партию через batch_id), потом сама партия
+                    await client.query('DELETE FROM receipt_items WHERE id = $1', [item.id]);
+                    await client.query('DELETE FROM warehouse_batches WHERE id = $1', [batchRow.id]);
+                } else {
+                    await client.query('DELETE FROM receipt_items WHERE id = $1', [item.id]);
+                }
+            }
         } else if (entity === 'moves') {
+            // Перемещение: вернуть остаток на склад-источник, убрать со склада-получателя
+            const moveInfo = await client.query('SELECT warehouse_from_id, warehouse_to_id FROM moves WHERE id = $1', [id]);
+            const warehouseFromId = moveInfo.rows[0]?.warehouse_from_id;
+            const warehouseToId = moveInfo.rows[0]?.warehouse_to_id;
+            const itemsRes = await client.query('SELECT * FROM move_items WHERE move_id = $1 FOR UPDATE', [id]);
+
+            for (const item of itemsRes.rows) {
+                const qty = Number(item.quantity) || 0;
+                const receiptId = item.income_document_id;
+
+                if (receiptId && qty > 0 && warehouseFromId && warehouseToId) {
+                    const src = await client.query(
+                        'SELECT id FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                        [warehouseFromId, item.zaphasti_id, receiptId]
+                    );
+                    if (src.rows.length > 0) {
+                        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, src.rows[0].id]);
+                    } else {
+                        await client.query(
+                            'INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+                            [warehouseFromId, item.zaphasti_id, receiptId, item.price || 0, qty]
+                        );
+                    }
+
+                    const dst = await client.query(
+                        'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
+                        [warehouseToId, item.zaphasti_id, receiptId]
+                    );
+                    if (dst.rows.length > 0) {
+                        const dstQty = Number(dst.rows[0].quantity) || 0;
+                        if (dstQty <= qty) {
+                            await client.query('DELETE FROM warehouse_batches WHERE id = $1', [dst.rows[0].id]);
+                        } else {
+                            await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [qty, dst.rows[0].id]);
+                        }
+                    }
+                }
+            }
             await client.query('DELETE FROM move_items WHERE move_id = $1', [id]);
         } else if (entity === 'repairs') {
+            // Ремонт списывает запчасти со склада — при удалении документа возвращаем их обратно
+            const repairInfo = await client.query('SELECT warehouse_id FROM repairs WHERE id = $1', [id]);
+            const warehouseId = repairInfo.rows[0]?.warehouse_id;
+            const itemsRes = await client.query('SELECT * FROM repair_items WHERE repair_id = $1 FOR UPDATE', [id]);
+
+            for (const item of itemsRes.rows) {
+                const qty = Number(item.quantity) || 0;
+                if (qty > 0 && warehouseId) {
+                    if (item.batch_id) {
+                        const b = await client.query('SELECT id FROM warehouse_batches WHERE id = $1 FOR UPDATE', [item.batch_id]);
+                        if (b.rows.length > 0) {
+                            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, item.batch_id]);
+                        } else {
+                            await client.query(
+                                'INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+                                [warehouseId, item.zaphast_id, item.receipt_id || null, item.price || 0, qty]
+                            );
+                        }
+                    } else {
+                        await client.query(
+                            'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4',
+                            [qty, warehouseId, item.zaphast_id, item.receipt_id]
+                        );
+                    }
+                }
+            }
             await client.query('DELETE FROM repair_items WHERE repair_id = $1', [id]);
             await client.query('DELETE FROM repair_works WHERE repair_id = $1', [id]);
+        } else if (entity === 'realizations') {
+            // Реализация списывает запчасти со склада — при удалении документа возвращаем их обратно
+            const realInfo = await client.query('SELECT sklad_id FROM realizations WHERE id = $1', [id]);
+            const skladId = realInfo.rows[0]?.sklad_id;
+            const itemsRes = await client.query('SELECT * FROM realization_items WHERE realization_id = $1 FOR UPDATE', [id]);
+
+            for (const item of itemsRes.rows) {
+                const qty = Number(item.quantity) || 0;
+                if (qty > 0 && skladId) {
+                    if (item.income_document_id && item.zaphasti_id) {
+                        const b = await client.query(
+                            'SELECT id FROM warehouse_batches WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4',
+                            [item.zaphasti_id, skladId, item.income_document_id, item.purchase_price || 0]
+                        );
+                        if (b.rows.length > 0) {
+                            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, b.rows[0].id]);
+                        } else {
+                            await client.query(
+                                'INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity) VALUES ($1, $2, $3, $4, $5)',
+                                [item.zaphasti_id, skladId, item.income_document_id, item.purchase_price || 0, qty]
+                            );
+                        }
+                    } else {
+                        const fb = await client.query(
+                            'SELECT id FROM warehouse_batches WHERE zaphasti_id = $1 AND warehouse_id = $2 ORDER BY created_at ASC LIMIT 1',
+                            [item.zaphasti_id, skladId]
+                        );
+                        if (fb.rows.length > 0) {
+                            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, fb.rows[0].id]);
+                        } else {
+                            await client.query(
+                                'INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, price_rub, quantity) VALUES ($1, $2, $3, $4)',
+                                [item.zaphasti_id, skladId, item.purchase_price || 0, qty]
+                            );
+                        }
+                    }
+                }
+            }
+            await client.query('DELETE FROM realization_items WHERE realization_id = $1', [id]);
+            await client.query('DELETE FROM realization_works WHERE realization_id = $1', [id]);
         } else if (entity === 'accidents') {
             await client.query('DELETE FROM accident_invoices WHERE dtp_id = $1', [id]);
             await client.query('DELETE FROM accident_payments WHERE dtp_id = $1', [id]);
