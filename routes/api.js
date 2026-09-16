@@ -5239,7 +5239,7 @@ router.get('/expenses_by_sklad', async (req, res) => {
         (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
         COALESCE(sub_ret.total_returned, 0) AS returned_sum,
         COALESCE(sub_pay.paid_sum, 0) AS paid_sum,
-        (COALESCE(sub_pay.paid_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS paid_netto,
+LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALESCE(sub_pay.paid_sum, 0)) AS paid_netto,
         GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.paid_sum, 0)) AS receipt_debt
     FROM receipts rec
     LEFT JOIN (
@@ -5295,8 +5295,7 @@ const listQuery = `
             (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS net_sum,
             COALESCE(sub_ret.total_returned, 0) AS returned_sum,
             COALESCE(sub_pay.total_paid, 0) AS paid_sum,
-            (COALESCE(sub_pay.total_paid, 0) - COALESCE(sub_ret.total_returned, 0)) AS paid_netto,
-            -- Долг именно ЭТОЙ накладной, никогда не отрицательный и не смешивается с другими
+LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALESCE(sub_pay.total_paid, 0)) AS paid_netto,            -- Долг именно ЭТОЙ накладной, никогда не отрицательный и не смешивается с другими
             GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
         FROM receipts rec
         LEFT JOIN (
@@ -5381,8 +5380,7 @@ router.get('/expenses_by_suppliers_totals', async (req, res) => {
                     (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) AS expense_sum,
                     COALESCE(sub_ret.total_returned, 0) AS returned_sum,
                     COALESCE(sub_pay.total_paid, 0) AS paid_sum,
-                    (COALESCE(sub_pay.total_paid, 0) - COALESCE(sub_ret.total_returned, 0)) AS paid_netto,
-                    GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
+LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALESCE(sub_pay.total_paid, 0)) AS paid_netto,                    GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(sub_pay.total_paid, 0)) AS receipt_debt
                 FROM receipts rec
                 LEFT JOIN (
                     SELECT ri.receipt_id, SUM(ri.quantity) AS total_qty, SUM(ri.total_rub) AS total_sum
@@ -5444,8 +5442,7 @@ router.get('/expenses_by_receipts', async (req, res) => {
                 COALESCE(sub_ret.total_returned, 0)::numeric AS total_returned_sum,
                 -- Итоговая сумма расходов с уменьшением на сумму возврата
                 (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0))::numeric AS total_expense_sum,
-COALESCE(pay.paid_sum, 0)::numeric AS total_paid,
-GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(pay.paid_sum, 0))::numeric AS debt_sum
+LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALESCE(pay.paid_sum, 0))::numeric AS total_paid,GREATEST(0, (COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0)) - COALESCE(pay.paid_sum, 0))::numeric AS debt_sum
 FROM receipts rec
             JOIN postavhik p ON rec.supplier_id = p.id
             LEFT JOIN skladi sk ON rec.warehouse_id = sk.id
