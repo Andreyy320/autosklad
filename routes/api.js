@@ -5427,7 +5427,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 ) pay ON m.id = pay.move_id
                 WHERE m.warehouse_to_id = $1
                   AND m.is_posted = true
-AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') <= $2)
+    AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') <= $2)
                   AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
                   AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
                 ORDER BY m.date ASC, m.id ASC
@@ -5457,7 +5457,7 @@ AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') <= $2)
                 ) pay ON real.id = pay.realization_id
                 WHERE real.customer_id = $1
                   AND real.is_posted = true
-AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') <= $2)
+    AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') <= $2)
                   AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
                   AND ($4::integer[] IS NULL OR real.id = ANY($4::integer[]))
                 ORDER BY real.doc_date ASC, real.id ASC
@@ -5569,7 +5569,25 @@ router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
                 WHERE cp.customer_id = $1
                   AND ($2::text IS NULL OR TO_CHAR(r.doc_date, 'YYYY-MM') = $2)
                   AND ($3::integer IS NULL OR r.sklad_id = $3::integer)
-                ORDER BY cp.date DESC, cp.id DESC;
+
+                UNION ALL
+
+                SELECT
+                    (-reti.id) AS id,
+                    COALESCE(ret.fact_date, ret.date) AS date,
+                    (-COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS amount,
+                    CONCAT('Возврат по документу ', real.doc_number)::text AS comment,
+                    real.doc_number AS doc_number,
+                    'return' AS row_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN realizations real ON ret.realization_id = real.id
+                WHERE ret.is_posted = true
+                  AND real.customer_id = $1
+                  AND ($2::text IS NULL OR TO_CHAR(real.doc_date, 'YYYY-MM') = $2)
+                  AND ($3::integer IS NULL OR real.sklad_id = $3::integer)
+
+                ORDER BY date DESC, id DESC;
             `;
             params = [realId, month_str || null, sklad_id || null];
         }
