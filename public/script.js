@@ -7094,7 +7094,7 @@ async function openReturnForm(entity, item = null) {
 
     // Тип возврата: определяем по наличию move_id / realization_id у редактируемого документа, иначе по умолчанию "поставщику"
     const initialType = item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier');
-    const typeLocked = isEdit; // при редактировании тип менять нельзя
+    const typeLocked = isPosted; // ИСПРАВЛЕНО: тип возврата можно менять, пока документ не проведён (раньше блокировался при любом редактировании)
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -7127,7 +7127,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-supplier-block" style="display:${initialType === 'to_supplier' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Приход, из которого возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder="🔍 Загрузка приходов..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                    <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder="🔍 Загрузка приходов..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="receipt_id" id="return-receipt-select" value="${item.receipt_id || ''}">
                     <div class="searchable-select-dropdown" id="return-receipt-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7137,7 +7137,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-move-block" style="display:${initialType === 'from_customer' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Перемещение, по которому возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-move-input" placeholder="🔍 Загрузка перемещений..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                    <input type="text" class="searchable-select-input" id="return-move-input" placeholder="🔍 Загрузка перемещений..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="move_id" id="return-move-select" value="${item.move_id || ''}">
                     <div class="searchable-select-dropdown" id="return-move-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7148,7 +7148,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-realization-block" style="display:${initialType === 'from_retail_customer' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Реализация, по которой возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-realization-input" placeholder="🔍 Загрузка реализаций..." autocomplete="off" ${item.id ? 'disabled' : ''}
+                    <input type="text" class="searchable-select-input" id="return-realization-input" placeholder="🔍 Загрузка реализаций..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="realization_id" id="return-realization-select" value="${item.realization_id || ''}">
                     <div class="searchable-select-dropdown" id="return-realization-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7514,7 +7514,6 @@ async function openReturnForm(entity, item = null) {
         });
     }
 }
-
 
 
 async function openCarDetailsForm(entity, item = null, parentId = null) {
@@ -7913,6 +7912,7 @@ async function renderReturnItemsInline(returnDoc) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">Ошибка загрузки позиций</td></tr>`;
     }
 }
+
 
 function openReturnQtyDrawer(btn, returnDoc) {
     const itemId = btn.dataset.itemId;
