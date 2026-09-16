@@ -126,17 +126,23 @@ const loginLimiter = rateLimit({
     router.post('/login', loginLimiter, async (req, res) => {
         const { login, password } = req.body;
         try {
-            const result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
-            
-                        if (result.rows.length > 0) {
+          let result = await pool.query('SELECT * FROM users WHERE login = $1', [login]);
+         let actorType = 'user';
+
+        if (result.rows.length === 0) {
+    result = await pool.query('SELECT * FROM employees WHERE login = $1 AND is_active = true', [login]);
+    actorType = 'employee';
+        }
+
+            if (result.rows.length > 0) {
                 const user = result.rows[0];
                 const match = await bcrypt.compare(password, user.password_hash);
                 
                if (match) {
         const { password_hash, ...safeUser } = user;
 
-    const token = jwt.sign(
-        { id: user.id, login: user.login },
+       const token = jwt.sign(
+        { id: user.id, login: user.login, type: actorType },
         process.env.JWT_SECRET,
         { expiresIn: '3h' }
     );
@@ -166,8 +172,8 @@ function authMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
-        req.headers['x-user-id'] = String(decoded.id);   
-        next();
+        req.headers['x-user-type'] = decoded.type || 'user';
+                next();
     } catch (err) {
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
     }
@@ -228,7 +234,28 @@ router.get('/users', async (req, res) => {
         }
     });
 
+router.get('/employees', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, login, name, description, is_active FROM employees ORDER BY id ASC');
+        return res.json(result.rows);
+    } catch (err) {
+        return res.status(500).send(err.message);
+    }
+});
 
+router.post('/employees', async (req, res) => {
+    try {
+        const { login, password_hash, name, description } = req.body;
+        bcrypt.hash(password_hash, 10)
+            const newRecord = await pool.query(
+            'INSERT INTO employees (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING id, login, name, description',
+            [login, password_hash, name, description]
+        );      
+        res.json(newRecord.rows[0]);
+    } catch (err) {
+        res.status(500).send('Ошибка сервера');
+    }
+});
 
     // Получение списка запчастей
     router.get('/parts', async (req, res) => {
@@ -3925,13 +3952,14 @@ async function writeRealizationLog(client, req, data) {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO realization_logs (
                 action, realization_id, document_number, warehouse_id, car_id, 
                 customer_id, zaphasti_id, quantity, price, total_rub, 
-                income_document_id, description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+                income_document_id, description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
             [
                 data.action,
                 data.realization_id,
@@ -3946,14 +3974,14 @@ async function writeRealizationLog(client, req, data) {
                 data.income_document_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
         console.error('Ошибка записи лога реализации (не критично):', logErr.message);
     }
 }
-
 
 // ==================== ПОЛУЧИТЬ СПИСОК УСЛУГ РЕАЛИЗАЦИИ ====================
 router.get('/realization_works', async (req, res) => {
@@ -6514,14 +6542,14 @@ async function writeReceiptLog(client, req, data = {}) {
                        req?.body?.user_id || 
                        d.user_id || 
                        null;
-
+        const userType = req?.headers?.['x-user-type'] || 'user';
         await client.query(`
             INSERT INTO receipt_logs (
                 action, receipt_id, document_number, user_id, 
                 supplier_id, warehouse_id, zaphasti_id, 
-                quantity, price, currency, price_rub, total_rub, description
+                quantity, price, currency, price_rub, total_rub, description, user_type
             ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
             d.action || 'INSERT',
             d.receipt_id ? Number(d.receipt_id) : null,
@@ -6535,7 +6563,8 @@ async function writeReceiptLog(client, req, data = {}) {
             d.currency || 'RUB',
             Number(d.price_rub) || 0,
             Number(d.total_rub) || 0,
-            d.description || ''
+            d.description || '',
+            userType
         ]);
     } catch (err) {
         console.error('❌ ОШИБКА записи в receipt_logs:', err.message);
@@ -6549,13 +6578,14 @@ async function writeMoveLog(client, req, data) {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO move_logs (
                 action, move_id, document_number, warehouse_from_id, warehouse_to_id, 
                 zaphasti_id, quantity, price, currency, price_rub, total_rub, 
-                income_document_id, description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+                income_document_id, description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
             [
                 data.action,
                 data.move_id,
@@ -6571,7 +6601,8 @@ async function writeMoveLog(client, req, data) {
                 data.income_document_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -6585,13 +6616,14 @@ async function writeRepairLog(client, req, data) {
         const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
         const userId = currentUserId || req.body.user_id || null;
         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
         await client.query(
             `INSERT INTO repair_logs (
                 action, repair_id, document_number, warehouse_id, car_id, 
                 zaphast_id, quantity, price, total, receipt_id, 
-                description, user_id, ip_address
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                description, user_id, ip_address, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
             [
                 data.action,
                 data.repair_id,
@@ -6605,7 +6637,8 @@ async function writeRepairLog(client, req, data) {
                 data.receipt_id,
                 data.description,
                 userId,
-                clientIp
+                clientIp,
+                userType
             ]
         );
     } catch (logErr) {
@@ -8978,7 +9011,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees'
         ];
  
         if (!allowedTables.includes(entity)) {
@@ -9180,7 +9213,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees'
         ];
 
         if (!allowedTables.includes(entity)) {
@@ -9453,7 +9486,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
-            'customer_cars','part_discounts','service_discounts','realizations','returns'
+            'customer_cars','part_discounts','service_discounts','realizations','returns','employees'
         ];
 
         if (!allowedTables.includes(entity)) {

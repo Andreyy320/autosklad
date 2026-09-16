@@ -85,6 +85,21 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
+        employees: {
+        title: 'Сотрудники',
+        columns: [
+            { field: 'login', label: 'Логин', width: '150px' },
+            { field: 'password_hash', label: 'Пароль', style: 'display: none;' },
+            { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td><b>${item.login}</b></td>
+            <td style="display: none;"></td>
+            <td>${item.name || ''}</td>
+            <td>${item.description || ''}</td>
+        `
+    },
     brands: {
         title: 'Бренды',
         columns: [
@@ -12373,7 +12388,9 @@ const navMap = {
     'Поставщики по складу': 'expenses_by_suppliers',
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items',
-    'История всех оплат':'expense_payments'       
+        'Сотрудники': 'employees',
+    'История всех оплат':'expense_payments'  
+         
 };
 
 function updateFilterPanels(entity) {
