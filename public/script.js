@@ -7448,14 +7448,14 @@ async function openReturnForm(entity, item = null) {
             const formData = new FormData(form);
             const data = {};
             formData.forEach((value, key) => { data[key] = value; });
-
+            
             const selectedType = form.querySelector('input[name="return_type_ui"]:checked')?.value
                 || (item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier'));
             delete data.return_type_ui;
 
             if (selectedType === 'to_supplier') {
-                delete data.move_id;
-                delete data.realization_id;
+                data.move_id = null;
+                data.realization_id = null;
                 if (!data.receipt_id) {
                     showAppNotification('Выберите приход, из которого делается возврат', 'warning');
                     isSubmitting = false;
@@ -7463,8 +7463,8 @@ async function openReturnForm(entity, item = null) {
                     return;
                 }
             } else if (selectedType === 'from_customer') {
-                delete data.receipt_id;
-                delete data.realization_id;
+                data.receipt_id = null;
+                data.realization_id = null;
                 if (!data.move_id) {
                     showAppNotification('Выберите перемещение, по которому делается возврат', 'warning');
                     isSubmitting = false;
@@ -7472,8 +7472,8 @@ async function openReturnForm(entity, item = null) {
                     return;
                 }
             } else {
-                delete data.receipt_id;
-                delete data.move_id;
+                data.receipt_id = null;
+                data.move_id = null;
                 if (!data.realization_id) {
                     showAppNotification('Выберите реализацию, по которой делается возврат', 'warning');
                     isSubmitting = false;
