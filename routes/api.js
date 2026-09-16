@@ -4568,8 +4568,8 @@ router.get('/money_receipts', async (req, res) => {
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
-                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
-                    m.date AS date,
+                    m.doc_number::text AS doc_number,
+                                        m.date AS date,
                     NULL::integer AS customer_id,
                     sk_to.id AS debtor_warehouse_id,
                     CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
@@ -4784,8 +4784,8 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                 SELECT 
                     m.id AS id,
                     m.id AS realization_id,
-                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
-                    m.date AS date,
+                    m.doc_number::text AS doc_number,
+                                        m.date AS date,
                     NULL::integer AS customer_id,
                     sk_to.id AS debtor_warehouse_id,
                     CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
@@ -5101,8 +5101,8 @@ router.get('/money_receipts_detail', async (req, res) => {
                 SELECT 
                     mi.id,
                     'part' AS item_type,
-                    CONCAT('ПЕРЕМЕЩЕНИЕ-', m.id)::text AS doc_number,
-                    m.date AS date,
+                    m.doc_number::text AS doc_number,
+                                        m.date AS date,
                     COALESCE(NULLIF(z.code, ''), NULLIF(z.article, ''), '')::text AS product_code,
                     COALESCE(NULLIF(z.name, ''), 'Запчасть')::text AS item_name,
                     mi.quantity::numeric AS quantity,
