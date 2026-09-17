@@ -12629,17 +12629,20 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
     }
 
-   function applyTableResizers() {
+     function applyTableResizers() {
     const activeLink = document.querySelector('.nav-link.active');
     const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
     const currentUserId = localStorage.getItem('currentUserId') || 'guest';
-    const storageKey = `col_widths_${currentUserId}_${sectionKey}`;
 
         document.querySelectorAll('table').forEach(table => {
             if (table.parentElement) {
                 table.parentElement.style.overflowX = 'auto';
                 table.parentElement.style.maxWidth = '100%';
             }
+
+            const headerRowEl = table.querySelector('thead tr[id]');
+            const tableRole = headerRowEl ? headerRowEl.id : 'table';
+            const storageKey = `col_widths_${currentUserId}_${sectionKey}_${tableRole}`;
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
