@@ -1221,7 +1221,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumVal}</td>
             <td>${formatDT(item.fact_date)}</td>
-            <td>
+                        <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
@@ -1668,7 +1668,7 @@ const tableConfig = {
             <td style="text-align: right;">${sumWorkVal}</td>
             <td style="text-align: right; font-weight: bold;">${sumTotalVal}</td>
             <td>${formatDT(item.fact_date)}</td>
-            <td>
+                       <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
