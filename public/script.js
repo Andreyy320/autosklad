@@ -628,7 +628,7 @@ const tableConfig = {
 
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
-        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses' }
+                { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -659,7 +659,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
-            <td>${isPostedHtml}</td>
+                       <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">${isPostedHtml}</td>
         `;
     }
     },
@@ -721,7 +721,7 @@ const tableConfig = {
             { field: 'source_doc_number', label: 'Документ-основание', width: '130px' },
             { field: 'total_sum', label: 'Сумма РУБ', width: '100px', align: 'right' },
             { field: 'fact_date', label: 'Дата факт', width: '140px' },
-            { field: 'is_posted', label: 'Проведен', width: '110px', align: 'center' }
+                        { field: 'is_posted', label: 'Проведен', width: '200px', align: 'center' }
         ],
         render: (item) => {
             const formattedDate = item.date ? new Date(item.date).toLocaleString() : '—';
@@ -743,7 +743,7 @@ const tableConfig = {
                 <td><span style="color:#475569;">${item.source_doc_number || '—'}</span></td>
                 <td style="text-align:right; font-weight:600; color:#0f172a;">${sum}</td>
                 <td><span style="color:#475569;">${formattedFactDate}</span></td>
-                <td style="text-align:center;">
+                               <td style="text-align:center; overflow: visible; white-space: nowrap; text-overflow: clip;">
                     ${isPosted
                         ? `<span style="color:#16a34a; font-weight:600;">Проведен</span>`
                         : `<span style="color:#94a3b8;">Не проведен</span> <button type="button" onclick="event.stopPropagation(); postReturn(${item.id})" style="background:#16a34a;color:white;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px;">Провести</button>`
@@ -1182,7 +1182,7 @@ const tableConfig = {
         { field: 'description', label: 'Описание' },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
-        { field: 'is_posted', label: 'Проведен', width: '120px' }
+              { field: 'is_posted', label: 'Проведен', width: '200px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1625,7 +1625,7 @@ const tableConfig = {
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
-        { field: 'is_posted', label: 'Проведен', width: '120px' }
+                { field: 'is_posted', label: 'Проведен', width: '200px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
