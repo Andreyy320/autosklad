@@ -3569,6 +3569,9 @@ router.post('/realization_items', async (req, res) => {
         client.release();
     }
 });
+
+
+
 // ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches И FIFO) ====================
 router.put('/realization_items/:id', async (req, res) => {
  
@@ -3867,6 +3870,9 @@ router.put('/realization_items/:id', async (req, res) => {
         client.release();
     }
 });
+
+
+
 // Функция для записи логов реализации в таблицу realization_logs
 async function writeRealizationLog(client, req, data) {
     try {
@@ -7236,15 +7242,14 @@ router.post('/move_items', async (req, res) => {
             return res.status(400).json({ error: 'Эта запчасть уже добавлена в данный документ перемещения. Измените существующую позицию или удалите её перед добавлением заново.' });
         }
 
-        // 1.1. Узнаем процент наценки для данной запчасти из таблицы gruppa_tsen через связку gruppa_tsen_id
+                // 1.1. Наценка берется только со склада-получателя. Если у склада не указано — 0%.
         const markupQuery = `
-            SELECT COALESCE(gt.markup_percent, 0) as markup_percent
-            FROM zaphasti z
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-            WHERE z.id = $1
+            SELECT COALESCE(markup_percent, 0) as markup_percent
+            FROM skladi
+            WHERE id = $1
         `;
-        const markupRes = await client.query(markupQuery, [zaphasti_id]);
-        
+        const markupRes = await client.query(markupQuery, [warehouseToId]);
+
         let markupPercent = 0;
         if (markupRes.rows.length > 0) {
             markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
@@ -7436,14 +7441,13 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
         }
 
-        // 2.1. Узнаем процент наценки для данной запчасти (как в POST)
+               // 2.1. Наценка берется только со склада-получателя (как в POST). Если не указано — 0%.
         const markupQuery = `
-            SELECT COALESCE(gt.markup_percent, 0) as markup_percent
-            FROM zaphasti z
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-            WHERE z.id = $1
+            SELECT COALESCE(markup_percent, 0) as markup_percent
+            FROM skladi
+            WHERE id = $1
         `;
-        const markupRes = await client.query(markupQuery, [zaphasti_id]);
+        const markupRes = await client.query(markupQuery, [warehouseToId]);
         let markupPercent = 0;
         if (markupRes.rows.length > 0) {
             markupPercent = Number(markupRes.rows[0].markup_percent) || 0;

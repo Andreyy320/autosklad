@@ -290,16 +290,18 @@ const tableConfig = {
             <td>${item.description || ''}</td>
         `
     },
-    skladi: {
+      skladi: {
         title: 'Склады',
         columns: [
             { field: 'type_sklad_id', label: 'Тип склада', width: '150px', ref: 'type_sklad' },
             { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'markup_percent', label: 'Наценка (%)', width: '120px' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td>${item.type_name || '—'}</td>
             <td><b>${item.name || ''}</b></td>
+            <td>${item.markup_percent !== null && item.markup_percent !== undefined && item.markup_percent !== '' ? item.markup_percent + '%' : '—'}</td>
             <td>${item.description || ''}</td>
         `
     },
