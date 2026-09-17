@@ -22,7 +22,8 @@ const idMapConfigs = [
     { key: 'toplivo_id',        url: '/api/toplivo',             label: r => r.name },
     { key: 'gruppa_tsen_id',    url: '/api/gruppa_tsen',         label: r => r.name },
     { key: 'proizvoditel_id',   url: '/api/proizvoditel_zaphasti', label: r => r.name },
-    { key: 'ed_izmereniya_id',  url: '/api/ed_izmereniya',       label: r => r.name }
+    { key: 'ed_izmereniya_id',  url: '/api/ed_izmereniya',       label: r => r.name },
+    { key: 'employee_id',       url: '/api/employees',           label: r => r.name || r.fio }
 ];
 
 const tableNamesRu = {
@@ -172,7 +173,8 @@ const fieldNamesRu = {
     'proizvoditel_id': 'Производитель',
     'ed_izmereniya_id': 'Единица измерения',
     'payment_type_id': 'Тип оплаты',
-    'autoservice_id': 'Автосервис'
+    'autoservice_id': 'Автосервис',
+    'employee_id': 'Сотрудник'
 };
 
 function translateTable(name) {
@@ -626,6 +628,6 @@ async function loadReferenceMaps() {
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-        await loadReferenceMaps();
+        await loadWarehouses();
         loadLogs('Приход', '/api/get-receipt-logs');
     });
