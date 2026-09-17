@@ -540,10 +540,9 @@ const tableConfig = {
         { field: 'mol_id', label: 'МОЛ', width: '150px', ref: 'mol' },
         { field: 'supplier_id', label: 'Поставщик', width: '180px', ref: 'postavhik' },
         { field: 'description', label: 'Описание' },
-
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
-               { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
+        { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -12660,12 +12659,14 @@ function setDetailToolbarVisible(visible) {
 
             const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
-            textCells.forEach((th, colIndex) => {
-                if (savedWidths[colIndex]) {
-                    th.style.width = savedWidths[colIndex];
+                       textCells.forEach((th, colIndex) => {
+                const widthKey = th.dataset.field || colIndex;
+
+                if (savedWidths[widthKey]) {
+                    th.style.width = savedWidths[widthKey];
                     for (let i = 0; i < textRowIndex; i++) {
                         const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                        if (upperCell) upperCell.style.width = savedWidths[colIndex];
+                        if (upperCell) upperCell.style.width = savedWidths[widthKey];
                     }
                 } else if (!th.style.width || th.style.width === 'auto') {
                     const w = th.offsetWidth;
@@ -12701,7 +12702,7 @@ function setDetailToolbarVisible(visible) {
                         }
                     }
 
-                    function onMouseUp() {
+                                       function onMouseUp() {
                         resizer.classList.remove('resizing');
                         document.body.style.cursor = '';
                         window.removeEventListener('mousemove', onMouseMove);
@@ -12709,11 +12710,11 @@ function setDetailToolbarVisible(visible) {
 
                         const currentWidths = {};
                         textRow.querySelectorAll('th, td').forEach((cell, idx) => {
-                            currentWidths[idx] = cell.style.width;
+                            const key = cell.dataset.field || idx;
+                            currentWidths[key] = cell.style.width;
                         });
                         localStorage.setItem(storageKey, JSON.stringify(currentWidths));
                     }
-
                     window.addEventListener('mousemove', onMouseMove);
                     window.addEventListener('mouseup', onMouseUp);
 
