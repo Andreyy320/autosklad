@@ -364,6 +364,20 @@ async function loadReferenceMaps() {
                     <th>Номер документа</th>
                 </tr>
             `;
+        } else if (type === 'Возврат') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время / Действие</th>
+                    <th>Пользователь</th>
+                    <th>Документ</th>
+                    <th>Тип возврата</th>
+                    <th>Запчасть (Артикул)</th>
+                    <th class="text-center">Количество</th>
+                    <th class="text-right">Цена</th>
+                    <th class="text-right">Итого</th>
+                    <th>Описание / Детали</th>
+                </tr>
+            `;
         } else {
             thead.innerHTML = `
                 <tr>
