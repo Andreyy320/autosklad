@@ -1,214 +1,251 @@
 let currentType = 'Приход';
-    let warehousesMap = {};
+let idMaps = {};
+let warehousesMap = {}; // оставляем для остального кода файла, который использует его напрямую
 
-    const tableNamesRu = {
-        'users': 'Пользователи',
-        'spare_parts': 'Запчасти',
-        'zaphasti': 'Запчасти',
-        'car_brands': 'Марки автомобилей',
-        'brands': 'Марки автомобилей',
-        'kyzov_type': 'Тип кузова',
-        'bodies': 'Тип кузова',
-        'car_models': 'Модели автомобилей',
-        'models': 'Модели автомобилей',
-        'counterparties': 'Контрагенты',
-        'postavhik': 'Поставщики',
-        'postavhik_contacts': 'Контакты поставщиков',
-        'customers': 'Клиенты',
-        'customer_contacts': 'Контакты клиентов',
-        'customer_cars': 'Автомобили клиентов',
-        'counterparty_types': 'Типы контрагентов',
-        'counterparty_contacts': 'Контакты контрагентов',
-        'type_sklad': 'Типы складов',
-        'skladi': 'Склады',
-        'cars': 'Автомобили',
-        'type_rabot': 'Типы работ',
-        'works': 'Работы',
-        'ispolnitel': 'Исполнители',
-        'repair_types': 'Типы ремонта',
-        'gruppa_tsen': 'Группа цен',
-        'proizvoditel_zaphasti': 'Производители запчастей',
-        'gryppa_zamehenia': 'Группа взаимозаменяемости',
-        'vidy_rabot': 'Виды работ',
-        'toplivo': 'Тип топлива',
-        'ed_izmereniya': 'Единицы измерения',
-        'mol': 'Материально ответственные лица',
-        'mol_users': 'МОЛ пользователей',
-        'receipts': 'Приходы',
-        'receipt_items': 'Позиции прихода',
-        'receipt_logs': 'Журнал приходов',
-        'moves': 'Перемещения',
-        'move_logs': 'Журнал перемещений',
-        'statuses': 'Статусы',
-        'autoservices': 'Автосервисы',
-        'payment_types': 'Типы оплаты',
-        'accidents': 'ДТП / Страховые случаи',
-        'accident_invoices': 'Счета по ДТП',
-        'accident_payments': 'Оплаты по ДТП',
-        'accident_events': 'События по ДТП',
-        'accident_images': 'Фото ДТП',
-        'repairs': 'Ремонты',
-        'repair_works': 'Работы по ремонту',
-        'repair_logs': 'Журнал ремонтов',
-        'realizations': 'Реализации',
-        'realization_items': 'Позиции реализации',
-        'realization_works': 'Работы по реализации',
-        'realization_logs': 'Журнал реализаций',
-        'part_discounts': 'Скидки на запчасти',
-        'service_discounts': 'Скидки на работы',
-        'customer_payments': 'Оплаты клиентов',
-        'supplier_payments': 'Оплаты поставщикам',
-        'warehouse_debt_payments': 'Оплаты по перемещениям',
-        'warehouse_batches': 'Партии на складе',
-        'car_details': 'Данные автомобиля',
-        'document_sequences': 'Нумерация документов',
-                'audit_logs': 'Журнал аудита',
-        'employees': 'Сотрудники',
-        'returns': 'Возвраты',
-        'return_items': 'Позиции возврата',
-        'return_logs': 'Журнал возвратов',
-        'posting_logs': 'Журнал проведения документов'
-    };
+// Конфиг: какое поле из деталей аудита -> из какого API справочника брать название
+const idMapConfigs = [
+    { key: 'warehouse_id',      url: '/api/skladi',              label: r => r.name },
+    { key: 'warehouse_from_id', url: '/api/skladi',              label: r => r.name },
+    { key: 'warehouse_to_id',   url: '/api/skladi',              label: r => r.name },
+    { key: 'sklad_id',          url: '/api/skladi',              label: r => r.name },
+    { key: 'supplier_id',       url: '/api/postavhik',           label: r => r.name },
+    { key: 'customer_id',       url: '/api/customers',           label: r => r.name_full || r.name_short || r.name },
+    { key: 'mol_id',            url: '/api/mol',                 label: r => r.name },
+    { key: 'mol_from_id',       url: '/api/mol',                 label: r => r.name },
+    { key: 'mol_to_id',         url: '/api/mol',                 label: r => r.name },
+    { key: 'user_id',           url: '/api/users',               label: r => r.name || r.login },
+    { key: 'car_id',            url: '/api/cars',                label: r => r.gos_number || r.vin || ('Авто #' + r.id) },
+    { key: 'brand_id',          url: '/api/brands',              label: r => r.name },
+    { key: 'model_id',          url: '/api/models',              label: r => r.name },
+    { key: 'body_id',           url: '/api/bodies',              label: r => r.name },
+    { key: 'kyzov_type_id',     url: '/api/bodies',              label: r => r.name },
+    { key: 'toplivo_id',        url: '/api/toplivo',             label: r => r.name },
+    { key: 'gruppa_tsen_id',    url: '/api/gruppa_tsen',         label: r => r.name },
+    { key: 'proizvoditel_id',   url: '/api/proizvoditel_zaphasti', label: r => r.name },
+    { key: 'ed_izmereniya_id',  url: '/api/ed_izmereniya',       label: r => r.name },
+    { key: 'employee_id',       url: '/api/employees',           label: r => r.name || r.fio }
+];
 
-    const fieldNamesRu = {
-        'id': 'ID',
-        'name': 'Название',
-        'name_full': 'Полное название',
-        'name_short': 'Краткое название',
-        'description': 'Описание',
-        'date': 'Дата',
-        'doc_date': 'Дата документа',
-        'fact_date': 'Фактическая дата',
-        'created_at': 'Дата создания',
-        'updated_at': 'Дата изменения',
-        'is_posted': 'Проведён',
-        'doc_number': 'Номер документа',
-        'user_id': 'Пользователь',
-        'customer_id': 'Клиент',
-        'supplier_id': 'Поставщик',
-        'warehouse_id': 'Склад',
-        'warehouse_from_id': 'Склад-отправитель',
-        'warehouse_to_id': 'Склад-получатель',
-        'sklad_id': 'Склад',
-        'mol_id': 'МОЛ',
-        'mol_from_id': 'МОЛ (откуда)',
-        'mol_to_id': 'МОЛ (куда)',
-        'quantity': 'Количество',
-        'price': 'Цена',
-        'price_rub': 'Цена (руб.)',
-        'total': 'Итого',
-        'total_rub': 'Итого (руб.)',
-        'total_amount': 'Сумма',
-        'amount': 'Сумма',
-        'comment': 'Комментарий',
-        'reason': 'Причина',
-        'article': 'Артикул',
-        'vin': 'VIN',
-        'year': 'Год выпуска',
-        'color': 'Цвет',
-        'engine': 'Объём двигателя',
-        'gos_number': 'Гос. номер',
-        'car_number': 'Гос. номер',
-          'toplivo_id': 'Тип топлива',
-        'end_date': 'Дата окончания',
-        'start_date': 'Дата начала',
-        'mileage':'Пробег', 
-        'doc type id': 'Тип документа',
-        'repair type id': 'Тип ремонта',
-        'sum':'Сумма',
-        'car_id': 'Автомобиль',
-        'car_model': 'Модель авто',
-        'brand_id': 'Марка',
-        'model_id': 'Модель',
-        'body_id': 'Тип кузова',
-        'kyzov_type_id': 'Тип кузова',
-        'counterparty_id': 'Контрагент',
-        'counterparty_type_id': 'Тип контрагента',
-        'receipt_id': 'Приход',
-        'realization_id': 'Реализация',
-        'move_id': 'Перемещение',
-        'repair_id': 'Ремонт',
-        'zaphasti_id': 'Запчасть',
-        'part_id': 'Запчасть',
-        'service_id': 'Услуга',
-        'work_id': 'Работа',
-        'discount': 'Скидка',
-        'currency': 'Валюта',
-        'login': 'Логин',
-        'password': 'Пароль',
-        'password_hash': 'Пароль (хэш)',
-        'role': 'Роль',
-        'phone': 'Телефон',
-        'address': 'Адрес',
-        'email': 'Email',
-        'status': 'Статус',
-        'status_id': 'Статус',
-        'ispolnitel_id': 'Исполнитель',
-        'gruppa_tsen_id': 'Группа цен',
-        'proizvoditel_id': 'Производитель',
-        'ed_izmereniya_id': 'Единица измерения',
-        'payment_type_id': 'Тип оплаты',
-        'autoservice_id': 'Автосервис'
-    };
+const tableNamesRu = {
+    'users': 'Пользователи',
+    'spare_parts': 'Запчасти',
+    'zaphasti': 'Запчасти',
+    'car_brands': 'Марки автомобилей',
+    'brands': 'Марки автомобилей',
+    'kyzov_type': 'Тип кузова',
+    'bodies': 'Тип кузова',
+    'car_models': 'Модели автомобилей',
+    'models': 'Модели автомобилей',
+    'counterparties': 'Контрагенты',
+    'postavhik': 'Поставщики',
+    'postavhik_contacts': 'Контакты поставщиков',
+    'customers': 'Клиенты',
+    'customer_contacts': 'Контакты клиентов',
+    'customer_cars': 'Автомобили клиентов',
+    'counterparty_types': 'Типы контрагентов',
+    'counterparty_contacts': 'Контакты контрагентов',
+    'type_sklad': 'Типы складов',
+    'skladi': 'Склады',
+    'cars': 'Автомобили',
+    'type_rabot': 'Типы работ',
+    'works': 'Работы',
+    'ispolnitel': 'Исполнители',
+    'repair_types': 'Типы ремонта',
+    'gruppa_tsen': 'Группа цен',
+    'proizvoditel_zaphasti': 'Производители запчастей',
+    'gryppa_zamehenia': 'Группа взаимозаменяемости',
+    'vidy_rabot': 'Виды работ',
+    'toplivo': 'Тип топлива',
+    'ed_izmereniya': 'Единицы измерения',
+    'mol': 'Материально ответственные лица',
+    'mol_users': 'МОЛ пользователей',
+    'receipts': 'Приходы',
+    'receipt_items': 'Позиции прихода',
+    'receipt_logs': 'Журнал приходов',
+    'moves': 'Перемещения',
+    'move_logs': 'Журнал перемещений',
+    'statuses': 'Статусы',
+    'autoservices': 'Автосервисы',
+    'payment_types': 'Типы оплаты',
+    'accidents': 'ДТП / Страховые случаи',
+    'accident_invoices': 'Счета по ДТП',
+    'accident_payments': 'Оплаты по ДТП',
+    'accident_events': 'События по ДТП',
+    'accident_images': 'Фото ДТП',
+    'repairs': 'Ремонты',
+    'repair_works': 'Работы по ремонту',
+    'repair_logs': 'Журнал ремонтов',
+    'realizations': 'Реализации',
+    'realization_items': 'Позиции реализации',
+    'realization_works': 'Работы по реализации',
+    'realization_logs': 'Журнал реализаций',
+    'part_discounts': 'Скидки на запчасти',
+    'service_discounts': 'Скидки на работы',
+    'customer_payments': 'Оплаты клиентов',
+    'supplier_payments': 'Оплаты поставщикам',
+    'warehouse_debt_payments': 'Оплаты по перемещениям',
+    'warehouse_batches': 'Партии на складе',
+    'car_details': 'Данные автомобиля',
+    'document_sequences': 'Нумерация документов',
+    'audit_logs': 'Журнал аудита',
+    'employees': 'Сотрудники',
+    'returns': 'Возвраты',
+    'return_items': 'Позиции возврата',
+    'return_logs': 'Журнал возвратов',
+    'posting_logs': 'Журнал проведения документов'
+};
 
-    function translateTable(name) {
-        if (!name) return '—';
-        return tableNamesRu[name] || name;
+const fieldNamesRu = {
+    'id': 'ID',
+    'name': 'Название',
+    'name_full': 'Полное название',
+    'name_short': 'Краткое название',
+    'description': 'Описание',
+    'date': 'Дата',
+    'doc_date': 'Дата документа',
+    'fact_date': 'Фактическая дата',
+    'created_at': 'Дата создания',
+    'updated_at': 'Дата изменения',
+    'is_posted': 'Проведён',
+    'doc_number': 'Номер документа',
+    'user_id': 'Пользователь',
+    'customer_id': 'Клиент',
+    'supplier_id': 'Поставщик',
+    'warehouse_id': 'Склад',
+    'warehouse_from_id': 'Склад-отправитель',
+    'warehouse_to_id': 'Склад-получатель',
+    'sklad_id': 'Склад',
+    'mol_id': 'МОЛ',
+    'mol_from_id': 'МОЛ (откуда)',
+    'mol_to_id': 'МОЛ (куда)',
+    'quantity': 'Количество',
+    'price': 'Цена',
+    'price_rub': 'Цена (руб.)',
+    'total': 'Итого',
+    'total_rub': 'Итого (руб.)',
+    'total_amount': 'Сумма',
+    'amount': 'Сумма',
+    'comment': 'Комментарий',
+    'reason': 'Причина',
+    'article': 'Артикул',
+    'vin': 'VIN',
+    'year': 'Год выпуска',
+    'color': 'Цвет',
+    'engine': 'Объём двигателя',
+    'gos_number': 'Гос. номер',
+    'car_number': 'Гос. номер',
+    'toplivo_id': 'Тип топлива',
+    'end_date': 'Дата окончания',
+    'start_date': 'Дата начала',
+'mileage': 'Пробег',
+'doc_type_id': 'Тип документа',
+'repair_type_id': 'Тип ремонта',
+'sum': 'Сумма',
+    'car_id': 'Автомобиль',
+    'car_model': 'Модель авто',
+    'brand_id': 'Марка',
+    'model_id': 'Модель',
+    'body_id': 'Тип кузова',
+    'kyzov_type_id': 'Тип кузова',
+    'counterparty_id': 'Контрагент',
+    'counterparty_type_id': 'Тип контрагента',
+    'receipt_id': 'Приход',
+    'realization_id': 'Реализация',
+    'move_id': 'Перемещение',
+    'repair_id': 'Ремонт',
+    'zaphasti_id': 'Запчасть',
+    'part_id': 'Запчасть',
+    'service_id': 'Услуга',
+    'work_id': 'Работа',
+    'discount': 'Скидка',
+    'currency': 'Валюта',
+    'login': 'Логин',
+    'password': 'Пароль',
+    'password_hash': 'Пароль (хэш)',
+    'role': 'Роль',
+    'phone': 'Телефон',
+    'address': 'Адрес',
+    'email': 'Email',
+    'status': 'Статус',
+    'status_id': 'Статус',
+    'ispolnitel_id': 'Исполнитель',
+    'gruppa_tsen_id': 'Группа цен',
+    'proizvoditel_id': 'Производитель',
+    'ed_izmereniya_id': 'Единица измерения',
+    'payment_type_id': 'Тип оплаты',
+    'autoservice_id': 'Автосервис',
+    'employee_id': 'Сотрудник'
+};
+
+function translateTable(name) {
+    if (!name) return '—';
+    return tableNamesRu[name] || name;
+}
+
+function translateField(key) {
+    return fieldNamesRu[key] || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+
+function formatFieldValue(key, val) {
+    if (val === null || val === undefined || val === '') return 'пусто';
+    if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
+    if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
+
+    if (idMaps[key] && idMaps[key][val] !== undefined) {
+        return idMaps[key][val];
     }
 
-    function translateField(key) {
-        return fieldNamesRu[key] || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) return d.toLocaleString('ru-RU');
     }
 
-    function formatFieldValue(key, val) {
-        if (val === null || val === undefined || val === '') return 'пусто';
-        if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
-        if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
+    return val;
+}
 
-        if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
-            return warehousesMap[val];
-        }
-
-        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
-            const d = new Date(val);
-            if (!isNaN(d.getTime())) return d.toLocaleString('ru-RU');
-        }
-
-        return val;
+const _originalFetch = window.fetch;
+window.fetch = async function(url, options = {}) {
+    const isApiCall = typeof url === 'string' && url.startsWith('/api/');
+    if (isApiCall) {
+        const token = localStorage.getItem('token');
+        options.headers = {
+            ...(options.headers || {}),
+            'Authorization': token ? `Bearer ${token}` : ''
+        };
     }
- 
-    const _originalFetch = window.fetch;
-    window.fetch = async function(url, options = {}) {
-        const isApiCall = typeof url === 'string' && url.startsWith('/api/');
-        if (isApiCall) {
-            const token = localStorage.getItem('token');
-            options.headers = {
-                ...(options.headers || {}),
-                'Authorization': token ? `Bearer ${token}` : ''
-            };
-        }
-        const response = await _originalFetch(url, options);
-        if (isApiCall && response.status === 401) {
-            alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
-            localStorage.clear();
-            window.location.href = '/';
-        }
-        return response;
-    };
+    const response = await _originalFetch(url, options);
+    if (isApiCall && response.status === 401) {
+        alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
+        localStorage.clear();
+        window.location.href = '/';
+    }
+    return response;
+};
 
-    async function loadWarehouses() {
+async function loadReferenceMaps() {
+    const uniqueUrls = [...new Set(idMapConfigs.map(c => c.url))];
+    const dataByUrl = {};
+
+    await Promise.all(uniqueUrls.map(async url => {
         try {
-            const res = await fetch('/api/warehouses');
-            if (res.ok) {
-                const list = await res.json();
-                list.forEach(w => {
-                    warehousesMap[w.id] = w.name;
-                });
-            }
+            const res = await fetch(url);
+            dataByUrl[url] = res.ok ? await res.json() : [];
         } catch (e) {
-            console.error('Не удалось загрузить справочник складов:', e);
+            console.error('Не удалось загрузить справочник ' + url, e);
+            dataByUrl[url] = [];
         }
-    }
+    }));
+
+    idMapConfigs.forEach(cfg => {
+        const map = {};
+        (dataByUrl[cfg.url] || []).forEach(row => {
+            map[row.id] = cfg.label(row);
+        });
+        idMaps[cfg.key] = map;
+    });
+
+    warehousesMap = idMaps['warehouse_id']; // алиас для остального кода файла ниже
+}
 
     function formatAuditDetails(log) {
         let details;
@@ -590,7 +627,7 @@ let currentType = 'Приход';
         loadLogs(type, endpoint);
     }
 
-    window.addEventListener('DOMContentLoaded', async () => {
-        await loadWarehouses();
-        loadLogs('Приход', '/api/get-receipt-logs');
-    });
+   window.addEventListener('DOMContentLoaded', async () => {
+    await loadReferenceMaps();
+    loadLogs('Приход', '/api/get-receipt-logs');
+});
