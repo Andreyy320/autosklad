@@ -296,7 +296,7 @@ let currentType = 'Приход';
                     <th style="width: 40%;">Детали изменений</th>
                 </tr>
             `;
-        } else if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') {
+               } else if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') {
             thead.innerHTML = `
                 <tr>
                     <th>Дата / Время</th>
@@ -305,6 +305,15 @@ let currentType = 'Приход';
                     <th>Контрагент</th>
                     <th class="text-right">Сумма оплаты (руб.)</th>
                     <th>Комментарий</th>
+                </tr>
+            `;
+        } else if (type === 'Проведения') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Дата / Время проведения</th>
+                    <th>Кто провёл</th>
+                    <th>Тип документа</th>
+                    <th>Номер документа</th>
                 </tr>
             `;
         } else {
@@ -374,8 +383,8 @@ let currentType = 'Приход';
         if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
         if (type === 'Реализация') colspanCount = 10;
         if (type === 'Аудит') colspanCount = 6;
-        if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
-
+               if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
+        if (type === 'Проведения') colspanCount = 4;
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
 
@@ -491,7 +500,7 @@ let currentType = 'Приход';
                         <td class="text-right"><strong>${Number(log.total_amount || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.reason || '—'}</td>
                     `;
-                } else if (currentType === 'Аудит') {
+                              } else if (currentType === 'Аудит') {
                     tr.innerHTML = `
                         <td>
                             ${formattedDate}<br>
@@ -502,6 +511,13 @@ let currentType = 'Приход';
                         <td>${log.record_id || '—'}</td>
                         <td>${log.ip_address || '—'}</td>
                         <td>${formatAuditDetails(log)}</td>
+                    `;
+                } else if (currentType === 'Проведения') {
+                    tr.innerHTML = `
+                        <td>${formattedDate}</td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_type_label || log.document_type || '—'}</td>
+                        <td>${log.document_number || '—'}</td>
                     `;
                 } else {
                     let rawFrom = log.warehouse_from_id || log.warehouse_from;

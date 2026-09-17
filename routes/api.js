@@ -1131,6 +1131,12 @@ router.put('/returns/:id/post', async (req, res) => {
             [factDate, totalSum, id]
         );
 
+        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл возврат
+        await pool.query(
+            'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
+            ['return', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
         res.status(200).json(result.rows[0]);
 
     } catch (err) {
@@ -2922,6 +2928,13 @@ router.put('/moves/:id/post', async (req, res) => {
         `;
 
         const result = await pool.query(updateQuery, [factDate, id]);
+
+        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл перемещение
+        await pool.query(
+            'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
+            ['move', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Ошибка при быстрой проводке перемещения:', err);
@@ -2943,6 +2956,13 @@ router.put('/receipts/:id/post', async (req, res) => {
             'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
             [factDate, id]
         );
+
+        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл приход
+        await pool.query(
+            'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
+            ['receipt', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Ошибка при проведении прихода:', err.message);
@@ -2965,6 +2985,13 @@ router.put('/repairs/:id/post', async (req, res) => {
             'UPDATE repairs SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
             [factDate, id]
         );
+
+        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл ремонт
+        await pool.query(
+            'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
+            ['repair', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Ошибка при проведении ремонта:', err.message);
@@ -2987,6 +3014,13 @@ router.put('/realizations/:id/post', async (req, res) => {
             'UPDATE realizations SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
             [factDate, id]
         );
+
+        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл реализацию
+        await pool.query(
+            'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
+            ['realization', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
         res.json(result.rows[0]);
     } catch (err) {
         console.error('Ошибка при проведении реализации:', err.message);
@@ -2997,9 +3031,34 @@ router.put('/realizations/:id/post', async (req, res) => {
 
 
 
-
-
-
+// ==================== ЖУРНАЛ ПРОВЕДЕНИЯ ДОКУМЕНТОВ (кто/когда провёл) ====================
+router.get('/get-posting-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                pl.*,
+                CASE pl.document_type
+                    WHEN 'receipt' THEN 'Приход'
+                    WHEN 'move' THEN 'Перемещение'
+                    WHEN 'repair' THEN 'Ремонт'
+                    WHEN 'realization' THEN 'Реализация'
+                    WHEN 'return' THEN 'Возврат'
+                    ELSE pl.document_type
+                END AS document_type_label,
+                COALESCE(CASE WHEN pl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
+            FROM posting_logs pl
+            LEFT JOIN users u ON pl.user_type = 'user' AND pl.user_id::text = u.id::text
+            LEFT JOIN employees e ON pl.user_type = 'employee' AND pl.user_id::text = e.id::text
+            ORDER BY pl.created_at DESC
+            LIMIT 500;
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения журнала проведения документов:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов проведения: ' + err.message });
+    }
+});
 
 
 
