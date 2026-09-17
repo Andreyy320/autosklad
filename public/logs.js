@@ -62,7 +62,12 @@ let currentType = 'Приход';
         'warehouse_batches': 'Партии на складе',
         'car_details': 'Данные автомобиля',
         'document_sequences': 'Нумерация документов',
-        'audit_logs': 'Журнал аудита'
+                'audit_logs': 'Журнал аудита',
+        'employees': 'Сотрудники',
+        'returns': 'Возвраты',
+        'return_items': 'Позиции возврата',
+        'return_logs': 'Журнал возвратов',
+        'posting_logs': 'Журнал проведения документов'
     };
 
     const fieldNamesRu = {
@@ -104,7 +109,13 @@ let currentType = 'Приход';
         'engine': 'Объём двигателя',
         'gos_number': 'Гос. номер',
         'car_number': 'Гос. номер',
-        'toplivo_id': 'Тип топлива',
+          'toplivo_id': 'Тип топлива',
+        'end_date': 'Дата окончания',
+        'start_date': 'Дата начала',
+        'Mileage':'Пробег', 
+        'Doc type id': 'Тип документа',
+        'Repair type id': 'Тип ремонта',
+        'Sum':'Сумма',
         'car_id': 'Автомобиль',
         'car_model': 'Модель авто',
         'brand_id': 'Марка',

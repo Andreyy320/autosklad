@@ -2914,6 +2914,12 @@ router.put('/moves/:id/post', async (req, res) => {
         }
         const oldDoc = oldDocRes.rows[0];
 
+        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
+        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM move_items WHERE move_id = $1', [id]);
+        if (Number(itemsCheck.rows[0].cnt) === 0) {
+            return res.status(400).json({ error: 'Нельзя провести пустой документ перемещения — добавьте хотя бы одну позицию' });
+        }
+
         let factDate = oldDoc.fact_date;
         if (!oldDoc.is_posted || !oldDoc.fact_date) {
     factDate = getServerNowString();       
@@ -2950,6 +2956,12 @@ router.put('/receipts/:id/post', async (req, res) => {
             return res.status(404).json({ error: 'Документ не найден' });
         }
 
+        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
+        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM receipt_items WHERE receipt_id = $1', [id]);
+        if (Number(itemsCheck.rows[0].cnt) === 0) {
+            return res.status(400).json({ error: 'Нельзя провести пустой документ прихода — добавьте хотя бы одну позицию' });
+        }
+
         const factDate = getServerNowString();
 
         const result = await pool.query(
@@ -2979,6 +2991,12 @@ router.put('/repairs/:id/post', async (req, res) => {
             return res.status(404).json({ error: 'Документ не найден' });
         }
 
+        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
+        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM repair_items WHERE repair_id = $1', [id]);
+        if (Number(itemsCheck.rows[0].cnt) === 0) {
+            return res.status(400).json({ error: 'Нельзя провести пустой документ ремонта — добавьте хотя бы одну позицию' });
+        }
+
         const factDate = getServerNowString();
 
         const result = await pool.query(
@@ -2998,7 +3016,6 @@ router.put('/repairs/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
-
 // ==================== БЫСТРОЕ ПРОВЕДЕНИЕ РЕАЛИЗАЦИИ ====================
 router.put('/realizations/:id/post', async (req, res) => {
     try {
@@ -3006,6 +3023,12 @@ router.put('/realizations/:id/post', async (req, res) => {
         const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM realizations WHERE id = $1', [id]);
         if (oldDocRes.rows.length === 0) {
             return res.status(404).json({ error: 'Документ не найден' });
+        }
+
+        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
+        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM realization_items WHERE realization_id = $1', [id]);
+        if (Number(itemsCheck.rows[0].cnt) === 0) {
+            return res.status(400).json({ error: 'Нельзя провести пустой документ реализации — добавьте хотя бы одну позицию' });
         }
 
         const factDate = getServerNowString();
@@ -3027,7 +3050,6 @@ router.put('/realizations/:id/post', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
     }
 });
-
 
 
 
