@@ -8914,10 +8914,11 @@ async function loadData(entity, title, customParams = {}) {
                     loadDetailData('postavhik_contacts', item.id);
                 } else if (entity === 'counterparties') {
                     loadDetailData('counterparty_contacts', item.id);
-                } else if (entity === 'customers') {
-                    const activeSubTab = typeof currentCustomerSubTab !== 'undefined' && currentCustomerSubTab ? currentCustomerSubTab : 'customer_contacts';
-                    loadDetailData(activeSubTab, item.id);
-                }
+               } else if (entity === 'customers') {
+    const activeSubTab = getCurrentDetailEntity();
+    currentCustomerSubTab = activeSubTab;
+    loadDetailData(activeSubTab, item.id);
+}
             };
 
             tbody.appendChild(tr);
