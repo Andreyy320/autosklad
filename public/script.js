@@ -12596,7 +12596,7 @@ function setDetailToolbarVisible(visible) {
         const style = document.createElement('style');
         style.id = 'auto-table-resizer-style';
         style.textContent = `
-table { table-layout: fixed !important; }
+    table { table-layout: fixed !important; }
             th, td { position: relative !important; }
             th .resizer, td .resizer {
                 position: absolute;
