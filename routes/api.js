@@ -7778,8 +7778,8 @@ router.delete('/move_items/:id', async (req, res) => {
                 total_rub: currentItem.total_rub,
                 markup_percent: markupPercent, // Сохраняем наценку в лог удаленной позиции
                 income_document_id: currentItem.income_document_id,
-                description: currentItem.description
-            });
+                description: currentItem.description || 'Удаление позиции перемещения (остатки возвращены на склад)'
+                        });
         }
 
         await client.query('COMMIT');
@@ -7958,7 +7958,7 @@ router.post('/repair_items', async (req, res) => {
                     price: cleanPrice,
                     total: totalSum,
                     receipt_id: batch.receipt_id,
-                    description: description || null
+                                        description: description || 'Добавление запчасти в ремонт'
                 });
             }
 
@@ -8199,7 +8199,7 @@ router.put('/repair_items/:id', async (req, res) => {
                 price: Number(finalPrice.toFixed(2)),
                 total: finalTotal,
                 receipt_id: firstReceiptId,
-                description: desc || null
+                                description: desc || 'Изменение позиции ремонта'
             });
         }
 
@@ -8340,7 +8340,7 @@ router.delete('/repair_items/:id', async (req, res) => {
                 price: itemPrice,
                 total: currentItem.total,
                 receipt_id: receiptId,
-                description: currentItem.description || null
+                                description: currentItem.description || 'Удаление позиции ремонта (остатки возвращены на склад)'
             });
         }
 
@@ -9342,7 +9342,11 @@ router.post('/:entity', async (req, res) => {
  
         // Отбрасываем любые поля, которых нет в реальной схеме таблицы —
         // закрывает инъекцию через "хитрые" имена ключей JSON.
-        req.body = await sanitizeBodyColumns(client, entity, req.body);
+               req.body = await sanitizeBodyColumns(client, entity, req.body);
+
+        if ((entity === 'users' || entity === 'employees') && req.body.password_hash !== undefined) {
+            delete req.body.password_hash;
+        }
 
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);
@@ -9591,7 +9595,11 @@ router.put('/:entity/:id', async (req, res) => {
 
                 // Отбрасываем любые поля, которых нет в реальной схеме таблицы —
         // закрывает инъекцию через "хитрые" имена ключей JSON.
-        req.body = await sanitizeBodyColumns(client, entity, req.body);
+                req.body = await sanitizeBodyColumns(client, entity, req.body);
+
+        if ((entity === 'users' || entity === 'employees') && req.body.password_hash !== undefined) {
+            delete req.body.password_hash;
+        }
 
         const keys = Object.keys(req.body);
         const values = Object.values(req.body);

@@ -733,8 +733,8 @@ const tableConfig = {
                 <td><span style="font-weight:600; color:#0f172a;">${item.doc_number || '—'}</span></td>
                 <td><span style="color:#475569;">${formattedDate}</span></td>
                 <td>
-                    <span style="padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; ${isFromCustomer ? 'background:#dbeafe; color:#1d4ed8;' : 'background:#fef3c7; color:#b45309;'}">
-                        ${isFromCustomer ? 'От покупателя' : 'Поставщику'}
+                    <span style="padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; color:#334155;">                       
+                    ${isFromCustomer ? 'От покупателя' : 'Поставщику'}
                     </span>
                 </td>
                 <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>
