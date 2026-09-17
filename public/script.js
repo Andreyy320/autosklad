@@ -10478,7 +10478,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                         <span id="receipt-icon-${currentGIdx}" style="display:inline-block; width:20px; color:#2563eb;">[-]</span>
                         ${group.title} &nbsp;|&nbsp;
-                        Итого за месяц: <span style="color:#d97706;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp;
+                                              Итого за месяц: <span style="color:#0f172a;">${group.totalSum.toFixed(2)}</span> &nbsp;|&nbsp;
                         Оплачено: <span style="color:#16a34a;">${group.totalPaid.toFixed(2)}</span> &nbsp;|&nbsp;
                         Долг: <span style="color:#dc2626;">${group.totalDebt.toFixed(2)}</span>
                     </td>
@@ -10526,8 +10526,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                                 footerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 16px;">
                         <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
-                            <span style="color: #475569;">Плюс запчасти: <b style="color: #0284c7; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                            <span style="color: #475569;">Услуги: <b style="color: #7c3aed; font-weight: 600;">${group.totalWorksProfit.toFixed(2)}</b></span>
+                                                       <span style="color: #475569;">Плюс запчасти: <b style="color: #0f172a; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>                    
+                            <span style="color: #475569;">Услуги: <b style="color: #0f172a; font-weight: 600;">${group.totalWorksProfit.toFixed(2)}</b></span>
                             <span style="color: #475569;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 600;">${group.totalNetProfit.toFixed(2)}</b></span>
                         </div>
                     </td>
@@ -10686,8 +10686,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                                footerTr.innerHTML = `
                     <td colspan="${colCount}" style="padding: 10px 16px;">
                         <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 24px; font-size: 13px;">
-                            <span style="color: #475569;">Плюс запчасти: <b style="color: #0284c7; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
-                            <span style="color: #475569;">Услуги: <b style="color: #7c3aed; font-weight: 600;">${group.totalWorksSum.toFixed(2)}</b></span>
+                                                      <span style="color: #475569;">Плюс запчасти: <b style="color: #0f172a; font-weight: 600;">${group.totalPartsProfit.toFixed(2)}</b></span>
+                            <span style="color: #475569;">Услуги: <b style="color: #0f172a; font-weight: 600;">${group.totalWorksSum.toFixed(2)}</b></span>
                             <span style="color: #475569;">Общий плюс: <b style="color: ${group.totalNetProfit >= 0 ? '#16a34a' : '#dc2626'}; font-weight: 600;">${group.totalNetProfit.toFixed(2)}</b></span>
                         </div>
                     </td>
