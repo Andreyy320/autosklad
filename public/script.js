@@ -1696,7 +1696,7 @@ const tableConfig = {
         { field: 'income_document_id', label: 'Док. прихода', width: '110px', type: 'text', table: true }
     ],
     
-    render: (item) => {
+        render: (item) => {
         if (!item) return '';
 
         const qty = Number(item.quantity) || 1;
@@ -1721,10 +1721,10 @@ const tableConfig = {
             <td>${code}</td>
             <td><b>${name}</b></td>
             <td style="text-align: right;">${qty}</td>
+            <td style="text-align: right; color: #16a34a;">${item.markup_percent !== null && item.markup_percent !== undefined ? item.markup_percent + '%' : '—'}</td>
             <td style="text-align: center;">${unit}</td>
             <td style="text-align: right;">${purchasePrice}</td>
             <td style="text-align: right;">${retailPrice}</td>
-            <td style="text-align: right; color: #16a34a;">${item.markup_percent !== null && item.markup_percent !== undefined ? item.markup_percent + '%' : '—'}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
             <td>${discountText}</td>
             <td style="text-align: right; font-weight: bold;">${Number(totalSum).toFixed(2)}</td>
