@@ -12637,6 +12637,10 @@ function setDetailToolbarVisible(visible) {
     const storageKey = `col_widths_${currentUserId}_${sectionKey}`;
 
         document.querySelectorAll('table').forEach(table => {
+            if (table.parentElement) {
+                table.parentElement.style.overflowX = 'auto';
+                table.parentElement.style.maxWidth = '100%';
+            }
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
