@@ -4379,7 +4379,7 @@ router.get('/returns/available-items', async (req, res) => {
             // У move_items нет своего batch_id — партия на складе-получателе ищется
             // по тройке (warehouse_id, zaphasti_id, receipt_id=income_document_id),
             // т.к. именно так она создаётся в POST /move_items.
-            const query = `
+                        const query = `
                 SELECT
                     mi.id AS move_item_id,
                     mi.zaphasti_id,
@@ -4390,7 +4390,10 @@ router.get('/returns/available-items', async (req, res) => {
                     mi.income_document_id AS receipt_id,
                     m.warehouse_to_id,
                     m.warehouse_from_id,
-                    COALESCE(sub_wb.available_qty, 0) AS available_qty
+                    LEAST(
+                        GREATEST(mi.quantity - COALESCE(sub_ret.returned_qty, 0), 0),
+                        COALESCE(sub_wb.available_qty, 0)
+                    ) AS available_qty
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
@@ -4401,6 +4404,12 @@ router.get('/returns/available-items', async (req, res) => {
                 ) sub_wb ON sub_wb.warehouse_id = m.warehouse_to_id
                         AND sub_wb.zaphasti_id = mi.zaphasti_id
                         AND sub_wb.receipt_id = mi.income_document_id
+                LEFT JOIN (
+                    SELECT move_item_id, SUM(quantity) AS returned_qty
+                    FROM return_items
+                    WHERE move_item_id IS NOT NULL
+                    GROUP BY move_item_id
+                ) sub_ret ON sub_ret.move_item_id = mi.id
                 WHERE mi.move_id = $1
                 ORDER BY mi.id ASC;
             `;
