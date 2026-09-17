@@ -12076,7 +12076,10 @@ function filterDetailTable() {
     });
 }
 
+let detailLoadToken = 0;
+
 async function loadDetailData(entity, parentId) {
+    const myDetailToken = ++detailLoadToken;
     ensureDetailPrintButton();
 
     const actionButtonsBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
@@ -12235,12 +12238,16 @@ async function loadDetailData(entity, parentId) {
             }
         });
 
+              if (myDetailToken !== detailLoadToken) return;
+
         if (!response.ok) throw new Error(`Ошибка загрузки деталей (Статус: ${response.status})`);
         
         const items = await response.json();
-        
+
+        if (myDetailToken !== detailLoadToken) return;
+
         currentDetailItems = items; 
-        selectedDetailItem = null;  
+        selectedDetailItem = null; 
         
         const entityTitles = {
             accident_invoices: 'Счета / Расходы',
@@ -12323,7 +12330,8 @@ async function loadDetailData(entity, parentId) {
             });
         }
 
-    } catch (err) {
+        } catch (err) {
+        if (myDetailToken !== detailLoadToken) return;
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
     }
 }
