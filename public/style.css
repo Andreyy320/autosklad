@@ -248,7 +248,8 @@ body, html {
 }
 
 table {
-    width: 100%;
+    width: auto;
+    min-width: 100%;
     border-collapse: collapse;
     background-color: #ffffff;
     table-layout: fixed !important;
