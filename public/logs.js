@@ -627,7 +627,7 @@ async function loadReferenceMaps() {
         loadLogs(type, endpoint);
     }
 
-    window.addEventListener('DOMContentLoaded', async () => {
-        await loadWarehouses();
-        loadLogs('Приход', '/api/get-receipt-logs');
-    });
+   window.addEventListener('DOMContentLoaded', async () => {
+    await loadReferenceMaps();
+    loadLogs('Приход', '/api/get-receipt-logs');
+});
