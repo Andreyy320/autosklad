@@ -3372,12 +3372,15 @@ async function writeRealizationLog(client, req, data) {
 router.post('/realization_items', async (req, res) => {
   
 
-const { realization_id, zaphasti_id, quantity, description, markup_percent } = req.body;
+const { realization_id, zaphasti_id, quantity, description, markup_percent, price, is_manual_price } = req.body;
 
 let markupPercent = Number(markup_percent);
 if (isNaN(markupPercent) || markupPercent < 0) {
     markupPercent = DEFAULT_MARKUP_PERCENT;
 }
+
+const manualMode = is_manual_price === true || is_manual_price === 'true' || is_manual_price === 'on' || is_manual_price === '1';
+const manualPriceValue = Number(price);
     const requestedQty = Number(quantity) || 0;
 
     if (!zaphasti_id || !realization_id) {
@@ -3496,9 +3499,24 @@ if (isNaN(markupPercent) || markupPercent < 0) {
             if (takeQty <= 0) continue;
 
 const purchase_price = batch.purchase_price;
-const baseRetailPrice = Number((purchase_price * (1 + markupPercent / 100)).toFixed(2));
-            const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
-            const total_rub = Number((takeQty * finalPrice).toFixed(2));
+
+let baseRetailPrice, finalPrice, appliedMarkupPercent, appliedDiscountText;
+
+if (manualMode && !isNaN(manualPriceValue) && manualPriceValue > 0) {
+    baseRetailPrice = manualPriceValue;
+    finalPrice = manualPriceValue;
+    appliedMarkupPercent = purchase_price > 0
+        ? Number((((manualPriceValue / purchase_price) - 1) * 100).toFixed(2))
+        : null;
+    appliedDiscountText = 'Цена указана вручную';
+} else {
+    baseRetailPrice = Number((purchase_price * (1 + markupPercent / 100)).toFixed(2));
+    finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
+    appliedMarkupPercent = markupPercent;
+    appliedDiscountText = discountText;
+}
+
+const total_rub = Number((takeQty * finalPrice).toFixed(2));
 
 
             // Списываем остаток из конкретной партии на складе
@@ -3507,21 +3525,21 @@ const baseRetailPrice = Number((purchase_price * (1 + markupPercent / 100)).toFi
                 [takeQty, batch.batch_id]
             );
 
-          const insertQuery = `
+                  const insertQuery = `
     INSERT INTO realization_items (
         realization_id, zaphasti_id, article, code, name, 
         quantity, unit, purchase_price, retail_price, price, 
-        discount, total_rub, description, income_document_id, markup_percent
+        discount, total_rub, description, income_document_id, markup_percent, is_manual_price
     ) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
     RETURNING *
 `;
 
 const values = [
     realization_id, zaphasti_id, zap.article, zap.code, zap.name, 
     takeQty, zap.unit || 'шт', purchase_price, baseRetailPrice, finalPrice, 
-    discountText, total_rub, description || null, batch.receipt_id,
-    markupPercent
+    appliedDiscountText, total_rub, description || null, batch.receipt_id,
+    appliedMarkupPercent, manualMode
 ];
 
             const result = await client.query(insertQuery, values);
@@ -3574,7 +3592,15 @@ router.put('/realization_items/:id', async (req, res) => {
  
 
     const { id } = req.params;
-    const { realization_id, zaphasti_id, quantity, description } = req.body;
+       const { realization_id, zaphasti_id, quantity, description, markup_percent, price, is_manual_price } = req.body;
+
+    let markupPercent = Number(markup_percent);
+    if (isNaN(markupPercent) || markupPercent < 0) {
+        markupPercent = DEFAULT_MARKUP_PERCENT;
+    }
+
+    const manualMode = is_manual_price === true || is_manual_price === 'true' || is_manual_price === 'on' || is_manual_price === '1';
+    const manualPriceValue = Number(price);
 
     const client = await pool.connect();
     try {
@@ -3791,13 +3817,27 @@ router.put('/realization_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Ошибка распределения партий FIFO при редактировании: не удалось покрыть требуемый объем.' });
         }
 
-        const baseRetailPrice = Number((chosenPurchasePrice * 1.30).toFixed(2));
-        const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
+               let baseRetailPrice, finalPrice, appliedMarkupPercent, appliedDiscountText;
+
+        if (manualMode && !isNaN(manualPriceValue) && manualPriceValue > 0) {
+            baseRetailPrice = manualPriceValue;
+            finalPrice = manualPriceValue;
+            appliedMarkupPercent = chosenPurchasePrice > 0
+                ? Number((((manualPriceValue / chosenPurchasePrice) - 1) * 100).toFixed(2))
+                : null;
+            appliedDiscountText = 'Цена указана вручную';
+        } else {
+            baseRetailPrice = Number((chosenPurchasePrice * (1 + markupPercent / 100)).toFixed(2));
+            finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
+            appliedMarkupPercent = markupPercent;
+            appliedDiscountText = discountText;
+        }
+
         const total_rub = Number((requestedQty * finalPrice).toFixed(2));
         const finalDescription = description !== undefined ? description : currentItem.description;
 
         // 7. Обновляем запись в realization_items
-        const updateQuery = `
+              const updateQuery = `
             UPDATE realization_items 
             SET realization_id = $1, 
                 zaphasti_id = $2, 
@@ -3812,8 +3852,10 @@ router.put('/realization_items/:id', async (req, res) => {
                 discount = $11, 
                 total_rub = $12, 
                 description = $13, 
-                income_document_id = $14
-            WHERE id = $15
+                income_document_id = $14,
+                markup_percent = $15,
+                is_manual_price = $16
+            WHERE id = $17
             RETURNING *
         `;
         
@@ -3828,10 +3870,12 @@ router.put('/realization_items/:id', async (req, res) => {
             chosenPurchasePrice, 
             baseRetailPrice, 
             finalPrice, 
-            discountText, 
+            appliedDiscountText, 
             total_rub, 
             finalDescription, 
             chosenIncomeDocumentId,
+            appliedMarkupPercent,
+            manualMode,
             id
         ];
 

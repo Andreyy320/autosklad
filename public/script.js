@@ -1685,7 +1685,8 @@ const tableConfig = {
         { field: 'code', label: 'Код', width: '80px', table: true },
         { field: 'name', label: 'Наименование', width: '180px', table: true },
         { field: 'quantity', label: 'Кол-во', width: '70px', type: 'number', table: true },
-        { field: 'markup_percent', label: 'Наценка, %', width: '80px', type: 'number', table: true },
+                { field: 'markup_percent', label: 'Наценка, %', width: '80px', type: 'number', table: true },
+        { field: 'is_manual_price', label: 'Указать цену вручную', type: 'checkbox', table: false },
         { field: 'unit', label: 'Ед. изм', width: '60px', type: 'text', table: true },
         { field: 'purchase_price', label: 'Закупка', width: '90px', type: 'number', table: true },
         { field: 'retail_price', label: 'Розница', width: '90px', type: 'number', table: true },
@@ -4529,7 +4530,7 @@ async function openRealizationItemsForm(item = null, parentId = null) {
         html += `<input type="hidden" name="realization_id" value="${parentId}">`;
     }
 
-const allowedFields = ['zaphasti_id', 'quantity', 'markup_percent', 'description'];
+const allowedFields = ['zaphasti_id', 'quantity', 'markup_percent', 'is_manual_price', 'price', 'description'];
     async function renderField(col) {
         if (!allowedFields.includes(col.field)) return '';
         if (col.insert === false) return '';
@@ -4618,8 +4619,14 @@ if (col.field === 'markup_percent' && !val) {
                 });
                 inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
             }
-        } else if (col.field === 'description') {
+                } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else if (col.field === 'is_manual_price') {
+            const checked = (val === true || val === 'true' || val === 1 || val === '1') ? 'checked' : '';
+            inputHtml = `<input type="checkbox" id="manual-price-toggle" name="${col.field}" ${checked} onchange="document.getElementById('price-input').disabled = !this.checked; document.getElementById('price-input').style.background = this.checked ? '#ffffff' : '#f1f5f9';">`;
+        } else if (col.field === 'price') {
+            const isManualNow = (item && (item.is_manual_price === true || item.is_manual_price === 'true'));
+            inputHtml = `<input type="text" id="price-input" name="price" value="${val}" ${!isManualNow ? 'disabled' : ''} style="${controlStyle} ${!isManualNow ? 'background:#f1f5f9;' : ''}">`;
         } else {
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
