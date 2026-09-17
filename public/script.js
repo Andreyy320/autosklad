@@ -12622,7 +12622,6 @@ function setDetailToolbarVisible(visible) {
     const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
     const currentUserId = localStorage.getItem('currentUserId') || 'guest';
     const storageKey = `col_widths_${currentUserId}_${sectionKey}`;
-    ...
 
         document.querySelectorAll('table').forEach(table => {
             const rows = Array.from(table.querySelectorAll('tr'));
