@@ -576,7 +576,7 @@ const tableConfig = {
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
-            <td>
+                        <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
