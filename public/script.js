@@ -9935,7 +9935,7 @@ totalSum += Number(item.total_expense_sum || 0);
             summaryTr.innerHTML = `
                 <td colspan="${colCount}" style="padding: 10px; border-top: 2px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
                     Итого &nbsp;|&nbsp; 
-                    Сумма закупок: <span style="color:#d97706;">${totalSum.toFixed(2)}</span> &nbsp;|&nbsp; 
+                    Сумма закупок: <span style="color:#0f172a;">${totalSum.toFixed(2)}</span> &nbsp;|&nbsp;                 
                     Оплачено: <span style="color:#16a34a;">${totalPaid.toFixed(2)}</span> &nbsp;|&nbsp; 
                     Долг: <span style="color:#dc2626;">${totalDebt.toFixed(2)}</span>
                 </td>
@@ -12617,12 +12617,13 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
     }
 
-    function applyTableResizers() {
+        function applyTableResizers() {
         const activeLink = document.querySelector('.nav-link.active');
         const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
-        const storageKey = `col_widths_${sectionKey}`;
 
-        document.querySelectorAll('table').forEach(table => {
+        document.querySelectorAll('table').forEach((table, tableIndex) => {
+            const tableKey = table.id || `tbl${tableIndex}`;
+            const storageKey = `col_widths_${sectionKey}_${tableKey}`;
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
