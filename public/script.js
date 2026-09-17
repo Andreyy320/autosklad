@@ -16,8 +16,8 @@ window.fetch = async function(url, options = {}) {
 
     if (isApiCall && response.status === 401) {
         console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
-        localStorage.clear();
-        location.reload();
+    localStorage.removeItem('token');
+            location.reload();
     }
 
     return response;
@@ -8072,8 +8072,8 @@ document.getElementById('login-form').addEventListener('submit', async function(
 });
 
 function logout() {
-    localStorage.clear(); 
-    location.reload();
+    localStorage.removeItem('token');
+        location.reload();
 }
 
 async function refreshData() {
