@@ -1,10 +1,5 @@
 let currentType = 'Приход';
     let warehousesMap = {};
-let postavhikMap = {};
-let customersMap = {};
-let molMap = {};
-
-
 
     const tableNamesRu = {
         'users': 'Пользователи',
@@ -170,18 +165,9 @@ let molMap = {};
         if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
         if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
 
-      if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
-    return warehousesMap[val];
-}
-if (key === 'supplier_id' && postavhikMap[val]) {
-    return postavhikMap[val];
-}
-if (key === 'customer_id' && customersMap[val]) {
-    return customersMap[val];
-}
-if ((key === 'mol_id' || key === 'mol_from_id' || key === 'mol_to_id') && molMap[val]) {
-    return molMap[val];
-}
+        if ((key === 'warehouse_id' || key === 'warehouse_from_id' || key === 'warehouse_to_id' || key === 'sklad_id') && warehousesMap[val]) {
+            return warehousesMap[val];
+        }
 
         if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
             const d = new Date(val);
@@ -210,24 +196,19 @@ if ((key === 'mol_id' || key === 'mol_from_id' || key === 'mol_to_id') && molMap
         return response;
     };
 
-  
-async function loadReferenceMaps() {
-    try {
-        const [skladiRes, postavhikRes, customersRes, molRes] = await Promise.all([
-            fetch('/api/skladi'),
-            fetch('/api/postavhik'),
-            fetch('/api/customers'),
-            fetch('/api/mol')
-        ]);
-
-        if (skladiRes.ok) (await skladiRes.json()).forEach(w => warehousesMap[w.id] = w.name);
-        if (postavhikRes.ok) (await postavhikRes.json()).forEach(p => postavhikMap[p.id] = p.name);
-        if (customersRes.ok) (await customersRes.json()).forEach(c => customersMap[c.id] = c.name);
-        if (molRes.ok) (await molRes.json()).forEach(m => molMap[m.id] = m.name);
-    } catch (e) {
-        console.error('Не удалось загрузить справочники (склады/поставщики/покупатели/МОЛ):', e);
+    async function loadWarehouses() {
+        try {
+            const res = await fetch('/api/warehouses');
+            if (res.ok) {
+                const list = await res.json();
+                list.forEach(w => {
+                    warehousesMap[w.id] = w.name;
+                });
+            }
+        } catch (e) {
+            console.error('Не удалось загрузить справочник складов:', e);
+        }
     }
-}
 
     function formatAuditDetails(log) {
         let details;
@@ -609,7 +590,7 @@ async function loadReferenceMaps() {
         loadLogs(type, endpoint);
     }
 
- window.addEventListener('DOMContentLoaded', async () => {
-    await loadReferenceMaps();
-    loadLogs('Приход', '/api/get-receipt-logs');
-});
+    window.addEventListener('DOMContentLoaded', async () => {
+        await loadWarehouses();
+        loadLogs('Приход', '/api/get-receipt-logs');
+    });
