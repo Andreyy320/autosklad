@@ -28,7 +28,8 @@
         const activeLink = document.querySelector('.nav-link.active');
         const sectionKey = activeLink ? activeLink.innerText.trim() : 'default_table';
 
-        document.querySelectorAll('table').forEach(table => {
+        document.querySelectorAll('table').forEach((table, tableIndex) => {
+            const tableKey = table.id || `tbl${tableIndex}`;
             const rows = table.querySelectorAll('tr');
             let textRow = null;
 
@@ -46,8 +47,8 @@
             textRow.querySelectorAll('th, td').forEach((th, index) => {
                 if (th.querySelector('.resizer')) return;
 
-                const savedWidths = JSON.parse(localStorage.getItem(`col_widths_${sectionKey}`) || '{}');
-                if (savedWidths[index]) {
+                const savedWidths = JSON.parse(localStorage.getItem(`col_widths_${sectionKey}_${tableKey}`) || '{}');
+                                if (savedWidths[index]) {
                     th.style.width = savedWidths[index];
                 } else if (!th.style.width || th.style.width === 'auto') {
                     const w = th.offsetWidth;
@@ -83,8 +84,8 @@
                         textRow.querySelectorAll('th, td').forEach((cell, idx) => {
                             currentWidths[idx] = cell.style.width;
                         });
-                        localStorage.setItem(`col_widths_${sectionKey}`, JSON.stringify(currentWidths));
-                    }
+                        localStorage.setItem(`col_widths_${sectionKey}_${tableKey}`, JSON.stringify(currentWidths));
+                                        }
 
                     window.addEventListener('mousemove', onMouseMove);
                     window.addEventListener('mouseup', onMouseUp);
