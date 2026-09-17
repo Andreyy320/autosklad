@@ -251,7 +251,7 @@ table {
     width: 100%;
     border-collapse: collapse;
     background-color: #ffffff;
-    table-layout: auto !important; /* Позволяет колонкам менять ширину под скрипт */
+    table-layout: fixed !important;
 }
 
 th {
