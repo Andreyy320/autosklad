@@ -543,7 +543,7 @@ const tableConfig = {
 
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
-        { field: 'is_posted', label: 'Проведен', width: '120px', ref: 'statuses' }
+               { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
