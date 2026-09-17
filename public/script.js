@@ -12617,10 +12617,12 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
     }
 
-    function applyTableResizers() {
-        const activeLink = document.querySelector('.nav-link.active');
-        const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
-        const storageKey = `col_widths_${sectionKey}`;
+   function applyTableResizers() {
+    const activeLink = document.querySelector('.nav-link.active');
+    const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
+    const currentUserId = localStorage.getItem('currentUserId') || 'guest';
+    const storageKey = `col_widths_${currentUserId}_${sectionKey}`;
+    ...
 
         document.querySelectorAll('table').forEach(table => {
             const rows = Array.from(table.querySelectorAll('tr'));
