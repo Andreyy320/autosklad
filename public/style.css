@@ -265,6 +265,8 @@ th {
     text-align: left;
     font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     position: relative !important; /* Обязательно для привязки ползунка мыши */
 }
 
