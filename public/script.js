@@ -1685,6 +1685,7 @@ const tableConfig = {
         { field: 'code', label: 'Код', width: '80px', table: true },
         { field: 'name', label: 'Наименование', width: '180px', table: true },
         { field: 'quantity', label: 'Кол-во', width: '70px', type: 'number', table: true },
+        { field: 'markup_percent', label: 'Наценка, %', width: '80px', type: 'number', table: true },
         { field: 'unit', label: 'Ед. изм', width: '60px', type: 'text', table: true },
         { field: 'purchase_price', label: 'Закупка', width: '90px', type: 'number', table: true },
         { field: 'retail_price', label: 'Розница', width: '90px', type: 'number', table: true },
@@ -1704,6 +1705,7 @@ const tableConfig = {
         
         const purchasePrice = Number(item.purchase_price || 0).toFixed(2);
         const retailPrice = Number(item.retail_price || 0).toFixed(2);
+        
         const realizationPrice = price.toFixed(2);
         
         const article = item.article || '—';
@@ -1722,6 +1724,7 @@ const tableConfig = {
             <td style="text-align: center;">${unit}</td>
             <td style="text-align: right;">${purchasePrice}</td>
             <td style="text-align: right;">${retailPrice}</td>
+            <td style="text-align: right; color: #16a34a;">${item.markup_percent !== null && item.markup_percent !== undefined ? item.markup_percent + '%' : '—'}</td>
             <td style="text-align: right; color: #2563eb; font-weight: 500;">${realizationPrice}</td>
             <td>${discountText}</td>
             <td style="text-align: right; font-weight: bold;">${Number(totalSum).toFixed(2)}</td>
@@ -4526,8 +4529,7 @@ async function openRealizationItemsForm(item = null, parentId = null) {
         html += `<input type="hidden" name="realization_id" value="${parentId}">`;
     }
 
-    const allowedFields = ['zaphasti_id', 'quantity', 'price', 'description'];
-
+const allowedFields = ['zaphasti_id', 'quantity', 'markup_percent', 'description'];
     async function renderField(col) {
         if (!allowedFields.includes(col.field)) return '';
         if (col.insert === false) return '';
@@ -4558,7 +4560,9 @@ async function openRealizationItemsForm(item = null, parentId = null) {
         if (col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
-
+if (col.field === 'markup_percent' && !val) {
+    val = 30;
+}
         let inputHtml = '';
         let fieldReadonly = col.readonly;
         if (isPosted && col.field !== 'is_posted' && col.field !== 'fact_date') {

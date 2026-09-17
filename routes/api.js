@@ -5,6 +5,8 @@ const path = require('path');
 const multer = require('multer'); 
 const jwt = require('jsonwebtoken');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const DEFAULT_MARKUP_PERCENT = 30; // потом можно вынести в settings-таблицу
+
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
@@ -3370,7 +3372,12 @@ async function writeRealizationLog(client, req, data) {
 router.post('/realization_items', async (req, res) => {
   
 
-    const { realization_id, zaphasti_id, quantity, description } = req.body;
+const { realization_id, zaphasti_id, quantity, description, markup_percent } = req.body;
+
+let markupPercent = Number(markup_percent);
+if (isNaN(markupPercent) || markupPercent < 0) {
+    markupPercent = DEFAULT_MARKUP_PERCENT;
+}
     const requestedQty = Number(quantity) || 0;
 
     if (!zaphasti_id || !realization_id) {
@@ -3488,8 +3495,8 @@ router.post('/realization_items', async (req, res) => {
             const takeQty = Math.min(remainingToDistribute, batch.available);
             if (takeQty <= 0) continue;
 
-            const purchase_price = batch.purchase_price;
-            const baseRetailPrice = Number((purchase_price * 1.30).toFixed(2));
+const purchase_price = batch.purchase_price;
+const baseRetailPrice = Number((purchase_price * (1 + markupPercent / 100)).toFixed(2));
             const finalPrice = Number((baseRetailPrice * (1 - discountPercent / 100)).toFixed(2));
             const total_rub = Number((takeQty * finalPrice).toFixed(2));
 
@@ -3500,32 +3507,22 @@ router.post('/realization_items', async (req, res) => {
                 [takeQty, batch.batch_id]
             );
 
-            const insertQuery = `
-                INSERT INTO realization_items (
-                    realization_id, zaphasti_id, article, code, name, 
-                    quantity, unit, purchase_price, retail_price, price, 
-                    discount, total_rub, description, income_document_id
-                ) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
-                RETURNING *
-            `;
-            
-            const values = [
-                realization_id, 
-                zaphasti_id, 
-                zap.article, 
-                zap.code, 
-                zap.name, 
-                takeQty, 
-                zap.unit || 'шт', 
-                purchase_price, 
-                baseRetailPrice, 
-                finalPrice, 
-                discountText, 
-                total_rub, 
-                description || null, 
-                batch.receipt_id 
-            ];
+          const insertQuery = `
+    INSERT INTO realization_items (
+        realization_id, zaphasti_id, article, code, name, 
+        quantity, unit, purchase_price, retail_price, price, 
+        discount, total_rub, description, income_document_id, markup_percent
+    ) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+    RETURNING *
+`;
+
+const values = [
+    realization_id, zaphasti_id, zap.article, zap.code, zap.name, 
+    takeQty, zap.unit || 'шт', purchase_price, baseRetailPrice, finalPrice, 
+    discountText, total_rub, description || null, batch.receipt_id,
+    markupPercent
+];
 
             const result = await client.query(insertQuery, values);
             const newRecord = result.rows[0];
