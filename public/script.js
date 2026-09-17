@@ -11772,10 +11772,12 @@ if (tableBody) {
     renderReturnItemsInline(selectedItem);
     } else if (currentEntity === 'postavhik') {
                     loadDetailData('postavhik_contacts', itemId);
-                } else if (currentEntity === 'counterparties') {
+                              } else if (currentEntity === 'counterparties') {
                     loadDetailData('counterparty_contacts', itemId);
                 } else if (currentEntity === 'customers') {
-                    loadDetailData('customer_contacts', itemId);
+                    const activeSubTab = getCurrentDetailEntity();
+                    currentCustomerSubTab = activeSubTab;
+                    loadDetailData(activeSubTab, itemId);
                 }
             }
 
