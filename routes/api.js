@@ -8376,7 +8376,42 @@ async function writeRepairLog(client, req, data) {
 }
 
 
+// Функция для записи логов по возвратам в таблицу return_logs
+async function writeReturnLog(client, req, data) {
+    try {
+        const currentUserId = req.headers['x-user-id'] || req.headers['user-id'] || null;
+        const userId = currentUserId || req.body.user_id || null;
+        const userType = req.headers['x-user-type'] || 'user';
 
+        let documentNumber = data.document_number || null;
+        if (!documentNumber && data.return_id) {
+            const docRes = await client.query('SELECT doc_number FROM returns WHERE id = $1', [data.return_id]);
+            documentNumber = docRes.rows[0]?.doc_number || null;
+        }
+
+        await client.query(
+            `INSERT INTO return_logs (
+                action, return_id, document_number, return_type,
+                zaphasti_id, quantity, price_rub, total_rub, description, user_id, user_type
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+                data.action,
+                data.return_id,
+                documentNumber,
+                data.return_type,
+                data.zaphasti_id,
+                data.quantity,
+                data.price_rub,
+                data.total_rub,
+                data.description || null,
+                userId,
+                userType
+            ]
+        );
+    } catch (logErr) {
+        console.error('Ошибка записи лога возврата (не критично):', logErr.message);
+    }
+}
 
 // POST /api/return_items - позиция возврата: по приходу (поставщику), по перемещению (от покупателя-склада) или по реализации (от розничного покупателя)
 router.post('/return_items', async (req, res) => {
@@ -8506,6 +8541,17 @@ router.post('/return_items', async (req, res) => {
                 RETURNING *;
             `, [return_id, move_item_id, mi.zaphasti_id, usedBatchId, numQty, priceWithMarkup, totalRub]);
 
+            await writeReturnLog(client, req, {
+                action: 'INSERT',
+                return_id: return_id,
+                return_type: 'customer_move',
+                zaphasti_id: mi.zaphasti_id,
+                quantity: numQty,
+                price_rub: priceWithMarkup,
+                total_rub: totalRub,
+                description: 'Возврат от покупателя (по перемещению)'
+            });
+
             await client.query(`
                 UPDATE returns SET total_sum = (
                     SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
@@ -8592,6 +8638,16 @@ router.post('/return_items', async (req, res) => {
                 RETURNING *;
             `, [return_id, realization_item_id, ri.zaphasti_id, usedBatchId, numQty, soldPrice, totalRub]);
 
+                        await writeReturnLog(client, req, {
+                action: 'INSERT',
+                return_id: return_id,
+                return_type: 'customer_realization',
+                zaphasti_id: ri.zaphasti_id,
+                quantity: numQty,
+                price_rub: soldPrice,
+                total_rub: totalRub,
+                description: 'Возврат от розничного покупателя (по реализации)'
+            });
             await client.query(`
                 UPDATE returns SET total_sum = (
                     SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
@@ -8638,6 +8694,17 @@ router.post('/return_items', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *;
         `, [return_id, receipt_item_id, receiptItem.zaphasti_id, batch.id, numQty, priceRub, totalRub]);
+
+        await writeReturnLog(client, req, {
+            action: 'INSERT',
+            return_id: return_id,
+            return_type: 'supplier',
+            zaphasti_id: receiptItem.zaphasti_id,
+            quantity: numQty,
+            price_rub: priceRub,
+            total_rub: totalRub,
+            description: 'Возврат поставщику (по приходу)'
+        });
 
         await client.query(`
             UPDATE returns SET total_sum = (
@@ -8808,6 +8875,17 @@ router.put('/return_items/:id', async (req, res) => {
             'UPDATE return_items SET quantity = $1, total_rub = $2 WHERE id = $3 RETURNING *',
             [newQty, totalRub, itemId]
         );
+
+                await writeReturnLog(client, req, {
+            action: 'UPDATE',
+            return_id: currentItem.return_id,
+            return_type: currentItem.move_item_id ? 'customer_move' : (currentItem.realization_item_id ? 'customer_realization' : 'supplier'),
+            zaphasti_id: currentItem.zaphasti_id,
+            quantity: newQty,
+            price_rub: priceRub,
+            total_rub: totalRub,
+            description: `Изменено количество (было ${oldQty})`
+        });
         await client.query(`
             UPDATE returns SET total_sum = (
                 SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
@@ -8888,7 +8966,16 @@ router.delete('/return_items/:id', async (req, res) => {
         }
 
         await client.query('DELETE FROM return_items WHERE id = $1', [itemId]);
-
+        await writeReturnLog(client, req, {
+            action: 'DELETE',
+            return_id: currentItem.return_id,
+            return_type: currentItem.move_item_id ? 'customer_move' : (currentItem.realization_item_id ? 'customer_realization' : 'supplier'),
+            zaphasti_id: currentItem.zaphasti_id,
+            quantity: currentItem.quantity,
+            price_rub: currentItem.price_rub,
+            total_rub: currentItem.total_rub,
+            description: 'Позиция возврата удалена'
+        });
         await client.query(`
             UPDATE returns SET total_sum = (
                 SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
@@ -8987,7 +9074,35 @@ router.delete('/returns/:id', async (req, res) => {
 
 
 
-
+// ==================== ЖУРНАЛ ВОЗВРАТОВ ====================
+router.get('/get-return-logs', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                rl.*,
+                z.name AS part_name,
+                COALESCE(z.article, z.code, '—') AS part_article,
+                CASE rl.return_type
+                    WHEN 'supplier' THEN 'Возврат поставщику'
+                    WHEN 'customer_move' THEN 'Возврат от покупателя (перемещение)'
+                    WHEN 'customer_realization' THEN 'Возврат от покупателя (реализация)'
+                    ELSE rl.return_type
+                END AS return_type_label,
+                COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
+            FROM return_logs rl
+            LEFT JOIN zaphasti z ON rl.zaphasti_id = z.id
+            LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
+            LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id::text = e.id::text
+            ORDER BY rl.created_at DESC
+            LIMIT 500;
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('Ошибка получения журнала возвратов:', err.message);
+        return res.status(500).json({ error: 'Ошибка сервера при получении логов возвратов: ' + err.message });
+    }
+});
 
 // GET /api/get-audit-logs - получение универсальных логов аудита
 router.get('/get-audit-logs', async (req, res) => {

@@ -384,6 +384,7 @@ let currentType = 'Приход';
         if (type === 'Реализация') colspanCount = 10;
         if (type === 'Аудит') colspanCount = 6;
                if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
+                       if (type === 'Возврат') colspanCount = 9;
         if (type === 'Проведения') colspanCount = 4;
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
@@ -512,12 +513,27 @@ let currentType = 'Приход';
                         <td>${log.ip_address || '—'}</td>
                         <td>${formatAuditDetails(log)}</td>
                     `;
-                } else if (currentType === 'Проведения') {
+                                } else if (currentType === 'Проведения') {
                     tr.innerHTML = `
                         <td>${formattedDate}</td>
                         <td><strong>${log.user_name || 'Система'}</strong></td>
                         <td>${log.document_type_label || log.document_type || '—'}</td>
                         <td>${log.document_number || '—'}</td>
+                    `;
+                } else if (currentType === 'Возврат') {
+                    tr.innerHTML = `
+                        <td>
+                            ${formattedDate}<br>
+                            ${actionBadge}
+                        </td>
+                        <td><strong>${log.user_name || 'Система'}</strong></td>
+                        <td>${log.document_number || '—'}</td>
+                        <td>${log.return_type_label || '—'}</td>
+                        <td>${log.part_name || '—'} <br><small style="color: #666;">Арт: ${log.part_article || '—'}</small></td>
+                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
+                        <td class="text-right">${Number(log.price_rub || 0).toLocaleString()} руб.</td>
+                        <td class="text-right"><strong>${Number(log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                        <td>${log.description || '—'}</td>
                     `;
                 } else {
                     let rawFrom = log.warehouse_from_id || log.warehouse_from;
