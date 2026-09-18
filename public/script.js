@@ -12251,7 +12251,8 @@ async function loadDetailData(entity, parentId) {
         }).join('');
     }
 
-      if (activeEntity === 'car_images') {
+            if (activeEntity === 'car_images') {
+        const titleElement = document.getElementById('detail-title');
         try {
             const [detailsRes, imagesRes] = await Promise.all([
                 fetch(`/api/car_details?car_id=${cleanParentId}`),
