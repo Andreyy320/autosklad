@@ -1847,29 +1847,6 @@ router.get('/receipts_history', async (req, res) => {
 
 
 
-/*
-=====================================================================================
-ВАЖНОЕ ПОЯСНЕНИЕ (почему цена асимметрична между приходом и расходом перемещения):
-
-При создании перемещения (POST /move_items) сервер считает:
-    basePrice       = warehouse_batches.price_rub склада-источника (себестоимость ТАМ)
-    priceWithMarkup = basePrice * (1 + markup_percent/100)
-
-И реально записывает НОВУЮ партию на складе-получателе в warehouse_batches
-с ценой priceWithMarkup (то есть С НАЦЕНКОЙ). Это и есть настоящая,
-физически хранимая себестоимость товара на складе-получателе.
-
-Отсюда правило для всех отчётов:
-  - ПРИХОД (входящее перемещение, склад-получатель)  -> цена С наценкой (mi.price как есть)
-  - РАСХОД (исходящее перемещение, склад-источник)    -> цена БЕЗ наценки ЭТОГО перемещения
-                                                          (mi.price / (1 + markup_percent/100)),
-                                                          т.к. это возвращает себестоимость,
-                                                          которая была у партии ДО наценки.
-
-Так приход и расход у одной и той же партии всегда сходятся по сумме.
-=====================================================================================
-*/
-
 router.get('/stock_balances', async (req, res) => {
     try {
         const { date, warehouse_id, mol_id } = req.query;
@@ -1908,7 +1885,7 @@ router.get('/stock_balances', async (req, res) => {
         }
 
         // Примечание: этот эндпоинт не пересчитывает движения, а суммирует уже готовую
-        // таблицу warehouse_batches (количество), цены здесь вообще не участвуют.
+        // таблицу warehouse_batches, поэтому правка цены "возврата по реализации" сюда не относится.
         const query = `
             WITH aggregated_stocks AS (
                 SELECT 
@@ -2028,9 +2005,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад -> Склад) — ИСПРАВЛЕНО (асимметрично по направлению):
-                --    расход (со склада-источника, выбранного в фильтре) -> цена БЕЗ наценки этого перемещения
-                --    приход (на склад-получатель)                        -> цена С наценкой (реальная себестоимость новой партии)
+                -- 2. Перемещения (Склад -> Склад) — цена: сначала реальная сохранённая цена позиции,
+                --    и только если её нет — оценка по последнему приходу на момент даты (без наценок)
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2041,14 +2017,9 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
+                    COALESCE(mi.price, lr.price, 0) AS price,
                     CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} 
-                        THEN COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0)
-                        ELSE COALESCE(mi.price, lr.price, 0)
-                    END AS price,
-                    CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} 
-                        THEN (-1 * mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, lr.price, 0))
                         ELSE (mi.quantity * COALESCE(mi.price, lr.price, 0))
                     END AS sum,
                     mi.description,
@@ -2077,9 +2048,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Списания в ремонт (Склад -> Ремонт) — списывается реальная себестоимость партии
-                --    (mi.price позиции уже содержит актуальную цену партии склада, без доп. правок),
-                --    затем оценка по последнему приходу как запасной вариант
+                -- 3. Списания в ремонт (Склад -> Ремонт) — сначала реальная сохранённая цена позиции,
+                --    затем оценка по последнему приходу
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2113,8 +2083,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель) — списывается реальная закупочная
-                --    (себестоимостная) цена позиции, затем оценка по последнему приходу
+                -- 4. Реализации / Продажи (Склад -> Покупатель) — сначала реальная закупочная цена позиции,
+                --    затем оценка по последнему приходу
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
@@ -2334,9 +2304,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Входящие перемещения — цена С наценкой (ВОЗВРАЩЕНО как было изначально):
-                --    это реальная себестоимость новой партии для склада-получателя,
-                --    физически записанная в warehouse_batches.price_rub.
+                -- 2. Входящие перемещения — цена с наценкой (как и было): это реальная стоимость
+                --    поступления для склада-получателя
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_to_id AS warehouse_filter_id,
@@ -2352,8 +2321,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Исходящие перемещения — списываем по цене БЕЗ наценки этого перемещения
-                --    (снимаем наценку получателя, которая иначе "прилипала" бы к остатку склада-источника)
+                -- 3. Исходящие перемещения — ИСПРАВЛЕНО: списываем по чистой закупочной цене
+                --    (снимаем наценку получателя, которая раньше "прилипала" к остатку склада-источника)
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_from_id AS warehouse_filter_id,
@@ -2458,7 +2427,7 @@ router.get('/stock_batches', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации,
-                --    сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
+                --    ИСПРАВЛЕНО: сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
                 SELECT 
                     reti.zaphasti_id,
                     real_ret.sklad_id AS warehouse_filter_id,
@@ -2546,11 +2515,8 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход) — ВОЗВРАЩЕНО: цена С наценкой как есть (mi.price),
-                --    т.к. это реальная себестоимость новой партии на складе-получателе.
-                --    lr_in оставлен как запасной вариант, если вдруг mi.price пуст.
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, 
-                       (mi.quantity * COALESCE(mi.price, lr_in.price, 0)) AS sum, 'in' as op_type
+                -- 2. Перемещения (приход)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_in.price, mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
@@ -2565,10 +2531,8 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход) — цена БЕЗ наценки этого перемещения (снимаем markup_percent),
-                --    т.к. со склада-источника должна списываться его собственная себестоимость партии.
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,
-                       (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'out' as op_type
+                -- 3. Перемещения (расход)
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_out.price, mi.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
@@ -2650,7 +2614,7 @@ router.get('/stock_movement', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации, приход) —
-                --    по чистой закупочной цене (без скидки/наценки реализации)
+                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
                 SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
                        reti.quantity AS qty, (reti.quantity * COALESCE(lr_relret_mv.price, reti.price_rub, 0)) AS sum, 'in' as op_type
                 FROM return_items reti
@@ -2747,6 +2711,7 @@ router.get('/stock_movement', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==================== ОБЩИЕ ЗАТРАТЫ МАШИНЫ (для вкладки "Общая") ====================
 router.get('/car_general', async (req, res) => {
     try {
