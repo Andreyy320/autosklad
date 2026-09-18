@@ -2017,7 +2017,7 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0) AS price
+                    COALESCE(mi.price, lr.price, 0) AS price,
                     CASE 
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, lr.price, 0))
                         ELSE (mi.quantity * COALESCE(mi.price, lr.price, 0))
@@ -2304,9 +2304,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Входящие перемещения — ИСПРАВЛЕНО: теперь берём чистую закупочную цену
-                --    (снимаем наценку получателя), а не цену с наценкой, как было раньше.
-                --    Это делает цену симметричной с блоком 3 (исходящие перемещения).
+                -- 2. Входящие перемещения — цена с наценкой (как и было): это реальная стоимость
+                --    поступления для склада-получателя
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_to_id AS warehouse_filter_id,
@@ -2314,15 +2313,15 @@ router.get('/stock_batches', async (req, res) => {
                     m.date AS doc_date,
                     mi.description,
                     mi.quantity AS qty,
-                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price) AS price,
-                    mi.currency
+    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price) AS price,
+    mi.currency
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 WHERE mi.zaphasti_id = $1
 
                 UNION ALL
 
-                -- 3. Исходящие перемещения — списываем по чистой закупочной цене
+                -- 3. Исходящие перемещения — ИСПРАВЛЕНО: списываем по чистой закупочной цене
                 --    (снимаем наценку получателя, которая раньше "прилипала" к остатку склада-источника)
                 SELECT 
                     mi.zaphasti_id,
@@ -2428,7 +2427,7 @@ router.get('/stock_batches', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации,
-                --    сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
+                --    ИСПРАВЛЕНО: сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
                 SELECT 
                     reti.zaphasti_id,
                     real_ret.sklad_id AS warehouse_filter_id,
@@ -2516,8 +2515,10 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 2. Перемещения (приход)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'in' as op_type
+                -- 2. Перемещения (приход) — исправлено: используется lr_in (а не lr_out), плюс
+                --    приоритет цены: сначала своя цена позиции без наценки, затем оценка по приходу
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, 
+                       (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_in.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
@@ -2532,8 +2533,10 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 3. Перемещения (расход)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,(mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'out' as op_type
+                -- 3. Перемещения (расход) — приоритет цены: сначала своя цена позиции без наценки,
+                --    затем оценка по последнему приходу
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,
+                       (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
