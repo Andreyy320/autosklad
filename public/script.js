@@ -12060,56 +12060,58 @@ function filterDetailTable() {
     const filterInputs = filterRow.querySelectorAll('input[data-column]');
     const filters = {};
 
-    filterInputs.forEach(input => {
-        const field = input.getAttribute('data-column');
+    filterInputs.forEach((input, colIndex) => {
         const val = input.value.trim().toLowerCase();
         if (val) {
-            filters[field] = val;
+            filters[colIndex] = val;
         }
     });
 
     const tbody = document.getElementById('detail-body');
     if (!tbody) return;
-    const rows = tbody.querySelectorAll('tr');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const hasFilters = Object.keys(filters).length > 0;
+    const groupVisible = {};
 
-    rows.forEach((row, index) => {
+    rows.forEach(row => {
+        if (row.hasAttribute('onclick')) return;
+
+        const cells = row.children;
         let isVisible = true;
-        const item = currentDetailItems ? currentDetailItems[index] : null;
 
-        if (!item) return;
-
-        const cells = Array.from(row.children);
-        const config = typeof activeEntity !== 'undefined' ? getConfig(activeEntity) : null;
-
-        for (const field in filters) {
-            let match = false;
-            
-            const itemValue = item[field];
-            if (itemValue !== undefined && itemValue !== null) {
-                if (String(itemValue).toLowerCase().includes(filters[field])) {
-                    match = true;
+        if (hasFilters) {
+            for (const colIndex in filters) {
+                const cell = cells[colIndex];
+                const text = cell ? cell.textContent.toLowerCase() : '';
+                if (!text.includes(filters[colIndex])) {
+                    isVisible = false;
+                    break;
                 }
-            }
-
-            if (!match && config && config.columns) {
-                const colIndex = config.columns.filter(c => c.table !== false).findIndex(c => c.field === field);
-                if (colIndex !== -1 && cells[colIndex]) {
-                    if (cells[colIndex].textContent.toLowerCase().includes(filters[field])) {
-                        match = true;
-                    }
-                }
-            }
-
-            if (!match) {
-                isVisible = false;
-                break;
             }
         }
 
         row.style.display = isVisible ? '' : 'none';
+
+        const groupClass = row.className ? row.className.trim() : '';
+        if (groupClass) {
+            if (isVisible) groupVisible[groupClass] = true;
+            else if (!(groupClass in groupVisible)) groupVisible[groupClass] = false;
+        }
+    });
+
+    rows.forEach(row => {
+        if (!row.hasAttribute('onclick')) return;
+
+        if (!hasFilters) {
+            row.style.display = '';
+            return;
+        }
+
+        const match = (row.getAttribute('onclick') || '').match(/'([^']+)'/);
+        const groupId = match ? match[1] : null;
+        row.style.display = (groupId && groupVisible[groupId]) ? '' : 'none';
     });
 }
-
 let detailLoadToken = 0;
 
 async function loadDetailData(entity, parentId) {
