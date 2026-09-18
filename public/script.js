@@ -8160,12 +8160,18 @@ async function refreshData() {
                 loadReceiptDetailTable(url, detailEntity);
             }
 
-            if (previousEntity === 'expense_items') {
+                        if (previousEntity === 'expense_items') {
                 let skladId = lockedSkladId || '';
                 let postavhikId = lockedPostavhikId || '';
                 let currentReceipt = lockedReceiptId || savedId || '';
                 let url = `/api/expense_items?receipt_id=${currentReceipt}&postavhik_id=${postavhikId}&sklad_id=${skladId}`;
                 loadExpenseDetailTable(url);
+            }
+
+            if (previousEntity === 'realizations') {
+                const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
+                const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
+                loadDetailData(detailEntity, savedSelectedItem.id);
             }
         }
     }

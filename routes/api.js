@@ -2541,18 +2541,10 @@ router.get('/stock_movement', async (req, res) => {
                 
                 UNION ALL
                 
-                -- 5. Реализации (продажи)
-                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
+                               -- 5. Реализации (продажи) — purchase_price уже записан по факту продажи конкретной FIFO-партии
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
                 FROM realization_items ri_rel 
                 JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
-                LEFT JOIN LATERAL (
-                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
-                    FROM receipt_items ri_p
-                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
-                    WHERE ri_p.zaphasti_id = ri_rel.zaphasti_id AND r_p.date <= COALESCE(r_rel.doc_date, NOW())
-                    ORDER BY r_p.date DESC, r_p.id DESC
-                    LIMIT 1
-                ) lr_rel ON true
                 WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
 
                 UNION ALL
@@ -2591,22 +2583,14 @@ router.get('/stock_movement', async (req, res) => {
 
                 UNION ALL
 
-                -- 9. Возвраты от покупателя (по реализации, приход) —
-                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
+                                -- 9. Возвраты от покупателя (по реализации, приход) —
+                --    берём ту же себестоимость, что была зафиксирована при продаже (ri_relret.purchase_price)
                 SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
-                       reti.quantity AS qty, (reti.quantity * COALESCE(lr_relret_mv.price, reti.price_rub, 0)) AS sum, 'in' as op_type
+                       reti.quantity AS qty, (reti.quantity * COALESCE(ri_relret.purchase_price, reti.price_rub, 0)) AS sum, 'in' as op_type
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
                 JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
                 JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
-                LEFT JOIN LATERAL (
-                    SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
-                    FROM receipt_items ri_p
-                    JOIN receipts r_p ON ri_p.receipt_id = r_p.id
-                    WHERE ri_p.zaphasti_id = ri_relret.zaphasti_id AND r_p.date <= COALESCE(ret.fact_date, ret.date)
-                    ORDER BY r_p.date DESC, r_p.id DESC
-                    LIMIT 1
-                ) lr_relret_mv ON true
                 WHERE real_ret.sklad_id IS NOT NULL
                   AND reti.realization_item_id IS NOT NULL
             ),
