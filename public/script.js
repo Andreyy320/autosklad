@@ -488,21 +488,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         <td>${item.description || ''}</td>
     `
     },
-    gruppa_tsen: {
-        title: 'Группа цен',
-        columns: [
-            { field: 'name', label: 'Наименование' },
-            { field: 'markup_percent', label: 'Наценка (%)' },
-            { field: 'rounding', label: 'Округление' },
-            { field: 'description', label: 'Описание' },
-        ],
-        render: (item) => `
-            <td><b>${item.name || ''}</b></td>
-            <td>${item.markup_percent !== null ? item.markup_percent : ''}</td>
-            <td>${item.rounding !== null ? item.rounding : ''}</td>
-            <td>${item.description || ''}</td>
-        `
-    },
     ed_izmereniya: {
         title: 'Ед. измерения',
         columns: [
@@ -804,41 +789,38 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
     },
 
 
+stock_balances: {
+title: 'Остатки запчастей',
+columns: [
+    { field: 'artikul', label: 'Артикул', width: '110px' },
+    { field: 'code', label: 'Код', width: '110px', align: 'center' },
+    { field: 'name', label: 'Наименование', width: '280px' },
+    { field: 'manufacturer', label: 'Производитель', width: '140px' },
+    { field: 'description', label: 'Описание' },
+    { field: 'sklad', label: 'Склад', width: '130px' },
+    { field: 'mol', label: 'МОЛ', width: '150px' },
+    { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
+    { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' }
+],
+rowAttributes: (item) => {
+    return `data-zaphasti-id="${item.id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
+},
+render: (item) => {
+    if (!item) return '';
 
-    stock_balances: {
-    title: 'Остатки запчастей',
-    columns: [
-        { field: 'artikul', label: 'Артикул', width: '110px' },
-        { field: 'code', label: 'Код', width: '110px', align: 'center' },
-        { field: 'name', label: 'Наименование', width: '280px' },
-        { field: 'manufacturer', label: 'Производитель', width: '140px' },
-        { field: 'price_group', label: 'Группа цены', width: '120px' },
-        { field: 'description', label: 'Описание' },
-        { field: 'sklad', label: 'Склад', width: '130px' },
-        { field: 'mol', label: 'МОЛ', width: '150px' },
-        { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
-        { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' }
-    ],
-    rowAttributes: (item) => {
-        return `data-zaphasti-id="${item.id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
-    },
-    render: (item) => {
-        if (!item) return '';
-
-        return `
-            <td>${item.artikul || ''}</td>
-            <td style="text-align: center;">${item.code || ''}</td>
-            <td><b>${item.name || ''}</b></td>
-            <td>${item.manufacturer || ''}</td>
-            <td>${item.price_group || ''}</td>
-            <td>${item.description || ''}</td>
-            <td>${item.sklad || 'Основной склад'}</td>
-            <td>${item.mol || 'Не назначен'}</td>
-            <td style="text-align: right; font-weight: bold; color: #006600; background-color: #e6fcf5;">${item.qty !== undefined ? item.qty : 0}</td>
-            <td style="text-align: center;">${item.unit || 'шт'}</td>
-        `;
-    }
-    },
+    return `
+        <td>${item.artikul || ''}</td>
+        <td style="text-align: center;">${item.code || ''}</td>
+        <td><b>${item.name || ''}</b></td>
+        <td>${item.manufacturer || ''}</td>
+        <td>${item.description || ''}</td>
+        <td>${item.sklad || 'Основной склад'}</td>
+        <td>${item.mol || 'Не назначен'}</td>
+        <td style="text-align: right; font-weight: bold; color: #006600; background-color: #e6fcf5;">${item.qty !== undefined ? item.qty : 0}</td>
+        <td style="text-align: center;">${item.unit || 'шт'}</td>
+    `;
+}
+},
 
     part_movement_details: {
     title: 'Детали движения',
@@ -12447,8 +12429,6 @@ const navMap = {
     'Тип ремонта': 'repair_types',
     'Запчасти': 'zaphasti',
     'Производитель': 'proizvoditel_zaphasti',
-    'Группа цен': 'gruppa_tsen',
-    'Группы цен': 'gruppa_tsen',
     'Топливо': 'toplivo',
     'Ед.измерения': 'ed_izmereniya',
     'Ед. измерения': 'ed_izmereniya',
