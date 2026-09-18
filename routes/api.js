@@ -8474,12 +8474,12 @@ router.post('/return_items', async (req, res) => {
             }
 
             // Партия на складе-получателе (у покупателя) — с неё списываем
-            const toBatchRes = await client.query(`
+                        const toBatchRes = await client.query(`
                 SELECT id, quantity FROM warehouse_batches
-                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3
+                WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 AND price_rub = $4
                 ORDER BY id ASC
                 FOR UPDATE
-            `, [mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id]);
+            `, [mi.warehouse_to_id, mi.zaphasti_id, mi.income_document_id, mi.price_rub]);
 
             const availableOnTo = toBatchRes.rows.reduce((s, b) => s + (Number(b.quantity) || 0), 0);
             if (numQty > availableOnTo) {
