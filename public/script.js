@@ -420,7 +420,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         title: 'МОЛ',
         columns: [
             { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
-            { field: 'warehouse_id', label: 'Вип клиент', ref: 'skladi' },
+            { field: 'warehouse_id', label: 'Склад', ref: 'skladi' },
             { field: 'date_assigned', label: 'Дата назнач.', type: 'datetime-local', width: '160px' },
             { field: 'date_removed', label: 'Дата снятия', type: 'datetime-local', width: '160px' },
             { field: 'description', label: 'Описание' }
@@ -455,8 +455,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             { field: 'name', label: 'Наименование' },
             { field: 'proizvoditel_id', label: 'Производитель', ref: 'proizvoditel_zaphasti' },
             { field: 'ed_izmereniya_id', label: 'Ед. изм.', ref: 'ed_izmereniya' },
-            { field: 'gruppa_tsen_id', label: 'Группа цен', ref: 'gruppa_tsen' },
-            { field: 'gryppa_zamehenia_id', label: 'Группа замещения', ref: 'gryppa_zamehenia' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
@@ -464,10 +462,8 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             <td>${item.code || ''}</td>
             <td><b>${item.name || ''}</b></td>
             <td>${item.proizvoditel_name || '—'}</td>
-            <td>${item.ed_izmereniya_name || '—'}</td>
-            <td>${item.gruppa_tsen_name || '—'}</td>
-            <td>${item.gryppa_zamehenia_name || '—'}</td>
-            <td>${item.description || ''}</td>
+           <td>${item.ed_izmereniya_name || '—'}</td>
+<td>${item.description || ''}</td>
         `
     },
     proizvoditel_zaphasti: {
@@ -480,17 +476,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             <td><b>${item.name || ''}</b></td>
             <td>${item.description || ''}</td>
         `
-    },
-   gryppa_zamehenia: {
-    title: 'Группа замещения',
-    columns: [
-        { field: 'name', label: 'Наименование', width: '250px' },
-        { field: 'description', label: 'Описание' }
-    ],
-    render: (item) => `
-        <td><b>${item.name || ''}</b></td>
-        <td>${item.description || ''}</td>
-    `
     },
   toplivo: {
     title: 'Топливо',
@@ -12460,7 +12445,6 @@ const navMap = {
     'Тип ремонта': 'repair_types',
     'Запчасти': 'zaphasti',
     'Производитель': 'proizvoditel_zaphasti',
-    'Группа замещения': 'gryppa_zamehenia',
     'Группа цен': 'gruppa_tsen',
     'Группы цен': 'gruppa_tsen',
     'Топливо': 'toplivo',

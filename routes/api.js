@@ -655,16 +655,13 @@ router.get('/customer_cars/:customer_id', async (req, res) => {
     });
 
 
-
 router.get('/works', async (req, res) => {
     try {
         const query = `
             SELECT w.*, 
-                   tr.name AS type_rabot_name, 
-                   gz.name AS replacement_group_name 
+                   tr.name AS type_rabot_name
             FROM works w
             LEFT JOIN type_rabot tr ON w.type_rabot_id = tr.id
-            LEFT JOIN gryppa_zamehenia gz ON w.replacement_group_id = gz.id
             ORDER BY w.id ASC
         `;
         const result = await pool.query(query);
@@ -674,7 +671,6 @@ router.get('/works', async (req, res) => {
         res.status(500).send('Ошибка при получении списка работ');
     }
 });
-
 
 
 // ПОЛУЧЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ
@@ -821,36 +817,18 @@ router.post('/ed_izmereniya', async (req, res) => {
 });
 
 
-// 1. Получение списка Групп цен
-router.get('/gruppa_tsen', async (req, res) => {
-    try {
-        const query = `
-            SELECT * FROM gruppa_tsen 
-            ORDER BY id ASC
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Ошибка при получении групп цен');
-    }
-});
 
 
-// ПОЛУЧЕНИЕ СПИСКА ЗАПЧАСТЕЙ
+
 router.get('/zaphasti', async (req, res) => {
     try {
         const query = `
             SELECT z.*, 
                    p.name AS proizvoditel_name, 
-                   e.short_name AS ed_izmereniya_name, -- Замени short_name на реальное имя колонки с сокращением в БД (например, symbol или short)
-                   gt.name AS gruppa_tsen_name, 
-                   gz.name AS gryppa_zamehenia_name 
+                   e.short_name AS ed_izmereniya_name -- Замени short_name на реальное имя колонки с сокращением в БД (например, symbol или short)
             FROM zaphasti z
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-            LEFT JOIN gryppa_zamehenia gz ON z.gryppa_zamehenia_id = gz.id
             ORDER BY z.id ASC
         `;
         const result = await pool.query(query);
@@ -861,21 +839,16 @@ router.get('/zaphasti', async (req, res) => {
     }
 });
 
-// ==================== ПОЛУЧЕНИЕ ОДНОЙ ЗАПЧАСТИ ПО ID (Устраняет ошибку 404) ====================
 router.get('/zaphasti/:id', async (req, res) => {
     const { id } = req.params;
     try {
         const query = `
             SELECT z.*, 
                    p.name AS proizvoditel_name, 
-                   e.name AS ed_izmereniya_name, 
-                   gt.name AS gruppa_tsen_name, 
-                   gz.name AS gryppa_zamehenia_name 
+                   e.name AS ed_izmereniya_name
             FROM zaphasti z
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
-            LEFT JOIN gryppa_zamehenia gz ON z.gryppa_zamehenia_id = gz.id
             WHERE z.id = $1
         `;
         const result = await pool.query(query, [id]);
@@ -904,16 +877,7 @@ router.get('/proizvoditel_zaphasti', async (req, res) => {
 });
 
 
-// ПОЛУЧЕНИЕ СПИСКА ГРУПП ЗАМЕЩЕНИЯ
-router.get('/gryppa_zamehenia', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM gryppa_zamehenia ORDER BY id ASC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error("Ошибка при получении групп замещения:", err.message);
-        res.status(500).send('Ошибка сервера');
-    }
-});
+
 
 // ПОЛУЧЕНИЕ СПИСКА ВИДОВ РАБОТ
 router.get('/vidy_rabot', async (req, res) => {
@@ -1650,19 +1614,18 @@ router.get('/repair_items', async (req, res) => {
     try {
         const { repair_id } = req.query;
         
-        let query = `
+               let query = `
             SELECT 
                 ri.*, 
                 z.article AS zaphasti_article, 
                 z.code AS zaphasti_code, 
                 z.name AS zaphasti_name, 
                 z.unit AS zaphasti_unit,
-                z.gruppa_tsen_id AS db_gruppa_tsen_id,
-                gt.name AS price_group_name,
-                COALESCE(gt.markup_percent, 0) AS markup_percent,
-                ROUND(COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS price_with_markup,
-                ROUND(COALESCE(ri.price, 0) * (COALESCE(gt.markup_percent, 0) / 100.0), 2) AS markup_amount,
-                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS total,
+                sk.name AS price_group_name,
+                COALESCE(sk.markup_percent, 0) AS markup_percent,
+                ROUND(COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS price_with_markup,
+                ROUND(COALESCE(ri.price, 0) * (COALESCE(sk.markup_percent, 0) / 100.0), 2) AS markup_amount,
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS total,
                 COALESCE(
                     CASE 
                         WHEN r.fact_date IS NOT NULL 
@@ -1673,10 +1636,11 @@ router.get('/repair_items', async (req, res) => {
                 ) AS income_document
             FROM repair_items ri
             LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            LEFT JOIN repairs rp ON ri.repair_id = rp.id
+            LEFT JOIN skladi sk ON rp.warehouse_id = sk.id
             LEFT JOIN receipts r ON ri.receipt_id = r.id
         `;
-        
+    
         let params = [];
         if (repair_id) {
             query += ' WHERE ri.repair_id = $1';
@@ -1687,9 +1651,9 @@ router.get('/repair_items', async (req, res) => {
 
         const result = await pool.query(query, params);
         
-        // Выводим в консоль то, что реально вернулась из базы по каждой запчасти
+              // Выводим в консоль то, что реально вернулась из базы по каждой запчасти
         result.rows.forEach(row => {
-            console.log(`[DEBUG ITEM] ID запчасти в ремонте: ${row.id}, Наименование: ${row.zaphasti_name}, zaphast_id: ${row.zaphast_id}, gruppa_tsen_id в запчасти: ${row.db_gruppa_tsen_id}, Найдено групп цен: ${row.price_group_name}, Процент наценки: ${row.markup_percent}%`);
+            console.log(`[DEBUG ITEM] ID запчасти в ремонте: ${row.id}, Наименование: ${row.zaphasti_name}, zaphast_id: ${row.zaphast_id}, Склад/ВИП-клиент: ${row.price_group_name}, Процент наценки: ${row.markup_percent}%`);
         });
 
         res.json(result.rows);
@@ -1827,8 +1791,8 @@ router.get('/receipts_history', async (req, res) => {
 
         const repairIds = repairs.map(r => r.id);
 
-        // 2. Получаем запчасти из repair_items с полной информацией из zaphasti, gruppa_tsen и receipts
-        const itemsQuery = `
+        // 2. Получаем запчасти из repair_items с полной информацией из zaphasti, и receipts
+                const itemsQuery = `
             SELECT 
                 ri.id,
                 ri.repair_id,
@@ -1839,7 +1803,7 @@ router.get('/receipts_history', async (req, res) => {
                 z.code AS code,
                 COALESCE(z.name, ri.description, 'Запчасть') AS name,
                 COALESCE(z.unit, 'шт') AS unit,
-                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS sum,
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS sum,
                 COALESCE(
                     CASE 
                         WHEN rec.fact_date IS NOT NULL 
@@ -1851,12 +1815,12 @@ router.get('/receipts_history', async (req, res) => {
                 'item' AS row_type
             FROM repair_items ri
             LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            LEFT JOIN repairs rp ON ri.repair_id = rp.id
+            LEFT JOIN skladi sk ON rp.warehouse_id = sk.id
             LEFT JOIN receipts rec ON ri.receipt_id = rec.id
             WHERE ri.repair_id = ANY($1::int[])
             ORDER BY ri.id DESC
         `;
-
         let allItems = [];
         try {
             const itemsRes = await pool.query(itemsQuery, [repairIds]);
@@ -2748,20 +2712,20 @@ router.get('/car_general', async (req, res) => {
         const { car_id } = req.query;
 
         const query = `
-            -- 1. Запчасти из ремонтов
+                       -- 1. Запчасти из ремонтов
             SELECT 
                 COALESCE(r.doc_date, NOW()) AS operational_date,
                 COALESCE(z.name, ri.description, 'Запчсть') AS name,
                 ri.quantity AS qty,
                 COALESCE(z.unit, 'шт') AS unit,
                 ri.price AS price,
-                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(gt.markup_percent, 0) / 100.0), 2) AS sum,
+                ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS sum,
                 ri.description,
                 CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY')) AS document
             FROM repair_items ri
             JOIN repairs r ON ri.repair_id = r.id
             LEFT JOIN zaphasti z ON ri.zaphast_id = z.id
-            LEFT JOIN gruppa_tsen gt ON z.gruppa_tsen_id = gt.id
+            LEFT JOIN skladi sk ON r.warehouse_id = sk.id
             LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
             WHERE r.car_id = $1
 
@@ -2810,6 +2774,8 @@ router.get('/car_general', async (req, res) => {
         res.status(500).send('Ошибка при получении общих данных автомобиля');
     }
 });
+
+
 
 router.get('/accidents', async (req, res) => {
     try {
@@ -9261,8 +9227,8 @@ router.post('/:entity', async (req, res) => {
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
             'counterparties', 'postavhik', 'customers', 'counterparty_types', 
             'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'ispolnitel', 'repair_types', 'zaphasti', 
+            'proizvoditel_zaphasti', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
@@ -9469,8 +9435,8 @@ router.put('/:entity/:id', async (req, res) => {
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
             'counterparties', 'postavhik', 'customers', 'counterparty_types', 
             'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'ispolnitel', 'repair_types', 'zaphasti', 
+            'proizvoditel_zaphasti', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
@@ -9748,8 +9714,8 @@ router.delete('/:entity/:id', async (req, res) => {
             'users', 'spare_parts', 'car_brands', 'kyzov_type', 'bodies', 'car_models',
             'counterparties', 'postavhik', 'customers', 'counterparty_types', 
             'type_sklad', 'skladi', 'cars', 'type_rabot', 'works', 
-            'ispolnitel', 'repair_types', 'gruppa_tsen', 'zaphasti', 
-            'proizvoditel_zaphasti', 'gryppa_zamehenia', 'vidy_rabot',
+            'ispolnitel', 'repair_types', 'zaphasti', 
+            'proizvoditel_zaphasti', 'vidy_rabot',
             'toplivo', 'ed_izmereniya', 'mol', 'receipts',
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
