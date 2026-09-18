@@ -376,6 +376,24 @@ const tableConfig = {
                 ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" />` : '—'}
             </td>
         `
+       },
+
+    car_images: {
+        title: 'Изображения',
+        columns: [
+            { field: 'date', label: 'Дата', width: '160px' },
+            { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
+            { field: 'source_label', label: 'Источник', width: '140px' },
+            { field: 'description', label: 'Описание' }
+        ],
+        render: (item) => `
+            <td>${item.date || ''}</td>
+            <td>
+                ${item.image_url ? `<a href="${item.image_url}" target="_blank"><img src="${item.image_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" /></a>` : '—'}
+            </td>
+            <td>${item.source_label || ''}</td>
+            <td>${item.description || ''}</td>
+        `
     },
  
     ispolnitel: {
@@ -11321,8 +11339,8 @@ function openDetailForm(mode) {
 
     const detailEntity = getCurrentDetailEntity();
 
-    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents'];
-    if (readOnlyDetailEntities.includes(detailEntity)) {
+    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'car_images'];
+        if (readOnlyDetailEntities.includes(detailEntity)) {
         return;
     }
 
@@ -12180,7 +12198,7 @@ async function loadDetailData(entity, parentId) {
         queryParamName = 'counterparty_id';
     } else if (entity === 'customer_contacts' || entity === 'customer_cars') {
         queryParamName = 'customer_id';
-    } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history'  || entity === 'car_general' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details') {
+       } else if (entity === 'repairs' || entity === 'repair_history' || entity === 'receipts_history'  || entity === 'car_general' || entity === 'accidents' || entity === 'car_accidents' || entity === 'dtp_history' || entity === 'car_details' || entity === 'car_images') {
         queryParamName = 'car_id';
     }
 
@@ -12231,6 +12249,58 @@ async function loadDetailData(entity, parentId) {
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 1px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
+    }
+
+      if (activeEntity === 'car_images') {
+        try {
+            const [detailsRes, imagesRes] = await Promise.all([
+                fetch(`/api/car_details?car_id=${cleanParentId}`),
+                fetch(`/api/accident_images?car_id=${cleanParentId}`)
+            ]);
+            const detailsItems = detailsRes.ok ? await detailsRes.json() : [];
+            const imagesItems = imagesRes.ok ? await imagesRes.json() : [];
+
+            if (myDetailToken !== detailLoadToken) return;
+
+            const merged = [
+                ...detailsItems.filter(i => i.photo_url).map(i => ({
+                    date: i.date ? new Date(i.date).toLocaleDateString() : '',
+                    image_url: i.photo_url,
+                    description: i.description || i.title || '',
+                    source_label: 'Фото авто',
+                    _sortDate: i.date || ''
+                })),
+                ...imagesItems.map(i => ({
+                    date: i.created_at ? new Date(i.created_at).toLocaleDateString() : '',
+                    image_url: i.image_url,
+                    description: i.description || '',
+                    source_label: 'Фото ДТП',
+                    _sortDate: i.created_at || ''
+                }))
+            ].sort((a, b) => new Date(b._sortDate) - new Date(a._sortDate));
+
+            currentDetailItems = merged;
+            selectedDetailItem = null;
+
+            if (titleElement) {
+                titleElement.innerText = `Автомобиль (ID: ${cleanParentId}) — Изображения | Записей: ${merged.length}`;
+            }
+
+            if (merged.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;color:#888;padding:20px;">Нет изображений</td></tr>`;
+            } else {
+                tbody.innerHTML = '';
+                merged.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = config.render(item);
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (err) {
+            if (myDetailToken !== detailLoadToken) return;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;color:red;padding:20px;">Ошибка загрузки данных с сервера</td></tr>`;
+        }
+        return;
     }
 
     try {
