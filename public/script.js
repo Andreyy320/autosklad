@@ -1347,8 +1347,8 @@ const tableConfig = {
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
                         <span style="color: #495057;">${repairType}</span> 
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #d97706;">Итого: ${costVal} руб.${mileage}</span>
-                    </td>
+                        <span style="color: #0f172a;">Итого: ${costVal} руб.${mileage}</span>
+                                            </td>
                 </tr>
             `;
 
@@ -1454,8 +1454,8 @@ const tableConfig = {
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
                         <span style="color: #495057;">${repairType}</span> 
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #d97706;">Итого запчастей: ${costVal} руб.${mileage}</span>
-                    </td>
+                        <span style="color: #0f172a;">Итого запчастей: ${costVal} руб.${mileage}</span>
+                                            </td>
                 </tr>
             `;
 
@@ -1568,8 +1568,8 @@ const tableConfig = {
                         <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
                         <span style="color: #212529;">${monthKey}</span> 
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #d97706;">Итого за месяц: ${monthTotal} руб.</span>
-                    </td>
+                        <span style="color: #0f172a;">Итого за месяц: ${monthTotal} руб.</span>
+                                            </td>
                 </tr>
             `;
 
