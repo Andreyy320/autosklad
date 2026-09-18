@@ -291,7 +291,7 @@ const tableConfig = {
         `
     },
       skladi: {
-        title: 'Склады',
+        title: 'Вип клиенты',
         columns: [
             { field: 'type_sklad_id', label: 'Тип склада', width: '150px', ref: 'type_sklad' },
             { field: 'name', label: 'Наименование', width: '250px' },
@@ -344,7 +344,7 @@ const tableConfig = {
             { field: 'year', label: 'Год' },
             { field: 'color', label: 'Цвет' },
              { field: 'vin', label: 'VIN-номер' },
-            { field: 'sklad_id', label: 'Склад', ref: 'skladi' },
+            { field: 'sklad_id', label: 'Вип клиента', ref: 'skladi' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
@@ -422,7 +422,7 @@ const tableConfig = {
         title: 'МОЛ',
         columns: [
             { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
-            { field: 'warehouse_id', label: 'Склад', ref: 'skladi' },
+            { field: 'warehouse_id', label: 'Вип клиент', ref: 'skladi' },
             { field: 'date_assigned', label: 'Дата назнач.', type: 'datetime-local', width: '160px' },
             { field: 'date_removed', label: 'Дата снятия', type: 'datetime-local', width: '160px' },
             { field: 'description', label: 'Описание' }
@@ -12415,7 +12415,7 @@ const navMap = {
     'Бренды': 'brands',
     'Модели': 'models',
     'Кузов': 'bodies',
-    'Склады': 'skladi',
+    'Вип клиенты': 'skladi',
     'Контрагенты': 'counterparties',
     'Поставщики': 'postavhik',
     'Покупатели': 'customers',
