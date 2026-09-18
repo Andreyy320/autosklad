@@ -2304,8 +2304,9 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Входящие перемещения — цена с наценкой (как и было): это реальная стоимость
-                --    поступления для склада-получателя
+                -- 2. Входящие перемещения — ИСПРАВЛЕНО: теперь берём чистую закупочную цену
+                --    (снимаем наценку получателя), а не цену с наценкой, как было раньше.
+                --    Это делает цену симметричной с блоком 3 (исходящие перемещения).
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_to_id AS warehouse_filter_id,
@@ -2313,7 +2314,7 @@ router.get('/stock_batches', async (req, res) => {
                     m.date AS doc_date,
                     mi.description,
                     mi.quantity AS qty,
-                    mi.price,
+                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price) AS price,
                     mi.currency
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
@@ -2321,7 +2322,7 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Исходящие перемещения — ИСПРАВЛЕНО: списываем по чистой закупочной цене
+                -- 3. Исходящие перемещения — списываем по чистой закупочной цене
                 --    (снимаем наценку получателя, которая раньше "прилипала" к остатку склада-источника)
                 SELECT 
                     mi.zaphasti_id,
@@ -2427,7 +2428,7 @@ router.get('/stock_batches', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации,
-                --    ИСПРАВЛЕНО: сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
+                --    сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
                 SELECT 
                     reti.zaphasti_id,
                     real_ret.sklad_id AS warehouse_filter_id,
@@ -2614,7 +2615,7 @@ router.get('/stock_movement', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации, приход) —
-                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
+                --    по чистой закупочной цене (без скидки/наценки реализации)
                 SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
                        reti.quantity AS qty, (reti.quantity * COALESCE(lr_relret_mv.price, reti.price_rub, 0)) AS sum, 'in' as op_type
                 FROM return_items reti
