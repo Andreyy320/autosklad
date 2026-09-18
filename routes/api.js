@@ -2017,7 +2017,7 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(mi.price, lr.price, 0) AS price,
+                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0) AS price
                     CASE 
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, lr.price, 0))
                         ELSE (mi.quantity * COALESCE(mi.price, lr.price, 0))
@@ -2517,7 +2517,7 @@ router.get('/stock_movement', async (req, res) => {
                 UNION ALL
                 
                 -- 2. Перемещения (приход)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_in.price, mi.price, 0)) AS sum, 'in' as op_type
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
@@ -2533,7 +2533,7 @@ router.get('/stock_movement', async (req, res) => {
                 UNION ALL
                 
                 -- 3. Перемещения (расход)
-                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(lr_out.price, mi.price, 0)) AS sum, 'out' as op_type
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,(mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr_out.price, 0)) AS sum, 'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 LEFT JOIN LATERAL (
