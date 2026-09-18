@@ -5238,21 +5238,17 @@ router.get('/money_receipts_detail', async (req, res) => {
                 LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
                 WHERE m.is_posted = true
             ) sub
-            WHERE 
-                -- Если передан конкретный ID документа, требуем совпадения и ID, и типа (чтобы реализация и перемещение с одинаковым ID не смешивались)
-                (
-                    $1::integer IS NULL 
-                    OR (
-                        sub.rel_id = $1 
-                        AND (
-                            (SUBSTRING(sub.doc_number FROM 1 for 11) = 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'move') 
-                            OR 
-                            (SUBSTRING(sub.doc_number FROM 1 for 11) != 'ПЕРЕМЕЩЕНИЕ' AND $4 = 'realization')
-                            OR 
-                            $4 IS NULL
-                        )
-                    )
-                )
+           WHERE 
+    (
+        $1::integer IS NULL 
+        OR (
+            sub.rel_id = $1 
+            AND (
+                $4::text IS NULL 
+                OR sub.doc_type = $4
+            )
+        )
+    )
                 AND ($2::integer IS NULL OR sub.cust_id = $2)
                 AND ($3::integer IS NULL OR sub.skl_id = $3)
             ORDER BY date DESC, id ASC;
