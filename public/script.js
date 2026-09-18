@@ -373,8 +373,7 @@ const tableConfig = {
             <td><b>${item.title || ''}</b></td>
             <td>${item.description || ''}</td>
             <td>
-                ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" />` : '—'}
-            </td>
+${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
         `
        },
 
@@ -389,8 +388,7 @@ const tableConfig = {
         render: (item) => `
             <td>${item.date || ''}</td>
             <td>
-                ${item.image_url ? `<a href="${item.image_url}" target="_blank"><img src="${item.image_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" /></a>` : '—'}
-            </td>
+${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
             <td>${item.source_label || ''}</td>
             <td>${item.description || ''}</td>
         `
@@ -1168,8 +1166,7 @@ const tableConfig = {
         return `
             <td>${formatDT(item.created_at)}</td>
             <td>
-                ${item.image_url ? `<a href="${item.image_url}" target="_blank"><img src="${item.image_url}" alt="Фото ДТП" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" /></a>` : '—'}
-            </td>
+${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
             <td>${item.description || ''}</td>
         `;
     }
@@ -8239,6 +8236,37 @@ function showAppNotification(message, type = 'info') {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
     }, 3500);
+}
+
+function openImageLightbox(url) {
+    if (!url) return;
+    const existing = document.getElementById('image-lightbox-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'image-lightbox-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: 10000;
+        display: flex; align-items: center; justify-content: center;
+        cursor: zoom-out; padding: 20px; box-sizing: border-box;
+    `;
+
+    overlay.innerHTML = `
+        <img src="${url}" style="max-width: 95%; max-height: 95%; object-fit: contain; border-radius: 6px; box-shadow: 0 4px 30px rgba(0,0,0,0.5);" />
+        <button id="image-lightbox-close" style="position: fixed; top: 16px; right: 24px; background: rgba(255,255,255,0.15); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 22px; cursor: pointer; line-height: 1;">&times;</button>
+    `;
+
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 }
 
 function showConfirmModal(title, text, onConfirm) {
