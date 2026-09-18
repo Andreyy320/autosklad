@@ -2304,7 +2304,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Входящие перемещения
+                -- 2. Входящие перемещения — цена с наценкой (как и было): это реальная стоимость
+                --    поступления для склада-получателя
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_to_id AS warehouse_filter_id,
@@ -2320,7 +2321,8 @@ router.get('/stock_batches', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Исходящие перемещения
+                -- 3. Исходящие перемещения — ИСПРАВЛЕНО: списываем по чистой закупочной цене
+                --    (снимаем наценку получателя, которая раньше "прилипала" к остатку склада-источника)
                 SELECT 
                     mi.zaphasti_id,
                     m.warehouse_from_id AS warehouse_filter_id,
@@ -2328,7 +2330,7 @@ router.get('/stock_batches', async (req, res) => {
                     m.date AS doc_date,
                     mi.description,
                     (-1 * mi.quantity) AS qty,
-                    mi.price,
+                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price) AS price,
                     mi.currency
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
@@ -2425,7 +2427,7 @@ router.get('/stock_batches', async (req, res) => {
                 UNION ALL
 
                 -- 9. Возвраты от покупателя (по реализации) — ПРИХОД на склад реализации,
-                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
+                --    ИСПРАВЛЕНО: сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
                 SELECT 
                     reti.zaphasti_id,
                     real_ret.sklad_id AS warehouse_filter_id,
@@ -2433,7 +2435,7 @@ router.get('/stock_batches', async (req, res) => {
                     COALESCE(ret.fact_date, ret.date) AS doc_date,
                     NULL AS description,
                     reti.quantity AS qty,
-                    COALESCE(lr_relret9.price, reti.price_rub, 0) AS price,
+                    COALESCE(reti.price_rub, lr_relret9.price, 0) AS price,
                     'Рубль ПМР' AS currency
                 FROM return_items reti
                 JOIN returns ret ON reti.return_id = ret.id
