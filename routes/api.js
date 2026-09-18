@@ -4591,9 +4591,10 @@ router.get('/money_receipts', async (req, res) => {
         const query = `
             WITH calc_data AS (
                 -- 1. Обычные реализации (покупатели)
-                SELECT 
+                              SELECT 
                     real.id AS id,
                     real.id AS realization_id,
+                    'realization'::text AS doc_type,
                     real.doc_number::text AS doc_number,
                      real.doc_date AS date,
                     c.id AS customer_id,
@@ -4669,9 +4670,10 @@ router.get('/money_receipts', async (req, res) => {
                 UNION ALL
 
                 -- 2. Перемещения (берем чистую закупку из связанного прихода через receipt_items)
-                SELECT 
+                           SELECT 
                     m.id AS id,
                     m.id AS realization_id,
+                    'move'::text AS doc_type,
                     m.doc_number::text AS doc_number,
                                         m.date AS date,
                     NULL::integer AS customer_id,
@@ -4751,9 +4753,10 @@ router.get('/money_receipts', async (req, res) => {
                   AND ($5::integer IS NULL OR sk_to.id = $5)
             AND ($4::integer IS NULL)
                   )
-            SELECT 
+                   SELECT 
                 id,
                 realization_id,
+                doc_type,
                 doc_number,
                 date,
                 customer_id,
