@@ -2247,6 +2247,7 @@ router.get('/part_movement_details', async (req, res) => {
     }
 });
 
+
 router.get('/stock_batches', async (req, res) => {
     try {
         let { zaphasti_id, warehouse_id, date } = req.query;
