@@ -2005,8 +2005,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад -> Склад) — цена: сначала реальная сохранённая цена позиции,
-                --    и только если её нет — оценка по последнему приходу на момент даты (без наценок)
+                -- 2. Перемещения (Склад -> Склад) — ИСПРАВЛЕНО: снята наценка.
+                --    Приоритет: своя цена позиции без наценки, затем оценка по последнему приходу на момент даты
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2017,10 +2017,10 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(mi.price, lr.price, 0) AS price,
+                    COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0) AS price,
                     CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, lr.price, 0))
-                        ELSE (mi.quantity * COALESCE(mi.price, lr.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0))
+                        ELSE (mi.quantity * COALESCE(mi.price / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price, lr.price, 0))
                     END AS sum,
                     mi.description,
                     m.warehouse_from_id,
@@ -2246,7 +2246,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 router.get('/stock_batches', async (req, res) => {
     try {
