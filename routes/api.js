@@ -2005,7 +2005,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 2. Перемещения (Склад -> Склад) — цена берётся строго из последнего прихода на момент даты перемещения (без наценок)
+                -- 2. Перемещения (Склад -> Склад) — цена: сначала реальная сохранённая цена позиции,
+                --    и только если её нет — оценка по последнему приходу на момент даты (без наценок)
                 SELECT 
                     m.date AS op_date,
                     m.doc_number AS doc_num,
@@ -2016,10 +2017,10 @@ router.get('/part_movement_details', async (req, res) => {
                         WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity)
                         ELSE mi.quantity
                     END AS qty,
-                    COALESCE(lr.price, mi.price, 0) AS price,
+                    COALESCE(mi.price, lr.price, 0) AS price,
                     CASE 
-                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(lr.price, mi.price, 0))
-                        ELSE (mi.quantity * COALESCE(lr.price, mi.price, 0))
+                        WHEN ${whParamIndex ? `m.warehouse_from_id = $${whParamIndex}::int` : 'FALSE'} THEN (-1 * mi.quantity * COALESCE(mi.price, lr.price, 0))
+                        ELSE (mi.quantity * COALESCE(mi.price, lr.price, 0))
                     END AS sum,
                     mi.description,
                     m.warehouse_from_id,
@@ -2047,7 +2048,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 3. Списания в ремонт (Склад -> Ремонт) — по чистой закупочной цене
+                -- 3. Списания в ремонт (Склад -> Ремонт) — сначала реальная сохранённая цена позиции,
+                --    затем оценка по последнему приходу
                 SELECT 
                     rep.doc_date AS op_date,
                     rep.doc_number AS doc_num,
@@ -2055,8 +2057,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rep.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rep.name, 'не указан')) AS source_info,
                     CONCAT('Авто: ', COALESCE(car.gos_number, 'б/н'), ' ', COALESCE(car.model, '')) AS dest_info,
                     (-1 * ri_rep.quantity) AS qty,
-                    COALESCE(lr_rep.price, ri_rep.price, 0) AS price,
-                    (-1 * ri_rep.quantity * COALESCE(lr_rep.price, ri_rep.price, 0)) AS sum,
+                    COALESCE(ri_rep.price, lr_rep.price, 0) AS price,
+                    (-1 * ri_rep.quantity * COALESCE(ri_rep.price, lr_rep.price, 0)) AS sum,
                     ri_rep.description,
                     rep.warehouse_id AS warehouse_from_id,
                     NULL::int AS warehouse_to_id,
@@ -2081,7 +2083,8 @@ router.get('/part_movement_details', async (req, res) => {
 
                 UNION ALL
 
-                -- 4. Реализации / Продажи (Склад -> Покупатель) — по чистой закупочной цене
+                -- 4. Реализации / Продажи (Склад -> Покупатель) — сначала реальная закупочная цена позиции,
+                --    затем оценка по последнему приходу
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
                     CAST(r_rel.id AS VARCHAR) AS doc_num,
@@ -2089,8 +2092,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
-                    COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0) AS price,
-                    (-1 * ri_rel.quantity * COALESCE(lr_rel.price, ri_rel.purchase_price, ri_rel.price, 0)) AS sum,
+                    COALESCE(ri_rel.purchase_price, ri_rel.price, lr_rel.price, 0) AS price,
+                    (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, lr_rel.price, 0)) AS sum,
                     ri_rel.description,
                     r_rel.sklad_id AS warehouse_id,
                     NULL::int AS warehouse_to_id,
@@ -2190,7 +2193,7 @@ router.get('/part_movement_details', async (req, res) => {
                 UNION ALL
 
                 -- 7. Возвраты от розничного покупателя (по реализации) — приход на склад реализации,
-                --    по чистой закупочной цене (без скидки/наценки реализации) — ИСПРАВЛЕНО
+                --    сначала реальная сохранённая цена возврата, затем оценка по последнему приходу
                 SELECT 
                     COALESCE(ret.fact_date, ret.date) AS op_date,
                     ret.doc_number AS doc_num,
@@ -2198,8 +2201,8 @@ router.get('/part_movement_details', async (req, res) => {
                     CONCAT('Покупатель: ', COALESCE(cust_ret.name_full, cust_ret.name_short, 'Розничный покупатель')) AS source_info,
                     CONCAT(COALESCE(s_relret.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_relret.mol_name, 'не назначен')) AS dest_info,
                     reti.quantity AS qty,
-                    COALESCE(lr_relret.price, reti.price_rub, 0) AS price,
-                    (reti.quantity * COALESCE(lr_relret.price, reti.price_rub, 0)) AS sum,
+                    COALESCE(reti.price_rub, lr_relret.price, 0) AS price,
+                    (reti.quantity * COALESCE(reti.price_rub, lr_relret.price, 0)) AS sum,
                     NULL AS description,
                     NULL::int AS warehouse_from_id,
                     real_ret.sklad_id AS warehouse_to_id,
