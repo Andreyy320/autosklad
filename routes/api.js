@@ -8151,7 +8151,7 @@ router.put('/repair_items/:id', async (req, res) => {
             }
         }
 
-        // 4. ТЕПЕРЬ СМОТРИМ АКТУАЛЬНЫЙ СКЛАД ДЛЯ НОВОГО FIFO-СПИСАНИЯ (уже с учетом возврата)
+        // 4. ТЕПЕРЬ СМОТРИМ АКТУАЛЬНЫЙ СКЛАД ДЛЯ НОВОГО СПИСАНИЯ (уже с учетом возврата)
         const batchesQuery = `
             SELECT id, receipt_id, price_rub, quantity, created_at
             FROM warehouse_batches
@@ -8171,50 +8171,33 @@ router.put('/repair_items/:id', async (req, res) => {
             });
         }
 
-        let remainingToDistribute = requestedQty;
-   
-        let firstBatchId = null;
-        let firstReceiptId = null;
-        let weightedPriceSum = 0;
-        let distributedTotalQty = 0;
-
-
-        for (const batch of batches) {
-            if (remainingToDistribute <= 0) break;
-
-            const batchQty = Number(batch.quantity);
-            const takeQty = Math.min(remainingToDistribute, batchQty);
-            if (takeQty <= 0) continue;
-
-            const cleanPrice = price !== undefined ? Number(price) : (Number(batch.price_rub) || 0);
-
-            // Уменьшаем количество в партии
-            await client.query(
-                'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
-                [takeQty, batch.id]
-            );
-
-            if (!firstBatchId) {
-                firstBatchId = batch.id;
-                firstReceiptId = batch.receipt_id;
-            }
-
-            weightedPriceSum += takeQty * cleanPrice;
-            distributedTotalQty += takeQty;
-            remainingToDistribute -= takeQty;
+        // Берём ОДНУ партию, в которой реально хватает нужного количества целиком.
+        // Сначала пробуем ту же партию, что была раньше (для стабильности), иначе — самую старую подходящую (FIFO).
+        let chosenBatch = batches.find(b => b.id === oldBatchId && Number(b.quantity) >= requestedQty);
+        if (!chosenBatch) {
+            chosenBatch = batches.find(b => Number(b.quantity) >= requestedQty);
         }
 
-        if (remainingToDistribute > 0) {
+        if (!chosenBatch) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка FIFO-распределения при обновлении запчасти в ремонте.' });
+            return res.status(400).json({
+                error: `Нужное количество (${requestedQty} шт.) есть на складе только по частям из нескольких разных партий поступления с разными ценами. Уменьшите количество до размера одной партии, либо удалите эту позицию и добавьте её заново — тогда система корректно разложит её по нескольким строкам.`
+            });
         }
+
+        const cleanPrice = price !== undefined ? Number(price) : (Number(chosenBatch.price_rub) || 0);
+
+        await client.query(
+            'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+            [requestedQty, chosenBatch.id]
+        );
 
         // Вычисляем итоговую цену и сумму
-        const finalPrice = price !== undefined ? Number(price) : (distributedTotalQty > 0 ? weightedPriceSum / distributedTotalQty : Number(currentItem.price));
+        const finalPrice = cleanPrice;
         const finalTotal = Number((requestedQty * finalPrice).toFixed(2));
         const desc = description !== undefined ? description : currentItem.description;
 
-        // 5. ОБНОВЛЯЕМ ЗАПИСЬ В REPAIR_ITEMS (с фиксацией нового batch_id и receipt_id)
+        // 5. ОБНОВЛЯЕМ ЗАПИСЬ В REPAIR_ITEMS (с фиксацией новой партии и прихода)
         const updateQuery = `
             UPDATE "repair_items" 
             SET "quantity" = $1, 
@@ -8232,8 +8215,8 @@ router.put('/repair_items/:id', async (req, res) => {
             Number(finalPrice.toFixed(2)),
             finalTotal,
             desc || null,
-            firstReceiptId,
-            firstBatchId,
+            chosenBatch.receipt_id,
+            chosenBatch.id,
             itemId
         ];
 
@@ -8252,7 +8235,7 @@ router.put('/repair_items/:id', async (req, res) => {
                 quantity: requestedQty,
                 price: Number(finalPrice.toFixed(2)),
                 total: finalTotal,
-                receipt_id: firstReceiptId,
+                receipt_id: chosenBatch.receipt_id,
                                 description: desc || 'Изменение позиции ремонта'
             });
         }
