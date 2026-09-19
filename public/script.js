@@ -553,14 +553,12 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             ? `<button onclick="event.stopPropagation(); postReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
 
-            <td>${item.supplier_name || '—'}</td>
-
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.date)}</td>
             <td>${item.warehouse_name || '—'}</td>
             <td>${item.mol_user_fio || item.mol_name || '—'}</td>
-            <td>${item.supplier_name || '—'} ${openingBalanceBadge}</td>
+<td>${item.supplier_name || '—'}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
