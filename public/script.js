@@ -1,5 +1,3 @@
-
-
 const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
@@ -39,6 +37,208 @@ setTimeout(function tryAutoLogin() {
 let currentEntity = 'users';
 let currentItems = [];
 let selectedItem = null;
+
+// ==================== ПОСТРАНИЧНАЯ ЗАГРУЗКА И ПОИСК ====================
+// Сервер отдаёт одну страницу строк, а общее число строк — в заголовке X-Total-Count.
+// Поиск и фильтры по колонкам работают на сервере, то есть по ВСЕЙ таблице, а не только по видимой странице.
+const PAGER = {
+    entity: null,   // раздел, для которого хранятся страница / поиск / фильтры
+    page: 1,
+    limit: 100,
+    total: 0,
+    search: '',
+    filters: {},    // фильтры по колонкам: { поле: текст }
+    reload: null,   // как перезагрузить текущую страницу; null — постраничный режим сейчас не активен
+    baseUrl: '',    // адрес и параметры запроса без page/limit/search/filters (нужны для печати всех строк)
+    baseQuery: '',
+    loading: false,
+    seq: 0,         // номер запроса: устаревшие ответы игнорируются
+    timer: null
+};
+
+function pagerReset(entity) {
+    PAGER.entity = entity || null;
+    PAGER.page = 1;
+    PAGER.total = 0;
+    PAGER.search = '';
+    PAGER.filters = {};
+    clearTimeout(PAGER.timer);
+    const searchInput = document.getElementById('pager-search');
+    if (searchInput) searchInput.value = '';
+}
+
+// Раздел без постраничного режима (кассы и т.п.): прячем панель и отменяем ожидающие запросы
+function pagerSuspend() {
+    PAGER.reload = null;
+    PAGER.seq++;
+    clearTimeout(PAGER.timer);
+    const bar = document.getElementById('pager-bar');
+    if (bar) bar.style.display = 'none';
+}
+
+function pagerParams(params) {
+    params.set('page', String(PAGER.page));
+    params.set('limit', String(PAGER.limit));
+    if (PAGER.search) params.set('search', PAGER.search);
+    if (Object.keys(PAGER.filters).length) params.set('filters', JSON.stringify(PAGER.filters));
+    return params;
+}
+
+// Разбирает ответ страницы. Вернёт null, если пока грузилось, пользователь ушёл в другой раздел или изменил поиск.
+async function pagerReadResponse(response, seq) {
+    const items = await response.json();
+    if (seq !== PAGER.seq) return null;
+    const total = parseInt(response.headers.get('X-Total-Count'), 10);
+    const page = parseInt(response.headers.get('X-Page'), 10);
+    PAGER.total = Number.isFinite(total) ? total : (Array.isArray(items) ? items.length : 0);
+    if (Number.isFinite(page)) PAGER.page = page;
+    PAGER.loading = false;
+    return items;
+}
+
+function pagerScheduleReload(delay) {
+    clearTimeout(PAGER.timer);
+    PAGER.timer = setTimeout(() => { if (PAGER.reload) PAGER.reload(); }, delay);
+}
+
+function pagerGo(page) {
+    if (!PAGER.reload) return;
+    const pages = Math.max(1, Math.ceil(PAGER.total / PAGER.limit));
+    const target = Math.min(Math.max(1, parseInt(page, 10) || 1), pages);
+    if (target === PAGER.page) return;
+    PAGER.page = target;
+    PAGER.reload();
+}
+
+// Панель встаёт над таблицей. Если в HTML есть <div id="pager-container"></div> — панель будет внутри него.
+function ensurePagerBar() {
+    let bar = document.getElementById('pager-bar');
+    if (bar) return bar;
+
+    const host = document.getElementById('pager-container');
+    const table = document.getElementById('table-body') ? document.getElementById('table-body').closest('table') : null;
+    if (!host && !table) return null;
+
+    const btnStyle = 'padding:3px 9px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:13px;';
+    bar = document.createElement('div');
+    bar.id = 'pager-bar';
+    bar.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;margin:4px 0;font-size:13px;background:#f7f7f7;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;';
+    bar.innerHTML = `
+        <input id="pager-search" type="search" placeholder="🔍 Поиск по всей таблице..." autocomplete="off"
+               style="flex:1 1 220px;max-width:380px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+        <span id="pager-info" style="color:#555;margin-left:auto;white-space:nowrap;"></span>
+        <button type="button" id="pager-first" title="В начало" style="${btnStyle}">«</button>
+        <button type="button" id="pager-prev" title="Назад" style="${btnStyle}">‹</button>
+        <span style="white-space:nowrap;">стр.
+            <input id="pager-page" type="number" min="1" value="1" style="width:56px;padding:3px 4px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+            из <span id="pager-pages">1</span></span>
+        <button type="button" id="pager-next" title="Вперёд" style="${btnStyle}">›</button>
+        <button type="button" id="pager-last" title="В конец" style="${btnStyle}">»</button>
+        <select id="pager-limit" title="Строк на странице" style="padding:3px 4px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+            <option value="50">50</option><option value="100" selected>100</option>
+            <option value="200">200</option><option value="500">500</option>
+        </select>`;
+
+    if (host) {
+        host.appendChild(bar);
+    } else {
+        const anchor = table.closest('.table-container, .table-wrapper, .table-responsive') || table.parentElement;
+        if (anchor && anchor.parentElement) anchor.parentElement.insertBefore(bar, anchor);
+        else table.parentNode.insertBefore(bar, table);
+    }
+
+    const searchInput = bar.querySelector('#pager-search');
+    searchInput.addEventListener('input', () => {
+        PAGER.search = searchInput.value.trim();
+        PAGER.page = 1;
+        pagerScheduleReload(350);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            clearTimeout(PAGER.timer);
+            if (PAGER.reload) PAGER.reload();
+        } else if (e.key === 'Escape' && searchInput.value) {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        }
+    });
+    bar.querySelector('#pager-first').onclick = () => pagerGo(1);
+    bar.querySelector('#pager-prev').onclick = () => pagerGo(PAGER.page - 1);
+    bar.querySelector('#pager-next').onclick = () => pagerGo(PAGER.page + 1);
+    bar.querySelector('#pager-last').onclick = () => pagerGo(Math.ceil(PAGER.total / PAGER.limit));
+    const pageInput = bar.querySelector('#pager-page');
+    pageInput.addEventListener('change', () => pagerGo(pageInput.value));
+    pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') pagerGo(pageInput.value); });
+    bar.querySelector('#pager-limit').addEventListener('change', (e) => {
+        PAGER.limit = parseInt(e.target.value, 10) || 100;
+        PAGER.page = 1;
+        if (PAGER.reload) PAGER.reload();
+    });
+    return bar;
+}
+
+function renderPager() {
+    const bar = ensurePagerBar();
+    if (!bar) return;
+    bar.style.display = 'flex';
+
+    const pages = Math.max(1, Math.ceil(PAGER.total / PAGER.limit));
+    const from = PAGER.total ? (PAGER.page - 1) * PAGER.limit + 1 : 0;
+    const to = Math.min(PAGER.total, PAGER.page * PAGER.limit);
+
+    bar.querySelector('#pager-info').textContent = PAGER.loading
+        ? 'Загрузка…'
+        : (PAGER.total ? `${from}–${to} из ${PAGER.total}` : 'Ничего не найдено');
+    bar.querySelector('#pager-pages').textContent = String(pages);
+    const pageInput = bar.querySelector('#pager-page');
+    if (document.activeElement !== pageInput) pageInput.value = String(PAGER.page);
+    pageInput.max = String(pages);
+    bar.querySelector('#pager-limit').value = String(PAGER.limit);
+
+    const atStart = PAGER.page <= 1;
+    const atEnd = PAGER.page >= pages;
+    bar.querySelector('#pager-first').disabled = atStart;
+    bar.querySelector('#pager-prev').disabled = atStart;
+    bar.querySelector('#pager-next').disabled = atEnd;
+    bar.querySelector('#pager-last').disabled = atEnd;
+}
+
+// Фильтры по колонкам, которых нет в данных сервера (вычисляемые колонки), применяем к показанной странице в браузере
+function pagerClientOnlyFilters() {
+    if (!currentItems.length) return;
+    const fields = Object.keys(PAGER.filters).filter(f => !Object.prototype.hasOwnProperty.call(currentItems[0], f));
+    if (!fields.length) return;
+    const config = getConfig(currentEntity);
+    document.querySelectorAll('#table-body tr').forEach(row => {
+        const cells = Array.from(row.children);
+        let ok = true;
+        for (const f of fields) {
+            const idx = config.columns.findIndex(c => c.field === f);
+            const cell = idx !== -1 ? cells[idx] : null;
+            if (!cell || !cell.textContent.toLowerCase().includes(String(PAGER.filters[f]).toLowerCase())) { ok = false; break; }
+        }
+        row.style.display = ok ? '' : 'none';
+    });
+}
+
+// Для печати: подгружает ВСЕ строки по текущему поиску/фильтрам (а не только показанную страницу)
+async function pagerFetchAllRowsHtml() {
+    const params = new URLSearchParams(PAGER.baseQuery);
+    params.set('page', '1');
+    params.set('limit', 'all');
+    if (PAGER.search) params.set('search', PAGER.search);
+    if (Object.keys(PAGER.filters).length) params.set('filters', JSON.stringify(PAGER.filters));
+
+    const response = await fetch(`${PAGER.baseUrl}?${params.toString()}`);
+    if (!response.ok) throw new Error('Ошибка сервера ' + response.status);
+    const items = await response.json();
+    const total = parseInt(response.headers.get('X-Total-Count'), 10);
+    if (Number.isFinite(total) && total > items.length) {
+        alert(`Строк слишком много (${total}). На печать выведены первые ${items.length}. Уточните поиск.`);
+    }
+    const config = getConfig(currentEntity);
+    return items.map(item => `<tr>${config.render(item)}</tr>`).join('');
+}
 
 const referenceDataCache = {};
 
@@ -8355,8 +8555,11 @@ async function loadMolsForFilter() {
     }
 }
 
-async function applyFilters() {
+async function applyFilters(fromPager) {
     if (currentEntity !== 'stock_balances') return;
+    if (fromPager !== true) PAGER.page = 1;          // нажали «Применить» — показываем с 1-й страницы
+    PAGER.reload = () => applyFilters(true);
+    const seq = ++PAGER.seq;
 
     const dateVal = document.getElementById('filter-date')?.value || '';
     const warehouseId = document.getElementById('filter-warehouse')?.value || '';
@@ -8364,12 +8567,17 @@ async function applyFilters() {
     const params = new URLSearchParams();
     if (dateVal) params.append('date', dateVal);
     if (warehouseId) params.append('warehouse_id', warehouseId);
+    PAGER.baseUrl = '/api/stock_balances';
+    PAGER.baseQuery = params.toString();
+    pagerParams(params);
 
     try {
         const response = await fetch(`/api/stock_balances?${params.toString()}`);
         if (!response.ok) throw new Error('Ошибка фильтрации');
 
-        currentItems = await response.json();
+        const pageItems = await pagerReadResponse(response, seq);
+        if (pageItems === null) return;
+        currentItems = pageItems;
         const config = getConfig('stock_balances');
         
         const tbody = document.getElementById('table-body');
@@ -8402,8 +8610,10 @@ async function applyFilters() {
 
         const rowCountEl = document.getElementById('row-count');
         if (rowCountEl) {
-            rowCountEl.innerText = `Раздел: Остатки запчастей | Найдено строк: ${currentItems.length}`;
+            rowCountEl.innerText = `Раздел: Остатки запчастей | Найдено строк: ${PAGER.total}`;
         }
+        pagerClientOnlyFilters();
+        renderPager();
 
        if (currentItems.length > 0) {
     selectedItem = currentItems[0];
@@ -8479,8 +8689,11 @@ async function loadMolsForMovement() {
 }
 
 
-async function applyMovementFilters() {
+async function applyMovementFilters(fromPager) {
     if (currentEntity !== 'stock_movement') return;
+    if (fromPager !== true) PAGER.page = 1;
+    PAGER.reload = () => applyMovementFilters(true);
+    const seq = ++PAGER.seq;
 
     const startDateVal = document.getElementById('movement-start-date')?.value || '';
     const endDateVal = document.getElementById('movement-end-date')?.value || '';
@@ -8493,6 +8706,9 @@ async function applyMovementFilters() {
 
     try {
         let url = `/api/stock_movement`;
+        PAGER.baseUrl = url;
+        PAGER.baseQuery = params.toString();
+        pagerParams(params);
         if (params.toString()) {
             url += `?${params.toString()}`;
         }
@@ -8500,7 +8716,9 @@ async function applyMovementFilters() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Ошибка фильтрации движения запчастей');
 
-        currentItems = await response.json();
+        const pageItems = await pagerReadResponse(response, seq);
+        if (pageItems === null) return;
+        currentItems = pageItems;
         const config = getConfig('stock_movement');
         const tbody = document.getElementById('table-body');
         tbody.innerHTML = '';
@@ -8518,7 +8736,9 @@ async function applyMovementFilters() {
             tbody.appendChild(tr);
         });
 
-        document.getElementById('row-count').innerText = `Раздел: Движение запчастей | Найдено строк: ${currentItems.length}`;
+        document.getElementById('row-count').innerText = `Раздел: Движение запчастей | Найдено строк: ${PAGER.total}`;
+        pagerClientOnlyFilters();
+        renderPager();
 
         if (currentItems.length > 0) {
     selectedItem = currentItems[0];
@@ -8538,7 +8758,25 @@ async function applyMovementFilters() {
     }
 }
 
-function printMainTable() {
+async function printMainTable() {
+    // окно открываем сразу (пока «жив» клик), иначе браузер может заблокировать всплывающее окно
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('Браузер заблокировал окно печати. Разрешите всплывающие окна для этого сайта.');
+        return;
+    }
+
+    let allRowsHtml = null;
+    if (PAGER.reload && PAGER.total > currentItems.length) {   // таблица разбита на страницы — печатаем все найденные строки
+        try {
+            allRowsHtml = await pagerFetchAllRowsHtml();
+        } catch (err) {
+            printWindow.close();
+            alert('Не удалось загрузить все строки для печати: ' + err.message);
+            return;
+        }
+    }
+
     const titleElement = document.querySelector('.sidebar .nav-link.active') || document.querySelector('.accordion-header span');
     const title = titleElement ? titleElement.innerText.replace('▲', '').replace('▼', '').trim() : 'Отчет по системе';
     
@@ -8553,8 +8791,6 @@ function printMainTable() {
     const now = new Date();
     const formattedDate = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
-    const printWindow = window.open('', '_blank');
-    
     printWindow.document.write(`
         <html>
             <head>
@@ -8637,7 +8873,7 @@ function printMainTable() {
                         <tr>${thead.innerHTML}</tr>
                     </thead>
                     <tbody>
-                        ${tbody.innerHTML}
+                        ${allRowsHtml !== null ? allRowsHtml : tbody.innerHTML}
                     </tbody>
                 </table>
             </body>
@@ -8735,8 +8971,17 @@ function ensureDetailPrintButton() {
     outerBar.appendChild(btn);
 }
 
-async function loadData(entity, title, customParams = {}) {
+async function loadData(entity, title, customParams = {}, opts = {}) {
+    const dataOnly = !!(opts && opts.dataOnly);   // перелистывание / поиск: шапку и поля фильтров не пересоздаём (иначе пропадёт фокус)
+    const sameEntity = (PAGER.entity === entity);
     resetSharedUiForEntity(entity);
+
+    if (!sameEntity) pagerReset(entity);          // зашли в другой раздел — начинаем с 1-й страницы и пустого поиска
+    PAGER.entity = entity;
+    PAGER.reload = () => loadData(entity, title, customParams, { dataOnly: true });
+    const seq = ++PAGER.seq;
+    PAGER.loading = true;
+    renderPager();
 
     currentEntity = entity;
     selectedItem = null;
@@ -8822,9 +9067,11 @@ async function loadData(entity, title, customParams = {}) {
             const endDateVal = document.getElementById('filter-end-date')?.value || '';
             const warehouseId = document.getElementById('filter-warehouse')?.value || '';
             const molId = document.getElementById('filter-mol')?.value || '';
+            const balanceDate = document.getElementById('filter-date')?.value || '';
 
             if (startDateVal) params.append('start_date', startDateVal);
             if (endDateVal) params.append('end_date', endDateVal);
+            if (balanceDate) params.append('date', balanceDate);   // /api/stock_balances читает именно date
             if (warehouseId) params.append('warehouse_id', warehouseId);
             if (molId) params.append('mol_id', molId);
         } else if (entity === 'stock_movement') {
@@ -8839,6 +9086,10 @@ async function loadData(entity, title, customParams = {}) {
             if (molId) params.append('mol_id', molId);
         }
 
+        PAGER.baseUrl = url;
+        PAGER.baseQuery = params.toString();
+        pagerParams(params);
+
         if (params.toString()) {
             url += `?${params.toString()}`;
         }
@@ -8852,7 +9103,9 @@ async function loadData(entity, title, customParams = {}) {
 
         if (!response.ok) throw new Error('Ошибка сервера');
 
-        currentItems = await response.json();
+        const pageItems = await pagerReadResponse(response, seq);
+        if (pageItems === null) return;   // устаревший ответ: пользователь уже ушёл дальше
+        currentItems = pageItems;
 
         const headerTr = document.getElementById('table-headers');
         const tbody = document.getElementById('table-body');
@@ -8861,18 +9114,19 @@ async function loadData(entity, title, customParams = {}) {
 
         const thead = headerTr.closest('thead');
         let filterRow = document.getElementById('table-filter-row');
+        const keepFilterRow = !!(dataOnly && filterRow && filterRow.dataset.entity === entity);
 
         if (!filterRow) {
             filterRow = document.createElement('tr');
             filterRow.id = 'table-filter-row';
             thead.insertBefore(filterRow, headerTr);
-        } else {
+        } else if (filterRow.nextElementSibling !== headerTr) {
             thead.insertBefore(filterRow, headerTr);
         }
 
         const visibleColumnsForFilter = config.columns.filter(col => col.table !== false);
 
-        filterRow.innerHTML = visibleColumnsForFilter.map((col, index) => {
+        if (!keepFilterRow) filterRow.innerHTML = visibleColumnsForFilter.map((col, index) => {
             let styleAttr = col.style ? `style="${col.style} padding: 4px;"` : (col.width ? `style="width: ${col.width}; padding: 4px;"` : 'style="padding: 4px;"');
             if (col.style && col.style.includes('display: none')) {
                 return `<th style="display: none; padding: 4px;"></th>`;
@@ -8888,6 +9142,13 @@ async function loadData(entity, title, customParams = {}) {
                 </th>
             `;
         }).join('');
+
+        if (!keepFilterRow) {
+            filterRow.dataset.entity = entity;
+            filterRow.querySelectorAll('input[data-column]').forEach(inp => {
+                inp.value = PAGER.filters[inp.getAttribute('data-column')] || '';
+            });
+        }
 
         const visibleColumns = config.columns.filter(col => col.table !== false);
 
@@ -8939,7 +9200,8 @@ async function loadData(entity, title, customParams = {}) {
 
                     loadDetailData('stock_batches', { 
                         zaphasti_id: zId, 
-                        warehouse_id: wId 
+                        warehouse_id: wId,
+                        date: document.getElementById('filter-date')?.value || ''
                     });
                 } else if (entity === 'stock_movement') {
                     loadDetailData('part_movement_details', item);
@@ -8971,7 +9233,10 @@ async function loadData(entity, title, customParams = {}) {
             tbody.appendChild(tr);
         });
 
-        document.getElementById('row-count').innerText = `Раздел: ${title} | Всего строк: ${currentItems.length}`;
+        const hasPagerFilter = !!(PAGER.search || Object.keys(PAGER.filters).length);
+        document.getElementById('row-count').innerText = `Раздел: ${title} | Всего строк: ${PAGER.total}${hasPagerFilter ? ' (по поиску/фильтру)' : ''}`;
+        pagerClientOnlyFilters();
+        renderPager();
 
         const carTabsBar = document.getElementById('car-tabs-bar');
         const tabsForCars = document.getElementById('tabs-for-cars');
@@ -9030,6 +9295,11 @@ async function loadData(entity, title, customParams = {}) {
     } catch (err) {
         currentItems = [];
         document.getElementById('row-count').innerText = `Раздел: ${title} (нет данных на сервер)`;
+        if (seq === PAGER.seq) {
+            PAGER.loading = false;
+            PAGER.total = 0;
+            renderPager();
+        }
     }
 }
 
@@ -9718,6 +9988,7 @@ async function loadExpenseDetailTable(fetchUrl) {
 async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') {
     let currentExpenseView = entity;
     resetSharedUiForEntity(entity);
+    pagerSuspend();
 
     window._currentExpenseView = entity;
     window._currentExpenseParentId = parentId;
@@ -10210,6 +10481,7 @@ async function submitIncomePayment(event, docId, skladId) {
 
 async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId = '') {
     resetSharedUiForEntity(entity);
+    pagerSuspend();
 
     let fetchUrl = '';
     let currentReceiptView = entity;
@@ -11125,6 +11397,19 @@ function emptyDetailBody(entity) {
 }
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
+
+    if (PAGER.reload) {   // постраничный режим: фильтруем на сервере по ВСЕЙ таблице
+        const serverFilters = {};
+        filterInputs.forEach(input => {
+            const v = input.value.trim();
+            if (v) serverFilters[input.getAttribute('data-column')] = v;
+        });
+        PAGER.filters = serverFilters;
+        PAGER.page = 1;
+        pagerScheduleReload(350);
+        return;
+    }
+
     const filters = {};
 
     filterInputs.forEach(input => {
@@ -12710,6 +12995,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
             return;
         }
 
+        pagerReset(entity);
         loadData(entity, text, () => {
             if (shouldShowDetails) {
                 const $firstRow = $('#mainTable tbody tr:first-child, .data-table tbody tr:first-child, table tbody tr:first-child').first();
