@@ -1823,7 +1823,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
-        { field: 'returned_sum', label: 'Возврат', width: '100px', align: 'right' },
+{ field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
     ],
@@ -1831,8 +1831,8 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
         const worksSum = Number(item.works_sum || 0).toFixed(2);
                const sum = Number(item.total_realization_sum || 0).toFixed(2);
-        const returnedSum = Number(item.returned_sum || 0).toFixed(2);
-        const totalPaidNum = Number(item.total_paid || 0);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
+                const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
         const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
         const debtSum = debtSumNum.toFixed(2);
