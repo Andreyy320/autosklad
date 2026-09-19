@@ -525,11 +525,11 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         { field: 'warehouse_id', label: 'Склад', width: '150px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '150px', ref: 'mol' },
         { field: 'supplier_id', label: 'Поставщик', width: '180px', ref: 'postavhik' },
-        { field: 'description', label: 'Описание' },
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
-                { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
+        { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
         { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
-{ field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox', table: false }
+        { field: 'description', label: 'Описание' },
+        { field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox', table: false }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -559,13 +559,13 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             <td>${item.warehouse_name || '—'}</td>
             <td>${item.mol_user_fio || item.mol_name || '—'}</td>
 <td>${item.supplier_name || '—'}</td>
-            <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
                         <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
+            <td>${item.description || ''}</td>
         `;
     }
     },
@@ -602,6 +602,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         `;
     }
     },
+
     moves: {
     title: 'Документ перемещения',
     columns: [
@@ -611,11 +612,11 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         { field: 'mol_from_id', label: 'МОЛ с кого', width: '150px', ref: 'mol' },
         { field: 'warehouse_to_id', label: 'Склад куда', width: '150px', ref: 'skladi' },
         { field: 'mol_to_id', label: 'МОЛ кому', width: '150px', ref: 'mol' },
-        { field: 'description', label: 'Описание' },
 
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
-                { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
+                { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
+        { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -643,13 +644,14 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             <td>${item.mol_from_name || item.mol_from_id || '—'}</td>
             <td>${item.warehouse_to_name || item.warehouse_to_id || '—'}</td>
             <td>${item.mol_to_name || item.mol_to_id || '—'}</td>
-            <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
                        <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">${isPostedHtml}</td>
+            <td>${item.description || ''}</td>
         `;
     }
     },
+
     move_items: {
     title: 'Спецификация перемещения',
     columns: [
@@ -790,18 +792,18 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
     },
 
 
-stock_balances: {
+    stock_balances: {
 title: 'Остатки запчастей',
 columns: [
     { field: 'artikul', label: 'Артикул', width: '110px' },
     { field: 'code', label: 'Код', width: '110px', align: 'center' },
     { field: 'name', label: 'Наименование', width: '280px' },
     { field: 'manufacturer', label: 'Производитель', width: '140px' },
-    { field: 'description', label: 'Описание' },
     { field: 'sklad', label: 'Склад', width: '130px' },
     { field: 'mol', label: 'МОЛ', width: '150px' },
     { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
-    { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' }
+    { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' },
+    { field: 'description', label: 'Описание' }
 ],
 rowAttributes: (item) => {
     return `data-zaphasti-id="${item.id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
@@ -814,14 +816,14 @@ render: (item) => {
         <td style="text-align: center;">${item.code || ''}</td>
         <td><b>${item.name || ''}</b></td>
         <td>${item.manufacturer || ''}</td>
-        <td>${item.description || ''}</td>
         <td>${item.sklad || 'Основной склад'}</td>
         <td>${item.mol || 'Не назначен'}</td>
         <td style="text-align: right; font-weight: bold; color: #006600; background-color: #e6fcf5;">${item.qty !== undefined ? item.qty : 0}</td>
         <td style="text-align: center;">${item.unit || 'шт'}</td>
+        <td>${item.description || ''}</td>
     `;
 }
-},
+    },
 
     part_movement_details: {
     title: 'Детали движения',
@@ -853,6 +855,7 @@ render: (item) => {
         `;
     }
     },
+
     stock_batches: {
     title: 'Партии товара',
     columns: [
@@ -1162,10 +1165,10 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
         { field: 'warehouse_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
-        { field: 'description', label: 'Описание' },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
-              { field: 'is_posted', label: 'Проведен', width: '200px' }
+              { field: 'is_posted', label: 'Проведен', width: '200px' },
+        { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1201,16 +1204,17 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             <td style="text-align: right;">${mileageVal}</td>
             <td>${item.warehouse_name || item.warehouse_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
-            <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumVal}</td>
             <td>${formatDT(item.fact_date)}</td>
                         <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
+            <td>${item.description || ''}</td>
         `;
     }
     },
+
     repair_items: {
     title: 'Список запчастей в ремонте',
     columns: [
@@ -1583,6 +1587,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         return html;
     }
     },
+    
     realizations: {
     title: 'Реализация',
     columns: [
@@ -1603,12 +1608,12 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
         { field: 'car_id', label: 'Гос. номер', width: '120px', ref: 'customer_cars', formatRef: (car) => car.gos_number || car.car_number || `ID #${car.id}` },
         { field: 'car_id', label: 'Марка авто', width: '140px', ref: 'customer_cars', formatRef: (car) => `${car.brand || ''} ${car.model || ''}`.trim() || '—' },
-        { field: 'description', label: 'Описание' },
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
-                { field: 'is_posted', label: 'Проведен', width: '200px' }
+                { field: 'is_posted', label: 'Проведен', width: '200px' },
+        { field: 'description', label: 'Описание' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1646,7 +1651,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             <td>${item.mol_name || item.mol_id || '—'}</td>
             <td><b>${gosNumber}</b></td>
             <td>${carBrandModel}</td>
-            <td>${item.description || ''}</td>
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
             <td style="text-align: right; font-weight: bold;">${sumTotalVal}</td>
@@ -1655,6 +1659,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
             </td>
+            <td>${item.description || ''}</td>
         `;
     }
     },
