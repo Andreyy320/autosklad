@@ -9337,7 +9337,9 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
 async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) {
     event.preventDefault();
-
+    if (window._payBusy) return;
+    window._payBusy = true;
+    setTimeout(() => { window._payBusy = false; }, 3000);
     const docIds = Array.isArray(window._paySelectedDocIds) ? window._paySelectedDocIds : [];
 
     const amount = document.getElementById('receipt-payment-amount').value;
@@ -9373,6 +9375,9 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) 
         showAppNotification('Ошибка: ' + err.message, 'error');
     }
 }
+
+
+
 
 async function openCustomerPaymentHistory(groupKey, counterpartyName, monthStr) {
     const drawer = getOrCreateDrawer();
@@ -9603,9 +9608,14 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
     }
 }
 
+
+
+
 async function submitPayment(event, postavhikId, monthStr) {
     event.preventDefault();
-
+    if (window._payBusy) return;
+    window._payBusy = true;
+    setTimeout(() => { window._payBusy = false; }, 3000);
     const receiptIds = Array.isArray(window._paySelectedReceiptIds) ? window._paySelectedReceiptIds : [];
 
     const payload = {
@@ -9644,6 +9654,7 @@ async function submitPayment(event, postavhikId, monthStr) {
         showAppNotification('Не удалось отправить данные на сервер', 'error');
     }
 }
+
 async function loadExpenseDetailTable(fetchUrl) {
   const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
     if (detailToolbarEl) detailToolbarEl.style.display = 'none';
@@ -10149,8 +10160,12 @@ function openIncomePaymentDrawer(docId, debtSum, docNumber, skladId = '') {
     openDrawer();
 }
 
+
 async function submitIncomePayment(event, docId, skladId) {
     event.preventDefault();
+        if (window._payBusy) return;
+    window._payBusy = true;
+    setTimeout(() => { window._payBusy = false; }, 3000);
     if (skladId === true || skladId === 'true' || skladId === 'undefined' || skladId === 'null') {
         skladId = window.currentSkladId || '';
     }

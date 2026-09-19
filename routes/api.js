@@ -1068,16 +1068,30 @@ router.get('/return_items', async (req, res) => {
 });
 
 router.put('/returns/:id/post', async (req, res) => {
+    const client = await pool.connect();
     try {
         const { id } = req.params;
 
-        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM returns WHERE id = $1', [id]);
+        await client.query('BEGIN');
+
+        // Блокируем документ возврата: пока идёт проведение, никто не сможет добавить/изменить/удалить позиции
+        // (эти операции тоже блокируют строку returns), а параллельное проведение подождёт и увидит актуальный статус
+        const oldDocRes = await client.query('SELECT is_posted, fact_date FROM returns WHERE id = $1 FOR UPDATE', [id]);
         if (oldDocRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Документ не найден' });
         }
 
-        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM return_items WHERE return_id = $1', [id]);
+        // Защита от двойного проведения (двойной клик или другой пользователь)
+        const alreadyPosted = oldDocRes.rows[0].is_posted === true || oldDocRes.rows[0].is_posted === 'true';
+        if (alreadyPosted) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
+
+        const itemsCheck = await client.query('SELECT COUNT(*) AS cnt FROM return_items WHERE return_id = $1', [id]);
         if (Number(itemsCheck.rows[0].cnt) === 0) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя провести пустой документ возврата — добавьте хотя бы одну позицию' });
         }
 
@@ -1086,31 +1100,41 @@ router.put('/returns/:id/post', async (req, res) => {
             factDate = getServerNowString();
         }
 
-        const sumRes = await pool.query(
+        const sumRes = await client.query(
             'SELECT COALESCE(SUM(total_rub), 0) AS total_sum FROM return_items WHERE return_id = $1',
             [id]
         );
         const totalSum = sumRes.rows[0].total_sum;
 
-        const result = await pool.query(
-            'UPDATE returns SET is_posted = true, fact_date = $1, total_sum = $2 WHERE id = $3 RETURNING *',
+        const result = await client.query(
+            'UPDATE returns SET is_posted = true, fact_date = $1, total_sum = $2 WHERE id = $3 AND is_posted IS NOT TRUE RETURNING *',
             [factDate, totalSum, id]
         );
 
+        // Вторая линия защиты: если по какой-то причине документ уже успели провести
+        if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
+
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл возврат
-        await pool.query(
+        await client.query(
             'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
             ['return', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
         );
 
+        await client.query('COMMIT');
+
         res.status(200).json(result.rows[0]);
 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('❌ Ошибка при проведении возврата:', err);
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    } finally {
+        client.release();
     }
 });
-
 
 
 // ==================== ПОЛУЧИТЬ ВСЕ АВТОСЕРВИСЫ ====================
@@ -1203,13 +1227,19 @@ router.get('/move_items', async (req, res) => {
 
 // ==================== ОБНОВЛЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
 router.put('/moves/:id', async (req, res) => {
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+
         const { id } = req.params;
         const { doc_number, date, warehouse_from_id, mol_from_id, warehouse_to_id, mol_to_id, description, is_posted } = req.body;
 
         // 1. Загружаем старые данные
-        const oldDocRes = await pool.query('SELECT * FROM moves WHERE id = $1', [id]);
+        // ИЗМЕНЕНО: FOR UPDATE — блокируем строку документа, чтобы другой пользователь
+        // не успел провести/изменить его, пока мы читаем и сохраняем форму
+        const oldDocRes = await client.query('SELECT * FROM moves WHERE id = $1 FOR UPDATE', [id]);
         if (oldDocRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Документ не найден' });
         }
         const oldDoc = oldDocRes.rows[0];
@@ -1229,16 +1259,18 @@ router.put('/moves/:id', async (req, res) => {
         const whFromChanging = warehouse_from_id !== undefined && parseInt(warehouse_from_id, 10) !== oldDoc.warehouse_from_id;
         const whToChanging = warehouse_to_id !== undefined && parseInt(warehouse_to_id, 10) !== oldDoc.warehouse_to_id;
 
-        if (whFromChanging || whToChanging) {
+               if (whFromChanging || whToChanging) {
             // Уже проведённый документ — склады менять нельзя вообще
             if (oldIsPostedBool) {
+                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Нельзя менять склады уже проведённого документа перемещения!' });
             }
 
             // Не проведён, но в нём уже есть позиции — тоже нельзя, т.к. остатки
             // уже привязаны к старым складам
-            const itemsCheck = await pool.query('SELECT 1 FROM move_items WHERE move_id = $1 LIMIT 1', [id]);
+            const itemsCheck = await client.query('SELECT 1 FROM move_items WHERE move_id = $1 LIMIT 1', [id]);
             if (itemsCheck.rows.length > 0) {
+                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Нельзя сменить склад — в документе уже есть позиции. Сначала удалите все позиции, затем смените склад.' });
             }
         }
@@ -1254,9 +1286,10 @@ router.put('/moves/:id', async (req, res) => {
             factDate = null;
         }
 
-        // 4. Защита от стирания данных
-        const finalDocNumber = doc_number !== undefined && doc_number !== '' ? doc_number : oldDoc.doc_number;
-
+              // 4. Защита от стирания данных
+        // ИЗМЕНЕНО: doc_number присваивается один раз при создании (см. getNextDocNumber) —
+        // что бы фронтенд ни прислал, игнорируем, чтобы не потерять уникальность номера
+        const finalDocNumber = oldDoc.doc_number;
         // Явно превращаем Date-объекты в "голую" строку без смещения таймзоны,
         // чтобы избежать повторной UTC-конвертации драйвером pg при обратной записи
        function toSafeTimestampString(val) {
@@ -1306,14 +1339,17 @@ router.put('/moves/:id', async (req, res) => {
             id
         ];
 
-        const result = await pool.query(updateQuery, values);
+          const result = await client.query(updateQuery, values);
+        await client.query('COMMIT');
         res.json(result.rows[0]);
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Ошибка при обновлении перемещения:', err);
         res.status(500).json({ error: 'Ошибка сервера при обновлении перемещения' });
+    } finally {
+        client.release();
     }
 });
-
 
 // Пример явного эндпоинта, если требуется:
 router.get('/payment_types', async (req, res) => {
@@ -2510,6 +2546,10 @@ router.get('/stock_movement', async (req, res) => {
             paramIndex++;
         }
 
+        let startParam = '', endParam = '';
+        if (startDateVal) { queryParams.push(startDateVal); startParam = `$${paramIndex++}`; }
+        if (endDateVal)   { queryParams.push(endDateVal);   endParam   = `$${paramIndex++}`; }
+
         const query = `
             WITH all_operations AS (
                 -- 1. Приходы
@@ -2611,7 +2651,7 @@ router.get('/stock_movement', async (req, res) => {
                     SUM(CASE WHEN op_type = 'in' THEN qty ELSE -qty END) AS start_qty,
                     SUM(CASE WHEN op_type = 'in' THEN sum ELSE -sum END) AS start_sum
                 FROM all_operations
-                WHERE ${startDateVal ? `date < '${startDateVal}'::timestamp` : '1=0'}
+                WHERE ${startDateVal ? `date < ${startParam}::timestamp` : '1=0'}
                 ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),
@@ -2625,8 +2665,8 @@ router.get('/stock_movement', async (req, res) => {
                     SUM(CASE WHEN op_type = 'out' THEN sum ELSE 0 END) AS outcome_sum
                 FROM all_operations
                 WHERE 1=1
-                ${startDateVal ? `AND date >= '${startDateVal}'::timestamp` : ''}
-                ${endDateVal ? `AND date <= '${endDateVal}'::timestamp` : ''}
+${startDateVal ? `AND date >= ${startParam}::timestamp` : ''}
+${endDateVal ? `AND date <= ${endParam}::timestamp` : ''}
                 ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),
@@ -2843,7 +2883,6 @@ router.get('/accident_statuses', async (req, res) => {
     }
 });
 
-
 // ==================== БЫСТРОЕ ПРОВЕДЕНИЕ ПЕРЕМЕЩЕНИЯ ====================
 router.put('/moves/:id/post', async (req, res) => {
     try {
@@ -2870,11 +2909,16 @@ router.put('/moves/:id/post', async (req, res) => {
             UPDATE moves 
             SET is_posted = true, 
                 fact_date = $1 
-            WHERE id = $2 
+            WHERE id = $2 AND is_posted IS NOT TRUE
             RETURNING *;
         `;
 
         const result = await pool.query(updateQuery, [factDate, id]);
+
+        // Защита от двойного проведения: если документ уже проведён (другим пользователем или двойным кликом)
+        if (result.rows.length === 0) {
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
 
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл перемещение
         await pool.query(
@@ -2906,9 +2950,14 @@ router.put('/receipts/:id/post', async (req, res) => {
         const factDate = getServerNowString();
 
         const result = await pool.query(
-            'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 AND is_posted IS NOT TRUE RETURNING *',
             [factDate, id]
         );
+
+        // Защита от двойного проведения
+        if (result.rows.length === 0) {
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
 
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл приход
         await pool.query(
@@ -2941,9 +2990,14 @@ router.put('/repairs/:id/post', async (req, res) => {
         const factDate = getServerNowString();
 
         const result = await pool.query(
-            'UPDATE repairs SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            'UPDATE repairs SET is_posted = true, fact_date = $1 WHERE id = $2 AND is_posted IS NOT TRUE RETURNING *',
             [factDate, id]
         );
+
+        // Защита от двойного проведения
+        if (result.rows.length === 0) {
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
 
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл ремонт
         await pool.query(
@@ -2975,9 +3029,14 @@ router.put('/realizations/:id/post', async (req, res) => {
         const factDate = getServerNowString();
 
         const result = await pool.query(
-            'UPDATE realizations SET is_posted = true, fact_date = $1 WHERE id = $2 RETURNING *',
+            'UPDATE realizations SET is_posted = true, fact_date = $1 WHERE id = $2 AND is_posted IS NOT TRUE RETURNING *',
             [factDate, id]
         );
+
+        // Защита от двойного проведения
+        if (result.rows.length === 0) {
+            return res.status(409).json({ error: 'Документ уже проведён' });
+        }
 
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл реализацию
         await pool.query(
@@ -3526,7 +3585,6 @@ const values = [
 
 
 
-// ==================== ИЗМЕНИТЬ ЗАПЧАСТЬ В РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches И FIFO) ====================
 router.put('/realization_items/:id', async (req, res) => {
  
 
@@ -3551,10 +3609,10 @@ router.put('/realization_items/:id', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция запчасти в реализации не найдена' });
         }
-        const currentItem = existingItemRes.rows[0];
+        let currentItem = existingItemRes.rows[0];
 
         // Проверяем, не проведена ли исходная реализация
-        const sourceRealizationCheck = await client.query(`SELECT is_posted, doc_number FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        const sourceRealizationCheck = await client.query(`SELECT is_posted, doc_number FROM realizations WHERE id = $1 FOR UPDATE`, [currentItem.realization_id]);
         if (sourceRealizationCheck.rows.length > 0) {
             const { is_posted } = sourceRealizationCheck.rows[0];
             const isSourcePosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
@@ -3563,6 +3621,14 @@ router.put('/realization_items/:id', async (req, res) => {
                 return res.status(400).json({ error: 'Нельзя изменять запчасти в уже проведенной реализации!' });
             }
         }
+
+        // Документ заблокирован — перечитываем позицию под блокировкой (защита от параллельной правки/удаления)
+        const lockedItemRes = await client.query(`SELECT * FROM realization_items WHERE id = $1 FOR UPDATE`, [id]);
+        if (lockedItemRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Позиция запчасти в реализации не найдена' });
+        }
+        currentItem = lockedItemRes.rows[0];
 
         // Определяем целевые идентификаторы
         const targetRealizationId = realization_id || currentItem.realization_id;
@@ -3888,7 +3954,6 @@ async function writeRealizationLog(client, req, data) {
     }
 }
 
-// ==================== УДАЛИТЬ ЗАПЧАСТЬ ИЗ РЕАЛИЗАЦИИ (С УЧЕТОМ НОВОЙ ТАБЛИЦЫ warehouse_batches) ====================
 router.delete('/realization_items/:id', async (req, res) => {
  
     const { id } = req.query;
@@ -3904,10 +3969,10 @@ router.delete('/realization_items/:id', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Запись не найдена' });
         }
-        const currentItem = existingItemRes.rows[0];
+        let currentItem = existingItemRes.rows[0];
 
         // 2. Проверяем, не проведена ли реализация, которой принадлежит эта позиция, а также получаем склад, клиента и номер документа
-        const realizationCheck = await client.query(`SELECT sklad_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1`, [currentItem.realization_id]);
+        const realizationCheck = await client.query(`SELECT sklad_id, customer_id, is_posted, doc_number FROM realizations WHERE id = $1 FOR UPDATE`, [currentItem.realization_id]);
         
         let sklad_id = null;
         let customer_id = null;
@@ -3931,6 +3996,14 @@ router.delete('/realization_items/:id', async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'В документе реализации не указан склад.' });
         }
+
+        // Документ уже заблокирован — перечитываем позицию под блокировкой (защита от двойного удаления)
+        const lockedItemRes = await client.query(`SELECT * FROM realization_items WHERE id = $1 FOR UPDATE`, [itemId]);
+        if (lockedItemRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+        currentItem = lockedItemRes.rows[0];
 
         // 3. Возвращаем количество удаляемой позиции обратно на склад в таблицу warehouse_batches (без некорректного ON CONFLICT без уникального индекса)
         if (currentItem.income_document_id && currentItem.zaphasti_id) {
@@ -4013,6 +4086,7 @@ router.delete('/realization_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 // Функция для записи логов реализации в таблицу realization_logs
 async function writeRealizationLog(client, req, data) {
     try {
@@ -4320,6 +4394,8 @@ router.put('/realization_works/:id', async (req, res) => {
         client.release();
     }
 });
+
+
 // ==================== УДАЛИТЬ УСЛУГУ ИЗ РЕАЛИЗАЦИИ ====================
 router.delete('/realization_works/:id', async (req, res) => {
     const { id } = req.params;
@@ -4328,11 +4404,25 @@ router.delete('/realization_works/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Проверяем существование записи перед удалением
-        const checkRes = await client.query(`SELECT id FROM realization_works WHERE id = $1`, [id]);
+              // Проверяем существование записи перед удалением
+        const checkRes = await client.query(`SELECT id, realization_id FROM realization_works WHERE id = $1`, [id]);
         if (checkRes.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Услуга в реализации не найдена' });
+        }
+
+        // ДОБАВЛЕНО: проверяем, не проведена ли родительская реализация
+        const realizationId = checkRes.rows[0].realization_id;
+        const realCheck = await client.query(
+            `SELECT is_posted FROM realizations WHERE id = $1 FOR UPDATE`,
+            [realizationId]
+        );
+        if (realCheck.rows.length > 0) {
+            const isPostedVal = realCheck.rows[0].is_posted;
+            if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя удалять услугу из уже проведённой реализации!' });
+            }
         }
 
         // Удаляем запись (триггер в БД автоматически пересчитаетсуммы в realizations)
@@ -5293,13 +5383,11 @@ router.post('/realizations/:id/pay', async (req, res) => {
         const { amount, customer_id, comment } = req.body;
  
         if (!docId || isNaN(docId)) {
-            client.release();
             return res.status(400).json({ error: 'Некорректный ID реализации' });
         }
  
         const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
-            client.release();
             return res.status(400).json({ error: 'Сумма оплаты должна быть больше нуля' });
         }
  
@@ -5315,7 +5403,6 @@ router.post('/realizations/:id/pay', async (req, res) => {
  
         if (realizationCheck.rows.length === 0) {
             await client.query('ROLLBACK');
-            client.release();
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
  
@@ -5356,7 +5443,6 @@ router.post('/realizations/:id/pay', async (req, res) => {
  
         if (paymentAmount > currentDebt) {
             await client.query('ROLLBACK');
-            client.release();
             return res.status(400).json({ 
                 error: `Сумма оплаты (${paymentAmount}) превышает остаток долга (${currentDebt.toFixed(2)} руб.). Переплата запрещена!` 
             });
@@ -5428,13 +5514,11 @@ router.post('/moves/:id/pay', async (req, res) => {
         const { amount, comment } = req.body;
  
         if (!docId || isNaN(docId)) {
-            client.release();
             return res.status(400).json({ error: 'Некорректный ID перемещения' });
         }
  
         const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
         if (!paymentAmount || paymentAmount <= 0) {
-            client.release();
             return res.status(400).json({ error: 'Сумма погашения должна быть больше нуля' });
         }
  
@@ -5449,7 +5533,6 @@ router.post('/moves/:id/pay', async (req, res) => {
  
         if (moveCheck.rows.length === 0) {
             await client.query('ROLLBACK');
-            client.release();
             return res.status(404).json({ error: 'Перемещение не найдено' });
         }
  
@@ -5480,7 +5563,6 @@ router.post('/moves/:id/pay', async (req, res) => {
  
         if (paymentAmount > moveCurrentDebt) {
             await client.query('ROLLBACK');
-            client.release();
             return res.status(400).json({ 
                 error: `Сумма погашения (${paymentAmount}) превышает долг по перемещению (${moveCurrentDebt.toFixed(2)} руб.)!` 
             });
@@ -5637,6 +5719,14 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
         const realId = isWarehouseDebtor ? String(id).replace('wh_', '') : id;
 
         await client.query('BEGIN');
+
+        // Сначала блокируем документы (строго по id), и только потом считаем долг —
+        // тогда видны оплаты, которые успела закоммитить параллельная транзакция
+        if (isWarehouseDebtor) {
+            await client.query('SELECT id FROM moves WHERE warehouse_to_id = $1 AND is_posted = true ORDER BY id FOR UPDATE', [realId]);
+        } else {
+            await client.query('SELECT id FROM realizations WHERE customer_id = $1 AND is_posted = true ORDER BY id FOR UPDATE', [realId]);
+        }
 
         let docsQuery;
         let docsParams;
@@ -6338,6 +6428,7 @@ router.get('/expenses_by_suppliers/:id/payments', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -6355,6 +6446,9 @@ router.post('/expenses_by_suppliers/:id/pay_month', async (req, res) => {
             : null;
 
         await client.query('BEGIN');
+
+        // Сначала блокируем приходы поставщика (строго по id), и только потом считаем долг
+        await client.query('SELECT id FROM receipts WHERE supplier_id = $1 AND is_posted = true ORDER BY id FOR UPDATE', [id]);
 
                 const receiptsQuery = `
             SELECT 
@@ -6762,8 +6856,8 @@ router.post('/receipt_items', async (req, res) => {
         }
 
         // 2. Проверяем, проведен ли уже родительский документ (receipts), и забираем нужные поля для лога и склада (warehouse_id, supplier_id, doc_number, date)
-        const receiptCheck = await client.query(
-            'SELECT is_posted, warehouse_id, supplier_id, doc_number, date FROM receipts WHERE id = $1',
+             const receiptCheck = await client.query(
+            'SELECT is_posted, warehouse_id, supplier_id, doc_number, date FROM receipts WHERE id = $1 FOR UPDATE',
             [receipt_id]
         );
 
@@ -6780,9 +6874,15 @@ router.post('/receipt_items', async (req, res) => {
         }
 
         // 3. Подготовка и расчёт числовых полей
-        const numPrice = Number(price) || 0;
+                const numPrice = Number(price) || 0;
         const numQty = Number(quantity) || 0;
-        const priceRub = numPrice; 
+
+        if (numQty <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Количество должно быть больше нуля.' });
+        }
+
+        const priceRub = numPrice;
         const totalRub = numPrice * numQty;
         const curr = currency || 'Рубль ПМР';
 
@@ -8453,7 +8553,13 @@ router.post('/return_items', async (req, res) => {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
             }
-            const mi = miRes.rows[0];
+                        const mi = miRes.rows[0];
+
+            // ДОБАВЛЕНО: нельзя оформить возврат по непроведённому перемещению
+            if (mi.move_posted !== true && mi.move_posted !== 'true') {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя оформить возврат — документ перемещения ещё не проведён.' });
+            }
 
             if (returnDoc.move_id && Number(returnDoc.move_id) !== Number(mi.move_id)) {
                 await client.query('ROLLBACK');
@@ -8572,7 +8678,13 @@ router.post('/return_items', async (req, res) => {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Позиция реализации не найдена.' });
             }
-            const ri = riRes.rows[0];
+                        const ri = riRes.rows[0];
+
+            // ДОБАВЛЕНО: нельзя оформить возврат по непроведённой реализации
+            if (ri.realization_posted !== true && ri.realization_posted !== 'true') {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя оформить возврат — документ реализации ещё не проведён.' });
+            }
 
             if (returnDoc.realization_id && Number(returnDoc.realization_id) !== Number(ri.realization_id)) {
                 await client.query('ROLLBACK');
@@ -8654,13 +8766,25 @@ router.post('/return_items', async (req, res) => {
             return res.status(201).json(insertResult.rows[0]);
         }
 
-        // ========== ВЕТКА 2: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
-        const riCheck = await client.query('SELECT * FROM receipt_items WHERE id = $1', [receipt_item_id]);
+                // ========== ВЕТКА 2: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
+        const riCheck = await client.query(`
+            SELECT rit.*, rec.is_posted AS receipt_posted
+            FROM receipt_items rit
+            JOIN receipts rec ON rit.receipt_id = rec.id
+            WHERE rit.id = $1
+            FOR UPDATE OF rit
+        `, [receipt_item_id]);
         if (riCheck.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Позиция прихода не найдена.' });
         }
         const receiptItem = riCheck.rows[0];
+
+        // ДОБАВЛЕНО: нельзя оформить возврат по непроведённому приходу
+        if (receiptItem.receipt_posted !== true && receiptItem.receipt_posted !== 'true') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Нельзя оформить возврат — документ прихода ещё не проведён.' });
+        }
 
         if (!receiptItem.batch_id) {
             await client.query('ROLLBACK');
