@@ -1816,20 +1816,22 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
     money_receipts: {
     title: 'Список документов (продажи и ремонты)',
     columns: [
-        { field: 'doc_number', label: '№ Документа', width: '100px' },
+             { field: 'doc_number', label: '№ Документа', width: '100px' },
         { field: 'date', label: 'Дата', width: '100px' },
         { field: 'counterparty_name', label: 'Покупатель / Склад', width: '180px' },
         { field: 'sklad_name', label: 'Склад', width: '120px' },
         { field: 'parts_sum', label: 'Сумма зап.', width: '105px', align: 'right' },
         { field: 'works_sum', label: 'Сумма усл.', width: '105px', align: 'right' },
         { field: 'total_realization_sum', label: 'Сумма', width: '110px', align: 'right' },
+        { field: 'returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'debt_sum', label: 'Долг', width: '110px', align: 'right' },
     ],
     render: (item) => {
         const partsSum = Number(item.parts_sum || 0).toFixed(2);
         const worksSum = Number(item.works_sum || 0).toFixed(2);
-        const sum = Number(item.total_realization_sum || 0).toFixed(2);
+               const sum = Number(item.total_realization_sum || 0).toFixed(2);
+        const returnedSum = Number(item.returned_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const formattedPaid = totalPaidNum.toFixed(2);
         const debtSumNum = Number(item.debt_sum || item.total_debt || 0);
@@ -1855,7 +1857,8 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             <td><span style="color: #334155;">${item.sklad_name || '—'}</span></td>
             <td style="text-align: right; color: #334155;">${partsSum}</td>
             <td style="text-align: right; color: #334155;">${worksSum}</td>
-            <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
+                       <td style="text-align: right; font-weight: 600; color: #0f172a;">${sum}</td>
+            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right;">${paidHtml}</td>
             <td style="text-align: right; font-weight: 500; color: ${debtSumNum > 0 ? '#991b1b' : '#334155'};">
                 ${debtSum}
@@ -1929,9 +1932,10 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'sklad_name', label: 'Склад', width: '140px' },
         { field: 'total_orders', label: 'Заказов', width: '80px', align: 'center' },
         { field: 'total_qty', label: 'Кол-во', width: '80px', align: 'right' },
-        { field: 'total_parts_sum', label: 'Запчасти', width: '110px', align: 'right' },
+                { field: 'total_parts_sum', label: 'Запчасти', width: '110px', align: 'right' },
         { field: 'total_works_sum', label: 'Услуги', width: '110px', align: 'right' },
         { field: 'total_sum', label: 'Общая', width: '110px', align: 'right' },
+        { field: 'total_returned_sum', label: 'Возврат', width: '100px', align: 'right' },
         { field: 'total_paid', label: 'Оплачено', width: '110px', align: 'right' },
         { field: 'total_debt', label: 'Долг', width: '110px', align: 'right' },
         { field: 'cumulative_debt', label: 'Долг накопительно', width: '120px', align: 'right' },
@@ -1941,7 +1945,8 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         const qty = Number(item.total_qty || 0).toFixed(2);
         const partsSum = Number(item.total_parts_sum || 0).toFixed(2);
         const worksSum = Number(item.total_works_sum || 0).toFixed(2);
-        const totalSum = Number(item.total_sum || 0).toFixed(2);
+                const totalSum = Number(item.total_sum || 0).toFixed(2);
+        const returnedSum = Number(item.total_returned_sum || 0).toFixed(2);
         const totalPaidNum = Number(item.total_paid || 0);
         const totalPaid = totalPaidNum.toFixed(2);
         const totalDebtNum = Number(item.total_debt || 0);
@@ -1960,7 +1965,8 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             <td style="text-align: right; color: #334155;">${qty}</td>
             <td style="text-align: right; color: #334155;">${partsSum}</td>
             <td style="text-align: right; color: #334155;">${worksSum}</td>
-            <td style="text-align: right; font-weight: 600; color: #0f172a;">${totalSum}</td>
+                       <td style="text-align: right; font-weight: 600; color: #0f172a;">${totalSum}</td>
+            <td style="text-align: right; color: #d97706;">${returnedSum}</td>
             <td style="text-align: right; color: #334155;">${paidHtml}</td>
                        <td style="text-align: right; font-weight: 500; color: ${totalDebtNum > 0 ? '#991b1b' : '#334155'};">${totalDebt}</td>
             <td style="text-align: right; font-weight: 600; color: ${cumulativeDebtNum > 0 ? '#991b1b' : '#334155'};" title="${totalDebt} (за этот месяц) + ${(cumulativeDebtNum - totalDebtNum).toFixed(2)} (долг с прошлых месяцев)">
