@@ -3722,13 +3722,12 @@ async function openReceiptItemsForm(item = null, parentId = null) {
                 });
                 inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
             }
-               } else if (col.field === 'description') {
+        } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
-        } else if (col.type === 'checkbox') {
-            inputHtml = `<input type="checkbox" name="${col.field}" ${val === true || val === 'true' ? 'checked' : ''} ${fieldReadonly ? 'disabled' : ''}>`;
         } else {
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
+
         return `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
@@ -5460,8 +5459,10 @@ async function openReceiptForm(entity, item = null) {
                 }
             }
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
-        } else if (col.field === 'description') {
+                } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else if (col.type === 'checkbox') {
+            inputHtml = `<input type="checkbox" name="${col.field}" ${val === true || val === 'true' ? 'checked' : ''} ${fieldReadonly ? 'disabled' : ''}>`;
         } else {
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
@@ -5657,7 +5658,7 @@ async function openReceiptForm(entity, item = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-               if (data.is_posted !== undefined && data.is_posted !== '') {
+              if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
         data.is_opening_balance = !!formElement.querySelector('[name="is_opening_balance"]')?.checked;
