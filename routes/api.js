@@ -213,6 +213,7 @@ function paginationMiddleware(req, res, next) {
     const originalJson = res.json.bind(res);
     res.json = (body) => {
         if (res.statusCode >= 400 || !Array.isArray(body)) return originalJson(body);
+        if (res.locals && res.locals.serverPaged) return originalJson(body); // страница уже собрана в SQL, ещё раз резать не нужно
         const r = applyPaginationToRows(body, req.query);
         res.set({
             'X-Total-Count': String(r.total),
@@ -227,6 +228,57 @@ function paginationMiddleware(req, res, next) {
     next();
 }
 // <<< PAGINATION-END
+
+// >>> FAST-PAGE-BEGIN
+// ==================== БЫСТРАЯ ВЫБОРКА СТРАНИЦЫ ПРЯМО В SQL ====================
+// Раньше ЛЮБОЙ список (даже с ?page=) сервер сначала забирал из базы ВЕСЬ (SELECT без LIMIT),
+// а резал на страницы и искал уже в Node. При росте таблицы (10 000+ строк) это медленно.
+// Эта функция — безопасная надстройка: если запрошена ОБЫЧНАЯ страница БЕЗ поиска и БЕЗ
+// фильтров, она берёт из базы сразу только нужные строки (LIMIT/OFFSET). Если есть поиск,
+// фильтры или запрошена печать всех строк (limit=all) — функция ничего не делает и всё
+// работает по-старому (это специально, чтобы не трогать логику поиска по «соседним» полям).
+function hasSearchOrFilters(query) {
+    if (query.search && String(query.search).trim()) return true;
+    if (query.filters) {
+        try {
+            const parsed = JSON.parse(String(query.filters));
+            if (parsed && typeof parsed === 'object' &&
+                Object.keys(parsed).some(k => String(parsed[k] == null ? '' : parsed[k]).trim())) return true;
+        } catch (e) { /* битый JSON фильтров — считаем, что фильтров нет */ }
+    }
+    return false;
+}
+
+async function trySqlFastPage(pool, req, res, { fromSql, orderBySql = 'id ASC', params = [] }) {
+    if (req.query.page === undefined) return false;               // не постраничный запрос — старое поведение
+    if (hasSearchOrFilters(req.query)) return false;               // есть поиск/фильтры — старый надёжный путь
+    if (String(req.query.limit || '').toLowerCase() === 'all') return false; // печать всех строк — старый путь
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || PAGE_SIZE_DEFAULT, 1), PAGE_SIZE_MAX);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const sql = `SELECT *, COUNT(*) OVER() AS __total_count FROM (${fromSql}) __page_src
+                 ORDER BY ${orderBySql} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    const result = await pool.query(sql, [...params, limit, offset]);
+
+    const total = result.rows.length > 0 ? Number(result.rows[0].__total_count) : 0;
+    const rows = result.rows.map(r => { const { __total_count, ...rest } = r; return rest; });
+    const pages = Math.max(1, Math.ceil(total / limit));
+
+    res.set({
+        'X-Total-Count': String(total),
+        'X-Page': String(Math.min(page, pages)),
+        'X-Page-Size': String(limit),
+        'X-Total-Pages': String(pages),
+        'Access-Control-Expose-Headers': 'X-Total-Count, X-Page, X-Page-Size, X-Total-Pages',
+        'Cache-Control': 'no-store'
+    });
+    res.locals.serverPaged = true;
+    res.json(rows);
+    return true;
+}
+// <<< FAST-PAGE-END
 
 module.exports = (pool) => {
     
@@ -943,16 +995,21 @@ router.post('/ed_izmereniya', async (req, res) => {
 
 router.get('/zaphasti', async (req, res) => {
     try {
-        const query = `
+        const baseFrom = `
             SELECT z.*, 
                    p.name AS proizvoditel_name, 
                    e.short_name AS ed_izmereniya_name -- Замени short_name на реальное имя колонки с сокращением в БД (например, symbol или short)
             FROM zaphasti z
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
-            ORDER BY z.id ASC
         `;
-        const result = await pool.query(query);
+
+        // Быстрый путь: обычная страница без поиска/фильтров — берём из базы только нужные строки
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: baseFrom, orderBySql: 'id ASC' });
+        if (handled) return;
+
+        // Старый путь (поиск/фильтры/печать всех строк) — работает в точности как раньше
+        const result = await pool.query(`${baseFrom} ORDER BY z.id ASC`);
         res.json(result.rows);
     } catch (err) {
         console.error(err.message);
@@ -1031,7 +1088,7 @@ router.get('/vidy_rabot/:id', async (req, res) => {
 // ==================== GET РОУТЫ ====================
 router.get('/receipts', async (req, res) => {
     try {
-        const query = `
+        const baseFrom = `
             SELECT r.*, 
                    s.name AS warehouse_name, 
                    COALESCE(u.name, u.login, m.description, 'МОЛ #' || m.id) AS mol_user_fio, 
@@ -1041,9 +1098,12 @@ router.get('/receipts', async (req, res) => {
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN postavhik p ON r.supplier_id = p.id
-            ORDER BY r.id DESC
         `;
-        const result = await pool.query(query);
+
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: baseFrom, orderBySql: 'id DESC' });
+        if (handled) return;
+
+        const result = await pool.query(`${baseFrom} ORDER BY r.id DESC`);
         res.json(result.rows);
     } catch (err) {
         console.error(err);
@@ -1275,7 +1335,7 @@ router.get('/autoservices', async (req, res) => {
 
 router.get('/moves', async (req, res) => {
     try {
-        const query = `
+        const baseFrom = `
             SELECT m.*, 
                    wf.name AS warehouse_from_name, 
                    wt.name AS warehouse_to_name,
@@ -1288,9 +1348,12 @@ router.get('/moves', async (req, res) => {
             LEFT JOIN users uf ON mf.user_id = uf.id
             LEFT JOIN mol mt ON m.mol_to_id = mt.id
             LEFT JOIN users ut ON mt.user_id = ut.id
-            ORDER BY m.id DESC
         `;
-        const result = await pool.query(query);
+
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: baseFrom, orderBySql: 'id DESC' });
+        if (handled) return;
+
+        const result = await pool.query(`${baseFrom} ORDER BY m.id DESC`);
         res.json(result.rows);
     } catch (err) {
         console.error(err);
@@ -1756,7 +1819,10 @@ router.get('/repairs', async (req, res) => {
             query += ` WHERE r.car_id = $1`;
             queryParams.push(car_id);
         }
-        
+
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: query, orderBySql: 'id DESC', params: queryParams });
+        if (handled) return;
+
         query += ` ORDER BY r.id DESC`;
 
         const result = await pool.query(query, queryParams);
@@ -3347,7 +3413,7 @@ router.delete('/car_details/:id', async (req, res) => {
 
 router.get('/realizations', async (req, res) => {
     try {
-        const query = `
+        const baseFrom = `
             SELECT r.*, 
                    COALESCE(c.name_full, c.name_short, 'Покупатель #' || c.id) AS customer_name,
                    s.name AS sklad_name,
@@ -3370,9 +3436,12 @@ router.get('/realizations', async (req, res) => {
             LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN customer_cars cc ON r.car_id = cc.id
-            ORDER BY r.id DESC
         `;
-        const result = await pool.query(query);
+
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: baseFrom, orderBySql: 'id DESC' });
+        if (handled) return;
+
+        const result = await pool.query(`${baseFrom} ORDER BY r.id DESC`);
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении реализаций:', err);
