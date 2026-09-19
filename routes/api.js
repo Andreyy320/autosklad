@@ -108,6 +108,126 @@ async function sanitizeBodyColumns(client, tableName, body) {
 }
 
 
+// >>> PAGINATION-BEGIN
+// ==================== ПОСТРАНИЧНЫЙ ВЫВОД И ПОИСК ДЛЯ СПИСКОВ ====================
+// Работает для ЛЮБОГО GET-маршрута, который отдаёт массив строк, если в запросе есть ?page=...
+//   ?page=2&limit=100         — 2-я страница по 100 строк (limit до 500; limit=all — все строки, до 20000, для печати)
+//   &search=болт 5            — поиск по всем полям строки (несколько слов — должны встретиться все)
+//   &filters={"name":"болт"}  — фильтры по колонкам (JSON); поля, которых нет в строке, игнорируются
+// Общее число строк возвращается в заголовке X-Total-Count. Запросы БЕЗ page работают как раньше.
+const PAGE_SIZE_DEFAULT = 100;
+const PAGE_SIZE_MAX = 500;
+const PAGE_ALL_MAX = 20000;
+
+function pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+// Текст значения для поиска. Для дат добавляем привычный вид ДД.ММ.ГГГГ (в JSON дата уходит как ГГГГ-ММ-ДД)
+function searchTextOfValue(v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) {
+        if (isNaN(v.getTime())) return '';
+        return `${v.toISOString()} ${pad2(v.getDate())}.${pad2(v.getMonth() + 1)}.${v.getFullYear()}`;
+    }
+    if (typeof v === 'string') {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+        return m ? `${v} ${m[3]}.${m[2]}.${m[1]}` : v;
+    }
+    if (typeof v === 'object') return '';
+    return String(v);
+}
+
+function rowSearchText(row) {
+    let s = '';
+    for (const k in row) {
+        const t = searchTextOfValue(row[k]);
+        if (t) s += t + '\u0001';
+    }
+    return s.toLowerCase();
+}
+
+// Фильтр по колонке «Производитель» (поле proizvoditel_id) должен искать по названию (proizvoditel_name),
+// а не по номеру, поэтому для полей *_id добавляем «соседние» поля с тем же началом имени.
+function filterKeysForField(row, field) {
+    const keys = [field];
+    if (/_id$/.test(field)) {
+        const base = field.slice(0, -3);
+        for (const k in row) {
+            if (k !== field && !/_id$/.test(k) && (k === base || k.startsWith(base + '_'))) keys.push(k);
+        }
+    }
+    return keys;
+}
+
+function applyPaginationToRows(rows, query) {
+    let list = rows;
+
+    const search = String(query.search || '').trim().slice(0, 200).toLowerCase();
+    if (search) {
+        const tokens = search.split(/\s+/).filter(Boolean).slice(0, 10);
+        list = list.filter(row => {
+            const text = rowSearchText(row);
+            return tokens.every(t => text.includes(t));
+        });
+    }
+
+    let filters = null;
+    if (query.filters) {
+        try {
+            const parsed = JSON.parse(String(query.filters));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) filters = parsed;
+        } catch (e) { /* битый JSON — просто не фильтруем */ }
+    }
+    if (filters && list.length > 0) {
+        const sample = list[0];
+        const plan = [];
+        for (const field of Object.keys(filters).slice(0, 30)) {
+            const val = String(filters[field] == null ? '' : filters[field]).trim().slice(0, 200).toLowerCase();
+            if (!val) continue;
+            if (!Object.prototype.hasOwnProperty.call(sample, field)) continue; // такого поля в данных нет — фильтр применит браузер
+            plan.push({ keys: filterKeysForField(sample, field), val });
+        }
+        if (plan.length > 0) {
+            list = list.filter(row => plan.every(p =>
+                p.keys.some(k => searchTextOfValue(row[k]).toLowerCase().includes(p.val))
+            ));
+        }
+    }
+
+    const total = list.length;
+    const wantAll = String(query.limit || '').toLowerCase() === 'all';
+    let limit = wantAll
+        ? PAGE_ALL_MAX
+        : Math.min(Math.max(parseInt(query.limit, 10) || PAGE_SIZE_DEFAULT, 1), PAGE_SIZE_MAX);
+    const pages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(parseInt(query.page, 10) || 1, 1), pages);
+    const items = list.slice((page - 1) * limit, page * limit);
+
+    return { items, total, page, limit, pages };
+}
+
+function paginationMiddleware(req, res, next) {
+    if (req.method !== 'GET' || req.query.page === undefined) return next();
+
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+        if (res.statusCode >= 400 || !Array.isArray(body)) return originalJson(body);
+        const r = applyPaginationToRows(body, req.query);
+        res.set({
+            'X-Total-Count': String(r.total),
+            'X-Page': String(r.page),
+            'X-Page-Size': String(r.limit),
+            'X-Total-Pages': String(r.pages),
+            'Access-Control-Expose-Headers': 'X-Total-Count, X-Page, X-Page-Size, X-Total-Pages',
+            'Cache-Control': 'no-store'
+        });
+        return originalJson(r.items);
+    };
+    next();
+}
+// <<< PAGINATION-END
+
 module.exports = (pool) => {
     
 
@@ -181,6 +301,7 @@ function authMiddleware(req, res, next) {
     }
 }
 router.use(authMiddleware);
+router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
     
 
