@@ -5921,7 +5921,8 @@ LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALES
             FROM supplier_payments sp
             GROUP BY sp.receipt_id
         ) sub_pay ON rec.id = sub_pay.receipt_id
-        WHERE rec.is_posted = true
+             WHERE rec.is_posted = true
+          AND rec.is_opening_balance IS NOT TRUE
           AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
           AND ($2::integer IS NULL OR rec.supplier_id = $2::integer)
     ),
@@ -6004,7 +6005,8 @@ LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALES
                     SELECT receipt_id, SUM(amount) AS total_paid
                     FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
                 ) sub_pay ON rec.id = sub_pay.receipt_id
-                WHERE rec.is_posted = true
+                                WHERE rec.is_posted = true
+                  AND rec.is_opening_balance IS NOT TRUE
                   AND ($1::integer IS NULL OR rec.warehouse_id = $1::integer)
             )
             SELECT
@@ -6072,8 +6074,9 @@ FROM receipts rec
                 JOIN returns ret ON reti.return_id = ret.id
                 WHERE ret.is_posted = true
                 GROUP BY ret.receipt_id
-            ) sub_ret ON rec.id = sub_ret.receipt_id
+                    ) sub_ret ON rec.id = sub_ret.receipt_id
             WHERE rec.is_posted = true
+              AND rec.is_opening_balance IS NOT TRUE
         `;
 
         const queryParams = [];

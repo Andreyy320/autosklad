@@ -527,8 +527,9 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         { field: 'supplier_id', label: 'Поставщик', width: '180px', ref: 'postavhik' },
         { field: 'description', label: 'Описание' },
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
-        { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
-        { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' }
+                { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
+        { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
+        { field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -552,12 +553,16 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             ? `<button onclick="event.stopPropagation(); postReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
 
+              const openingBalanceBadge = item.is_opening_balance
+            ? `<span style="margin-left: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 4px; white-space: nowrap;">Нач. остаток</span>`
+            : '';
+
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.date)}</td>
             <td>${item.warehouse_name || '—'}</td>
             <td>${item.mol_user_fio || item.mol_name || '—'}</td>
-            <td>${item.supplier_name || '—'}</td>
+            <td>${item.supplier_name || '—'} ${openingBalanceBadge}</td>
             <td>${item.description || ''}</td>
             <td style="text-align: right; font-weight: bold;">${sumRub}</td>
             <td>${formatDT(item.fact_date)}</td>
@@ -3717,12 +3722,13 @@ async function openReceiptItemsForm(item = null, parentId = null) {
                 });
                 inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
             }
-        } else if (col.field === 'description') {
+               } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else if (col.type === 'checkbox') {
+            inputHtml = `<input type="checkbox" name="${col.field}" ${val === true || val === 'true' ? 'checked' : ''} ${fieldReadonly ? 'disabled' : ''}>`;
         } else {
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
-
         return `
             <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
@@ -5651,9 +5657,10 @@ async function openReceiptForm(entity, item = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        if (data.is_posted !== undefined && data.is_posted !== '') {
+               if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
         }
+        data.is_opening_balance = !!formElement.querySelector('[name="is_opening_balance"]')?.checked;
 
         try {
             const isEdit = item && item.id;
