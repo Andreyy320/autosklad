@@ -5864,7 +5864,8 @@ LEAST(COALESCE(sub_i.total_sum, 0) - COALESCE(sub_ret.total_returned, 0), COALES
         SELECT receipt_id, SUM(amount) AS paid_sum
         FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id
     ) sub_pay ON rec.id = sub_pay.receipt_id
-    WHERE rec.warehouse_id = $1 AND rec.is_posted = true
+        WHERE rec.warehouse_id = $1 AND rec.is_posted = true
+      AND rec.is_opening_balance IS NOT TRUE
 )
 SELECT 
     sk.id AS id, sk.id AS sklad_id,

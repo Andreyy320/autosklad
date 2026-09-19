@@ -529,7 +529,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
                 { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
         { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
-        { field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox' }
+{ field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox', table: false }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -553,9 +553,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             ? `<button onclick="event.stopPropagation(); postReceipt(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
             : '';
 
-              const openingBalanceBadge = item.is_opening_balance
-            ? `<span style="margin-left: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 4px; white-space: nowrap;">Нач. остаток</span>`
-            : '';
+            <td>${item.supplier_name || '—'}</td>
 
         return `
             <td><b>${item.doc_number || ''}</b></td>
