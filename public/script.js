@@ -964,9 +964,10 @@ render: (item) => {
         { label: "Ущерб", field: "damage_amount", width: "100px", align: "right" },
         { label: "Счет", field: "account_number", width: "90px", edit: false },
         { label: "Выплачено", field: "paid_amount", width: "100px", align: "right", edit: false },
-        { label: "Описание", field: "description", edit: false },
         { label: "Дата факт", field: "actual_date", type: 'datetime-local', width: "130px", edit: false },
-        { label: "Контроль", field: "status_id", width: "110px", ref: "accident_statuses" }
+        { label: "Контроль", field: "status_id", width: "110px", ref: "accident_statuses" },
+        { label: "Проведен", field: "is_posted", width: "200px", insert: false, update: false },
+        { label: "Описание", field: "description", edit: false }
     ],
     render: (item) => {
         const formatDT = (dateStr, includeTime = true) => {
@@ -992,6 +993,14 @@ render: (item) => {
             ? 'text-align: right; color: #d9534f; font-weight: bold;' 
             : 'text-align: right;';
 
+        const isPosted = Boolean(item.is_posted);
+        const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
+        const isPostedColor = isPosted ? 'green' : 'gray';
+
+        const actionButton = !isPosted 
+            ? `<button onclick="event.stopPropagation(); postAccident(${item.id})" style="margin-left: 8px; padding: 2px 6px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 3px;">Провести</button>` 
+            : '';
+
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.doc_date)}</td>
@@ -1004,9 +1013,13 @@ render: (item) => {
             <td style="text-align: right;">${damageVal}</td>
             <td>${item.account_number || '0.0'}</td>
             <td style="${paidStyle}">${paidVal}</td>
-            <td>${item.description || ''}</td>
             <td>${formatDT(item.actual_date)}</td>
             <td><b>${item.status_name || 'На контроле'}</b></td>
+            <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
+                <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
+                ${actionButton}
+            </td>
+            <td>${item.description || ''}</td>
         `;
     }
     },
@@ -11611,7 +11624,31 @@ async function postRealization(realizationId) {
         }
     );
 }
+async function postAccident(accidentId) {
+    showPostConfirmModal(
+        'Проведение документа',
+        'Вы действительно хотите провести этот документ ДТП?',
+        async () => {
+            try {
+                const response = await fetch(`/api/accidents/${accidentId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_posted: true })
+                });
 
+                if (!response.ok) throw new Error('Ошибка при проведении документа');
+
+                showAppNotification('Документ ДТП успешно проведен', 'success');
+                refreshData();
+            } catch (err) {
+                console.error(err);
+                showAppNotification('Не удалось провести документ', 'error');
+            }
+        }
+    );
+}
 const tableBody = document.getElementById('table-body');
 if (tableBody) {
     tableBody.addEventListener('click', async (e) => {
