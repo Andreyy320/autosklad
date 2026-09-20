@@ -4852,7 +4852,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 COALESCE(SUM(doc.paid_sum), 0)::numeric AS total_paid,
                 GREATEST(COALESCE(SUM(doc.total_sum) - SUM(doc.paid_sum), 0), 0)::numeric AS debt_sum
             FROM skladi sk
-            JOIN combined_docs doc ON doc.sklad_id = sk.id
+     LEFT JOIN combined_docs doc ON doc.sklad_id = sk.id
             WHERE sk.id = $1
             GROUP BY sk.id, sk.name;
         `;
