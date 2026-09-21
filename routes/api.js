@@ -7058,6 +7058,10 @@ router.post('/receipt_items', async (req, res) => {
         }
 
         const receiptData = receiptCheck.rows[0];
+        if (!receiptData.warehouse_id) {
+    await client.query('ROLLBACK');
+    return res.status(400).json({ error: 'В приходе не указан склад. Выберите склад и сохраните документ перед добавлением позиций.' });
+}
         const isPostedVal = receiptData.is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
             await client.query('ROLLBACK');
