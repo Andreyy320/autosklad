@@ -124,7 +124,7 @@ function ensurePagerBar() {
     bar.id = 'pager-bar';
     bar.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;margin:4px 0;font-size:13px;background:#f7f7f7;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;';
     bar.innerHTML = `
-        <input id="pager-search" type="search" placeholder="🔍 Поиск по всей таблице..." autocomplete="off"
+        <input id="pager-search" type="search" placeholder=" Поиск по всей таблице..." autocomplete="off"
                style="flex:1 1 220px;max-width:380px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
         <span id="pager-info" style="color:#555;margin-left:auto;white-space:nowrap;"></span>
         <button type="button" id="pager-first" title="В начало" style="${btnStyle}">«</button>
@@ -2744,7 +2744,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                         <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -3320,7 +3320,7 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                     <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -3609,7 +3609,7 @@ async function openRepairWorksForm(item = null, parentId = null) {
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                     <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -3917,7 +3917,7 @@ async function openReceiptItemsForm(item = null, parentId = null) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                         <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -4215,7 +4215,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                         <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -4508,7 +4508,7 @@ async function openRepairItemsForm(item = null, parentId = null) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                         <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -4806,7 +4806,7 @@ if (col.field === 'markup_percent' && !val) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off">
                         <input type="hidden" name="${col.field}" ${extraAttributes} value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -5091,7 +5091,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
 
                 inputHtml = `
                     <div class="searchable-select-container" style="position: relative;">
-                        <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                        <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                         <input type="hidden" name="${col.field}" id="accident-car-select" value="${val !== '' && val !== null ? val : ''}">
                         <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                             <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -5625,7 +5625,7 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -5650,7 +5650,7 @@ async function openReceiptForm(entity, item = null) {
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -5938,6 +5938,7 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
+
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     let entity, item, parentId;
     if (typeof entityOrItem === 'object' && entityOrItem !== null) {
@@ -6087,6 +6088,33 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
                     <option value="true" ${isCurrentPosted ? 'selected' : ''}>Проведен</option>
                 </select>
             `;
+        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
+            // Склад — поиск с фильтрацией вместо обычного select.
+            // name="${col.field}" и событие 'change' на hidden-инпуте оставлены как есть,
+            // чтобы фильтрация МОЛ по складу ниже по коду продолжала работать без изменений.
+            const referenceName = col.ref;
+            const refItems = await fetchReferenceData(referenceName);
+
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                }
+            });
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => {
+                            const displayName = refItem.user_fio || refItem.name || refItem.login || refItem.name_full || refItem.title || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                            return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
         } else if (col.ref) {
             const referenceName = col.ref;
             let refItems = await fetchReferenceData(referenceName);
@@ -6158,6 +6186,49 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
+
+    // Обработчики для новых поисковых полей склада (searchable-select-container).
+    // Раньше их в этой форме не было, добавляем ровно по тому же принципу, что и в форме приходов.
+    formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        const input = container.querySelector('.searchable-select-input');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const dropdown = container.querySelector('.searchable-select-dropdown');
+        const options = dropdown.querySelectorAll('.searchable-option');
+
+        input.addEventListener('focus', () => {
+            dropdown.style.display = 'block';
+        });
+
+        input.addEventListener('input', () => {
+            const filter = input.value.toLowerCase();
+            dropdown.style.display = 'block';
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                if (text.includes(filter) || opt.dataset.id === '') {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                input.value = opt.dataset.id === '' ? '' : opt.textContent;
+                hiddenInput.value = opt.dataset.id;
+                dropdown.style.display = 'none';
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
 
     const isPostedSelect = formElement.querySelector('[name="is_posted"]');
     const factDateInput = formElement.querySelector('[name="fact_date"]');
@@ -6493,11 +6564,38 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
             inputHtml = `
                                 <div class="searchable-select-container" id="car-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder="Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" id="car-select" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
                         ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" data-sklad-id="${refItem.sklad_id || refItem.warehouse_id || ''}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                    </div>
+                </div>
+            `;
+        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
+            // Склад — поиск с фильтрацией вместо обычного select.
+            // name="${col.field}" остаётся прежним, поэтому фильтрация машин по складу
+            // (skladForCarSelect ниже по коду) и фильтрация МОЛ (pairs/filterMols) работают без изменений.
+            const referenceName = col.ref;
+            const refItems = await fetchReferenceData(referenceName);
+
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                }
+            });
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => {
+                            const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                            return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -6957,11 +7055,38 @@ async function openRealizationForm(entity, item = null) {
             });
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" id="customer-select" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
                         ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildDisplayName(refItem)}</div>`).join('')}
+                    </div>
+                </div>
+            `;
+        } else if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'sklad_id' ||
+                   col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' ||
+                   col.field === 'skald_from_id' || col.field === 'skald_to_id' ||
+                   col.field === 'sklad_from_id' || col.field === 'sklad_to_id') {
+            // Склад — поиск с фильтрацией вместо select.
+            // name="${col.field}" остаётся прежним, поэтому warehouseMolPairs/updateMolOptions
+            // ниже по коду (которые ищут элементы по [name="..."]) продолжают работать без изменений.
+            const refItems = await fetchReferenceData(col.ref);
+            const buildWarehouseName = (refItem) => refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) selectedDisplayName = buildWarehouseName(refItem);
+            });
+
+            const warehouseExtraId = (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'sklad_id') ? 'id="warehouse_id"' : '';
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" ${warehouseExtraId} value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${buildWarehouseName(refItem)}</div>`).join('')}
                     </div>
                 </div>
             `;
@@ -7011,7 +7136,6 @@ async function openRealizationForm(entity, item = null) {
 
             let extraAttributes = '';
             if (col.field === 'car_id') extraAttributes = 'id="car-select"';
-            else if (col.field === 'warehouse_id' || col.field === 'skald_id' || col.field === 'sklad_id') extraAttributes = `name="${col.field}" id="warehouse_id"`;
             else if (col.field === 'mol_id' || col.field === 'mol_from_id') extraAttributes = `name="${col.field}" id="mol_id"`;
 
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
@@ -7387,7 +7511,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-supplier-block" style="display:${initialType === 'to_supplier' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Приход, из которого возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder="🔍 Загрузка приходов..." autocomplete="off" ${fieldLock}
+                    <input type="text" class="searchable-select-input" id="return-receipt-input" placeholder=" Загрузка приходов..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="receipt_id" id="return-receipt-select" value="${item.receipt_id || ''}">
                     <div class="searchable-select-dropdown" id="return-receipt-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7397,7 +7521,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-move-block" style="display:${initialType === 'from_customer' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Перемещение, по которому возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-move-input" placeholder="🔍 Загрузка перемещений..." autocomplete="off" ${fieldLock}
+                    <input type="text" class="searchable-select-input" id="return-move-input" placeholder=" Загрузка перемещений..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="move_id" id="return-move-select" value="${item.move_id || ''}">
                     <div class="searchable-select-dropdown" id="return-move-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7408,7 +7532,7 @@ async function openReturnForm(entity, item = null) {
             <div id="return-realization-block" style="display:${initialType === 'from_retail_customer' ? 'block' : 'none'};">
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Реализация, по которой возвращаем *</label>
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" id="return-realization-input" placeholder="🔍 Загрузка реализаций..." autocomplete="off" ${fieldLock}
+                    <input type="text" class="searchable-select-input" id="return-realization-input" placeholder=" Загрузка реализаций..." autocomplete="off" ${fieldLock}
                            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
                     <input type="hidden" name="realization_id" id="return-realization-select" value="${item.realization_id || ''}">
                     <div class="searchable-select-dropdown" id="return-realization-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
@@ -7476,7 +7600,7 @@ async function openReturnForm(entity, item = null) {
             const dropdown = document.getElementById('return-receipt-dropdown');
 
             const postedReceipts = receipts.filter(r => r.is_posted === true || r.is_posted === 'true');
-            searchInput.placeholder = '🔍 Начните ввод для поиска приход...';
+            searchInput.placeholder = ' Начните ввод для поиска приход...';
 
             function applyReceipt(r) {
                 hiddenInput.value = r ? r.id : '';
@@ -7538,7 +7662,7 @@ async function openReturnForm(entity, item = null) {
             const dropdown = document.getElementById('return-move-dropdown');
 
             const postedMoves = moves.filter(m => m.is_posted === true || m.is_posted === 'true');
-            searchInput.placeholder = '🔍 Начните ввод для поиска перемещение...';
+            searchInput.placeholder = ' Начните ввод для поиска перемещение...';
 
             function moveLabel(m) {
                 const dateStr = m.date ? new Date(m.date).toLocaleDateString() : '';
@@ -7603,7 +7727,7 @@ async function openReturnForm(entity, item = null) {
             const dropdown = document.getElementById('return-realization-dropdown');
 
             const postedRealizations = realizations.filter(r => r.is_posted === true || r.is_posted === 'true');
-            searchInput.placeholder = '🔍 Начните ввод для поиска реализацию...';
+            searchInput.placeholder = ' Начните ввод для поиска реализацию...';
 
             function realizationLabel(r) {
                 const dateStr = r.doc_date ? new Date(r.doc_date).toLocaleDateString() : '';
@@ -9538,7 +9662,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
                 Если ничего не выбрано — сумма распределится по всем от старых к новым, как раньше.
             </label>
             <div id="pay-docs-search-block" style="position: relative;">
-                <input type="text" id="pay-doc-search-input" placeholder="🔍 Начните ввод для поиска накладной..." autocomplete="off"
+                <input type="text" id="pay-doc-search-input" placeholder=" Начните ввод для поиска накладной..." autocomplete="off"
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
                 <div id="pay-doc-search-dropdown" style="display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08);"></div>
                 <div id="pay-doc-selected-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
@@ -9813,7 +9937,7 @@ async function openPaymentDrawer(postavhikId, debtSum, titleLabel, monthStr) {
                 Если ничего не выбрано — сумма распределится по всем от старых к новым, как раньше.
             </label>
             <div id="pay-receipts-search-block" style="position: relative;">
-                <input type="text" id="pay-receipt-search-input" placeholder="🔍 Начните ввод для поиска накладной..." autocomplete="off"
+                <input type="text" id="pay-receipt-search-input" placeholder=" Начните ввод для поиска накладной..." autocomplete="off"
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
                 <div id="pay-receipt-search-dropdown" style="display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08);"></div>
                 <div id="pay-receipt-selected-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
