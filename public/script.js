@@ -38,21 +38,19 @@ let currentEntity = 'users';
 let currentItems = [];
 let selectedItem = null;
 
-// ==================== ПОСТРАНИЧНАЯ ЗАГРУЗКА И ПОИСК ====================
-// Сервер отдаёт одну страницу строк, а общее число строк — в заголовке X-Total-Count.
-// Поиск и фильтры по колонкам работают на сервере, то есть по ВСЕЙ таблице, а не только по видимой странице.
+
 const PAGER = {
-    entity: null,   // раздел, для которого хранятся страница / поиск / фильтры
+    entity: null,  
     page: 1,
     limit: 100,
     total: 0,
     search: '',
-    filters: {},    // фильтры по колонкам: { поле: текст }
-    reload: null,   // как перезагрузить текущую страницу; null — постраничный режим сейчас не активен
-    baseUrl: '',    // адрес и параметры запроса без page/limit/search/filters (нужны для печати всех строк)
+    filters: {},   
+    reload: null,   
+    baseUrl: '',   
     baseQuery: '',
     loading: false,
-    seq: 0,         // номер запроса: устаревшие ответы игнорируются
+    seq: 0,        
     timer: null
 };
 
@@ -67,7 +65,6 @@ function pagerReset(entity) {
     if (searchInput) searchInput.value = '';
 }
 
-// Раздел без постраничного режима (кассы и т.п.): прячем панель и отменяем ожидающие запросы
 function pagerSuspend() {
     PAGER.reload = null;
     PAGER.seq++;
@@ -84,7 +81,6 @@ function pagerParams(params) {
     return params;
 }
 
-// Разбирает ответ страницы. Вернёт null, если пока грузилось, пользователь ушёл в другой раздел или изменил поиск.
 async function pagerReadResponse(response, seq) {
     const items = await response.json();
     if (seq !== PAGER.seq) return null;
@@ -110,7 +106,6 @@ function pagerGo(page) {
     PAGER.reload();
 }
 
-// Панель встаёт над таблицей. Если в HTML есть <div id="pager-container"></div> — панель будет внутри него.
 function ensurePagerBar() {
     let bar = document.getElementById('pager-bar');
     if (bar) return bar;
@@ -203,7 +198,6 @@ function renderPager() {
     bar.querySelector('#pager-last').disabled = atEnd;
 }
 
-// Фильтры по колонкам, которых нет в данных сервера (вычисляемые колонки), применяем к показанной странице в браузере
 function pagerClientOnlyFilters() {
     if (!currentItems.length) return;
     const fields = Object.keys(PAGER.filters).filter(f => !Object.prototype.hasOwnProperty.call(currentItems[0], f));
@@ -221,7 +215,6 @@ function pagerClientOnlyFilters() {
     });
 }
 
-// Для печати: подгружает ВСЕ строки по текущему поиску/фильтрам (а не только показанную страницу)
 async function pagerFetchAllRowsHtml() {
     const params = new URLSearchParams(PAGER.baseQuery);
     params.set('page', '1');
@@ -2295,7 +2288,6 @@ money_receipts_by_customers_totals: {
         `;
     }
     },
-   // Уровень 2: клик по поставщику -> список его месяцев.
     expenses_by_suppliers: {
     title: 'Поставщик — по месяцам',
     columns: [
@@ -2326,7 +2318,6 @@ money_receipts_by_customers_totals: {
             ? `${totalDebt} + ${prevMonthsAmount.toFixed(2)}`
             : `${totalDebt} − ${Math.abs(prevMonthsAmount).toFixed(2)}`;
 
-        // СТАЛО (кнопка снова смотрит только на долг именно этого месяца):
 const actionHtml = cumulativeDebtNum <= 0
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
     : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
@@ -2381,7 +2372,6 @@ const actionHtml = cumulativeDebtNum <= 0
         `;
     }
     },
-   // Уровень 1: Склад -> Поставщики. Одна строка на поставщика, долг НАКОПЛЕННЫЙ по всем месяцам сразу.
     expenses_by_suppliers_totals: {
     title: 'Поставщики — общий долг',
     columns: [
@@ -3212,9 +3202,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
-                // Если это СОЗДАНИЕ нового документа (не редактирование) — сбрасываем старое
-                // выделение строки, иначе после обновления списка подсветится не только
-                // новый документ, но и та строка, что была выбрана до нажатия "Добавить"
                 if (!isEdit) {
                     selectedItem = null;
                 }
@@ -5637,9 +5624,7 @@ async function openReceiptForm(entity, item = null) {
                 </div>
             `;
         } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'skald_id') {
-            // Склад — тот же поиск с фильтрацией, что и у поставщика.
-            // Важно: имя поля (name) и событие 'change' на hidden-инпуте оставлены как есть,
-            // чтобы фильтрация МОЛ по складу ниже по коду продолжала работать без изменений.
+           
             const refItems = await fetchReferenceData(col.ref);
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
@@ -6089,9 +6074,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
                 </select>
             `;
         } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
-            // Склад — поиск с фильтрацией вместо обычного select.
-            // name="${col.field}" и событие 'change' на hidden-инпуте оставлены как есть,
-            // чтобы фильтрация МОЛ по складу ниже по коду продолжала работать без изменений.
+           
             const referenceName = col.ref;
             const refItems = await fetchReferenceData(referenceName);
 
@@ -6187,8 +6170,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     const formElement = rawFormElement.cloneNode(true);
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
-    // Обработчики для новых поисковых полей склада (searchable-select-container).
-    // Раньше их в этой форме не было, добавляем ровно по тому же принципу, что и в форме приходов.
+    
     formElement.querySelectorAll('.searchable-select-container').forEach(container => {
         const input = container.querySelector('.searchable-select-input');
         const hiddenInput = container.querySelector('input[type="hidden"]');
@@ -6573,9 +6555,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 </div>
             `;
         } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
-            // Склад — поиск с фильтрацией вместо обычного select.
-            // name="${col.field}" остаётся прежним, поэтому фильтрация машин по складу
-            // (skladForCarSelect ниже по коду) и фильтрация МОЛ (pairs/filterMols) работают без изменений.
+            
             const referenceName = col.ref;
             const refItems = await fetchReferenceData(referenceName);
 
@@ -7067,9 +7047,6 @@ async function openRealizationForm(entity, item = null) {
                    col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' ||
                    col.field === 'skald_from_id' || col.field === 'skald_to_id' ||
                    col.field === 'sklad_from_id' || col.field === 'sklad_to_id') {
-            // Склад — поиск с фильтрацией вместо select.
-            // name="${col.field}" остаётся прежним, поэтому warehouseMolPairs/updateMolOptions
-            // ниже по коду (которые ищут элементы по [name="..."]) продолжают работать без изменений.
             const refItems = await fetchReferenceData(col.ref);
             const buildWarehouseName = (refItem) => refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
 
@@ -7476,9 +7453,8 @@ async function openReturnForm(entity, item = null) {
     const fieldLock = isPosted ? 'disabled' : '';
     const isEdit = !!item.id;
 
-    // Тип возврата: определяем по наличию move_id / realization_id у редактируемого документа, иначе по умолчанию "поставщику"
     const initialType = item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier');
-    const typeLocked = isPosted; // ИСПРАВЛЕНО: тип возврата можно менять, пока документ не проведён (раньше блокировался при любом редактировании)
+    const typeLocked = isPosted; 
 
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
@@ -7562,7 +7538,6 @@ async function openReturnForm(entity, item = null) {
     drawer.innerHTML = html;
     openDrawer();
 
-    // Переключение блоков "приход" / "перемещение" / "реализация"
     const supplierBlock = document.getElementById('return-supplier-block');
     const moveBlock = document.getElementById('return-move-block');
     const realizationBlock = document.getElementById('return-realization-block');
@@ -7584,13 +7559,11 @@ async function openReturnForm(entity, item = null) {
                 document.getElementById('return-realization-select').value = '';
                 document.getElementById('return-realization-input').value = '';
             }
-            // сбрасываем склад/поставщика при смене типа
             document.getElementById('return-warehouse-id').value = '';
             document.getElementById('return-supplier-id').value = '';
         });
     });
 
-    // Подгружаем список проведённых приходов
     try {
         const res = await fetch('/api/receipts');
         if (res.ok) {
@@ -7652,7 +7625,6 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список приходов:', err);
     }
 
-    // Подгружаем список проведённых перемещений
     try {
         const res = await fetch('/api/moves');
         if (res.ok) {
@@ -7672,7 +7644,6 @@ async function openReturnForm(entity, item = null) {
             function applyMove(m) {
                 hiddenInput.value = m ? m.id : '';
                 searchInput.value = m ? moveLabel(m) : '';
-                // Возврат от покупателя приходуется на МОЙ склад — склад-источник перемещения
                 document.getElementById('return-warehouse-id').value = m ? (m.warehouse_from_id || '') : '';
                 document.getElementById('return-supplier-id').value = '';
             }
@@ -7717,7 +7688,6 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список перемещений:', err);
     }
 
-    // Подгружаем список проведённых реализаций
     try {
         const res = await fetch('/api/realizations');
         if (res.ok) {
@@ -7781,7 +7751,6 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список реализаций:', err);
     }
 
-    // Удаление возврата прямо из формы
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -8300,7 +8269,7 @@ async function renderReturnItemsInline(returnDoc) {
 
 function openReturnQtyDrawer(btn, returnDoc) {
     const itemId = btn.dataset.itemId;
-    const itemType = btn.dataset.itemType; // 'receipt' | 'move' | 'realization'
+    const itemType = btn.dataset.itemType; 
     const returnItemId = btn.dataset.returnItemId;
     const maxQty = Number(btn.dataset.max) || 0;
     const currentQty = Number(btn.dataset.current) || 0;
@@ -8705,7 +8674,7 @@ async function loadMolsForFilter() {
 
 async function applyFilters(fromPager) {
     if (currentEntity !== 'stock_balances') return;
-    if (fromPager !== true) PAGER.page = 1;          // нажали «Применить» — показываем с 1-й страницы
+    if (fromPager !== true) PAGER.page = 1;         
     PAGER.reload = () => applyFilters(true);
     const seq = ++PAGER.seq;
 
@@ -8907,7 +8876,6 @@ async function applyMovementFilters(fromPager) {
 }
 
 async function printMainTable() {
-    // окно открываем сразу (пока «жив» клик), иначе браузер может заблокировать всплывающее окно
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         alert('Браузер заблокировал окно печати. Разрешите всплывающие окна для этого сайта.');
@@ -8915,7 +8883,7 @@ async function printMainTable() {
     }
 
     let allRowsHtml = null;
-    if (PAGER.reload && PAGER.total > currentItems.length) {   // таблица разбита на страницы — печатаем все найденные строки
+    if (PAGER.reload && PAGER.total > currentItems.length) {   
         try {
             allRowsHtml = await pagerFetchAllRowsHtml();
         } catch (err) {
@@ -9120,11 +9088,11 @@ function ensureDetailPrintButton() {
 }
 
 async function loadData(entity, title, customParams = {}, opts = {}) {
-    const dataOnly = !!(opts && opts.dataOnly);   // перелистывание / поиск: шапку и поля фильтров не пересоздаём (иначе пропадёт фокус)
+    const dataOnly = !!(opts && opts.dataOnly);   
     const sameEntity = (PAGER.entity === entity);
     resetSharedUiForEntity(entity);
 
-    if (!sameEntity) pagerReset(entity);          // зашли в другой раздел — начинаем с 1-й страницы и пустого поиска
+    if (!sameEntity) pagerReset(entity);          
     PAGER.entity = entity;
     PAGER.reload = () => loadData(entity, title, customParams, { dataOnly: true });
     const seq = ++PAGER.seq;
@@ -9219,7 +9187,7 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
 
             if (startDateVal) params.append('start_date', startDateVal);
             if (endDateVal) params.append('end_date', endDateVal);
-            if (balanceDate) params.append('date', balanceDate);   // /api/stock_balances читает именно date
+            if (balanceDate) params.append('date', balanceDate);   
             if (warehouseId) params.append('warehouse_id', warehouseId);
             if (molId) params.append('mol_id', molId);
         } else if (entity === 'stock_movement') {
@@ -9252,7 +9220,7 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
         if (!response.ok) throw new Error('Ошибка сервера');
 
         const pageItems = await pagerReadResponse(response, seq);
-        if (pageItems === null) return;   // устаревший ответ: пользователь уже ушёл дальше
+        if (pageItems === null) return;  
         currentItems = pageItems;
 
         const headerTr = document.getElementById('table-headers');
@@ -9358,7 +9326,7 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
                } else if (entity === 'moves') {
     loadDetailData('move_items', item.id);
     } else if (entity === 'returns') {
-    detailToolbarTarget && (detailToolbarTarget.style.display = 'none'); // кнопки Добавить/Изменить снизу больше не нужны
+    detailToolbarTarget && (detailToolbarTarget.style.display = 'none'); 
     renderReturnItemsInline(item);
     }
                 else if (entity === 'realizations') {
@@ -9538,7 +9506,6 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
             const pAmount = rawAmount.toFixed(2);
             const pDoc = p.doc_number || '—';
             
-            // Проверяем: если сумма меньше нуля, это возврат
             const isReturn = rawAmount < 0;
             const amountColor = isReturn ? '#dc2626' : '#16a34a';
             
@@ -10411,7 +10378,6 @@ async function loadExpenseMainData(entity = 'expenses_by_sklad', parentId = '') 
     });
 
 } else if (currentEntity === 'expenses_by_suppliers') {
-            // Уровень "Месяцы поставщика": без плашек по месяцам — одна общая плашка "Итого"
                        let totalSum = 0, totalPaid = 0, totalDebt = 0;
             currentItems.forEach(item => {
 totalSum += Number(item.total_expense_sum || 0);
@@ -11092,7 +11058,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
 
             const sortedMonthKeys = Object.keys(groupedByMonth).sort().reverse();
 
-            // ← ДОБАВЛЕНО: сюда будем запоминать самую первую строку-документ
             let firstDocRow = null;
 
             sortedMonthKeys.forEach(monthKey => {
@@ -11131,7 +11096,6 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                     tr.style.cursor = 'pointer';
                     tr.innerHTML = config.render(item);
 
-                    // ← ДОБАВЛЕНО: запоминаем самую первую строку-документ во всей таблице
                     if (!firstDocRow) {
                         firstDocRow = tr;
                     }
@@ -11200,8 +11164,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                 });
             });
 
-            // ← ДОБАВЛЕНО: автоматически "кликаем" по самому первому документу,
-            // чтобы нижняя таблица деталей открылась сама, без ручного клика
+           
             if (firstDocRow) {
                 firstDocRow.click();
             }
@@ -11546,7 +11509,7 @@ function emptyDetailBody(entity) {
 function filterTable() {
     const filterInputs = document.querySelectorAll('#table-filter-row input[data-column]');
 
-    if (PAGER.reload) {   // постраничный режим: фильтруем на сервере по ВСЕЙ таблице
+    if (PAGER.reload) {   
         const serverFilters = {};
         filterInputs.forEach(input => {
             const v = input.value.trim();
@@ -13321,13 +13284,11 @@ function setDetailToolbarVisible(visible) {
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 5. Первичный запуск
     setTimeout(applyTableResizers, 300);
 })();
 
 
 
-// ==================== ПЛОТНОСТЬ ТАБЛИЦЫ ====================
 (function() {
     const STORAGE_KEY = 'tableDensityLevel';
        const LEVELS = {
@@ -13362,7 +13323,6 @@ function setDetailToolbarVisible(visible) {
               const input = document.getElementById('density-select-input');
         if (input) {
             input.value = LABELS[level] || LABELS.standard;
-            // размер текста самой кнопки в тулбаре не трогаем — меняется только таблица
         }
     }
 
