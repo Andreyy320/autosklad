@@ -378,8 +378,8 @@ const tableConfig = {
         { field: 'description', label: 'Описание' }
     ],
     render: (item) => `
-        <td><span style="font-weight: 600; color: #0f172a;">${item.type_name || '—'}</span></td>
-        <td><span style="font-weight: 600; color: #0f172a;">${item.name_full || ''}</span></td>
+        <td><span style="color: #334155;">${item.type_name || '—'}</span></td>
+        <td><span style="color: #334155;">${item.name_full || ''}</span></td>
         <td><span style="color: #334155;">${item.name_short || ''}</span></td>
         <td><span style="color: #334155;">${item.part_discount_name || '—'}</span></td>
         <td><span style="color: #64748b; font-size: 13px;">${item.description || ''}</span></td>
