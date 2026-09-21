@@ -1,6 +1,75 @@
 let currentType = 'Приход';
+let currentEndpoint = '/api/get-receipt-logs';
 let idMaps = {};
 let warehousesMap = {}; // оставляем для остального кода файла, который использует его напрямую
+
+const LOGS_PAGER = { page: 1, limit: 100, total: 0 };
+
+function logsPagerGo(page) {
+    const pages = Math.max(1, Math.ceil(LOGS_PAGER.total / LOGS_PAGER.limit));
+    const target = Math.min(Math.max(1, parseInt(page, 10) || 1), pages);
+    if (target === LOGS_PAGER.page) return;
+    LOGS_PAGER.page = target;
+    loadLogs(currentType, currentEndpoint);
+}
+
+function ensureLogsPagerBar() {
+    let bar = document.getElementById('logs-pager-bar');
+    if (bar) return bar;
+    const host = document.getElementById('logs-pager');
+    if (!host) return null;
+
+    bar = document.createElement('div');
+    bar.id = 'logs-pager-bar';
+    bar.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin:10px 0;font-size:14px;background:#f7f7f7;border:1px solid #ddd;border-radius:6px;';
+    bar.innerHTML = `
+        <span id="logs-pager-info" style="color:#555;"></span>
+        <span style="margin-left:auto;"></span>
+        <button type="button" id="logs-pager-first" style="padding:4px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">«</button>
+        <button type="button" id="logs-pager-prev" style="padding:4px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">‹</button>
+        <span>стр. <input id="logs-pager-page" type="number" min="1" value="1" style="width:56px;padding:3px;border:1px solid #ccc;border-radius:4px;"> из <span id="logs-pager-pages">1</span></span>
+        <button type="button" id="logs-pager-next" style="padding:4px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">›</button>
+        <button type="button" id="logs-pager-last" style="padding:4px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">»</button>
+        <select id="logs-pager-limit" style="padding:4px;border:1px solid #ccc;border-radius:4px;">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+        </select>`;
+    host.appendChild(bar);
+
+    bar.querySelector('#logs-pager-first').onclick = () => logsPagerGo(1);
+    bar.querySelector('#logs-pager-prev').onclick = () => logsPagerGo(LOGS_PAGER.page - 1);
+    bar.querySelector('#logs-pager-next').onclick = () => logsPagerGo(LOGS_PAGER.page + 1);
+    bar.querySelector('#logs-pager-last').onclick = () => logsPagerGo(Math.ceil(LOGS_PAGER.total / LOGS_PAGER.limit));
+    const pageInput = bar.querySelector('#logs-pager-page');
+    pageInput.addEventListener('change', () => logsPagerGo(pageInput.value));
+    pageInput.addEventListener('keydown', e => { if (e.key === 'Enter') logsPagerGo(pageInput.value); });
+    bar.querySelector('#logs-pager-limit').addEventListener('change', e => {
+        LOGS_PAGER.limit = parseInt(e.target.value, 10) || 100;
+        LOGS_PAGER.page = 1;
+        loadLogs(currentType, currentEndpoint);
+    });
+    return bar;
+}
+
+function renderLogsPager() {
+    const bar = ensureLogsPagerBar();
+    if (!bar) return;
+    const pages = Math.max(1, Math.ceil(LOGS_PAGER.total / LOGS_PAGER.limit));
+    const from = LOGS_PAGER.total ? (LOGS_PAGER.page - 1) * LOGS_PAGER.limit + 1 : 0;
+    const to = Math.min(LOGS_PAGER.total, LOGS_PAGER.page * LOGS_PAGER.limit);
+    bar.querySelector('#logs-pager-info').textContent = LOGS_PAGER.total ? `${from}–${to} из ${LOGS_PAGER.total}` : 'Нет записей';
+    bar.querySelector('#logs-pager-pages').textContent = String(pages);
+    const pageInput = bar.querySelector('#logs-pager-page');
+    if (document.activeElement !== pageInput) pageInput.value = String(LOGS_PAGER.page);
+    pageInput.max = String(pages);
+    bar.querySelector('#logs-pager-limit').value = String(LOGS_PAGER.limit);
+    bar.querySelector('#logs-pager-first').disabled = LOGS_PAGER.page <= 1;
+    bar.querySelector('#logs-pager-prev').disabled = LOGS_PAGER.page <= 1;
+    bar.querySelector('#logs-pager-next').disabled = LOGS_PAGER.page >= pages;
+    bar.querySelector('#logs-pager-last').disabled = LOGS_PAGER.page >= pages;
+}
 
 // Конфиг: какое поле из деталей аудита -> из какого API справочника брать название
 const idMapConfigs = [
@@ -439,6 +508,7 @@ async function loadReferenceMaps() {
 
     async function loadLogs(type, endpoint) {
         currentType = type;
+        currentEndpoint = endpoint;
         renderTableHead(type);
 
         let colspanCount = 10;
@@ -454,7 +524,8 @@ async function loadReferenceMaps() {
         console.log(`Фронтенд: отправляем запрос на ${endpoint}`);
 
         try {
-            const response = await fetch(endpoint);
+            const url = `${endpoint}?page=${LOGS_PAGER.page}&limit=${LOGS_PAGER.limit}`;
+            const response = await fetch(url);
             
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
@@ -463,11 +534,15 @@ async function loadReferenceMaps() {
 
             const logs = await response.json();
             console.log(`Фронтенд: получено записей от сервера:`, logs);
-            
+
+            const totalHeader = parseInt(response.headers.get('X-Total-Count'), 10);
+            LOGS_PAGER.total = Number.isFinite(totalHeader) ? totalHeader : logs.length;
+
             tbody.innerHTML = '';
 
             if (!Array.isArray(logs) || logs.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">В этом разделе пока нет записей</td></tr>`;
+                renderLogsPager();
                 return;
             }
 
@@ -629,6 +704,8 @@ async function loadReferenceMaps() {
                 }
                 tbody.appendChild(tr);
             });
+
+            renderLogsPager();
         } catch (err) {
             console.error('Ошибка загрузки логов на клиенте:', err);
             tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center; color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
@@ -638,6 +715,7 @@ async function loadReferenceMaps() {
     function switchTab(type, endpoint, buttonElement) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         buttonElement.classList.add('active');
+        LOGS_PAGER.page = 1;
         loadLogs(type, endpoint);
     }
 
