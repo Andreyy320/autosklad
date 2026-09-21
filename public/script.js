@@ -13182,12 +13182,12 @@ function setDetailToolbarVisible(visible) {
 // ==================== ПЛОТНОСТЬ ТАБЛИЦЫ ====================
 (function() {
     const STORAGE_KEY = 'tableDensityLevel';
-    const LEVELS = {
-        compact:  { fontSize: 12, padY: 4,  padX: 8  },
-        standard: { fontSize: 13, padY: 6,  padX: 10 },
-        medium:   { fontSize: 14, padY: 8,  padX: 10 },
-        expanded: { fontSize: 15, padY: 10, padX: 12 },
-        wide:     { fontSize: 16, padY: 12, padX: 12 }
+       const LEVELS = {
+        compact:  { fontSize: 11, padY: 3,  padX: 6  },
+        standard: { fontSize: 12, padY: 5,  padX: 8  },
+        medium:   { fontSize: 13, padY: 7,  padX: 9  },
+        expanded: { fontSize: 13, padY: 9,  padX: 10 },
+        wide:     { fontSize: 14, padY: 11, padX: 10 }
     };
     const LABELS = { compact: 'Плотный', standard: 'Стандартный', medium: 'Средний', expanded: 'Расширенный', wide: 'Широкий' };
 
@@ -13211,10 +13211,10 @@ function setDetailToolbarVisible(visible) {
             }
         `;
         localStorage.setItem(STORAGE_KEY, level);
-        const input = document.getElementById('density-select-input');
+              const input = document.getElementById('density-select-input');
         if (input) {
             input.value = LABELS[level] || LABELS.standard;
-            input.style.fontSize = cfg.fontSize + 'px';
+            // размер текста самой кнопки в тулбаре не трогаем — меняется только таблица
         }
     }
 
