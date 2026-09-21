@@ -6588,7 +6588,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
@@ -7082,7 +7082,7 @@ async function openRealizationForm(entity, item = null) {
 
             inputHtml = `
                 <div class="searchable-select-container" style="position: relative;">
-                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
                     <input type="hidden" name="${col.field}" ${warehouseExtraId} value="${val !== '' && val !== null ? val : ''}">
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
