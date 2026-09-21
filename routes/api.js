@@ -2120,6 +2120,7 @@ router.get('/stock_balances', async (req, res) => {
                 ${dateFilterClause}
                 ${warehouseFilterForBatches}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
+                HAVING SUM(wb.quantity) <> 0 -- ИЗМЕНЕНО: показываем только ненулевые остатки
             ),
             latest_mol AS (
                 SELECT DISTINCT ON (warehouse_id)
@@ -2141,9 +2142,9 @@ router.get('/stock_balances', async (req, res) => {
                 COALESCE(u.name, 'Не назначен') AS mol,
                 COALESCE(st.total_qty, 0) AS qty,
                 COALESCE(ei.short_name, z.unit, 'шт') AS unit
-            FROM zaphasti z
-            CROSS JOIN skladi s
-            LEFT JOIN aggregated_stocks st ON st.zaphasti_id = z.id AND st.warehouse_id = s.id
+            FROM aggregated_stocks st -- ИЗМЕНЕНО: было FROM zaphasti z CROSS JOIN skladi s
+            JOIN zaphasti z ON z.id = st.zaphasti_id
+            JOIN skladi s ON s.id = st.warehouse_id
             LEFT JOIN proizvoditel_zaphasti p ON z.proizvoditel_id = p.id
             LEFT JOIN latest_mol lm ON lm.warehouse_id = s.id
             LEFT JOIN users u ON lm.user_id = u.id
