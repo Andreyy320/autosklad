@@ -13176,3 +13176,83 @@ function setDetailToolbarVisible(visible) {
     // 5. Первичный запуск
     setTimeout(applyTableResizers, 300);
 })();
+
+
+
+// ==================== ПЛОТНОСТЬ ТАБЛИЦЫ ====================
+(function() {
+    const STORAGE_KEY = 'tableDensityLevel';
+    const LEVELS = {
+        compact:  { fontSize: 12, padY: 4,  padX: 8  },
+        standard: { fontSize: 13, padY: 6,  padX: 10 },
+        medium:   { fontSize: 14, padY: 8,  padX: 10 },
+        expanded: { fontSize: 15, padY: 10, padX: 12 },
+        wide:     { fontSize: 16, padY: 12, padX: 12 }
+    };
+    const LABELS = { compact: 'Плотный', standard: 'Стандартный', medium: 'Средний', expanded: 'Расширенный', wide: 'Широкий' };
+
+    function ensureDensityStyleTag() {
+        let style = document.getElementById('table-density-style');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'table-density-style';
+            document.head.appendChild(style);
+        }
+        return style;
+    }
+
+    function applyDensity(level) {
+        const cfg = LEVELS[level] || LEVELS.standard;
+        ensureDensityStyleTag().textContent = `
+            #data-table td, #data-table th,
+            #detail-table td, #detail-table th {
+                font-size: ${cfg.fontSize}px !important;
+                padding: ${cfg.padY}px ${cfg.padX}px !important;
+            }
+        `;
+        localStorage.setItem(STORAGE_KEY, level);
+        const input = document.getElementById('density-select-input');
+        if (input) {
+            input.value = LABELS[level] || LABELS.standard;
+            input.style.fontSize = cfg.fontSize + 'px';
+        }
+    }
+
+    function initDensitySelector() {
+        const container = document.getElementById('density-select-container');
+        const input = document.getElementById('density-select-input');
+        const dropdown = document.getElementById('density-select-dropdown');
+        if (!container || !input || !dropdown) return;
+        if (container.dataset.densityInit) return;
+        container.dataset.densityInit = '1';
+
+        input.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        });
+
+        dropdown.querySelectorAll('.density-option').forEach(opt => {
+            opt.addEventListener('mouseover', () => { opt.style.background = '#f1f5f9'; });
+            opt.addEventListener('mouseout', () => { opt.style.background = '#fff'; });
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                applyDensity(opt.dataset.level);
+                dropdown.style.display = 'none';
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) dropdown.style.display = 'none';
+        });
+
+        applyDensity(localStorage.getItem(STORAGE_KEY) || 'standard');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDensitySelector);
+    } else {
+        initDensitySelector();
+    }
+    const densityObserver = new MutationObserver(() => initDensitySelector());
+    densityObserver.observe(document.body, { childList: true, subtree: true });
+})();

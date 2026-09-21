@@ -102,8 +102,21 @@
                 
 <button class="tool-btn" onclick="printMainTable()"><i class="fas fa-print" style="color: #2e7d32;"></i> Печать</button>
 
-                <span id="row-count" style="margin-left: 10px; font-size: 13px; font-weight: bold; color: #333;  display: none;"></span>
+                <div class="separator"></div>
 
+                <div id="density-select-container" style="position: relative; width: 150px;">
+                    <input type="text" id="density-select-input" readonly value="Стандартный"
+                           style="width: 100%; box-sizing: border-box; padding: 4px 24px 4px 8px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #fff url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6z%22 fill=%22%23555%22/></svg>') no-repeat right 8px center;">
+                    <div id="density-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden;">
+                        <div class="density-option" data-level="compact"  style="padding: 4px 12px;  font-size: 12px; cursor: pointer;">Плотный</div>
+                        <div class="density-option" data-level="standard" style="padding: 6px 12px;  font-size: 13px; cursor: pointer;">Стандартный</div>
+                        <div class="density-option" data-level="medium"   style="padding: 8px 12px;  font-size: 14px; cursor: pointer;">Средний</div>
+                        <div class="density-option" data-level="expanded" style="padding: 10px 12px; font-size: 15px; cursor: pointer;">Расширенный</div>
+                        <div class="density-option" data-level="wide"     style="padding: 12px 12px; font-size: 16px; cursor: pointer;">Широкий</div>
+                    </div>
+                </div>
+
+                <span id="row-count" style="margin-left: 10px; font-size: 13px; font-weight: bold; color: #333;  display: none;"></span>
                 <div class="separator"></div>
 
 
