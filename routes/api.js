@@ -3627,7 +3627,7 @@ const manualPriceValue = Number(price);
                 wb.price_rub,
                 wb.quantity AS available_qty
             FROM warehouse_batches wb
-            JOIN receipts r ON wb.receipt_id = r.id
+LEFT JOIN receipts r ON wb.receipt_id = r.id
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
@@ -3934,7 +3934,7 @@ router.put('/realization_items/:id', async (req, res) => {
                 wb.price_rub,
                 wb.quantity AS available_qty
             FROM warehouse_batches wb
-            JOIN receipts r ON wb.receipt_id = r.id
+LEFT JOIN receipts r ON wb.receipt_id = r.id
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
