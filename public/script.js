@@ -615,7 +615,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
             { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
             { field: 'warehouse_id', label: 'Склад', ref: 'skladi' },
             { field: 'date_assigned', label: 'Дата назнач.', type: 'datetime-local', width: '160px' },
-            { field: 'date_removed', label: 'Дата снятия', type: 'datetime-local', width: '160px' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => {
@@ -635,7 +634,6 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 10
                 <td><b>${item.user_fio || '—'}</b></td>
                 <td><b>${item.warehouse_name || '—'}</b></td>
                 <td>${formatDT(item.date_assigned)}</td>
-                <td>${formatDT(item.date_removed)}</td>
                 <td>${item.description || ''}</td>
             `;
         }
@@ -2551,6 +2549,20 @@ function closeDrawer() {
 
 }
 
+function formatCarModelLabel(m) {
+    const fmtDate = (s) => {
+        if (!s) return '';
+        const p = String(s).substring(0, 10).split('-');
+        return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : '';
+    };
+    const brand = (m.brand_name || '').trim();
+    const name = (m.name || '').trim();
+    const title = (brand && !name.toLowerCase().startsWith(brand.toLowerCase())) ? `${brand} ${name}` : name;
+    const engineFuel = `${m.engine || ''} ${m.toplivo_name || ''}`.trim();
+    const dates = (m.start_date || m.end_date) ? `${fmtDate(m.start_date)} - ${fmtDate(m.end_date)}` : '';
+    return [title, m.body_name, engineFuel, dates].filter(Boolean).join(' | ');
+}
+
 async function openEntityForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
     const drawer = getOrCreateDrawer();
@@ -2699,6 +2711,13 @@ async function openEntityForm(entity, item = null, parentId = null) {
                 }
             } else {
                 refItems = await fetchReferenceData(referenceName);
+                if (entity === 'cars' && referenceName === 'models') {
+                    window.carModelsById = {};
+                    refItems = refItems.map(m => {
+                        window.carModelsById[m.id] = m;
+                        return { ...m, name: formatCarModelLabel(m) };
+                    });
+                }
             }
 
             let extraAttributes = '';
@@ -2862,7 +2881,18 @@ async function openEntityForm(entity, item = null, parentId = null) {
         for (const col of config.columns) {
             if (col.field === 'car_id') continue; 
 
+            if (entity === 'cars' && (col.field === 'body' || col.field === 'engine' || col.field === 'toplivo_id')) {
+                const hv = (item && item[col.field] != null) ? item[col.field] : '';
+                html += `<input type="hidden" name="${col.field}" value="${String(hv).replace(/"/g, '&quot;')}">`;
+                continue;
+            }
+
             html += await renderField(col);
+
+            if (entity === 'cars' && col.field === 'model_id') {
+                const mv = (item && item.model != null) ? item.model : '';
+                html += `<input type="hidden" name="model" value="${String(mv).replace(/"/g, '&quot;')}">`;
+            }
 
             if (col.field === 'customer_id' && carCol && entity !== 'repairs') {
                 html += await renderField(carCol);
@@ -2935,6 +2965,23 @@ async function openEntityForm(entity, item = null, parentId = null) {
     const carSelect = formElement.querySelector('#car-select');
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     const vidyRabotSelect = formElement.querySelector('#vidy-rabot-select');
+
+    if (entity === 'cars') {
+        const modelField = formElement.querySelector('[name="model_id"]');
+        if (modelField) {
+            modelField.addEventListener('change', () => {
+                const m = (window.carModelsById || {})[modelField.value];
+                const setVal = (fieldName, v) => {
+                    const el = formElement.querySelector(`[name="${fieldName}"]`);
+                    if (el) el.value = (v === undefined || v === null) ? '' : v;
+                };
+                setVal('model', m ? m.name : '');
+                setVal('body', m ? m.body_name : '');
+                setVal('engine', m ? `${m.engine || ''} ${m.toplivo_name || ''}`.trim() : '');
+                setVal('toplivo_id', m ? m.toplivo_id : '');
+            });
+        }
+    }
 
     const warehouseMolPairs = [
         { warehouse: formElement.querySelector('[name="warehouse_from_id"]'), mol: formElement.querySelector('[name="mol_from_id"]') },
@@ -3229,7 +3276,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         }
     });
 }
-
 
 async function openRealizationWorksForm(item = null, parentId = null) {
     const entity = 'realization_works';
