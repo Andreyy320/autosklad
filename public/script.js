@@ -5614,7 +5614,7 @@ async function openReceiptForm(entity, item = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-                } else if (col.ref === 'postavhik') {
+        } else if (col.ref === 'postavhik') {
             const refItems = await fetchReferenceData(col.ref);
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
@@ -5631,6 +5631,31 @@ async function openReceiptForm(entity, item = null) {
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
                         ${refItems.map(refItem => {
                             const displayName = refItem.name || refItem.title || refItem.name_full || `Запись #${refItem.id}`;
+                            return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'skald_id') {
+            // Склад — тот же поиск с фильтрацией, что и у поставщика.
+            // Важно: имя поля (name) и событие 'change' на hidden-инпуте оставлены как есть,
+            // чтобы фильтрация МОЛ по складу ниже по коду продолжала работать без изменений.
+            const refItems = await fetchReferenceData(col.ref);
+            let selectedDisplayName = '';
+            refItems.forEach(refItem => {
+                if (String(refItem.id) === String(val)) {
+                    selectedDisplayName = refItem.name || refItem.title || refItem.name_full || refItem.description || `Склад #${refItem.id}`;
+                }
+            });
+
+            inputHtml = `
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder="🔍 Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${refItems.map(refItem => {
+                            const displayName = refItem.name || refItem.title || refItem.name_full || refItem.description || `Склад #${refItem.id}`;
                             return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
                         }).join('')}
                     </div>
@@ -5673,7 +5698,7 @@ async function openReceiptForm(entity, item = null) {
                 }
             }
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
-                } else if (col.field === 'description') {
+        } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
         } else if (col.type === 'checkbox') {
             inputHtml = `<input type="checkbox" name="${col.field}" ${val === true || val === 'true' ? 'checked' : ''} ${fieldReadonly ? 'disabled' : ''}>`;
@@ -5913,7 +5938,6 @@ async function openReceiptForm(entity, item = null) {
         }
     });
 }
-
 async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     let entity, item, parentId;
     if (typeof entityOrItem === 'object' && entityOrItem !== null) {
