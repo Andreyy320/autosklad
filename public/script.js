@@ -7573,6 +7573,7 @@ async function openReturnForm(entity, item = null) {
                                ${initialType === 'from_retail_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
                         От покупателя (по реализации)
                     </label>
+                    <div style="width:100%; height:0;"></div>
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
                         <input type="radio" name="return_type_ui" value="from_repair" id="return-type-repair"
                                ${initialType === 'from_repair' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
