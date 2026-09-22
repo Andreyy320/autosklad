@@ -39,9 +39,11 @@ function applyAccessControl() {
     const role = localStorage.getItem('userRole');
     const financeSection = document.getElementById('section-finance');
     const logsSection = document.getElementById('section-logs');
+    const employeesLink = document.getElementById('nav-employees'); // ← новая строка
     if (role !== 'admin') {
         if (financeSection) financeSection.style.display = 'none';
         if (logsSection) logsSection.style.display = 'none';
+        if (employeesLink) employeesLink.style.display = 'none'; // ← новая строка
     }
 }
 

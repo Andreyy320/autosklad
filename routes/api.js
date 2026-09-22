@@ -356,15 +356,14 @@ router.use(authMiddleware);
 router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
     
-const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad'];
+const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad', '/employees'];
 router.use((req, res, next) => {
-    const isFinanceRoute = ADMIN_ONLY_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix));
-    if (isFinanceRoute && req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Доступ запрещён: раздел "Финансы" доступен только администраторам' });
+    const isAdminOnlyRoute = ADMIN_ONLY_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix));
+    if (isAdminOnlyRoute && req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Доступ запрещён: этот раздел доступен только администраторам' });
     }
     next();
 });
-
 
 
 router.get('/logs', (req, res) => {
@@ -443,6 +442,36 @@ router.post('/employees', async (req, res) => {
         res.status(500).send('Ошибка сервера');
     }
 });
+
+
+router.put('/:entity/:id/change-password', async (req, res) => {
+    const { entity, id } = req.params;
+    if (entity !== 'users' && entity !== 'employees') {
+        return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+    }
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Доступ запрещён: менять пароли может только администратор' });
+    }
+    const { new_password } = req.body;
+    if (!new_password || String(new_password).length < 4) {
+        return res.status(400).json({ error: 'Пароль должен содержать не менее 4 символов' });
+    }
+    try {
+        const hash = await bcrypt.hash(String(new_password), 10);
+        const result = await pool.query(
+            `UPDATE "${entity}" SET password_hash = $1 WHERE id = $2 RETURNING id, login`,
+            [hash, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Запись не найдена' });
+        }
+        res.json({ success: true, message: `Пароль для "${result.rows[0].login}" обновлён` });
+    } catch (err) {
+        console.error('Ошибка при смене пароля:', err.message);
+        res.status(500).json({ error: 'Ошибка сервера при смене пароля' });
+    }
+});
+
 
     // Получение списка запчастей
     router.get('/parts', async (req, res) => {
