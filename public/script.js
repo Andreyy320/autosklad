@@ -1355,8 +1355,7 @@ render: (item) => {
         return `
             <td>${formatDT(item.created_at)}</td>
             <td>
-${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
-            <td>${item.description || ''}</td>
+${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="width: 160px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>            <td>${item.description || ''}</td>
         `;
     }
     },
