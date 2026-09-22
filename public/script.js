@@ -7557,7 +7557,7 @@ async function openReturnForm(entity, item = null) {
 
             <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:6px;">Тип возврата *</label>
-                <div style="display:flex; flex-wrap:wrap; gap:16px;">
+                <div style="display:grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap:16px 24px;">
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
                         <input type="radio" name="return_type_ui" value="to_supplier" id="return-type-supplier"
                                ${initialType === 'to_supplier' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
@@ -7573,7 +7573,6 @@ async function openReturnForm(entity, item = null) {
                                ${initialType === 'from_retail_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
                         От покупателя (по реализации)
                     </label>
-                    <div style="width:100%; height:0;"></div>
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
                         <input type="radio" name="return_type_ui" value="from_repair" id="return-type-repair"
                                ${initialType === 'from_repair' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
@@ -8058,7 +8057,6 @@ async function openReturnForm(entity, item = null) {
         });
     }
 }
-
 
 async function openCarDetailsForm(entity, item = null, parentId = null) {
     const config = getConfig(entity);
