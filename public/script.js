@@ -2656,7 +2656,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         if (col.field === 'car_id' && parentId) return '';
         if (col.insert === false) return '';
         if ((col.update === false || col.edit === false) && item && item.id) return '';
-       if ((entity === 'users' || entity === 'employees') && col.field === 'password_hash' && item && item.id) return '';
         let val = '';
         if (item) {
             const possibleKeys = [
@@ -2840,8 +2839,12 @@ async function openEntityForm(entity, item = null, parentId = null) {
             inputHtml = `<input type="datetime-local" name="${col.field}" value="${formattedVal}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else if (col.field === 'description') {
             inputHtml = `<textarea name="${col.field}" rows="4" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle} resize: vertical; font-family: inherit;">${val}</textarea>`;
+        } else if (col.field === 'password_hash') {
+            const isEditingExisting = item && item.id;
+            const pwPlaceholder = isEditingExisting ? 'Оставьте пустым, чтобы не менять пароль' : '';
+            inputHtml = `<input type="password" name="${col.field}" value="" autocomplete="new-password" placeholder="${pwPlaceholder}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         } else {
-            const inputType = (col.field === 'password_hash') ? 'password' : 'text';
+            const inputType = 'text';
             inputHtml = `<input type="${inputType}" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
@@ -2921,7 +2924,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
                                      <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
-                    ${item && item.id && (entity === 'users' || entity === 'employees') ? `<button type="button" id="change-password-btn" style="background: #f59e0b; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сменить пароль</button>` : ''}
                     ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                     <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
@@ -3204,32 +3206,6 @@ async function openEntityForm(entity, item = null, parentId = null) {
         });
     }
 
-    const changePasswordBtn = drawer.querySelector('#change-password-btn');
-    if (changePasswordBtn) {
-        changePasswordBtn.addEventListener('click', async () => {
-            const newPassword = window.prompt(`Новый пароль для "${item.login || ''}" (минимум 4 символа):`);
-            if (newPassword === null) return;
-            if (newPassword.trim().length < 4) {
-                showAppNotification('Пароль должен содержать не менее 4 символов', 'error');
-                return;
-            }
-            try {
-                const response = await fetch(`/api/${entity}/${item.id}/change-password`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ new_password: newPassword.trim() })
-                });
-                const result = await response.json().catch(() => ({}));
-                if (response.ok) {
-                    showAppNotification(result.message || 'Пароль успешно изменён', 'success');
-                } else {
-                    showAppNotification(result.error || 'Ошибка при смене пароля', 'error');
-                }
-            } catch (err) {
-                showAppNotification('Ошибка соединения с сервером', 'error');
-            }
-        });
-    }
 
     let isSubmitting = false;
 
@@ -3244,6 +3220,21 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+
+        let pendingPasswordChange = null;
+        if ((entity === 'users' || entity === 'employees') && item && item.id && Object.prototype.hasOwnProperty.call(data, 'password_hash')) {
+            const newPasswordValue = (data.password_hash || '').trim();
+            delete data.password_hash;
+            if (newPasswordValue) {
+                if (newPasswordValue.length < 4) {
+                    showAppNotification('Пароль должен содержать не менее 4 символов', 'error');
+                    if (saveButton) saveButton.disabled = false;
+                    isSubmitting = false;
+                    return;
+                }
+                pendingPasswordChange = newPasswordValue;
+            }
+        }
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
@@ -3274,6 +3265,22 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
                 try {
             const isEdit = item && item.id;
+
+            if (pendingPasswordChange) {
+                const pwResponse = await fetch(`/api/${entity}/${item.id}/change-password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_password: pendingPasswordChange })
+                });
+                if (!pwResponse.ok) {
+                    const pwErrData = await pwResponse.json().catch(() => ({}));
+                    showAppNotification(pwErrData.error || 'Ошибка при смене пароля', 'error');
+                    if (saveButton) saveButton.disabled = false;
+                    isSubmitting = false;
+                    return;
+                }
+            }
+
             const url = isEdit ? `/api/${entity}/${item.id}` : `/api/${entity}`;
             const method = isEdit ? 'PUT' : 'POST';
             const currentUserId = localStorage.getItem('currentUserId') || '';
