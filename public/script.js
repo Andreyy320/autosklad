@@ -1170,7 +1170,6 @@ render: (item) => {
         { label: "Счет", field: "account_number", width: "90px", edit: false },
         { label: "Выплачено", field: "paid_amount", width: "100px", align: "right", edit: false },
         { label: "Дата факт", field: "actual_date", type: 'datetime-local', width: "130px", edit: false },
-        { label: "Контроль", field: "status_id", width: "110px", ref: "accident_statuses" },
         { label: "Проведен", field: "is_posted", width: "200px", insert: false, update: false },
         { label: "Описание", field: "description", edit: false }
     ],
@@ -1219,7 +1218,6 @@ render: (item) => {
             <td>${item.account_number || '0.0'}</td>
             <td style="${paidStyle}">${paidVal}</td>
             <td>${formatDT(item.actual_date)}</td>
-            <td><b>${item.status_name || 'На контроле'}</b></td>
             <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
                 <span style="color: ${isPostedColor}; font-weight: bold;">${isPostedText}</span>
                 ${actionButton}
