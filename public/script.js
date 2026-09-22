@@ -533,7 +533,7 @@ const tableConfig = {
             { field: 'model_id', label: 'Модель', ref: 'models' },
             { field: 'body', label: 'Кузов', ref: 'bodies' },
             { field: 'engine', label: 'Двигатель' },
-            { field: 'toplivo_id', label: 'Топливо', ref: 'toplivo' },
+{ field: 'toplivo_id', label: 'Топливо', ref: 'toplivo', table: false },
             { field: 'year', label: 'Год' },
             { field: 'color', label: 'Цвет' },
              { field: 'vin', label: 'VIN-номер' },
@@ -545,7 +545,6 @@ const tableConfig = {
             <td><b>${item.car_model_name || '—'}</b></td>
             <td>${item.body_name || ''}</td>
             <td>${item.engine || ''}</td>
-            <td><b>${item.toplivo_name || '—'}</b></td>
             <td>${item.year || ''}</td>
             <td>${item.color || ''}</td>
                        <td>${item.vin || ''}</td>
