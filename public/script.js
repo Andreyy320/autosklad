@@ -12459,6 +12459,39 @@ if (tableBody) {
         const tr = e.target.closest('tr');
         if (!tr) return;
 
+        const isInsideDetail = e.target.closest('#detail-container') || 
+                               e.target.closest('#car-tabs-panel') || 
+                               e.target.closest('#car-tabs-bar');
+        if (isInsideDetail) {
+            return; // карточка авто и все её переключатели/детальные таблицы
+        }
+
+        const excludedEntities = [
+            'expenses_by_sklad',       // касса расходов
+            'expenses_by_suppliers', 
+            'expenses_by_receipts',
+            'money_receipts',          // касса приходов
+            'money_receipts_by_sklad',
+            'money_receipts_detail',
+            'stock_remains',           // остатки запчастей (верх+низ)
+            'stock',
+            'stock_balances',
+            'stock_batches',
+            'stock_movement',          // движение запчастей
+            'part_movement_details',
+            'car_cards',                // карточка авто
+            'car_general',
+            'car_accidents',
+            'dtp_history',
+            'receipts_history',
+            'repair_history'
+        ];
+
+        const targetEntity = (typeof activeEntity !== 'undefined' && activeEntity && e.target.closest('#detail-table')) ? activeEntity : currentEntity;
+        if (excludedEntities.includes(targetEntity)) {
+            return;
+        }
+
         e.preventDefault();
 
         const id = tr.getAttribute('data-id');
