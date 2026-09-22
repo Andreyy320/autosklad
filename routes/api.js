@@ -315,8 +315,8 @@ const loginLimiter = rateLimit({
                if (match) {
         const { password_hash, ...safeUser } = user;
 
-       const token = jwt.sign(
-        { id: user.id, login: user.login, type: actorType },
+           const token = jwt.sign(
+        { id: user.id, login: user.login, type: actorType, role: user.role || 'employee' },
         process.env.JWT_SECRET,
         { expiresIn: '3h' }
     );
@@ -356,8 +356,21 @@ router.use(authMiddleware);
 router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
     
+const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad'];
+router.use((req, res, next) => {
+    const isFinanceRoute = ADMIN_ONLY_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix));
+    if (isFinanceRoute && req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Доступ запрещён: раздел "Финансы" доступен только администраторам' });
+    }
+    next();
+});
+
+
 
 router.get('/logs', (req, res) => {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).send('Доступ запрещён');
+    }
     res.sendFile(path.join(__dirname, '../logs.html'));
 });
 

@@ -26,13 +26,26 @@ setTimeout(function tryAutoLogin() {
     if (savedToken) {
         const loginScreen = document.getElementById('login-screen');
         const appScreen = document.getElementById('app-screen');
-        if (loginScreen && appScreen) {
+                if (loginScreen && appScreen) {
             loginScreen.style.display = 'none';
             appScreen.style.display = 'flex';
+            applyAccessControl();
             loadData('users', 'Пользователи');
         }
     }
 }, 0);
+
+function applyAccessControl() {
+    const role = localStorage.getItem('userRole');
+    const financeSection = document.getElementById('section-finance');
+    const logsSection = document.getElementById('section-logs');
+    if (role !== 'admin') {
+        if (financeSection) financeSection.style.display = 'none';
+        if (logsSection) logsSection.style.display = 'none';
+    }
+}
+
+
 
 let currentEntity = 'users';
 let currentItems = [];
@@ -8436,13 +8449,16 @@ document.getElementById('login-form').addEventListener('submit', async function(
             
             const userId = result.user?.id || result.id || result.userId || null;
 
-            if (userId) {
+                        if (userId) {
                 localStorage.setItem('currentUserId', userId);
             }
+
+            localStorage.setItem('userRole', result.user?.role || 'employee');
 
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
+            applyAccessControl();
             loadData('users', 'Пользователи');
 
         } else {
