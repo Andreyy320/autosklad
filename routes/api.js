@@ -1208,7 +1208,7 @@ router.get('/statuses', async (req, res) => {
 
 router.get('/returns', async (req, res) => {
     try {
-        const query = `
+               const query = `
             SELECT 
                 ret.*,
                 sk.name AS sklad_name,
@@ -1230,19 +1230,28 @@ router.get('/returns', async (req, res) => {
                 cust.name_full AS realization_customer_full_name,
                 cust.name_short AS realization_customer_short_name,
 
+                -- Возврат с ремонта
+                rep.doc_number AS repair_doc_number,
+                rep.doc_date AS repair_date,
+                rep.warehouse_id AS repair_warehouse_id,
+                sk_rep.name AS repair_warehouse_name,
+
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN 'from_customer'
                     WHEN ret.realization_id IS NOT NULL THEN 'from_retail_customer'
+                    WHEN ret.repair_id IS NOT NULL THEN 'from_repair'
                     ELSE 'to_supplier'
                 END AS return_type,
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN COALESCE(sk_to.name, 'Не указан')
                     WHEN ret.realization_id IS NOT NULL THEN COALESCE(cust.name_full, cust.name_short, 'Розничный покупатель')
+                    WHEN ret.repair_id IS NOT NULL THEN COALESCE(sk_rep.name, 'Не указан')
                     ELSE COALESCE(p.name, 'Не указан')
                 END AS counterparty_name,
                 CASE 
                     WHEN ret.move_id IS NOT NULL THEN mv.doc_number
                     WHEN ret.realization_id IS NOT NULL THEN real.doc_number
+                    WHEN ret.repair_id IS NOT NULL THEN rep.doc_number
                     ELSE rec.doc_number
                 END AS source_doc_number
             FROM returns ret
@@ -1254,6 +1263,8 @@ router.get('/returns', async (req, res) => {
             LEFT JOIN skladi sk_to ON mv.warehouse_to_id = sk_to.id
             LEFT JOIN realizations real ON ret.realization_id = real.id
             LEFT JOIN customers cust ON real.customer_id = cust.id
+            LEFT JOIN repairs rep ON ret.repair_id = rep.id
+            LEFT JOIN skladi sk_rep ON rep.warehouse_id = sk_rep.id
             ORDER BY ret.date DESC, ret.id DESC;
         `;
         const result = await pool.query(query);
@@ -4678,11 +4689,10 @@ router.delete('/realization_works/:id', async (req, res) => {
 
 router.get('/returns/available-items', async (req, res) => {
     try {
-        const { receipt_id, move_id, realization_id } = req.query;
-        if (!receipt_id && !move_id && !realization_id) {
-            return res.status(400).json({ error: 'Не указан receipt_id, move_id или realization_id' });
+        const { receipt_id, move_id, realization_id, repair_id } = req.query;
+        if (!receipt_id && !move_id && !realization_id && !repair_id) {
+            return res.status(400).json({ error: 'Не указан receipt_id, move_id, realization_id или repair_id' });
         }
-
         if (move_id) {
             // Возврат по перемещению: товар лежит на СКЛАДЕ-ПОЛУЧАТЕЛЕ (m.warehouse_to_id).
             // У move_items нет своего batch_id — партия на складе-получателе ищется
@@ -4757,6 +4767,36 @@ router.get('/returns/available-items', async (req, res) => {
             return res.json(result.rows);
         }
 
+        if (repair_id) {
+            // Возврат с ремонта: позиция списывалась с конкретной партии (repair_items.batch_id),
+            // возвращаем строго в неё же. "Доступно" = списано в ремонт минус уже возвращено.
+            const query = `
+                SELECT
+                    rit.id AS repair_item_id,
+                    rit.zaphast_id AS zaphasti_id,
+                    z.code AS zaphasti_code,
+                    z.name AS zaphasti_name,
+                    rit.quantity AS original_qty,
+                    rit.price AS price_rub,
+                    rit.batch_id,
+                    rep.warehouse_id,
+                    GREATEST(rit.quantity - COALESCE(sub_ret.returned_qty, 0), 0) AS available_qty
+                FROM repair_items rit
+                JOIN repairs rep ON rit.repair_id = rep.id
+                LEFT JOIN zaphasti z ON rit.zaphast_id = z.id
+                LEFT JOIN (
+                    SELECT repair_item_id, SUM(quantity) AS returned_qty
+                    FROM return_items
+                    WHERE repair_item_id IS NOT NULL
+                    GROUP BY repair_item_id
+                ) sub_ret ON sub_ret.repair_item_id = rit.id
+                WHERE rit.repair_id = $1
+                ORDER BY rit.id ASC;
+            `;
+            const result = await pool.query(query, [repair_id]);
+            return res.json(result.rows);
+        }
+
         const query = `
             SELECT 
                 ri.id AS receipt_item_id,
@@ -4780,7 +4820,6 @@ router.get('/returns/available-items', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера', details: err.message });
     }
 });
-
 
 
 
@@ -8746,17 +8785,17 @@ async function writeReturnLog(client, req, data) {
     }
 }
 
-// POST /api/return_items - позиция возврата: по приходу (поставщику), по перемещению (от покупателя-склада) или по реализации (от розничного покупателя)
+// POST /api/return_items - позиция возврата: по приходу (поставщику), по перемещению (от покупателя-склада), по реализации (от розничного покупателя) или по ремонту
 router.post('/return_items', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const { return_id, receipt_item_id, move_item_id, realization_item_id, quantity } = req.body;
+        const { return_id, receipt_item_id, move_item_id, realization_item_id, repair_item_id, quantity } = req.body;
 
-        if (!return_id || (!receipt_item_id && !move_item_id && !realization_item_id)) {
+        if (!return_id || (!receipt_item_id && !move_item_id && !realization_item_id && !repair_item_id)) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Не указан return_id и ни receipt_item_id, ни move_item_id, ни realization_item_id.' });
+            return res.status(400).json({ error: 'Не указан return_id и ни receipt_item_id, ни move_item_id, ни realization_item_id, ни repair_item_id.' });
         }
 
         const numQty = Number(quantity) || 0;
@@ -9003,6 +9042,102 @@ router.post('/return_items', async (req, res) => {
             return res.status(201).json(insertResult.rows[0]);
         }
 
+        // ========== ВЕТКА 4: ВОЗВРАТ С РЕМОНТА (обратно на склад, с которого списали) ==========
+        if (repair_item_id) {
+            const riRes = await client.query(`
+                SELECT rit.*, rep.id AS repair_id, rep.warehouse_id, rep.is_posted AS repair_posted
+                FROM repair_items rit
+                JOIN repairs rep ON rit.repair_id = rep.id
+                WHERE rit.id = $1
+                FOR UPDATE OF rit
+            `, [repair_item_id]);
+
+            if (riRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Позиция ремонта не найдена.' });
+            }
+            const ri = riRes.rows[0];
+
+            if (ri.repair_posted !== true && ri.repair_posted !== 'true') {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя оформить возврат — документ ремонта ещё не проведён.' });
+            }
+
+            if (returnDoc.repair_id && Number(returnDoc.repair_id) !== Number(ri.repair_id)) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Эта позиция принадлежит другому документу ремонта.' });
+            }
+            if (!ri.warehouse_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'В документе ремонта не указан склад.' });
+            }
+
+            // Сколько уже вернули по этой позиции ранее
+            const doneRes = await client.query(
+                'SELECT COALESCE(SUM(quantity), 0) AS qty FROM return_items WHERE repair_item_id = $1',
+                [repair_item_id]
+            );
+            const alreadyReturned = Number(doneRes.rows[0].qty) || 0;
+            const leftByDoc = (Number(ri.quantity) || 0) - alreadyReturned;
+
+            if (numQty > leftByDoc) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `По этой позиции можно вернуть ещё ${leftByDoc} шт. (списано в ремонт ${ri.quantity}, уже возвращено ${alreadyReturned}).` });
+            }
+
+            const priceRub = Number(ri.price) || 0;
+            const totalRub = Number((priceRub * numQty).toFixed(2));
+            let usedBatchId = ri.batch_id;
+
+            // Возвращаем количество строго в ту же партию, из которой списывали
+            if (usedBatchId) {
+                const batchCheck = await client.query('SELECT id FROM warehouse_batches WHERE id = $1 FOR UPDATE', [usedBatchId]);
+                if (batchCheck.rows.length > 0) {
+                    await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [numQty, usedBatchId]);
+                } else {
+                    const newBatch = await client.query(`
+                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                        VALUES ($1, $2, $3, $4, $5, NOW())
+                        RETURNING id
+                    `, [ri.warehouse_id, ri.zaphast_id, ri.receipt_id, priceRub, numQty]);
+                    usedBatchId = newBatch.rows[0].id;
+                }
+            } else {
+                const newBatch = await client.query(`
+                    INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                    RETURNING id
+                `, [ri.warehouse_id, ri.zaphast_id, ri.receipt_id, priceRub, numQty]);
+                usedBatchId = newBatch.rows[0].id;
+            }
+
+            const insertResult = await client.query(`
+                INSERT INTO return_items (return_id, repair_item_id, zaphasti_id, batch_id, quantity, price_rub, total_rub)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *;
+            `, [return_id, repair_item_id, ri.zaphast_id, usedBatchId, numQty, priceRub, totalRub]);
+
+            await writeReturnLog(client, req, {
+                action: 'INSERT',
+                return_id: return_id,
+                return_type: 'repair',
+                zaphasti_id: ri.zaphast_id,
+                quantity: numQty,
+                price_rub: priceRub,
+                total_rub: totalRub,
+                description: 'Возврат с ремонта'
+            });
+
+            await client.query(`
+                UPDATE returns SET total_sum = (
+                    SELECT COALESCE(SUM(total_rub), 0) FROM return_items WHERE return_id = $1
+                ) WHERE id = $1
+            `, [return_id]);
+
+            await client.query('COMMIT');
+            return res.status(201).json(insertResult.rows[0]);
+        }
+
                 // ========== ВЕТКА 2: ВОЗВРАТ ПОСТАВЩИКУ (по приходу) — как было ==========
         const riCheck = await client.query(`
             SELECT rit.*, rec.is_posted AS receipt_posted
@@ -9080,7 +9215,6 @@ router.post('/return_items', async (req, res) => {
         client.release();
     }
 });
-
 
 // PUT /api/return_items/:id - изменение количества с пересчётом остатка партии
 router.put('/return_items/:id', async (req, res) => {
@@ -9869,8 +10003,8 @@ router.put('/:entity/:id', async (req, res) => {
         // документа. Если позиции (return_items) уже добавлены — они физически привязаны к конкретной
         // партии/приходу/перемещению/реализации. Смена источника в шапке "подменит" контекст, но не
         // тронет ни warehouse_batches, ни уже посчитанные суммы в кассах — данные разъедутся.
-        if (entity === 'returns') {
-            const sourceFields = ['receipt_id', 'move_id', 'realization_id'];
+                if (entity === 'returns') {
+            const sourceFields = ['receipt_id', 'move_id', 'realization_id', 'repair_id'];
             const changesSource = sourceFields.some(f =>
                 req.body[f] !== undefined && String(req.body[f] || '') !== String(oldDoc[f] || '')
             );
@@ -9881,7 +10015,7 @@ router.put('/:entity/:id', async (req, res) => {
                 if (Number(itemsCountRes.rows[0].cnt) > 0) {
                     await client.query('ROLLBACK');
                     return res.status(400).json({
-                        error: 'Нельзя сменить приход/перемещение/реализацию — в этом возврате уже есть позиции. Сначала удалите все позиции возврата (остатки на складе восстановятся автоматически), потом меняйте источник.'
+                        error: 'Нельзя сменить приход/перемещение/реализацию/ремонт — в этом возврате уже есть позиции. Сначала удалите все позиции возврата (остатки на складе восстановятся автоматически), потом меняйте источник.'
                     });
                 }
             }

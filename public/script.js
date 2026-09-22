@@ -7545,7 +7545,7 @@ async function openReturnForm(entity, item = null) {
     const fieldLock = isPosted ? 'disabled' : '';
     const isEdit = !!item.id;
 
-    const initialType = item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier');
+    const initialType = item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : (item.repair_id ? 'from_repair' : 'to_supplier'));
     const typeLocked = isPosted; 
 
     let html = `
@@ -7572,6 +7572,11 @@ async function openReturnForm(entity, item = null) {
                         <input type="radio" name="return_type_ui" value="from_retail_customer" id="return-type-retail-customer"
                                ${initialType === 'from_retail_customer' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
                         От покупателя (по реализации)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
+                        <input type="radio" name="return_type_ui" value="from_repair" id="return-type-repair"
+                               ${initialType === 'from_repair' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
+                        С ремонта
                     </label>
                 </div>
             </div>
@@ -7608,6 +7613,17 @@ async function openReturnForm(entity, item = null) {
                 <div style="font-size:12px; color:#64748b; margin-top:4px;">Товар вернётся на склад, с которого была продажа.</div>
             </div>
 
+            <div id="return-repair-block" style="display:${initialType === 'from_repair' ? 'block' : 'none'};">
+                <label style="font-size: 13px; color: #475569; display:block; margin-bottom:4px;">Ремонт, с которого возвращаем *</label>
+                <div class="searchable-select-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" id="return-repair-input" placeholder=" Загрузка ремонтов..." autocomplete="off" ${fieldLock}
+                           style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+                    <input type="hidden" name="repair_id" id="return-repair-select" value="${item.repair_id || ''}">
+                    <div class="searchable-select-dropdown" id="return-repair-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div style="font-size:12px; color:#64748b; margin-top:4px;">Запчасть вернётся на склад, с которого была списана в ремонт.</div>
+            </div>
+
             <input type="hidden" name="warehouse_id" id="return-warehouse-id" value="${item.warehouse_id || ''}">
             <input type="hidden" name="supplier_id" id="return-supplier-id" value="${item.supplier_id || ''}">
             <div>
@@ -7633,11 +7649,13 @@ async function openReturnForm(entity, item = null) {
     const supplierBlock = document.getElementById('return-supplier-block');
     const moveBlock = document.getElementById('return-move-block');
     const realizationBlock = document.getElementById('return-realization-block');
+    const repairBlock = document.getElementById('return-repair-block');
     document.querySelectorAll('input[name="return_type_ui"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             supplierBlock.style.display = e.target.value === 'to_supplier' ? 'block' : 'none';
             moveBlock.style.display = e.target.value === 'from_customer' ? 'block' : 'none';
             realizationBlock.style.display = e.target.value === 'from_retail_customer' ? 'block' : 'none';
+            repairBlock.style.display = e.target.value === 'from_repair' ? 'block' : 'none';
 
             if (e.target.value !== 'to_supplier') {
                 document.getElementById('return-receipt-select').value = '';
@@ -7650,6 +7668,10 @@ async function openReturnForm(entity, item = null) {
             if (e.target.value !== 'from_retail_customer') {
                 document.getElementById('return-realization-select').value = '';
                 document.getElementById('return-realization-input').value = '';
+            }
+            if (e.target.value !== 'from_repair') {
+                document.getElementById('return-repair-select').value = '';
+                document.getElementById('return-repair-input').value = '';
             }
             document.getElementById('return-warehouse-id').value = '';
             document.getElementById('return-supplier-id').value = '';
@@ -7843,6 +7865,69 @@ async function openReturnForm(entity, item = null) {
         console.error('Не удалось загрузить список реализаций:', err);
     }
 
+    try {
+        const res = await fetch('/api/repairs');
+        if (res.ok) {
+            const repairs = await res.json();
+            const hiddenInput = document.getElementById('return-repair-select');
+            const searchInput = document.getElementById('return-repair-input');
+            const dropdown = document.getElementById('return-repair-dropdown');
+
+            const postedRepairs = repairs.filter(r => r.is_posted === true || r.is_posted === 'true');
+            searchInput.placeholder = ' Начните ввод для поиска ремонт...';
+
+            function repairLabel(r) {
+                const dateStr = r.doc_date ? new Date(r.doc_date).toLocaleDateString() : '';
+                return `${r.doc_number} от ${dateStr} — ${r.car_number || 'авто не указано'} (${r.warehouse_name || '?'})`;
+            }
+
+            function applyRepair(r) {
+                hiddenInput.value = r ? r.id : '';
+                searchInput.value = r ? repairLabel(r) : '';
+                document.getElementById('return-warehouse-id').value = r ? (r.warehouse_id || '') : '';
+                document.getElementById('return-supplier-id').value = '';
+            }
+
+            function renderDropdown(filterText) {
+                const filter = (filterText || '').toLowerCase().trim();
+                const matches = postedRepairs.filter(r => repairLabel(r).toLowerCase().includes(filter));
+
+                dropdown.innerHTML = matches.map(r => `
+                    <div class="searchable-option" data-id="${r.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;">
+                        ${repairLabel(r)}
+                    </div>
+                `).join('') || '<div style="padding: 8px 12px; color: #94a3b8; font-size: 13px;">Ничего не найдено</div>';
+
+                dropdown.querySelectorAll('.searchable-option').forEach(opt => {
+                    opt.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const r = postedRepairs.find(x => String(x.id) === opt.dataset.id);
+                        applyRepair(r);
+                        dropdown.style.display = 'none';
+                        searchInput.blur();
+                    });
+                });
+
+                dropdown.style.display = 'block';
+            }
+
+            searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+            searchInput.addEventListener('input', () => renderDropdown(searchInput.value));
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.searchable-select-container') || !dropdown.contains(e.target) && e.target !== searchInput) {
+                    if (e.target !== searchInput) dropdown.style.display = 'none';
+                }
+            });
+
+            if (item.repair_id) {
+                const preselected = postedRepairs.find(r => String(r.id) === String(item.repair_id));
+                if (preselected) applyRepair(preselected);
+            }
+        }
+    } catch (err) {
+        console.error('Не удалось загрузить список ремонтов:', err);
+    }
+
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -7895,12 +7980,13 @@ async function openReturnForm(entity, item = null) {
             formData.forEach((value, key) => { data[key] = value; });
             
             const selectedType = form.querySelector('input[name="return_type_ui"]:checked')?.value
-                || (item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : 'to_supplier'));
+                || (item.move_id ? 'from_customer' : (item.realization_id ? 'from_retail_customer' : (item.repair_id ? 'from_repair' : 'to_supplier')));
             delete data.return_type_ui;
 
             if (selectedType === 'to_supplier') {
                 data.move_id = null;
                 data.realization_id = null;
+                data.repair_id = null;
                 if (!data.receipt_id) {
                     showAppNotification('Выберите приход, из которого делается возврат', 'warning');
                     isSubmitting = false;
@@ -7910,8 +7996,19 @@ async function openReturnForm(entity, item = null) {
             } else if (selectedType === 'from_customer') {
                 data.receipt_id = null;
                 data.realization_id = null;
+                data.repair_id = null;
                 if (!data.move_id) {
                     showAppNotification('Выберите перемещение, по которому делается возврат', 'warning');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
+            } else if (selectedType === 'from_retail_customer') {
+                data.receipt_id = null;
+                data.move_id = null;
+                data.repair_id = null;
+                if (!data.realization_id) {
+                    showAppNotification('Выберите реализацию, по которой делается возврат', 'warning');
                     isSubmitting = false;
                     if (saveButton) saveButton.disabled = false;
                     return;
@@ -7919,8 +8016,9 @@ async function openReturnForm(entity, item = null) {
             } else {
                 data.receipt_id = null;
                 data.move_id = null;
-                if (!data.realization_id) {
-                    showAppNotification('Выберите реализацию, по которой делается возврат', 'warning');
+                data.realization_id = null;
+                if (!data.repair_id) {
+                    showAppNotification('Выберите ремонт, по которому делается возврат', 'warning');
                     isSubmitting = false;
                     if (saveButton) saveButton.disabled = false;
                     return;
@@ -8250,16 +8348,19 @@ async function renderReturnItemsInline(returnDoc) {
 
     const isMoveReturn = !!returnDoc.move_id;
     const isRealizationReturn = !isMoveReturn && !!returnDoc.realization_id;
+    const isRepairReturn = !isMoveReturn && !isRealizationReturn && !!returnDoc.repair_id;
 
     if (titleEl) {
         titleEl.innerText = isMoveReturn
             ? `Возврат ${returnDoc.doc_number || ''} — позиции из перемещения ${returnDoc.move_doc_number || ''}`
             : isRealizationReturn
                 ? `Возврат ${returnDoc.doc_number || ''} — позиции из реализации ${returnDoc.realization_doc_number || ''}`
-                : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
+                : isRepairReturn
+                    ? `Возврат ${returnDoc.doc_number || ''} — позиции из ремонта ${returnDoc.repair_doc_number || ''}`
+                    : `Возврат ${returnDoc.doc_number || ''} — позиции из прихода ${returnDoc.receipt_doc_number || ''}`;
     }
 
-    const sourceColLabel = isMoveReturn ? 'Кол-во в перемещении' : (isRealizationReturn ? 'Кол-во в реализации' : 'Кол-во в приходе');
+    const sourceColLabel = isMoveReturn ? 'Кол-во в перемещении' : (isRealizationReturn ? 'Кол-во в реализации' : (isRepairReturn ? 'Кол-во в ремонте' : 'Кол-во в приходе'));
 
     if (headerTr) {
         headerTr.innerHTML = `
@@ -8276,16 +8377,16 @@ async function renderReturnItemsInline(returnDoc) {
 
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">Загрузка...</td></tr>`;
 
-    const sourceId = isMoveReturn ? returnDoc.move_id : (isRealizationReturn ? returnDoc.realization_id : returnDoc.receipt_id);
+    const sourceId = isMoveReturn ? returnDoc.move_id : (isRealizationReturn ? returnDoc.realization_id : (isRepairReturn ? returnDoc.repair_id : returnDoc.receipt_id));
     if (!sourceId) {
-        const missingLabel = isMoveReturn ? 'документ перемещения' : (isRealizationReturn ? 'документ реализации' : 'приход');
+        const missingLabel = isMoveReturn ? 'документ перемещения' : (isRealizationReturn ? 'документ реализации' : (isRepairReturn ? 'документ ремонта' : 'приход'));
         if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626; padding:20px;">У возврата не указан ${missingLabel}</td></tr>`;
         return;
     }
 
-    const idField = isMoveReturn ? 'move_item_id' : (isRealizationReturn ? 'realization_item_id' : 'receipt_item_id');
-    const availQueryParam = isMoveReturn ? 'move_id' : (isRealizationReturn ? 'realization_id' : 'receipt_id');
-    const itemTypeAttr = isMoveReturn ? 'move' : (isRealizationReturn ? 'realization' : 'receipt');
+    const idField = isMoveReturn ? 'move_item_id' : (isRealizationReturn ? 'realization_item_id' : (isRepairReturn ? 'repair_item_id' : 'receipt_item_id'));
+    const availQueryParam = isMoveReturn ? 'move_id' : (isRealizationReturn ? 'realization_id' : (isRepairReturn ? 'repair_id' : 'receipt_id'));
+    const itemTypeAttr = isMoveReturn ? 'move' : (isRealizationReturn ? 'realization' : (isRepairReturn ? 'repair' : 'receipt'));
 
     try {
         const [availRes, returnedRes] = await Promise.all([
@@ -8301,7 +8402,7 @@ async function renderReturnItemsInline(returnDoc) {
         returnedItems.forEach(ri => { returnedByItem[ri[idField]] = ri; });
 
         if (availableItems.length === 0) {
-            const emptyLabel = isMoveReturn ? 'В этом перемещении нет позиций' : (isRealizationReturn ? 'В этой реализации нет позиций' : 'В этом приходе нет позиций');
+            const emptyLabel = isMoveReturn ? 'В этом перемещении нет позиций' : (isRealizationReturn ? 'В этой реализации нет позиций' : (isRepairReturn ? 'В этом ремонте нет позиций' : 'В этом приходе нет позиций'));
             if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">${emptyLabel}</td></tr>`;
             return;
         }
@@ -8434,6 +8535,8 @@ async function saveReturnQtyValue({ returnDoc, itemId, itemType, returnItemId, n
                 body = { return_id: returnDoc.id, move_item_id: itemId, quantity: newQty };
             } else if (itemType === 'realization') {
                 body = { return_id: returnDoc.id, realization_item_id: itemId, quantity: newQty };
+            } else if (itemType === 'repair') {
+                body = { return_id: returnDoc.id, repair_item_id: itemId, quantity: newQty };
             } else {
                 body = { return_id: returnDoc.id, receipt_item_id: itemId, quantity: newQty };
             }
