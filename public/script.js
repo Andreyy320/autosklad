@@ -595,7 +595,7 @@ ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 28
         render: (item) => `
             <td>${item.date || ''}</td>
             <td>
-${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
+${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 200px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
             <td>${item.source_label || ''}</td>
             <td>${item.description || ''}</td>
         `
