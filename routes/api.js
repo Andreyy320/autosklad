@@ -2425,6 +2425,7 @@ router.get('/part_movement_details', async (req, res) => {
                   AND ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
                   AND reti.realization_item_id IS NULL
+                  AND reti.repair_item_id IS NULL
 
                 UNION ALL
 
@@ -2513,6 +2514,39 @@ router.get('/part_movement_details', async (req, res) => {
                 ) lr_relret ON true
                 WHERE reti.zaphasti_id = $1
                   AND reti.realization_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 8. Возвраты с ремонта (Ремонт -> Склад) — приход обратно на склад, с которого списывали
+                SELECT 
+                    COALESCE(ret.fact_date, ret.date) AS op_date,
+                    ret.doc_number AS doc_num,
+                    'Возврат с ремонта' AS doc_type,
+                    CONCAT('Ремонт: ', COALESCE(rep_ret.doc_number, ''), ' | Авто: ', COALESCE(car_ret.gos_number, 'б/н')) AS source_info,
+                    CONCAT(COALESCE(s_rep_ret.name, 'Склад'), ' | МОЛ: ', COALESCE(lm_rep_ret.mol_name, 'не назначен')) AS dest_info,
+                    reti.quantity AS qty,
+                    COALESCE(reti.price_rub, 0) AS price,
+                    reti.total_rub AS sum,
+                    NULL AS description,
+                    NULL::int AS warehouse_from_id,
+                    rep_ret.warehouse_id AS warehouse_to_id,
+                    NULL::int AS sklad_id
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN repair_items ri_rep_ret ON reti.repair_item_id = ri_rep_ret.id
+                JOIN repairs rep_ret ON ri_rep_ret.repair_id = rep_ret.id
+                LEFT JOIN skladi s_rep_ret ON rep_ret.warehouse_id = s_rep_ret.id
+                LEFT JOIN cars car_ret ON rep_ret.car_id = car_ret.id
+                LEFT JOIN LATERAL (
+                    SELECT u_rep_ret.name AS mol_name
+                    FROM mol mm_rep_ret
+                    LEFT JOIN users u_rep_ret ON mm_rep_ret.user_id = u_rep_ret.id
+                    WHERE mm_rep_ret.warehouse_id = rep_ret.warehouse_id
+                    ORDER BY mm_rep_ret.id DESC
+                    LIMIT 1
+                ) lm_rep_ret ON true
+                WHERE reti.zaphasti_id = $1
+                  AND reti.repair_item_id IS NOT NULL
             )
             SELECT op_date, doc_num, doc_type, source_info, dest_info, qty, price, sum, description 
             FROM all_ops
@@ -2528,7 +2562,6 @@ router.get('/part_movement_details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 router.get('/stock_batches', async (req, res) => {
     try {
@@ -2668,6 +2701,7 @@ router.get('/stock_batches', async (req, res) => {
                 WHERE reti.zaphasti_id = $1
                   AND reti.move_item_id IS NULL
                   AND reti.realization_item_id IS NULL
+                  AND reti.repair_item_id IS NULL
 
                 UNION ALL
 
@@ -2733,6 +2767,25 @@ router.get('/stock_batches', async (req, res) => {
                 ) lr_relret9 ON true
                 WHERE reti.zaphasti_id = $1
                   AND reti.realization_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 10. Возвраты с ремонта — ПРИХОД обратно на склад, с которого списывали в ремонт
+                SELECT 
+                    reti.zaphasti_id,
+                    rep_ret.warehouse_id AS warehouse_filter_id,
+                    CONCAT('Возврат с ремонта ', ret.doc_number) AS document_name,
+                    COALESCE(ret.fact_date, ret.date) AS doc_date,
+                    NULL AS description,
+                    reti.quantity AS qty,
+                    COALESCE(reti.price_rub, 0) AS price,
+                    'Рубль ПМР' AS currency
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN repair_items ri_rep_ret ON reti.repair_item_id = ri_rep_ret.id
+                JOIN repairs rep_ret ON ri_rep_ret.repair_id = rep_ret.id
+                WHERE reti.zaphasti_id = $1
+                  AND reti.repair_item_id IS NOT NULL
             )
             SELECT 
                 z.article AS artikul,
@@ -2842,6 +2895,7 @@ router.get('/stock_movement', async (req, res) => {
                 WHERE ret.warehouse_id IS NOT NULL
                   AND reti.move_item_id IS NULL
                   AND reti.realization_item_id IS NULL
+                  AND reti.repair_item_id IS NULL
 
                 UNION ALL
 
@@ -2879,6 +2933,18 @@ router.get('/stock_movement', async (req, res) => {
                 JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
                 WHERE real_ret.sklad_id IS NOT NULL
                   AND reti.realization_item_id IS NOT NULL
+
+                UNION ALL
+
+                -- 10. Возвраты с ремонта (приход обратно на склад, с которого списывали в ремонт)
+                SELECT reti.zaphasti_id, rep_ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date,
+                       reti.quantity AS qty, (reti.quantity * COALESCE(reti.price_rub, 0)) AS sum, 'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN repair_items ri_rep_ret ON reti.repair_item_id = ri_rep_ret.id
+                JOIN repairs rep_ret ON ri_rep_ret.repair_id = rep_ret.id
+                WHERE rep_ret.warehouse_id IS NOT NULL
+                  AND reti.repair_item_id IS NOT NULL
             ),
             latest_warehouse AS (
                 SELECT DISTINCT ON (zaphasti_id) zaphasti_id, warehouse_id
