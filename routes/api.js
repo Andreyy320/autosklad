@@ -10,7 +10,7 @@ const DEFAULT_MARKUP_PERCENT = 30; // потом можно вынести в se
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
-    limits: { fileSize: 5 * 1024 * 1024 }, 
+    limits: { fileSize: 10 * 1024 * 1024 }, 
     fileFilter: (req, file, cb) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (allowed.includes(file.mimetype)) {
