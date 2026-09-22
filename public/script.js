@@ -2920,7 +2920,8 @@ async function openEntityForm(entity, item = null, parentId = null) {
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
-                    <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                                     <button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сохранить</button>
+                    ${item && item.id && (entity === 'users' || entity === 'employees') ? `<button type="button" id="change-password-btn" style="background: #f59e0b; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Сменить пароль</button>` : ''}
                     ${item && item.id ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; transition: background 0.2s;">Удалить</button>` : ''}
                     <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Отмена</button>
                 </div>
@@ -3198,8 +3199,35 @@ async function openEntityForm(entity, item = null, parentId = null) {
                     } catch (err) {
                         showAppNotification('Ошибка соединения с сервером', 'error');
                     }
-                }
+                          }
             );
+        });
+    }
+
+    const changePasswordBtn = drawer.querySelector('#change-password-btn');
+    if (changePasswordBtn) {
+        changePasswordBtn.addEventListener('click', async () => {
+            const newPassword = window.prompt(`Новый пароль для "${item.login || ''}" (минимум 4 символа):`);
+            if (newPassword === null) return;
+            if (newPassword.trim().length < 4) {
+                showAppNotification('Пароль должен содержать не менее 4 символов', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/${entity}/${item.id}/change-password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_password: newPassword.trim() })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    showAppNotification(result.message || 'Пароль успешно изменён', 'success');
+                } else {
+                    showAppNotification(result.error || 'Ошибка при смене пароля', 'error');
+                }
+            } catch (err) {
+                showAppNotification('Ошибка соединения с сервером', 'error');
+            }
         });
     }
 
@@ -9200,8 +9228,12 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
             btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
-        } else if (entity === 'expenses_by_receipts') {
+                } else if (entity === 'expenses_by_receipts') {
             btnAdd.style.display = 'inline-block';
+            btnEdit.style.display = 'none';
+            btnDelete.style.display = 'none';
+        } else if (entity === 'employees' && localStorage.getItem('userRole') !== 'admin') {
+            btnAdd.style.display = 'none';
             btnEdit.style.display = 'none';
             btnDelete.style.display = 'none';
         } else {
