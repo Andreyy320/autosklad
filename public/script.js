@@ -7521,7 +7521,6 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
-
 async function openReturnForm(entity, item = null) {
     const drawer = getOrCreateDrawer();
 
@@ -7557,7 +7556,7 @@ async function openReturnForm(entity, item = null) {
 
             <div>
                 <label style="font-size: 13px; color: #475569; display:block; margin-bottom:6px;">Тип возврата *</label>
-                <div style="display:grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap:16px 24px;">
+                <div style="display:flex; flex-direction:column; gap:12px;">
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; ${typeLocked ? 'opacity:0.6;' : 'cursor:pointer;'}">
                         <input type="radio" name="return_type_ui" value="to_supplier" id="return-type-supplier"
                                ${initialType === 'to_supplier' ? 'checked' : ''} ${typeLocked ? 'disabled' : ''}>
