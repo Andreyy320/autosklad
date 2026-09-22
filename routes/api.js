@@ -9613,13 +9613,16 @@ router.post('/:entity', async (req, res) => {
         });
     }
 
-    if (code) {
-                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
+       if (code) {
+                const codeCheck = await client.query(
+                    'SELECT id FROM zaphasti WHERE code = $1 AND proizvoditel_id IS NOT DISTINCT FROM $2', 
+                    [code, proizvoditel_id || null]
+                );
                 if (codeCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
-                    browserLog(`[ERROR] Запчасть с кодом ${code} уже существует`);
+                    browserLog(`[ERROR] Запчасть с кодом ${code} уже существует у этого производителя`);
                     return res.status(400).json({ 
-                        error: 'Запчасть с таким кодом уже существует!', 
+                        error: 'Запчасть с таким кодом уже существует у этого производителя!', 
                         serverLogs: logsBuffer 
                     });
                 }
@@ -9868,17 +9871,21 @@ router.put('/:entity/:id', async (req, res) => {
         return res.status(400).json({ error: 'Поле "Код" обязательно для заполнения!' });
     }
 
+        const targetProvId = proizvoditel_id !== undefined ? proizvoditel_id : oldDoc.proizvoditel_id;
+
     if (code !== undefined && code !== null && code !== '') {
-                const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1 AND id <> $2', [code, id]);
+                const codeCheck = await client.query(
+                    'SELECT id FROM zaphasti WHERE code = $1 AND proizvoditel_id IS NOT DISTINCT FROM $2 AND id <> $3', 
+                    [code, targetProvId || null, id]
+                );
                 if (codeCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Запчасть с таким кодом уже существует!' });
+                    return res.status(400).json({ error: 'Запчасть с таким кодом уже существует у этого производителя!' });
                 }
             }
 
             // Если артикул или производитель меняются, проверяем связку
             const targetArticle = article !== undefined ? article : oldDoc.article;
-            const targetProvId = proizvoditel_id !== undefined ? proizvoditel_id : oldDoc.proizvoditel_id;
 
             if (targetArticle && targetProvId) {
                 const artProvCheck = await client.query(
