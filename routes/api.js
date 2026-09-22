@@ -9602,10 +9602,18 @@ router.post('/:entity', async (req, res) => {
         // ================================================================================
  
         // Проверка уникальности для запчастей при добавлении (код и связка артикул+производитель)
-        if (entity === 'zaphasti') {
-            const { code, article, proizvoditel_id } = req.body;
- 
-            if (code) {
+       if (entity === 'zaphasti') {
+    const { code, article, proizvoditel_id } = req.body;
+
+    if (!code) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+            error: 'Поле "Код" обязательно для заполнения!', 
+            serverLogs: logsBuffer 
+        });
+    }
+
+    if (code) {
                 const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1', [code]);
                 if (codeCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
@@ -9851,10 +9859,16 @@ router.put('/:entity/:id', async (req, res) => {
         }
 
         // Проверка уникальности при обновлении запчастей (код и связка артикул+производитель исключая текущий ID)
-        if (entity === 'zaphasti') {
-            const { code, article, proizvoditel_id } = req.body;
+      if (entity === 'zaphasti') {
+    const { code, article, proizvoditel_id } = req.body;
+    const targetCode = code !== undefined ? code : oldDoc.code;
 
-            if (code !== undefined && code !== null && code !== '') {
+    if (!targetCode) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Поле "Код" обязательно для заполнения!' });
+    }
+
+    if (code !== undefined && code !== null && code !== '') {
                 const codeCheck = await client.query('SELECT id FROM zaphasti WHERE code = $1 AND id <> $2', [code, id]);
                 if (codeCheck.rows.length > 0) {
                     await client.query('ROLLBACK');
