@@ -12371,6 +12371,9 @@ if (tableBody) {
     });
 }
 
+
+
+
 const tableBodyForDblClick = document.getElementById('table-body');
 if (tableBodyForDblClick) {
     tableBodyForDblClick.addEventListener('dblclick', (e) => {
@@ -12449,6 +12452,64 @@ if (tableBodyForDblClick) {
             }
         }
     });
+}
+
+if (tableBody) {
+    tableBody.addEventListener('contextmenu', (e) => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+
+        e.preventDefault();
+
+        const id = tr.getAttribute('data-id');
+        const item = currentItems.find(i => String(i.id || i.receipt_id || i.sklad_id || i.postavhik_id || i.move_id) === String(id));
+        if (!item) return;
+
+        if (item.is_posted !== undefined) {
+            item.is_posted = (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1 || item.is_posted === '1');
+        }
+        selectedItem = item;
+
+        document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected-row'));
+        tr.classList.add('selected-row');
+
+        showRowContextMenu(e.pageX, e.pageY);
+    });
+}
+
+function showRowContextMenu(x, y) {
+    const old = document.getElementById('row-context-menu');
+    if (old) old.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'row-context-menu';
+    menu.style.cssText = `
+        position: absolute; top: ${y}px; left: ${x}px; z-index: 9999;
+        background: #fff; border: 1px solid #ddd; border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; min-width: 140px;
+    `;
+    menu.innerHTML = `
+        <div id="ctx-edit" style="padding: 8px 14px; cursor: pointer; font-size: 13px;">✏️ Изменить</div>
+        <div id="ctx-delete" style="padding: 8px 14px; cursor: pointer; font-size: 13px; color: red;">🗑️ Удалить</div>
+    `;
+    document.body.appendChild(menu);
+
+    menu.querySelector('#ctx-edit').addEventListener('click', () => {
+        menu.remove();
+        editSelectedEntity();
+    });
+    menu.querySelector('#ctx-delete').addEventListener('click', () => {
+        menu.remove();
+        deleteSelectedEntity();
+    });
+
+    const closeMenu = (ev) => {
+        if (!menu.contains(ev.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
 
 let currentCustomerSubTab = 'customer_contacts';
