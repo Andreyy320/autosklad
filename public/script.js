@@ -580,7 +580,7 @@ const tableConfig = {
             <td><b>${item.title || ''}</b></td>
             <td>${item.description || ''}</td>
             <td>
-${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 100px; height: 120px; object-fit: cover; border-radius: 6px; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
+${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 180px; height: 120px; object-fit: cover; border-radius: 6px; cursor: pointer;" onclick="openImageLightbox(this.src)" />` : '—'}            </td>
         `
        },
 
