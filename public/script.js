@@ -12518,14 +12518,24 @@ function showRowContextMenu(x, y) {
     menu.id = 'row-context-menu';
     menu.style.cssText = `
         position: absolute; top: ${y}px; left: ${x}px; z-index: 9999;
-        background: #fff; border: 1px solid #ddd; border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; min-width: 140px;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12); overflow: hidden; min-width: 160px;
+        font-size: 13px; padding: 4px;
     `;
     menu.innerHTML = `
-        <div id="ctx-edit" style="padding: 8px 14px; cursor: pointer; font-size: 13px;">✏️ Изменить</div>
-        <div id="ctx-delete" style="padding: 8px 14px; cursor: pointer; font-size: 13px; color: red;">🗑️ Удалить</div>
+        <div id="ctx-edit" class="ctx-item" style="display:flex; align-items:center; gap:10px; padding: 8px 12px; cursor: pointer; border-radius: 5px; color: #0f172a;">
+            <i class="fas fa-pen-to-square" style="color: #0055ea; width: 14px;"></i> Изменить
+        </div>
+        <div id="ctx-delete" class="ctx-item" style="display:flex; align-items:center; gap:10px; padding: 8px 12px; cursor: pointer; border-radius: 5px; color: #0f172a;">
+            <i class="fas fa-trash-can" style="color: #dc2626; width: 14px;"></i> Удалить
+        </div>
     `;
     document.body.appendChild(menu);
+
+    menu.querySelectorAll('.ctx-item').forEach(el => {
+        el.addEventListener('mouseenter', () => el.style.background = '#f1f5f9');
+        el.addEventListener('mouseleave', () => el.style.background = 'transparent');
+    });
 
     menu.querySelector('#ctx-edit').addEventListener('click', () => {
         menu.remove();
