@@ -2831,13 +2831,13 @@ router.get('/stock_batches', async (req, res) => {
                 FROM filtered_movements fm
                 WHERE fm.qty > 0
             )
-            SELECT 
+                        SELECT 
                 z.article AS artikul,
                 z.code,
                 z.name,
                 ir.document_name,
                 ir.doc_date,
-                ir.description,
+                COALESCE(sup.supplier_name, 'Не указан') AS supplier_name,
                 -- показываем не исходное кол-во партии, а то, что от неё реально
                 -- осталось после FIFO-списания (без отдельных минусовых строк)
                 GREATEST(0, LEAST(ir.qty, ir.cumsum_qty - COALESCE(t.total_outflow, 0))) AS qty,
@@ -2849,6 +2849,16 @@ router.get('/stock_batches', async (req, res) => {
             JOIN zaphasti z ON ir.zaphasti_id = z.id
             LEFT JOIN totals t 
                 ON t.zaphasti_id = ir.zaphasti_id AND t.warehouse_filter_id = ir.warehouse_filter_id
+            LEFT JOIN LATERAL (
+                -- актуальный поставщик = поставщик из последнего по дате прихода этой запчасти
+                SELECT p_sup.name AS supplier_name
+                FROM receipt_items ri_sup
+                JOIN receipts r_sup ON ri_sup.receipt_id = r_sup.id
+                LEFT JOIN postavhik p_sup ON r_sup.supplier_id = p_sup.id
+                WHERE ri_sup.zaphasti_id = z.id
+                ORDER BY r_sup.date DESC, r_sup.id DESC
+                LIMIT 1
+            ) sup ON true
             WHERE GREATEST(0, LEAST(ir.qty, ir.cumsum_qty - COALESCE(t.total_outflow, 0))) > 0
             ${warehouseCondition.replace('m.', 'ir.')}
             ORDER BY ir.doc_date DESC;
