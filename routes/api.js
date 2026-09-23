@@ -1454,7 +1454,14 @@ router.get('/move_items', async (req, res) => {
             LEFT JOIN ed_izmereniya e ON z.ed_izmereniya_id = e.id
             LEFT JOIN receipts r ON mi.income_document_id = r.id
             -- Джойним конкретную строку прихода, чтобы взять точную закупочную цену партии
-            LEFT JOIN receipt_items ri_orig ON mi.income_document_id = ri_orig.receipt_id AND mi.zaphasti_id = ri_orig.zaphasti_id
+            LEFT JOIN LATERAL (
+    SELECT ri.price
+    FROM receipt_items ri
+    WHERE ri.receipt_id = mi.income_document_id
+      AND ri.zaphasti_id = mi.zaphasti_id
+    ORDER BY (ri.batch_id = mi.batch_id) DESC NULLS LAST, ri.id
+    LIMIT 1
+) ri_orig ON true
         `;
         
         const params = [];
