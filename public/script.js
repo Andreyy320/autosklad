@@ -1077,44 +1077,44 @@ render: (item) => {
     }
     },
 
-        stock_batches: {
-        title: 'Партии товара',
-        columns: [
-            { field: 'artikul', label: 'Артикул', width: '110px' },
-            { field: 'code', label: 'Код', width: '90px', align: 'center' },
-            { field: 'name', label: 'Наименование', width: '220px' },
-            { field: 'document_name', label: 'Документ прихода / перемещения', width: '240px' },
-            { field: 'doc_date', label: 'Дата', width: '100px', align: 'center' },
-            { field: 'description', label: 'Описание' },
-            { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
-            { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
-            { field: 'purchase_price', label: 'Цена закуп.', width: '90px', align: 'right' },
-            { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' },
-            { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
-        ],
-        render: (item) => {
-            if (!item) return '';
-            let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
-            
-            let rawPurchasePrice = item.purchase_price !== undefined ? Number(item.purchase_price) : 0;
-            let retailPrice = item.retail_price !== undefined ? item.retail_price : (rawPurchasePrice * 1.3).toFixed(2);
-
-            return `
-                <td>${item.artikul || ''}</td>
-                <td style="text-align: center;">${item.code || ''}</td>
-                <td><b>${item.name || ''}</b></td>
-                <td>${item.document_name || ''}</td>
-                <td style="text-align: center;">${formattedDate}</td>
-                <td>${item.description || ''}</td>
-                <td style="text-align: right; font-weight: bold; color: #0044cc;">${item.qty !== undefined ? item.qty : 0}</td>
-                <td style="text-align: center;">${item.unit || 'шт'}</td>
-                <td style="text-align: right;">${rawPurchasePrice}</td>
-                <td style="text-align: right; font-weight: bold; color: #16a34a;">${retailPrice}</td>
-                <td style="text-align: center;">${item.currency || ''}</td>
-            `;
-        }
-        },
+         stock_batches: {
+    title: 'Партии товара',
+    columns: [
+        { field: 'artikul', label: 'Артикул', width: '110px' },
+        { field: 'code', label: 'Код', width: '90px', align: 'center' },
+        { field: 'name', label: 'Наименование', width: '220px' },
+        { field: 'document_name', label: 'Документ прихода / перемещения', width: '240px' },
+        { field: 'doc_date', label: 'Дата', width: '100px', align: 'center' },
+        { field: 'supplier_name', label: 'Поставщик', width: '160px' },
+        { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
+        { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
+        { field: 'purchase_price', label: 'Цена закуп.', width: '90px', align: 'right' },
+        { field: 'retail_price', label: 'Розн. цена', width: '90px', align: 'right' },
+        { field: 'currency', label: 'Валюта', width: '80px', align: 'center' }
+    ],
+    render: (item) => {
+        if (!item) return '';
+        let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
         
+        let rawPurchasePrice = item.purchase_price !== undefined ? Number(item.purchase_price) : 0;
+        let retailPrice = item.retail_price !== undefined ? item.retail_price : (rawPurchasePrice * 1.3).toFixed(2);
+
+        return `
+            <td>${item.artikul || ''}</td>
+            <td style="text-align: center;">${item.code || ''}</td>
+            <td><b>${item.name || ''}</b></td>
+            <td>${item.document_name || ''}</td>
+            <td style="text-align: center;">${formattedDate}</td>
+            <td>${item.supplier_name || ''}</td>
+            <td style="text-align: right; font-weight: bold; color: #0044cc;">${item.qty !== undefined ? item.qty : 0}</td>
+            <td style="text-align: center;">${item.unit || 'шт'}</td>
+            <td style="text-align: right;">${rawPurchasePrice}</td>
+            <td style="text-align: right; font-weight: bold; color: #16a34a;">${retailPrice}</td>
+            <td style="text-align: center;">${item.currency || ''}</td>
+        `;
+    }
+    },
+
     stock_movement: {
         title: 'Движение запчастей',
         columns: [
