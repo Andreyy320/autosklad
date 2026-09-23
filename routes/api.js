@@ -356,7 +356,7 @@ router.use(authMiddleware);
 router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
     
-const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad', '/employees'];
+const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad', '/employees', '/users'];
 router.use((req, res, next) => {
     const isAdminOnlyRoute = ADMIN_ONLY_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix));
     if (isAdminOnlyRoute && req.user?.role !== 'admin') {

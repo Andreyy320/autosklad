@@ -30,7 +30,11 @@ setTimeout(function tryAutoLogin() {
             loginScreen.style.display = 'none';
             appScreen.style.display = 'flex';
             applyAccessControl();
-            loadData('users', 'Пользователи');
+            if (localStorage.getItem('userRole') === 'admin') {
+                loadData('users', 'Пользователи');
+            } else {
+                loadData('zaphasti', 'Запчасти');
+            }
         }
     }
 }, 0);
@@ -39,11 +43,13 @@ function applyAccessControl() {
     const role = localStorage.getItem('userRole');
     const financeSection = document.getElementById('section-finance');
     const logsSection = document.getElementById('section-logs');
-    const employeesLink = document.getElementById('nav-employees'); // ← новая строка
+    const employeesLink = document.getElementById('nav-employees');
+    const usersLink = document.getElementById('nav-users'); // ← новая строка
     if (role !== 'admin') {
         if (financeSection) financeSection.style.display = 'none';
         if (logsSection) logsSection.style.display = 'none';
-        if (employeesLink) employeesLink.style.display = 'none'; // ← новая строка
+        if (employeesLink) employeesLink.style.display = 'none';
+        if (usersLink) usersLink.style.display = 'none'; // ← новая строка
     }
 }
 
@@ -8659,13 +8665,17 @@ document.getElementById('login-form').addEventListener('submit', async function(
                 localStorage.setItem('currentUserId', userId);
             }
 
-            localStorage.setItem('userRole', result.user?.role || 'employee');
+                        localStorage.setItem('userRole', result.user?.role || 'employee');
 
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'flex';
 
             applyAccessControl();
-            loadData('users', 'Пользователи');
+            if ((result.user?.role || 'employee') === 'admin') {
+                loadData('users', 'Пользователи');
+            } else {
+                loadData('zaphasti', 'Запчасти');
+            }
 
         } else {
             errorDiv.style.display = 'block';
