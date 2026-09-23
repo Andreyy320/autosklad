@@ -7905,7 +7905,7 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
         }
 
-                const currentItem = itemCheck.rows[0];
+        const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
         const zaphasti_id = currentItem.zaphasti_id;
         const oldQuantity = Number(currentItem.quantity) || 0;
@@ -7944,7 +7944,7 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
         }
 
-               // 2.1. Наценка берется только со склада-получателя (как в POST). Если не указано — 0%.
+        // 2.1. Наценка берется только со склада-получателя (как в POST). Если не указано — 0%.
         const markupQuery = `
             SELECT COALESCE(markup_percent, 0) as markup_percent
             FROM skladi
@@ -7956,7 +7956,7 @@ router.put('/move_items/:id', async (req, res) => {
             markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
         }
 
-                // 3. ШАГ ОТКАТА СТАРЫХ ЗНАЧЕНИЙ — по точным batch_id/dest_batch_id
+        // 3. ШАГ ОТКАТА СТАРЫХ ЗНАЧЕНИЙ — по точным batch_id/dest_batch_id
         if (oldQuantity > 0) {
             if (oldSourceBatchId) {
                 const srcCheck = await client.query('SELECT id FROM warehouse_batches WHERE id = $1 FOR UPDATE', [oldSourceBatchId]);
@@ -7996,6 +7996,9 @@ router.put('/move_items/:id', async (req, res) => {
                         error: `Нельзя изменить позицию: часть перемещённого товара (${oldQuantity - targetQty} шт. из ${oldQuantity} шт.) уже была использована на складе-получателе (списана в ремонт, реализацию или другое перемещение).`
                     });
                 } else if (targetQty === oldQuantity) {
+                    // ИСПРАВЛЕНИЕ: сначала отвязываем партию от move_items,
+                    // иначе FK move_items_dest_batch_id_fkey не даёт её удалить
+                    await client.query('UPDATE move_items SET dest_batch_id = NULL WHERE dest_batch_id = $1', [targetBatch.id]);
                     await client.query('DELETE FROM warehouse_batches WHERE id = $1', [targetBatch.id]);
                 } else {
                     await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [oldQuantity, targetBatch.id]);
@@ -8026,7 +8029,7 @@ router.put('/move_items/:id', async (req, res) => {
 
         // Берем подходящую партию — но только если в НЕЙ САМОЙ реально хватает нужного количества,
         // а не просто хватает суммарного остатка по складу (иначе партия уходит в минус)
-               let chosenBatch = batches.find(b => b.id === oldSourceBatchId && Number(b.quantity) >= requestedQty);
+        let chosenBatch = batches.find(b => b.id === oldSourceBatchId && Number(b.quantity) >= requestedQty);
         if (!chosenBatch) {
             chosenBatch = batches.find(b => b.receipt_id === oldReceiptId && Number(b.quantity) >= requestedQty);
         }
@@ -8061,7 +8064,7 @@ router.put('/move_items/:id', async (req, res) => {
             [requestedQty, chosenBatch.id]
         );
 
-             // 6. Создаем СВОЮ, отдельную партию на складе-получателе
+        // 6. Создаем СВОЮ, отдельную партию на складе-получателе
         const destBatchRes = await client.query(`
             INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
             VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
@@ -8143,6 +8146,7 @@ router.put('/move_items/:id', async (req, res) => {
         client.release();
     }
 });
+
 // Функция для записи логов перемещений в таблицу move_logs
 async function writeMoveLog(client, req, data) {
     try {
