@@ -3347,12 +3347,16 @@ router.put('/repairs/:id/post', async (req, res) => {
             return res.status(404).json({ error: 'Документ не найден' });
         }
 
-        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
-        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM repair_items WHERE repair_id = $1', [id]);
-        if (Number(itemsCheck.rows[0].cnt) === 0) {
-            return res.status(400).json({ error: 'Нельзя провести пустой документ ремонта — добавьте хотя бы одну позицию' });
-        }
-
+      // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции (запчасть ИЛИ работа)
+const itemsCheck = await pool.query(
+    `SELECT
+        (SELECT COUNT(*) FROM repair_items WHERE repair_id = $1) +
+        (SELECT COUNT(*) FROM repair_works WHERE repair_id = $1) AS cnt`,
+    [id]
+);
+if (Number(itemsCheck.rows[0].cnt) === 0) {
+    return res.status(400).json({ error: 'Нельзя провести пустой документ ремонта — добавьте хотя бы одну позицию (запчасть или работу)' });
+}
         const factDate = getServerNowString();
 
         const result = await pool.query(
