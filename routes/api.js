@@ -10534,24 +10534,40 @@ router.delete('/:entity/:id', async (req, res) => {
                 const qty = Number(item.quantity) || 0;
                 const receiptId = item.income_document_id;
 
-                if (receiptId && qty > 0 && warehouseFromId && warehouseToId) {
-                    const src = await client.query(
-                        'SELECT id FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-                        [warehouseFromId, item.zaphasti_id, receiptId]
-                    );
-                    if (src.rows.length > 0) {
-                        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, src.rows[0].id]);
-                    } else {
+                if (qty > 0 && warehouseFromId && warehouseToId) {
+                    // 1. Возврат на склад-источник — в ТОЧНУЮ партию (batch_id)
+                    let srcBatchId = null;
+                    if (item.batch_id) {
+                        const src = await client.query('SELECT id FROM warehouse_batches WHERE id = $1 FOR UPDATE', [item.batch_id]);
+                        if (src.rows.length > 0) srcBatchId = src.rows[0].id;
+                    } else if (receiptId) {
+                        // запасной вариант для старых строк без batch_id
+                        const src = await client.query(
+                            'SELECT id FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 ORDER BY id LIMIT 1 FOR UPDATE',
+                            [warehouseFromId, item.zaphasti_id, receiptId]
+                        );
+                        if (src.rows.length > 0) srcBatchId = src.rows[0].id;
+                    }
+
+                    if (srcBatchId) {
+                        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, srcBatchId]);
+                    } else if (receiptId) {
                         await client.query(
                             'INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
-                            [warehouseFromId, item.zaphasti_id, receiptId, item.price || 0, qty]
+                            [warehouseFromId, item.zaphasti_id, receiptId, item.price_rub || item.price || 0, qty]
                         );
                     }
 
-                                        const dst = await client.query(
-                        'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-                        [warehouseToId, item.zaphasti_id, receiptId]
-                    );
+                    // 2. Убираем со склада-получателя — по ТОЧНОМУ dest_batch_id
+                    let dst = { rows: [] };
+                    if (item.dest_batch_id) {
+                        dst = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [item.dest_batch_id]);
+                    } else if (receiptId) {
+                        dst = await client.query(
+                            'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 ORDER BY id LIMIT 1 FOR UPDATE',
+                            [warehouseToId, item.zaphasti_id, receiptId]
+                        );
+                    }
                     const dstQty = dst.rows.length > 0 ? (Number(dst.rows[0].quantity) || 0) : 0;
 
                     if (dstQty < qty) {
@@ -10562,6 +10578,8 @@ router.delete('/:entity/:id', async (req, res) => {
                     }
 
                     if (dstQty === qty) {
+                        // Сначала отвязываем партию от move_items (FK), потом удаляем её
+                        await client.query('UPDATE move_items SET dest_batch_id = NULL WHERE dest_batch_id = $1', [dst.rows[0].id]);
                         await client.query('DELETE FROM warehouse_batches WHERE id = $1', [dst.rows[0].id]);
                     } else {
                         await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [qty, dst.rows[0].id]);
