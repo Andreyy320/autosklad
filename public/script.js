@@ -1187,15 +1187,17 @@ render: (item) => {
             return `${day}.${month}.${year} ${hours}:${minutes}`;
         };
 
-        const damageVal = Number(item.damage_amount || 0).toFixed(2);
+             const damageVal = Number(item.damage_amount || 0).toFixed(2);
         const accountNum = Number(item.account_number || 0);
         const paidNum = Number(item.paid_amount || 0);
         const paidVal = paidNum.toFixed(2);
+        const accountVal = accountNum.toFixed(2);
 
         const isUnderpaid = accountNum > paidNum;
         const paidStyle = isUnderpaid 
-            ? 'text-align: right; color: #d9534f; font-weight: bold;' 
+            ? 'text-align: right; background-color: #f8d7da; color: #842029; font-weight: bold;' 
             : 'text-align: right;';
+        const accountStyle = 'text-align: right; color: #2563eb; font-weight: 600;';
 
         const isPosted = Boolean(item.is_posted);
         const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
@@ -1214,8 +1216,8 @@ render: (item) => {
             <td>${formatDT(item.detected_date)}</td>
             <td>${item.driver || '—'}</td>
             <td>${item.culprit || '—'}</td>
-            <td style="text-align: right;">${damageVal}</td>
-            <td>${item.account_number || '0.0'}</td>
+                        <td style="text-align: right;">${damageVal}</td>
+            <td style="${accountStyle}">${accountVal}</td>
             <td style="${paidStyle}">${paidVal}</td>
             <td>${formatDT(item.actual_date)}</td>
             <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
