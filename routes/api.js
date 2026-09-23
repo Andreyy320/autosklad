@@ -1850,14 +1850,15 @@ router.get('/repairs', async (req, res) => {
         const { car_id } = req.query;
         
         let query = `
-            SELECT 
-                r.*,
-                dt.name AS doc_type_name,
-                rt.name AS repair_type_name,
-                c.gos_number AS car_number,
-                COALESCE(c.model, cm.name, 'Не указана') AS car_model,
-                s.name AS warehouse_name,
-                u.name AS mol_name,
+           SELECT 
+    r.*,
+    dt.name AS doc_type_name,
+    rt.name AS repair_type_name,
+    c.gos_number AS car_number,
+    COALESCE(c.model, cm.name, 'Не указана') AS car_model,
+    s.name AS warehouse_name,
+    COALESCE(cust.name_full, cust.name_short) AS service_name,
+    u.name AS mol_name,
                 -- Итоговая сумма: чистые запчасти (количество * цена) + работы
                 (
                     COALESCE(parts.total_parts_sum, 0) + 
@@ -1868,8 +1869,9 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN repair_types rt ON r.repair_type_id = rt.id
             LEFT JOIN cars c ON r.car_id = c.id
             LEFT JOIN car_models cm ON c.model_id = cm.id
-            LEFT JOIN skladi s ON r.warehouse_id = s.id
-            LEFT JOIN mol m ON r.mol_id = m.id
+           LEFT JOIN skladi s ON r.warehouse_id = s.id
+LEFT JOIN customers cust ON r.customer_id = cust.id
+LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN (
                 -- Считаем сумму запчастей без наценки: количество * цена

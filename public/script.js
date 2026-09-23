@@ -1396,9 +1396,10 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'repair_type', label: 'Тип ремонта', width: '130px', ref: 'repair_types' },
         { field: 'car_id', label: 'Гос номер', width: '100px', ref: 'cars' },
         { field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true },
-        { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
-        { field: 'warehouse_id', label: 'Склад', width: '130px', ref: 'skladi' },
-        { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
+     { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
+    { field: 'warehouse_id', label: 'Склад/Сервис', width: '150px', ref: 'skladi' },
+    { field: 'customer_id', label: 'Сервис', width: '150px', ref: 'customers', table: false },
+    { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
               { field: 'is_posted', label: 'Проведен', width: '200px' },
@@ -1417,10 +1418,15 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             return `${day}.${month}.${year} ${hours}:${minutes}`;
         };
 
-        const mileageVal = item.mileage ? Number(item.mileage).toLocaleString('ru-RU') : '—';
-        const sumVal = item.sum ? Number(item.sum).toFixed(2) : '0.00';
-        
-        const isPosted = Boolean(item.is_posted);
+      const mileageVal = item.mileage ? Number(item.mileage).toLocaleString('ru-RU') : '—';
+const sumVal = item.sum ? Number(item.sum).toFixed(2) : '0.00';
+
+const isServiceDocType = (item.doc_type_name || '').toLowerCase().includes('сервис');
+const skladServiceVal = isServiceDocType
+    ? (item.service_name || item.customer_id || '—')
+    : (item.warehouse_name || item.warehouse_id || '—');
+
+const isPosted = Boolean(item.is_posted);
         const isPostedText = isPosted ? 'Проведен' : 'Не проведен';
         const isPostedColor = isPosted ? 'green' : 'gray';
 
@@ -1436,7 +1442,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
             <td>${item.car_number || item.car_id || '—'}</td>
             <td>${item.car_model || '—'}</td>
             <td style="text-align: right;">${mileageVal}</td>
-            <td>${item.warehouse_name || item.warehouse_id || '—'}</td>
+<td>${skladServiceVal}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
             <td style="text-align: right; font-weight: bold;">${sumVal}</td>
             <td>${formatDT(item.fact_date)}</td>
@@ -6716,15 +6722,16 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     </div>
                 </div>
             `;
-        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
-            
+        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id' || col.field === 'customer_id') {
+
             const referenceName = col.ref;
             const refItems = await fetchReferenceData(referenceName);
+            const fallbackLabel = col.field === 'customer_id' ? 'Сервис' : 'Склад';
 
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
                 if (String(refItem.id) === String(val)) {
-                    selectedDisplayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                    selectedDisplayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.name_short || refItem.doc_number || refItem.gos_number || `${fallbackLabel} #${refItem.id}`;
                 }
             });
 
@@ -6735,7 +6742,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
                         ${refItems.map(refItem => {
-                            const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.doc_number || refItem.gos_number || `Склад #${refItem.id}`;
+                            const displayName = refItem.name || refItem.title || refItem.user_fio || refItem.login || refItem.name_full || refItem.name_short || refItem.doc_number || refItem.gos_number || `${fallbackLabel} #${refItem.id}`;
                             return `<div class="searchable-option" data-id="${refItem.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${displayName}</div>`;
                         }).join('')}
                     </div>
@@ -6761,7 +6768,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 optionsHtml += `<option value="${refItem.id}" ${selected}>${displayName}</option>`;
             });
 
-            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : '');
+            const extraAttributes = (col.field === 'zaphasti_id' ? 'id="zaphasti-select"' : (entity === 'repairs' && col.field === 'doc_type' ? 'id="repair-doctype-select"' : ''));
             inputHtml = `<select name="${col.field}" ${extraAttributes} ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
         } else if (col.type === 'datetime-local' || col.field.includes('date') || col.field.includes('_at')) {
             let formattedVal = '';
@@ -6787,8 +6794,9 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
+        const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id') ? ' id="repair-warehouse-field"' : ((entity === 'repairs' && col.field === 'customer_id') ? ' id="repair-service-field"' : '');
         html += `
-            <label style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+            <label${repairFieldWrapId} style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
             </label>
@@ -6861,6 +6869,44 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                 factDateInput.value = '';
             }
         });
+    }
+
+    // ВАЖНЫЙ БЛОК: переключение "Склад" <-> "Сервис" в зависимости от Типа документа.
+    // Ремонт база -> Склад (как раньше). Ремонт сервис -> Сервис (из Покупателей).
+    if (entity === 'repairs') {
+        const docTypeSelect = formElement.querySelector('#repair-doctype-select');
+        const warehouseFieldWrap = formElement.querySelector('#repair-warehouse-field');
+        const serviceFieldWrap = formElement.querySelector('#repair-service-field');
+
+        const updateRepairWarehouseServiceVisibility = () => {
+            if (!docTypeSelect || !warehouseFieldWrap || !serviceFieldWrap) return;
+            const selectedOption = docTypeSelect.options[docTypeSelect.selectedIndex];
+            const selectedText = selectedOption ? selectedOption.textContent.toLowerCase() : '';
+            const isServiceRepair = selectedText.includes('сервис');
+
+            warehouseFieldWrap.style.display = isServiceRepair ? 'none' : 'flex';
+            serviceFieldWrap.style.display = isServiceRepair ? 'flex' : 'none';
+        };
+
+        if (docTypeSelect && !isPosted) {
+            docTypeSelect.addEventListener('change', () => {
+                const selectedOption = docTypeSelect.options[docTypeSelect.selectedIndex];
+                const selectedText = selectedOption ? selectedOption.textContent.toLowerCase() : '';
+                const isServiceRepair = selectedText.includes('сервис');
+
+                const fieldToClear = isServiceRepair ? warehouseFieldWrap : serviceFieldWrap;
+                if (fieldToClear) {
+                    const hidden = fieldToClear.querySelector('input[type="hidden"]');
+                    const visible = fieldToClear.querySelector('.searchable-select-input');
+                    if (hidden) hidden.value = '';
+                    if (visible) visible.value = '';
+                }
+
+                updateRepairWarehouseServiceVisibility();
+            });
+        }
+
+        updateRepairWarehouseServiceVisibility();
     }
 
     if (formElement && !isPosted) {
