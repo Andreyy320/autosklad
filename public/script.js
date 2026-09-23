@@ -932,14 +932,20 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             const formattedFactDate = item.fact_date ? new Date(item.fact_date).toLocaleString() : '—';
             const sum = Number(item.total_sum || 0).toFixed(2);
             const isPosted = item.is_posted === true || item.is_posted === 'true';
-            const isFromCustomer = item.return_type === 'from_customer';
+                        const returnTypeLabels = {
+                'from_customer': 'От покупателя',
+                'from_retail_customer': 'От розничного покупателя',
+                'from_repair': 'С ремонта',
+                'to_supplier': 'Поставщику'
+            };
+            const returnTypeLabel = returnTypeLabels[item.return_type] || 'Поставщику';
 
             return `
                 <td><span style="font-weight:600; color:#0f172a;">${item.doc_number || '—'}</span></td>
                 <td><span style="color:#475569;">${formattedDate}</span></td>
                 <td>
                     <span style="padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; color:#334155;">                       
-                    ${isFromCustomer ? 'От покупателя' : 'Поставщику'}
+                    ${returnTypeLabel}
                     </span>
                 </td>
                 <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>

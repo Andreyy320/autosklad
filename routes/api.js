@@ -9713,10 +9713,11 @@ router.get('/get-return-logs', async (req, res) => {
                 rl.*,
                 z.name AS part_name,
                 COALESCE(z.article, z.code, '—') AS part_article,
-                CASE rl.return_type
+                                CASE rl.return_type
                     WHEN 'supplier' THEN 'Возврат поставщику'
                     WHEN 'customer_move' THEN 'Возврат от покупателя (перемещение)'
                     WHEN 'customer_realization' THEN 'Возврат от покупателя (реализация)'
+                    WHEN 'repair' THEN 'Возврат с ремонта'
                     ELSE rl.return_type
                 END AS return_type_label,
                 COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
