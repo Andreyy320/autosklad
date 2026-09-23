@@ -278,18 +278,20 @@ async function fetchReferenceData(refEntity) {
 }
 
 const tableConfig = {
-    users: {
+       users: {
         title: 'Пользователи',
         columns: [
             { field: 'login', label: 'Логин', width: '150px' },
             { field: 'password_hash', label: 'Пароль', style: 'display: none;' },
             { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'role', label: 'Роль', width: '130px' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td><b>${item.login}</b></td>
             <td style="display: none;"></td>
             <td>${item.name || ''}</td>
+            <td>${item.role === 'admin' ? '<b style="color:#2563eb;">Админ</b>' : 'Сотрудник'}</td>
             <td>${item.description || ''}</td>
         `
     },
@@ -299,12 +301,14 @@ const tableConfig = {
             { field: 'login', label: 'Логин', width: '150px' },
             { field: 'password_hash', label: 'Пароль', style: 'display: none;' },
             { field: 'name', label: 'Наименование', width: '250px' },
+            { field: 'role', label: 'Роль', width: '130px' },
             { field: 'description', label: 'Описание' }
         ],
         render: (item) => `
             <td><b>${item.login}</b></td>
             <td style="display: none;"></td>
             <td>${item.name || ''}</td>
+            <td>${item.role === 'admin' ? '<b style="color:#2563eb;">Админ</b>' : 'Сотрудник'}</td>
             <td>${item.description || ''}</td>
         `
     },
@@ -2687,7 +2691,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        if (col.field === 'is_posted') {
+               if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
 
@@ -2697,6 +2701,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
+        } else if (col.field === 'role') {
+            const isAdminViewer = localStorage.getItem('userRole') === 'admin';
+            const currentRole = val || 'employee';
+            // Не-админ вообще не может трогать это поле — select будет disabled
+            // и браузер просто не отправит его значение при сохранении формы.
+            inputHtml = `
+                <select name="${col.field}" ${!isAdminViewer ? 'disabled' : ''} style="${controlStyle}">
+                    <option value="employee" ${currentRole !== 'admin' ? 'selected' : ''}>Сотрудник</option>
+                    <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Админ</option>
+                </select>
+            `;
         } else if (col.ref) {
             const referenceName = col.ref;
             let refItems = [];

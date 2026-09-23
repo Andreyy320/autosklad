@@ -376,7 +376,7 @@ router.get('/logs', (req, res) => {
 // 2. ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
 router.get('/users', async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, login, name, description FROM users ORDER BY id ASC');
+        const result = await pool.query('SELECT id, login, name, description, role FROM users ORDER BY id ASC');
         return res.json(result.rows);
     } catch (err) {
         console.error('>>> [API ОШИБКА] в /users:', err.message);
@@ -398,9 +398,15 @@ router.get('/users', async (req, res) => {
 
 
     // 3. ДОБАВЛЕНИЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
-    router.post('/users', async (req, res) => {
+        router.post('/users', async (req, res) => {
         try {
             const { login, password_hash, name, description } = req.body;
+
+            // НОВОЕ: роль может задать только администратор, остальным — всегда 'employee'
+            let finalRole = 'employee';
+            if (req.body.role !== undefined && req.user?.role === 'admin') {
+                finalRole = req.body.role;
+            }
 
             let finalPasswordHash = null;
             if (password_hash) {
@@ -409,8 +415,8 @@ router.get('/users', async (req, res) => {
             }
 
                         const newRecord = await pool.query(
-                'INSERT INTO users (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING id, login, name, description',
-                [login, finalPasswordHash, name, description]
+                'INSERT INTO users (login, password_hash, name, description, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, login, name, description, role',
+                [login, finalPasswordHash, name, description, finalRole]
             );
 
             res.json(newRecord.rows[0]);
@@ -422,7 +428,7 @@ router.get('/users', async (req, res) => {
 
 router.get('/employees', async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, login, name, description, is_active FROM employees ORDER BY id ASC');
+        const result = await pool.query('SELECT id, login, name, description, is_active, role FROM employees ORDER BY id ASC');
         return res.json(result.rows);
     } catch (err) {
         return res.status(500).send(err.message);
@@ -432,10 +438,18 @@ router.get('/employees', async (req, res) => {
 router.post('/employees', async (req, res) => {
     try {
         const { login, password_hash, name, description } = req.body;
+
+        // НОВОЕ: роль может задать только администратор (этот роут и так доступен только админам,
+        // но проверка остаётся на случай изменения ADMIN_ONLY_PATH_PREFIXES в будущем)
+        let finalRole = 'employee';
+        if (req.body.role !== undefined && req.user?.role === 'admin') {
+            finalRole = req.body.role;
+        }
+
         const finalPasswordHash = await bcrypt.hash(password_hash, 10);
         const newRecord = await pool.query(
-            'INSERT INTO employees (login, password_hash, name, description) VALUES ($1, $2, $3, $4) RETURNING id, login, name, description',
-            [login, finalPasswordHash, name, description]
+            'INSERT INTO employees (login, password_hash, name, description, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, login, name, description, role',
+            [login, finalPasswordHash, name, description, finalRole]
         );
         res.json(newRecord.rows[0]);
     } catch (err) {
@@ -10058,8 +10072,13 @@ router.put('/:entity/:id', async (req, res) => {
             'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees'
         ];
 
-        if (!allowedTables.includes(entity)) {
+               if (!allowedTables.includes(entity)) {
             return res.status(400).json({ error: `Недопустимая таблица: ${entity}` });
+        }
+
+        // НОВОЕ: менять роль пользователя/сотрудника может только администратор
+        if ((entity === 'users' || entity === 'employees') && req.body.role !== undefined && req.user?.role !== 'admin') {
+            delete req.body.role;
         }
 
         if (entity === 'accidents' && req.body.car_model !== undefined) {
