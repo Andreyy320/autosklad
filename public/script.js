@@ -6794,8 +6794,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-        const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id') ? ' id="repair-warehouse-field"' : ((entity === 'repairs' && col.field === 'customer_id') ? ' id="repair-service-field"' : '');
-        html += `
+const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id') ? ' id="repair-warehouse-field"' : ((entity === 'repairs' && col.field === 'customer_id') ? ' id="repair-service-field"' : ((entity === 'repairs' && col.field === 'mol_id') ? ' id="repair-mol-field"' : ''));        html += `
             <label${repairFieldWrapId} style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
@@ -6874,43 +6873,54 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
     // ВАЖНЫЙ БЛОК: переключение "Склад" <-> "Сервис" в зависимости от Типа документа.
     // Ремонт база -> Склад (как раньше). Ремонт сервис -> Сервис (из Покупателей).
     if (entity === 'repairs') {
-        const docTypeSelect = formElement.querySelector('#repair-doctype-select');
-        const warehouseFieldWrap = formElement.querySelector('#repair-warehouse-field');
-        const serviceFieldWrap = formElement.querySelector('#repair-service-field');
+    const docTypeSelect = formElement.querySelector('#repair-doctype-select');
+    const warehouseFieldWrap = formElement.querySelector('#repair-warehouse-field');
+    const serviceFieldWrap = formElement.querySelector('#repair-service-field');
+    const molFieldWrap = formElement.querySelector('#repair-mol-field');
 
-        const updateRepairWarehouseServiceVisibility = () => {
-            if (!docTypeSelect || !warehouseFieldWrap || !serviceFieldWrap) return;
+    const updateRepairWarehouseServiceVisibility = () => {
+        if (!docTypeSelect || !warehouseFieldWrap || !serviceFieldWrap) return;
+        const selectedOption = docTypeSelect.options[docTypeSelect.selectedIndex];
+        const selectedText = selectedOption ? selectedOption.textContent.toLowerCase() : '';
+        const isServiceRepair = selectedText.includes('сервис');
+
+        warehouseFieldWrap.style.display = isServiceRepair ? 'none' : 'flex';
+        serviceFieldWrap.style.display = isServiceRepair ? 'flex' : 'none';
+        if (molFieldWrap) {
+            molFieldWrap.style.display = isServiceRepair ? 'none' : 'flex';
+        }
+    };
+
+    if (docTypeSelect && !isPosted) {
+        docTypeSelect.addEventListener('change', () => {
             const selectedOption = docTypeSelect.options[docTypeSelect.selectedIndex];
             const selectedText = selectedOption ? selectedOption.textContent.toLowerCase() : '';
             const isServiceRepair = selectedText.includes('сервис');
 
-            warehouseFieldWrap.style.display = isServiceRepair ? 'none' : 'flex';
-            serviceFieldWrap.style.display = isServiceRepair ? 'flex' : 'none';
-        };
+            const fieldToClear = isServiceRepair ? warehouseFieldWrap : serviceFieldWrap;
+            if (fieldToClear) {
+                const hidden = fieldToClear.querySelector('input[type="hidden"]');
+                const visible = fieldToClear.querySelector('.searchable-select-input');
+                if (hidden) hidden.value = '';
+                if (visible) visible.value = '';
 
-        if (docTypeSelect && !isPosted) {
-            docTypeSelect.addEventListener('change', () => {
-                const selectedOption = docTypeSelect.options[docTypeSelect.selectedIndex];
-                const selectedText = selectedOption ? selectedOption.textContent.toLowerCase() : '';
-                const isServiceRepair = selectedText.includes('сервис');
-
-                const fieldToClear = isServiceRepair ? warehouseFieldWrap : serviceFieldWrap;
-                if (fieldToClear) {
-                    const hidden = fieldToClear.querySelector('input[type="hidden"]');
-                    const visible = fieldToClear.querySelector('.searchable-select-input');
-                    if (hidden) hidden.value = '';
-                    if (isServiceRepair && hidden) {
-    hidden.dispatchEvent(new Event('change', { bubbles: true }));
-}
-                    if (visible) visible.value = '';
+                if (isServiceRepair && hidden) {
+                    hidden.dispatchEvent(new Event('change', { bubbles: true }));
                 }
+            }
 
-                updateRepairWarehouseServiceVisibility();
-            });
-        }
+            if (isServiceRepair && molFieldWrap) {
+                const molSelect = molFieldWrap.querySelector('select[name="mol_id"]');
+                if (molSelect) molSelect.value = '';
+            }
 
-        updateRepairWarehouseServiceVisibility();
+            updateRepairWarehouseServiceVisibility();
+        });
     }
+
+    updateRepairWarehouseServiceVisibility();
+}
+    
 
     if (formElement && !isPosted) {
         const pairs = [
