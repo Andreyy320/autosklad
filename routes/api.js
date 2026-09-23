@@ -2805,25 +2805,53 @@ router.get('/stock_batches', async (req, res) => {
                 JOIN repairs rep_ret ON ri_rep_ret.repair_id = rep_ret.id
                 WHERE reti.zaphasti_id = $1
                   AND reti.repair_item_id IS NOT NULL
+                      ),
+            filtered_movements AS (
+                -- фильтр по дате применяем здесь же, до расчёта FIFO
+                SELECT * FROM all_movements m
+                WHERE 1=1
+                ${dateCondition}
+            ),
+            totals AS (
+                -- сколько всего "ушло" по каждой позиции/складу (перемещения-расход,
+                -- списания, реализации, возвраты поставщику и т.д.)
+                SELECT zaphasti_id, warehouse_filter_id, SUM(GREATEST(-qty, 0)) AS total_outflow
+                FROM filtered_movements
+                GROUP BY zaphasti_id, warehouse_filter_id
+            ),
+            inflows_ranked AS (
+                -- только приходные операции, пронумерованные по дате для FIFO
+                SELECT
+                    fm.*,
+                    SUM(fm.qty) OVER (
+                        PARTITION BY fm.zaphasti_id, fm.warehouse_filter_id
+                        ORDER BY fm.doc_date, fm.document_name
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    ) AS cumsum_qty
+                FROM filtered_movements fm
+                WHERE fm.qty > 0
             )
             SELECT 
                 z.article AS artikul,
                 z.code,
                 z.name,
-                m.document_name,
-                m.doc_date,
-                m.description,
-                m.qty,
+                ir.document_name,
+                ir.doc_date,
+                ir.description,
+                -- показываем не исходное кол-во партии, а то, что от неё реально
+                -- осталось после FIFO-списания (без отдельных минусовых строк)
+                GREATEST(0, LEAST(ir.qty, ir.cumsum_qty - COALESCE(t.total_outflow, 0))) AS qty,
                 COALESCE(z.unit, 'шт') AS unit,
-                m.price AS purchase_price,
-                ROUND(m.price * 1.3, 2) AS retail_price, 
-                COALESCE(m.currency, 'Рубль ПМР') AS currency
-            FROM all_movements m
-            JOIN zaphasti z ON m.zaphasti_id = z.id
-            WHERE 1=1
-            ${warehouseCondition}
-            ${dateCondition}
-            ORDER BY m.doc_date DESC;
+                ir.price AS purchase_price,
+                ROUND(ir.price * 1.3, 2) AS retail_price, 
+                COALESCE(ir.currency, 'Рубль ПМР') AS currency
+            FROM inflows_ranked ir
+            JOIN zaphasti z ON ir.zaphasti_id = z.id
+            LEFT JOIN totals t 
+                ON t.zaphasti_id = ir.zaphasti_id AND t.warehouse_filter_id = ir.warehouse_filter_id
+            WHERE GREATEST(0, LEAST(ir.qty, ir.cumsum_qty - COALESCE(t.total_outflow, 0))) > 0
+            ${warehouseCondition.replace('m.', 'ir.')}
+            ORDER BY ir.doc_date DESC;
         `;
 
         const result = await pool.query(query, queryParams);
