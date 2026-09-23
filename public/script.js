@@ -6899,6 +6899,9 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     const hidden = fieldToClear.querySelector('input[type="hidden"]');
                     const visible = fieldToClear.querySelector('.searchable-select-input');
                     if (hidden) hidden.value = '';
+                    if (isServiceRepair && hidden) {
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+}
                     if (visible) visible.value = '';
                 }
 
