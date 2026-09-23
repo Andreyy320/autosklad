@@ -8196,7 +8196,7 @@ router.delete('/move_items/:id', async (req, res) => {
             return res.status(404).json({ error: 'Позиция перемещения не найдена.' });
         }
 
-               const currentItem = itemCheck.rows[0];
+        const currentItem = itemCheck.rows[0];
         const move_id = currentItem.move_id;
         const zaphasti_id = currentItem.zaphasti_id;
         const quantityToReturn = Number(currentItem.quantity) || 0;
@@ -8281,6 +8281,9 @@ router.delete('/move_items/:id', async (req, res) => {
                         error: `Нельзя удалить позицию: часть перемещённого товара (${quantityToReturn - targetQty} шт. из ${quantityToReturn} шт.) уже была использована на складе-получателе (списана в ремонт, реализацию или другое перемещение).`
                     });
                 } else if (targetQty === quantityToReturn) {
+                    // ИСПРАВЛЕНИЕ: сначала отвязываем партию от move_items,
+                    // иначе FK move_items_dest_batch_id_fkey не даёт её удалить
+                    await client.query('UPDATE move_items SET dest_batch_id = NULL WHERE dest_batch_id = $1', [targetBatch.id]);
                     await client.query('DELETE FROM warehouse_batches WHERE id = $1', [targetBatch.id]);
                 } else {
                     await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [quantityToReturn, targetBatch.id]);
@@ -8308,7 +8311,7 @@ router.delete('/move_items/:id', async (req, res) => {
                 markup_percent: markupPercent, // Сохраняем наценку в лог удаленной позиции
                 income_document_id: currentItem.income_document_id,
                 description: currentItem.description || 'Удаление позиции перемещения (остатки возвращены на склад)'
-                        });
+            });
         }
 
         await client.query('COMMIT');
