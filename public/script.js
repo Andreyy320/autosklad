@@ -5683,13 +5683,27 @@ async function openReceiptForm(entity, item = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        if (col.field === 'is_posted') {
+               if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
+
+            let hasItems = false;
+            if (item && item.id) {
+                try {
+                    const itemsRes = await fetch(`/api/receipt_items?receipt_id=${item.id}`);
+                    const itemsList = await itemsRes.json();
+                    hasItems = Array.isArray(itemsList) && itemsList.length > 0;
+                } catch (e) {
+                    hasItems = false;
+                }
+            }
+
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
-            
+
             statusItems.forEach(st => {
+                const stIsTrue = String(st.id) === 'true' || st.id === true || st.id === 1 || st.id === '1';
                 const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
-                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+                const blockOption = stIsTrue && !hasItems;
+                optionsHtml += `<option value="${st.id}" ${selected} ${blockOption ? 'disabled' : ''}>${st.name}${blockOption ? ' — нет позиций' : ''}</option>`;
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly && !item.id ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
@@ -6157,12 +6171,24 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-                if (col.field === 'is_posted') {
+                            if (col.field === 'is_posted') {
             const isCurrentPosted = val === true || val === 'true' || val === 1 || val === '1';
+
+            let hasItems = false;
+            if (item && item.id) {
+                try {
+                    const itemsRes = await fetch(`/api/move_items?move_id=${item.id}`);
+                    const itemsList = await itemsRes.json();
+                    hasItems = Array.isArray(itemsList) && itemsList.length > 0;
+                } catch (e) {
+                    hasItems = false;
+                }
+            }
+
             inputHtml = `
                 <select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">
                     <option value="false" ${!isCurrentPosted ? 'selected' : ''}>Не проведен</option>
-                    <option value="true" ${isCurrentPosted ? 'selected' : ''}>Проведен</option>
+                    <option value="true" ${isCurrentPosted ? 'selected' : ''} ${!hasItems ? 'disabled' : ''}>Проведен${!hasItems ? ' — нет позиций' : ''}</option>
                 </select>
             `;
         } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id') {
@@ -6608,17 +6634,31 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        if (col.field === 'is_posted') {
+                if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
+
+            let hasItems = false;
+            if (item && item.id) {
+                try {
+                    const itemsRes = await fetch(`/api/repair_items?repair_id=${item.id}`);
+                    const itemsList = await itemsRes.json();
+                    hasItems = Array.isArray(itemsList) && itemsList.length > 0;
+                } catch (e) {
+                    hasItems = false;
+                }
+            }
+
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
 
             statusItems.forEach(st => {
+                const stIsTrue = String(st.id) === 'true' || st.id === true || st.id === 1 || st.id === '1';
                 const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
-                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+                const blockOption = stIsTrue && !hasItems;
+                optionsHtml += `<option value="${st.id}" ${selected} ${blockOption ? 'disabled' : ''}>${st.name}${blockOption ? ' — нет позиций' : ''}</option>`;
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;
-                } else if (col.ref === 'repair_cars' || col.ref === 'customer_cars' || col.ref === 'cars') {
+                } else if (col.ref === 'repair_cars' ||  col.ref === 'customer_cars' || col.ref === 'cars') {
             const referenceName = col.ref;
             let refItems = await fetchReferenceData(referenceName);
 
@@ -7105,13 +7145,27 @@ async function openRealizationForm(entity, item = null) {
             ? 'width: 100%; padding: 8px 12px; font-size: 13px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: not-allowed; outline: none;' 
             : 'width: 100%; padding: 8px 12px; font-size: 13px; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s;';
 
-        if (col.field === 'is_posted') {
+               if (col.field === 'is_posted') {
             const statusItems = await fetchReferenceData('statuses');
+
+            let hasItems = false;
+            if (item && item.id) {
+                try {
+                    const itemsRes = await fetch(`/api/realization_items?realization_id=${item.id}`);
+                    const itemsList = await itemsRes.json();
+                    hasItems = Array.isArray(itemsList) && itemsList.length > 0;
+                } catch (e) {
+                    hasItems = false;
+                }
+            }
+
             let optionsHtml = `<option value="">-- Не выбрано --</option>`;
             
             statusItems.forEach(st => {
+                const stIsTrue = String(st.id) === 'true' || st.id === true || st.id === 1 || st.id === '1';
                 const selected = (val !== '' && val !== null && String(st.id) === String(Boolean(val === true || val === 'true' || val === 1 || val === '1'))) ? 'selected' : '';
-                optionsHtml += `<option value="${st.id}" ${selected}>${st.name}</option>`;
+                const blockOption = stIsTrue && !hasItems;
+                optionsHtml += `<option value="${st.id}" ${selected} ${blockOption ? 'disabled' : ''}>${st.name}${blockOption ? ' — нет позиций' : ''}</option>`;
             });
 
             inputHtml = `<select name="${col.field}" ${fieldReadonly ? 'disabled' : ''} style="${controlStyle}">${optionsHtml}</select>`;

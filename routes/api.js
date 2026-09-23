@@ -1481,7 +1481,7 @@ router.put('/moves/:id', async (req, res) => {
         }
         const oldDoc = oldDocRes.rows[0];
 
-        // 2. Статус проведения
+            // 2. Статус проведения
         let boolIsPosted = oldDoc.is_posted;
         if (is_posted !== undefined && is_posted !== null) {
             boolIsPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1';
@@ -1493,6 +1493,11 @@ router.put('/moves/:id', async (req, res) => {
         // "на лету" оставит остатки висеть не на том складе.
         const oldIsPostedBool = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
+        // НОВОЕ: провести документ можно только кнопкой «Провести» (роут /moves/:id/post,
+        // там есть проверка на пустые позиции). Через обычное сохранение шапки — нельзя.
+        if (!oldIsPostedBool && boolIsPosted) {
+            boolIsPosted = false;
+        }
         const whFromChanging = warehouse_from_id !== undefined && parseInt(warehouse_from_id, 10) !== oldDoc.warehouse_from_id;
         const whToChanging = warehouse_to_id !== undefined && parseInt(warehouse_to_id, 10) !== oldDoc.warehouse_to_id;
 
@@ -9877,12 +9882,18 @@ router.post('/:entity', async (req, res) => {
             }
         }
  
-        if (req.body.is_posted !== undefined) {
+              if (req.body.is_posted !== undefined) {
             if (req.body.is_posted === '' || req.body.is_posted === null) {
                 delete req.body.is_posted; 
             } else {
                 req.body.is_posted = req.body.is_posted === 'true' || req.body.is_posted === true || req.body.is_posted === '1' || req.body.is_posted === 1;
             }
+        }
+
+        // НОВОЕ: документ нельзя СОЗДАТЬ сразу проведённым — проведение только через /:id/post
+        const docWithStatusTablesCreate = ['receipts', 'moves', 'repairs', 'realizations', 'returns'];
+        if (docWithStatusTablesCreate.includes(entity)) {
+            delete req.body.is_posted;
         }
  
         // Автоматически подставляем user_id из заголовков для receipts, moves, repairs и realizations
@@ -10103,7 +10114,7 @@ router.put('/:entity/:id', async (req, res) => {
         }
         const oldDoc = currentDocRes.rows[0];
 
-    const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations', 'returns'];     
+        const docWithStatusTables = ['receipts', 'moves', 'accidents', 'repairs', 'realizations', 'returns'];     
        if (docWithStatusTables.includes(entity)) {
             const oldIsPosted = oldDoc.is_posted === true || oldDoc.is_posted === 'true' || oldDoc.is_posted === 1 || oldDoc.is_posted === '1';
 
@@ -10116,6 +10127,10 @@ router.put('/:entity/:id', async (req, res) => {
                         delete req.body[key];
                     }
                 }
+            } else if (req.body.is_posted === true && entity !== 'accidents') {
+                // НОВОЕ: провести можно только кнопкой «Провести» (роут /:id/post с проверкой позиций),
+                // не через обычное сохранение шапки. Для accidents оставляем как было — у них своего /post нет.
+                delete req.body.is_posted;
             }
         }
 
