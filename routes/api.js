@@ -3307,41 +3307,82 @@ router.put('/moves/:id/post', async (req, res) => {
 });
 
 router.put('/receipts/:id/post', async (req, res) => {
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+
         const { id } = req.params;
-        const oldDocRes = await pool.query('SELECT is_posted, fact_date FROM receipts WHERE id = $1', [id]);
+        const oldDocRes = await client.query(
+            'SELECT is_posted, fact_date, warehouse_id, date FROM receipts WHERE id = $1 FOR UPDATE',
+            [id]
+        );
         if (oldDocRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Документ не найден' });
         }
+        const receiptData = oldDocRes.rows[0];
 
         // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
-        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM receipt_items WHERE receipt_id = $1', [id]);
-        if (Number(itemsCheck.rows[0].cnt) === 0) {
+        const itemsRes = await client.query(
+            'SELECT id, zaphasti_id, price_rub, quantity, batch_id FROM receipt_items WHERE receipt_id = $1 FOR UPDATE',
+            [id]
+        );
+        if (itemsRes.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Нельзя провести пустой документ прихода — добавьте хотя бы одну позицию' });
         }
 
         const factDate = getServerNowString();
 
-        const result = await pool.query(
+        const result = await client.query(
             'UPDATE receipts SET is_posted = true, fact_date = $1 WHERE id = $2 AND is_posted IS NOT TRUE RETURNING *',
             [factDate, id]
         );
 
         // Защита от двойного проведения
         if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(409).json({ error: 'Документ уже проведён' });
         }
 
+        // НОВОЕ: только сейчас, при проведении, создаём партии на складе (warehouse_batches)
+        // для каждой позиции прихода — именно с этого момента товар появляется в остатках.
+        for (const item of itemsRes.rows) {
+            if (item.batch_id) continue; // партия уже есть (на всякий случай, не должно происходить)
+
+            const batchResult = await client.query(`
+                INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
+                RETURNING id;
+            `, [
+                receiptData.warehouse_id,
+                item.zaphasti_id,
+                id,
+                item.price_rub,
+                item.quantity,
+                receiptData.date
+            ]);
+
+            await client.query(
+                'UPDATE receipt_items SET batch_id = $1 WHERE id = $2',
+                [batchResult.rows[0].id, item.id]
+            );
+        }
+
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл приход
-        await pool.query(
+        await client.query(
             'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
             ['receipt', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
         );
 
+        await client.query('COMMIT');
         res.json(result.rows[0]);
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Ошибка при проведении прихода:', err.message);
         res.status(500).json({ error: 'Ошибка сервера при проведении' });
+    } finally {
+        client.release();
     }
 });
 
@@ -7280,7 +7321,7 @@ router.post('/receipt_items', async (req, res) => {
         if (!receiptData.warehouse_id) {
     await client.query('ROLLBACK');
     return res.status(400).json({ error: 'В приходе не указан склад. Выберите склад и сохраните документ перед добавлением позиций.' });
-}
+    }
         const isPostedVal = receiptData.is_posted;
         if (isPostedVal === true || isPostedVal === 'true' || isPostedVal === 2 || isPostedVal === 1) {
             await client.query('ROLLBACK');
@@ -7300,26 +7341,9 @@ router.post('/receipt_items', async (req, res) => {
         const totalRub = numPrice * numQty;
         const curr = currency || 'Рубль ПМР';
 
-              // 4. Сначала создаём партию на складе (warehouse_batches) — ДО строки прихода,
-        // чтобы получить её id и сразу привязать к строке прихода (избегаем путаницы,
-        // если в одном приходе несколько строк с одной и той же запчастью)
-        const batchQuery = `
-            INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
-            VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
-            RETURNING *;
-        `;
-        const batchResult = await client.query(batchQuery, [
-            receiptData.warehouse_id,
-            zaphasti_id,
-            receipt_id,
-            priceRub,
-            numQty,
-            receiptData.date
-        ]);
-        const newBatch = batchResult.rows[0];
-        console.log('📦 [WAREHOUSE BATCH CREATED]:', newBatch);
-
-        // 5. Вставка позиции в таблицу receipt_items — сразу с привязкой к своей партии (batch_id)
+        // 4. Вставка позиции в таблицу receipt_items БЕЗ создания партии на складе.
+        // Партия (warehouse_batches) создаётся только при проведении документа
+        // (см. PUT /receipts/:id/post) — до этого момента остатки не должны меняться.
         const insertQuery = `
             INSERT INTO receipt_items (
                 receipt_id, 
@@ -7332,7 +7356,7 @@ router.post('/receipt_items', async (req, res) => {
                 total_rub,
                 batch_id
             ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL) 
             RETURNING *;
         `;
 
@@ -7344,14 +7368,13 @@ router.post('/receipt_items', async (req, res) => {
             numQty,
             description || null,
             priceRub,
-            totalRub,
-            newBatch.id
+            totalRub
         ];
 
         const newItemResult = await client.query(insertQuery, values);
         const createdItem = newItemResult.rows[0];
         
-        // 6. Запись лога в новую изолированную таблицу receipt_logs
+        // 5. Запись лога в новую изолированную таблицу receipt_logs
         await writeReceiptLog(client, req, {
             action: 'INSERT',
             receipt_id: receipt_id,
@@ -7370,7 +7393,7 @@ router.post('/receipt_items', async (req, res) => {
         await client.query('COMMIT');
 
         return res.status(201).json({
-            message: 'Позиция успешно добавлена в приход и на склад',
+            message: 'Позиция успешно добавлена в приход. На склад попадёт после проведения документа.',
             item: createdItem
         });
 
@@ -7392,7 +7415,7 @@ router.post('/receipt_items', async (req, res) => {
     }
 });
 
-// PUT /api/receipt_items/:id - редактирование позиции в приходе с обновлением warehouse_batches
+// PUT /api/receipt_items/:id - редактирование позиции в приходе
 router.put('/receipt_items/:id', async (req, res) => {
     const itemId = req.params.id;
     const {
@@ -7420,7 +7443,6 @@ router.put('/receipt_items/:id', async (req, res) => {
         const currentItem = itemCheck.rows[0];
         const receipt_id = currentItem.receipt_id;
         const zaphasti_id = currentItem.zaphasti_id;
-        const oldQuantity = Number(currentItem.quantity) || 0;
 
         // 2. Проверяем, проведен ли родительский документ (receipts), и забираем нужные поля (warehouse_id, supplier_id, doc_number)
         const receiptCheck = await client.query(
@@ -7453,58 +7475,8 @@ router.put('/receipt_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество запчасти должно быть больше нуля.' });
         }
 
-                // 4. Находим СВОЮ конкретную партию по batch_id (если он есть — точный, однозначный поиск).
-        // Для старых строк, созданных до появления batch_id, используем прежний способ поиска как запасной вариант.
-        let batchCheck;
-        if (currentItem.batch_id) {
-            batchCheck = await client.query(
-                'SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE',
-                [currentItem.batch_id]
-            );
-        } else {
-            batchCheck = await client.query(
-                'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-                [receiptData.warehouse_id, zaphasti_id, receipt_id]
-            );
-        }
-
-               if (batchCheck.rows.length > 0) {
-            const currentBatchQty = Number(batchCheck.rows[0].quantity) || 0;
-            // Сколько уже реально ушло из этой партии (продано/перемещено/списано в ремонт) —
-            // разница между тем, что было изначально в приходе, и тем, что осталось сейчас в партии
-            const alreadyConsumed = oldQuantity - currentBatchQty;
-            const newBatchQty = numQty - alreadyConsumed;
-
-            if (newBatchQty < 0) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({
-                    error: `Нельзя уменьшить количество до ${numQty} шт. — с этой партии уже списано ${alreadyConsumed} шт. в другие документы (продажи/перемещения/ремонт). Минимально допустимое количество в приходе: ${alreadyConsumed} шт.`
-                });
-            }
-
-            // Обновляем количество и цену партии, СОХРАНЯЯ уже произошедшее списание
-            await client.query(
-                'UPDATE warehouse_batches SET quantity = $1, price_rub = $2 WHERE id = $3',
-                [newBatchQty, priceRub, batchCheck.rows[0].id]
-            );
-               } else {
-            // Если вдруг партии не оказалось, создаем новую и сразу привязываем её к строке прихода
-            const newBatchResult = await client.query(`
-                INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
-                VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
-                RETURNING *;
-            `, [
-                receiptData.warehouse_id,
-                zaphasti_id,
-                receipt_id,
-                priceRub,
-                numQty,
-                receiptData.date || new Date()
-            ]);
-            await client.query('UPDATE receipt_items SET batch_id = $1 WHERE id = $2', [newBatchResult.rows[0].id, itemId]);
-        }
-
-        // 5. Обновление позиции в таблице receipt_items
+        // 4. Партии на складе ещё нет (документ не проведён — проверено выше),
+        // поэтому просто обновляем строку прихода, ничего не трогая в warehouse_batches.
         const updateQuery = `
             UPDATE receipt_items 
             SET price = $1, 
@@ -7530,7 +7502,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         const updateResult = await client.query(updateQuery, values);
         const updatedItem = updateResult.rows[0];
 
-        // 6. Запись лога в новую изолированную таблицу receipt_logs через writeReceiptLog
+        // 5. Запись лога в новую изолированную таблицу receipt_logs через writeReceiptLog
         await writeReceiptLog(client, req, {
             action: 'UPDATE',
             receipt_id: receipt_id,
@@ -7549,7 +7521,7 @@ router.put('/receipt_items/:id', async (req, res) => {
         await client.query('COMMIT');
 
         return res.status(200).json({
-            message: 'Позиция прихода успешно обновлена и остатки на складе синхронизированы',
+            message: 'Позиция прихода успешно обновлена',
             item: updatedItem
         });
 
@@ -7570,7 +7542,8 @@ router.put('/receipt_items/:id', async (req, res) => {
         client.release();
     }
 });
-// DELETE /api/receipt_items/:id - удаление позиции из прихода с проверкой warehouse_batches
+
+// DELETE /api/receipt_items/:id - удаление позиции из прихода
 router.delete('/receipt_items/:id', async (req, res) => {
 
     const itemId = req.params.id;
@@ -7612,44 +7585,11 @@ router.delete('/receipt_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Нельзя удалять позиции из уже проведенного прихода. Сначала отмените проведение документа.' });
         }
 
-               // 3. Находим СВОЮ конкретную партию по batch_id — точно, без путаницы с другими строками той же запчасти в этом же приходе
-        let batchCheck;
-        if (currentItem.batch_id) {
-            batchCheck = await client.query(
-                'SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE',
-                [currentItem.batch_id]
-            );
-        } else {
-            batchCheck = await client.query(
-                'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-                [warehouseId, zaphasti_id, receipt_id]
-            );
-        }
-               if (batchCheck.rows.length > 0) {
-            const batch = batchCheck.rows[0];
-            const currentBatchQty = Number(batch.quantity) || 0;
+        // 3. Партии на складе ещё нет (документ не проведён — проверено выше),
+        // поэтому просто удаляем строку прихода.
+        await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
 
-            // Если со склада по этой партии уже успели что-то списать (остаток меньше, чем было в приходе)
-            if (currentBatchQty < initialQty) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ 
-                    error: `Нельзя удалить позицию из прихода, так как часть товара (${initialQty - currentBatchQty} шт. из ${initialQty} шт.) уже была списана со склада в другие документы.` 
-                });
-            }
-
-            // 4. Сначала удаляем саму строку прихода (она ссылается на партию через batch_id) —
-            // только ПОСЛЕ этого можно безопасно удалить саму партию, иначе база не даст
-            // удалить партию, пока на неё ещё есть ссылка
-            await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
-
-            // 5. Теперь удаляем саму партию — ссылок на неё больше нет
-            await client.query('DELETE FROM warehouse_batches WHERE id = $1', [batch.id]);
-            console.log(`📦 [WAREHOUSE BATCH DELETED]: ID ${batch.id} для прихода ${receipt_id}`);
-        } else {
-            // Партии не нашли вообще — просто удаляем строку прихода
-            await client.query('DELETE FROM receipt_items WHERE id = $1', [itemId]);
-        }
-        // 5. Запись лога через writeReceiptLog
+        // 4. Запись лога через writeReceiptLog
         await writeReceiptLog(client, req, {
             action: 'DELETE',
             receipt_id: receipt_id,
@@ -7662,12 +7602,12 @@ router.delete('/receipt_items/:id', async (req, res) => {
             currency: currentItem.currency || 'RUB',
             price_rub: currentItem.price_rub || 0,
             total_rub: currentItem.total_rub || 0,
-            description: currentItem.description || 'Удалена позиция из прихода и со склада'
+            description: currentItem.description || 'Удалена позиция из прихода'
         });
 
         await client.query('COMMIT');
 
-        return res.status(200).json({ message: 'Позиция прихода и соответствующая партия со склада успешно удалены', id: itemId });
+        return res.status(200).json({ message: 'Позиция прихода успешно удалена', id: itemId });
 
     } catch (err) {
         await client.query('ROLLBACK');
