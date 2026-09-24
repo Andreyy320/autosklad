@@ -2546,9 +2546,10 @@ function getOrCreateDrawer() {
         drawer = document.createElement('div');
         drawer.id = 'entity-drawer';
         drawer.style.cssText = `
-            position: fixed; top: 0; right: -440px; width: 420px; height: 100%;
+                        position: fixed; top: 0; right: 0; width: min(420px, 94vw); height: 100%;
+            transform: translateX(100%);
             background: #ffffff; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.12);
-            z-index: 1000; transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1000;                         transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex; flex-direction: column; padding: 24px;
             box-sizing: border-box; overflow-y: auto; font-family: inherit;
         `;
@@ -2563,7 +2564,7 @@ function openDrawer() {
     const drawer = getOrCreateDrawer();
     const backdrop = document.getElementById('entity-drawer-backdrop');
     
-    drawer.style.right = '0px';
+       drawer.style.transform = 'translateX(0)';
     if (backdrop) {
         backdrop.style.opacity = '1';
         backdrop.style.pointerEvents = 'auto';
@@ -2575,8 +2576,7 @@ function closeDrawer() {
     const backdrop = document.getElementById('entity-drawer-backdrop');
     
     if (drawer) {
-        drawer.style.right = '-440px';
-        drawer.style.width = '420px';
+                drawer.style.transform = 'translateX(100%)';
     }
     if (backdrop) {
         backdrop.style.opacity = '0';
