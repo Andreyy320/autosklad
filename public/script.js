@@ -12758,9 +12758,12 @@ if (tableBody) {
     });
 }
 
-function showRowContextMenu(x, y) {
+function showRowContextMenu(x, y, onEdit, onDelete) {
     const old = document.getElementById('row-context-menu');
     if (old) old.remove();
+
+    const editHandler = typeof onEdit === 'function' ? onEdit : editSelectedEntity;
+    const deleteHandler = typeof onDelete === 'function' ? onDelete : deleteSelectedEntity;
 
     const menu = document.createElement('div');
     menu.id = 'row-context-menu';
@@ -12787,11 +12790,11 @@ function showRowContextMenu(x, y) {
 
     menu.querySelector('#ctx-edit').addEventListener('click', () => {
         menu.remove();
-        editSelectedEntity();
+        editHandler();
     });
     menu.querySelector('#ctx-delete').addEventListener('click', () => {
         menu.remove();
-        deleteSelectedEntity();
+        deleteHandler();
     });
 
     const closeMenu = (ev) => {
@@ -12802,7 +12805,6 @@ function showRowContextMenu(x, y) {
     };
     setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
-
 let currentCustomerSubTab = 'customer_contacts';
 
 function switchCustomerTab(tabName, btnElement) {
@@ -12951,6 +12953,40 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
             selectedDetailItem = item;
             openDetailForm('edit'); 
         }
+    });
+
+    // НОВОЕ: контекстное меню (правая кнопка мыши) для строк спецификации —
+    // работает только для receipt_items, move_items, repair_items, repair_works,
+    // realization_items, realization_works
+    detailBody.addEventListener('contextmenu', (e) => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+
+        const detailEntity = getCurrentDetailEntity();
+        const allowedDetailEntities = [
+            'receipt_items',
+            'move_items',
+            'repair_items',
+            'repair_works',
+            'realization_items',
+            'realization_works'
+        ];
+        if (!allowedDetailEntities.includes(detailEntity)) {
+            return;
+        }
+
+        e.preventDefault();
+
+        const id = tr.getAttribute('data-id');
+        const item = currentDetailItems.find(i => i.id == id);
+        if (!item) return;
+
+        selectedDetailItem = item;
+
+        document.querySelectorAll('#detail-body tr').forEach(row => row.style.background = '');
+        tr.style.background = '#e2e8f0';
+
+        showRowContextMenu(e.pageX, e.pageY, () => openDetailForm('edit'), deleteDetailItem);
     });
 }
 
