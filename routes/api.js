@@ -2987,10 +2987,10 @@ router.get('/stock_movement', async (req, res) => {
         const query = `
             WITH all_operations AS (
                 -- 1. Приходы
-                SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
-                FROM receipt_items ri 
-                JOIN receipts r ON ri.receipt_id = r.id 
-                WHERE r.warehouse_id IS NOT NULL
+SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
+FROM receipt_items ri 
+JOIN receipts r ON ri.receipt_id = r.id 
+WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
                 
                 UNION ALL
                 
@@ -3505,7 +3505,6 @@ router.put('/receipts/:id/post', async (req, res) => {
             }
         }
 
-        // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл приход
         await client.query(
             'INSERT INTO posting_logs (document_type, document_id, document_number, user_id, user_type) VALUES ($1, $2, $3, $4, $5)',
             ['receipt', id, result.rows[0].doc_number || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
