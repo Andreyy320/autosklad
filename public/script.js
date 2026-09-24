@@ -291,7 +291,7 @@ const tableConfig = {
             { field: 'password_hash', label: 'Пароль', style: 'display: none;' },
             { field: 'name', label: 'Наименование', width: '250px' },
             { field: 'role', label: 'Роль', width: '130px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.login}</b></td>
@@ -308,7 +308,7 @@ const tableConfig = {
             { field: 'password_hash', label: 'Пароль', style: 'display: none;' },
             { field: 'name', label: 'Наименование', width: '250px' },
             { field: 'role', label: 'Роль', width: '130px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.login}</b></td>
@@ -322,7 +322,7 @@ const tableConfig = {
         title: 'Бренды',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name}</b></td>
@@ -333,7 +333,7 @@ const tableConfig = {
         title: 'Кузов',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name}</b></td>
@@ -350,7 +350,7 @@ const tableConfig = {
             { field: 'engine', label: 'Двигатель', width: '100px' },
             { field: 'start_date', label: 'Начало', width: '90px' },
             { field: 'end_date', label: 'Конец', width: '90px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -384,7 +384,7 @@ const tableConfig = {
             { field: 'type_id', label: 'Тип', width: '130px', ref: 'counterparty_types' },
             { field: 'name', label: 'Наименование', width: '220px' },
             { field: 'short_name', label: 'Кратко', width: '150px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.type_name || '—'}</b></td>
@@ -400,7 +400,7 @@ const tableConfig = {
         { field: 'name_full', label: 'Наименование', width: '220px' },
         { field: 'name_short', label: 'Кратко', width: '150px' },
         { field: 'discount_part_id', label: 'Скидка зап.', width: '110px', ref: 'part_discounts' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => `
         <td><span style="color: #334155;">${item.type_name || '—'}</span></td>
@@ -417,7 +417,7 @@ const tableConfig = {
             { field: 'phone', label: 'Телефон', width: '150px' },
             { field: 'position', label: 'Должность', width: '150px' },
             { field: 'address', label: 'Адрес', width: '200px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -436,7 +436,7 @@ const tableConfig = {
             { field: 'year', label: 'Год', width: '70px' },
             { field: 'color', label: 'Цвет', width: '100px' },
             { field: 'vin', label: 'VIN-номер', width: '160px' },
-            { field: 'description', label: 'Описание' }
+           { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.brand || ''}</b></td>
@@ -456,7 +456,7 @@ const tableConfig = {
             { field: 'phone', label: 'Телефон', width: '150px' },
             { field: 'position', label: 'Должность', width: '150px' },
             { field: 'address', label: 'Адрес', width: '200px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -474,7 +474,7 @@ const tableConfig = {
             { field: 'phone', label: 'Телефон', width: '150px' },
             { field: 'position', label: 'Должность', width: '150px' },
             { field: 'address', label: 'Адрес', width: '200px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -490,7 +490,7 @@ const tableConfig = {
     title: 'Тип контрагента',
     columns: [
         { field: 'name', label: 'Наименование', width: '250px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => `
         <td><b>${item.name || ''}</b></td>
@@ -514,7 +514,7 @@ const tableConfig = {
             { field: 'type_sklad_id', label: 'Тип склада', width: '150px', ref: 'type_sklad' },
             { field: 'name', label: 'Наименование', width: '250px' },
             { field: 'markup_percent', label: 'Наценка (%)', width: '120px' },
-            { field: 'description', label: 'Описание' }
+           { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td>${item.type_name || '—'}</td>
@@ -529,7 +529,7 @@ const tableConfig = {
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
             { field: 'discount_percent', label: 'Процент скидки', width: '150px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -542,7 +542,7 @@ const tableConfig = {
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
             { field: 'discount_percent', label: 'Процент скидки', width: '150px' },
-            { field: 'description', label: 'Описание' }
+           { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -563,7 +563,7 @@ const tableConfig = {
             { field: 'color', label: 'Цвет' },
              { field: 'vin', label: 'VIN-номер' },
             { field: 'sklad_id', label: 'Вип клиента', ref: 'skladi' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.gos_number || ''}</b></td>
@@ -600,7 +600,7 @@ ${item.photo_url ? `<img src="${item.photo_url}" alt="Фото" style="width: 28
             { field: 'date', label: 'Дата', width: '160px' },
             { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
             { field: 'source_label', label: 'Источник', width: '140px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td>${item.date || ''}</td>
@@ -639,7 +639,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             { field: 'user_id', label: 'ФИО (Пользователь)', ref: 'mol_users' },
             { field: 'warehouse_id', label: 'Склад', ref: 'skladi' },
             { field: 'date_assigned', label: 'Дата назнач.', type: 'datetime-local', width: '160px' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => {
             const formatDT = (dateStr) => {
@@ -670,7 +670,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             { field: 'name', label: 'Наименование' },
             { field: 'proizvoditel_id', label: 'Производитель', ref: 'proizvoditel_zaphasti' },
             { field: 'ed_izmereniya_id', label: 'Ед. изм.', ref: 'ed_izmereniya' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td>${item.article || ''}</td>
@@ -696,7 +696,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
     title: 'Топливо',
     columns: [
         { field: 'name', label: 'Наименование', width: '250px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => `
         <td><b>${item.name || ''}</b></td>
@@ -797,7 +797,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         { field: 'price', label: 'Цена', width: '90px' },
         { field: 'currency', label: 'Валюта', width: '100px', default: 'Рубль ПМР' },
         { field: 'total_rub', label: 'Сумма', width: '90px', insert: false },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const price = Number(item.price) || 0;
@@ -996,7 +996,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         { field: 'year', label: 'Год вып.', width: '80px' },
         { field: 'color', label: 'Цвет', width: '80px' },
         { field: 'vin', label: 'VIN-номер', width: '180px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         return `
@@ -1024,7 +1024,7 @@ columns: [
     { field: 'mol', label: 'МОЛ', width: '150px' },
     { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
     { field: 'unit', label: 'Ед. изм.', width: '70px', align: 'center' },
-    { field: 'description', label: 'Описание' }
+    { field: 'description', label: 'Описание', width: '150px' }
 ],
 rowAttributes: (item) => {
     return `data-zaphasti-id="${item.id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
@@ -1057,7 +1057,7 @@ render: (item) => {
         { field: 'qty', label: 'Кол-во', width: '60px', align: 'right' },
         { field: 'price', label: 'Цена', width: '80px', align: 'right' },
         { field: 'sum', label: 'Сумма', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         if (!item) return '';
@@ -1130,7 +1130,7 @@ render: (item) => {
             { field: 'outcome_sum', label: 'Сумма', width: '80px', align: 'right' },
             { field: 'end_qty', label: 'Кол-во', width: '60px', align: 'right' },
             { field: 'end_sum', label: 'Сумма', width: '80px', align: 'right' },
-            { field: 'description', label: 'Описание' }
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         rowAttributes: (item) => {
             return `data-zaphasti-id="${item.id || item.zaphasti_id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
@@ -1292,7 +1292,7 @@ render: (item) => {
         { field: 'invoice_date', label: 'Дата', width: '150px' },
         { field: 'debtor', label: 'Должник', width: '180px' },
         { field: 'amount', label: 'Сумма', width: '120px', align: 'right' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1317,7 +1317,7 @@ render: (item) => {
         { field: 'payment_date', label: 'Дата', width: '150px', type: 'datetime-local' },
         { field: 'payer', label: 'Плательщик', width: '180px' },
         { field: 'amount', label: 'Сумма', width: '120px', align: 'right' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1360,7 +1360,7 @@ render: (item) => {
     columns: [
         { field: 'created_at', label: 'Дата загрузки', width: '160px' },
         { field: 'image_url', label: 'Изображение', type: 'image', width: '150px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1403,7 +1403,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
               { field: 'is_posted', label: 'Проведен', width: '200px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -1853,7 +1853,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
                 { field: 'is_posted', label: 'Проведен', width: '200px' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
