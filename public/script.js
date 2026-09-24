@@ -369,7 +369,7 @@ const tableConfig = {
             { field: 'counterparty_type_id', label: 'Тип', width: '150px', ref: 'counterparty_types' },
             { field: 'name', label: 'Наименование', width: '220px' },
             { field: 'short_name', label: 'Кратко', width: '150px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.counterparty_type_name || '—'}</b></td>
@@ -501,7 +501,7 @@ const tableConfig = {
         title: 'Тип склада',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -582,7 +582,7 @@ const tableConfig = {
         columns: [
             { field: 'date', label: 'Дата', type: 'date' },
             { field: 'title', label: 'Наименование' },
-            { field: 'description', label: 'Описание' },
+           { field: 'description', label: 'Описание', width: '150px' },
             { field: 'photo_url', label: 'Изображение', type: 'image' }
         ],
         render: (item) => `
@@ -615,7 +615,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         title: 'Исполнители',
         columns: [
             { field: 'name', label: 'Имя / Название', width: '250px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -626,7 +626,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         title: 'Типы ремонта',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -685,7 +685,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         title: 'Производитель',
         columns: [
             { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -723,7 +723,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         columns: [
             { field: 'name', label: 'Наименование' },
             { field: 'price', label: 'Стоимость', width: '120px' },
-            { field: 'description', label: 'Описание' },
+            { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
@@ -743,7 +743,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
         { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
-        { field: 'description', label: 'Описание' },
+        { field: 'description', label: 'Описание', width: '150px' },
         { field: 'is_opening_balance', label: 'Начальный остаток (не учитывать в расходах)', type: 'checkbox', table: false }
     ],
     render: (item) => {
@@ -831,7 +831,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         { field: 'sum_rub', label: 'Сумма РУБ', width: '120px', insert: false, readonly: true },
         { field: 'fact_date', label: 'Дата факт', type: 'datetime-local', width: '160px' },
                 { field: 'is_posted', label: 'Проведен', width: '200px', ref: 'statuses' },
-        { field: 'description', label: 'Описание' }
+        { field: 'description', label: 'Описание', width: '150px' }
     ],
     render: (item) => {
         const formatDT = (dateStr) => {
@@ -880,7 +880,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         { field: 'markup_percent', label: 'Наценка, %', width: '80px', insert: false },
         { field: 'currency', label: 'Валюта', width: '100px' },
         { field: 'total_rub', label: 'Сумма', width: '90px', insert: false },
-        { field: 'description', label: 'Описание' },
+{ field: 'description', label: 'Описание', width: '150px' },
         { field: 'income_document', label: 'Документ прихода', width: '180px', insert: false }
     ],
     render: (item) => {
@@ -1188,7 +1188,7 @@ render: (item) => {
         { label: "Выплачено", field: "paid_amount", width: "100px", align: "right", edit: false },
         { label: "Дата факт", field: "actual_date", type: 'datetime-local', width: "130px", edit: false },
         { label: "Проведен", field: "is_posted", width: "200px", insert: false, update: false },
-        { label: "Описание", field: "description", edit: false }
+       { label: "Описание", field: "description", width: "150px", edit: false }
     ],
     render: (item) => {
         const formatDT = (dateStr, includeTime = true) => {
@@ -1255,7 +1255,7 @@ render: (item) => {
         { field: 'damage_amount', label: 'Ущерб', width: '90px', align: 'right' },
         { field: 'account_number', label: 'Счет', width: '90px', align: 'right' },
         { field: 'paid_amount', label: 'Выплачено', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание' },
+        { field: 'description', label: 'Описание', width: '150px' },
         { field: 'doc_number', label: 'Документ ДТП', width: '180px' }
     ],
     render: (item) => {
@@ -1520,7 +1520,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание' },
+        { field: 'description', label: 'Описание', width: '150px' }
         { field: 'doc_source', label: 'Документ прихода / Исполнитель', width: '200px' }
     ],
     render: (repairsList) => {
@@ -1627,7 +1627,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание' },
+        { field: 'description', label: 'Описание', width: '150px' }
         { field: 'doc_source', label: 'Документ прихода', width: '200px' }
     ],
     render: (repairsList) => {
@@ -1734,7 +1734,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание' },
+        { field: 'description', label: 'Описание', width: '150px' }
         { field: 'document', label: 'Документ', width: '250px' }
     ],
     render: (itemsList) => {
