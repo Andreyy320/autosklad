@@ -1170,34 +1170,108 @@ router.get('/receipts', async (req, res) => {
 
 
 
+const RECEIPT_ITEMS_SQL_FIELDS = {
+    article: 'z.article',
+    code: 'z.code',
+    name: 'z.name',
+    unit: 'z.unit',
+    quantity: 'ri.quantity',
+    price: 'ri.price',
+    currency: 'ri.currency',
+    total_rub: 'COALESCE(NULLIF(ri.total_rub, 0), ri.price * ri.quantity)',
+    description: 'ri.description'
+};
+
+function sqlLikeContains(text) {
+    return '%' + String(text).replace(/[\\%_]/g, '\\$&') + '%';
+}
 
 router.get('/receipt_items', async (req, res) => {
     try {
         const { receipt_id } = req.query;
-        
-        let query = `
-            SELECT 
-                ri.*, 
-                z.article AS zaphasti_article, 
-                z.code AS zaphasti_code, 
-                z.name AS zaphasti_name, 
-                z.unit AS zaphasti_unit 
-            FROM receipt_items ri
-            LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id
-        `;
-        
-        let params = [];
+        const fromSql = `FROM receipt_items ri LEFT JOIN zaphasti z ON ri.zaphasti_id = z.id`;
+        const selectSql = `
+            SELECT ri.*,
+                z.article AS zaphasti_article,
+                z.code AS zaphasti_code,
+                z.name AS zaphasti_name,
+                z.unit AS zaphasti_unit
+            ${fromSql}`;
 
+        const wantsPage = req.query.page !== undefined
+            && String(req.query.limit || '').toLowerCase() !== 'all';
+
+        if (wantsPage) {
+            const where = [];
+            const params = [];
+
+            if (receipt_id) {
+                params.push(receipt_id);
+                where.push(`ri.receipt_id = $${params.length}`);
+            }
+
+            const search = String(req.query.search || '').trim().slice(0, 200);
+            if (search) {
+                const haystack = Object.values(RECEIPT_ITEMS_SQL_FIELDS)
+                    .map(expr => `COALESCE(CAST(${expr} AS text), '')`)
+                    .join(` || ' ' || `);
+                for (const token of search.split(/\s+/).filter(Boolean).slice(0, 10)) {
+                    params.push(sqlLikeContains(token));
+                    where.push(`(${haystack}) ILIKE $${params.length}`);
+                }
+            }
+
+            let filters = null;
+            if (req.query.filters) {
+                try {
+                    const parsed = JSON.parse(String(req.query.filters));
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) filters = parsed;
+                } catch (e) {}
+            }
+            if (filters) {
+                for (const field of Object.keys(filters).slice(0, 30)) {
+                    if (!Object.prototype.hasOwnProperty.call(RECEIPT_ITEMS_SQL_FIELDS, field)) continue;
+                    const val = String(filters[field] == null ? '' : filters[field]).trim().slice(0, 200);
+                    if (!val) continue;
+                    params.push(sqlLikeContains(val));
+                    where.push(`COALESCE(CAST(${RECEIPT_ITEMS_SQL_FIELDS[field]} AS text), '') ILIKE $${params.length}`);
+                }
+            }
+
+            const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+            const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || PAGE_SIZE_DEFAULT, 1), PAGE_SIZE_MAX);
+
+            const countRes = await pool.query(`SELECT COUNT(*)::int AS total ${fromSql} ${whereSql}`, params);
+            const total = countRes.rows[0].total;
+            const pages = Math.max(1, Math.ceil(total / limit));
+            const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), pages);
+
+            const rowsRes = await pool.query(
+                `${selectSql} ${whereSql} ORDER BY ri.id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+                [...params, limit, (page - 1) * limit]
+            );
+
+            res.set({
+                'X-Total-Count': String(total),
+                'X-Page': String(page),
+                'X-Page-Size': String(limit),
+                'X-Total-Pages': String(pages),
+                'Access-Control-Expose-Headers': 'X-Total-Count, X-Page, X-Page-Size, X-Total-Pages',
+                'Cache-Control': 'no-store'
+            });
+            res.locals.serverPaged = true;
+            return res.json(rowsRes.rows);
+        }
+
+        const params = [];
+        let query = selectSql;
         if (receipt_id) {
             query += ' WHERE ri.receipt_id = $1';
             params.push(receipt_id);
         }
+        query += ' ORDER BY ri.id ASC';
 
         const result = await pool.query(query, params);
-        
-        if (result.rows.length > 0) {
-        }
-
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении строк прихода:', err);

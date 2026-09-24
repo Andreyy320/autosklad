@@ -5725,7 +5725,7 @@ async function openReceiptForm(entity, item = null) {
             let hasItems = false;
             if (item && item.id) {
                 try {
-                    const itemsRes = await fetch(`/api/receipt_items?receipt_id=${item.id}`);
+                    const itemsRes = await fetch(`/api/receipt_items?receipt_id=${item.id}&page=1&limit=1`);
                     const itemsList = await itemsRes.json();
                     hasItems = Array.isArray(itemsList) && itemsList.length > 0;
                 } catch (e) {
@@ -9656,7 +9656,7 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
                         detailToolbarTarget.style.display = 'flex';
                     }
                 }
-
+                if (entity !== 'receipts') removeDetailPager();
                 if (entity === 'stock_balances') {
                     const zId = item.zaphasti_id || item.id;
                     const wId = item.warehouse_id || item.sklad_id || item.id_sklad || item.warehouseId;
@@ -12990,10 +12990,181 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
     });
 }
 
+const DETAIL_PAGED = { receipt_items: 'receipt_id' };
+const DETAIL_PAGED_TITLES = { receipt_items: 'Спецификация прихода' };
+const DETAIL_PAGE = { entity: null, parentId: null, page: 1, limit: 100, total: 0, filters: {}, timer: null, seq: 0 };
+
+function removeDetailPager() {
+    clearTimeout(DETAIL_PAGE.timer);
+    DETAIL_PAGE.entity = null;
+    DETAIL_PAGE.seq++;
+    const bar = document.getElementById('detail-pager');
+    if (bar) bar.remove();
+}
+
+function detailPagerGo(page) {
+    if (!DETAIL_PAGE.entity) return;
+    const pages = Math.max(1, Math.ceil(DETAIL_PAGE.total / DETAIL_PAGE.limit));
+    const target = Math.min(Math.max(1, parseInt(page, 10) || 1), pages);
+    if (target === DETAIL_PAGE.page) return;
+    DETAIL_PAGE.page = target;
+    loadDetailPage(DETAIL_PAGE.entity, DETAIL_PAGE.parentId);
+}
+
+function ensureDetailPager() {
+    let bar = document.getElementById('detail-pager');
+    if (bar) return bar;
+    const tbody = document.getElementById('detail-body');
+    if (!tbody) return null;
+    const table = tbody.closest('table');
+    const host = document.getElementById('detail-container') || (table ? table.parentElement : null);
+    if (!host) return null;
+
+    const btn = 'padding:2px 9px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:13px;';
+    bar = document.createElement('div');
+    bar.id = 'detail-pager';
+    bar.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding:4px 8px;font-size:13px;background:#f7f7f7;border-top:1px solid #ddd;box-sizing:border-box;position:sticky;bottom:0;z-index:2;';
+    bar.innerHTML = `
+        <span id="dp-info" style="color:#555;margin-right:auto;white-space:nowrap;"></span>
+        <button type="button" id="dp-first" title="В начало" style="${btn}">«</button>
+        <button type="button" id="dp-prev" title="Назад" style="${btn}">‹</button>
+        <span>стр. <input id="dp-page" type="number" min="1" value="1" style="width:56px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:13px;"> из <span id="dp-pages">1</span></span>
+        <button type="button" id="dp-next" title="Вперёд" style="${btn}">›</button>
+        <button type="button" id="dp-last" title="В конец" style="${btn}">»</button>
+        <select id="dp-limit" title="Строк на странице" style="padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+            <option value="50">50</option><option value="100">100</option>
+            <option value="200">200</option><option value="500">500</option>
+        </select>`;
+    host.appendChild(bar);
+
+    bar.querySelector('#dp-first').onclick = () => detailPagerGo(1);
+    bar.querySelector('#dp-prev').onclick = () => detailPagerGo(DETAIL_PAGE.page - 1);
+    bar.querySelector('#dp-next').onclick = () => detailPagerGo(DETAIL_PAGE.page + 1);
+    bar.querySelector('#dp-last').onclick = () => detailPagerGo(Math.ceil(DETAIL_PAGE.total / DETAIL_PAGE.limit));
+    const pageInput = bar.querySelector('#dp-page');
+    pageInput.addEventListener('change', () => detailPagerGo(pageInput.value));
+    pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') detailPagerGo(pageInput.value); });
+    bar.querySelector('#dp-limit').addEventListener('change', (e) => {
+        DETAIL_PAGE.limit = parseInt(e.target.value, 10) || 100;
+        DETAIL_PAGE.page = 1;
+        loadDetailPage(DETAIL_PAGE.entity, DETAIL_PAGE.parentId);
+    });
+    return bar;
+}
+
+function renderDetailPager() {
+    const bar = ensureDetailPager();
+    if (!bar) return;
+    const pages = Math.max(1, Math.ceil(DETAIL_PAGE.total / DETAIL_PAGE.limit));
+    const from = DETAIL_PAGE.total ? (DETAIL_PAGE.page - 1) * DETAIL_PAGE.limit + 1 : 0;
+    const to = Math.min(DETAIL_PAGE.total, DETAIL_PAGE.page * DETAIL_PAGE.limit);
+
+    bar.style.display = pages > 1 ? 'flex' : 'none';
+    bar.querySelector('#dp-info').textContent = DETAIL_PAGE.total ? `${from}–${to} из ${DETAIL_PAGE.total}` : 'Ничего не найдено';
+    bar.querySelector('#dp-pages').textContent = String(pages);
+    const pageInput = bar.querySelector('#dp-page');
+    if (document.activeElement !== pageInput) pageInput.value = String(DETAIL_PAGE.page);
+    pageInput.max = String(pages);
+    bar.querySelector('#dp-limit').value = String(DETAIL_PAGE.limit);
+
+    const atStart = DETAIL_PAGE.page <= 1;
+    const atEnd = DETAIL_PAGE.page >= pages;
+    bar.querySelector('#dp-first').disabled = atStart;
+    bar.querySelector('#dp-prev').disabled = atStart;
+    bar.querySelector('#dp-next').disabled = atEnd;
+    bar.querySelector('#dp-last').disabled = atEnd;
+}
+
+async function loadDetailPage(entity, parentId, token, showLoader) {
+    const config = getConfig(entity);
+    const tbody = document.getElementById('detail-body');
+    if (!tbody || !Object.prototype.hasOwnProperty.call(DETAIL_PAGED, entity)) return;
+
+    const myToken = (token === undefined) ? detailLoadToken : token;
+    const mySeq = ++DETAIL_PAGE.seq;
+    const stale = () => myToken !== detailLoadToken || mySeq !== DETAIL_PAGE.seq;
+
+    const visibleColumns = config && config.columns ? config.columns.filter(col => col.table !== false) : [];
+    const colCount = visibleColumns.length > 0 ? visibleColumns.length : 1;
+
+    if (showLoader) {
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">Загрузка...</td></tr>`;
+    } else {
+        tbody.style.opacity = '0.5';
+    }
+
+    try {
+        const params = new URLSearchParams();
+        params.set(DETAIL_PAGED[entity], parentId);
+        params.set('page', String(DETAIL_PAGE.page));
+        params.set('limit', String(DETAIL_PAGE.limit));
+        if (Object.keys(DETAIL_PAGE.filters).length) params.set('filters', JSON.stringify(DETAIL_PAGE.filters));
+
+        const response = await fetch(`/api/${entity}?${params.toString()}`);
+        if (stale()) return;
+        if (!response.ok) throw new Error(`Ошибка загрузки деталей (Статус: ${response.status})`);
+        const items = await response.json();
+        if (stale()) return;
+
+        const total = parseInt(response.headers.get('X-Total-Count'), 10);
+        const page = parseInt(response.headers.get('X-Page'), 10);
+        DETAIL_PAGE.total = Number.isFinite(total) ? total : items.length;
+        if (Number.isFinite(page)) DETAIL_PAGE.page = page;
+
+        currentDetailItems = items;
+        selectedDetailItem = null;
+
+        const titleElement = document.getElementById('detail-title');
+        if (titleElement) {
+            const prettyName = DETAIL_PAGED_TITLES[entity] || (config && config.title) || entity;
+            titleElement.innerText = `${prettyName} | Записей: ${DETAIL_PAGE.total}`;
+        }
+
+        if (items.length === 0) {
+            const hasFilters = Object.keys(DETAIL_PAGE.filters).length > 0;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: #888; padding: 20px;">${hasFilters ? 'Ничего не найдено' : 'Нет данных для отображения'}</td></tr>`;
+        } else {
+            const frag = document.createDocumentFragment();
+            items.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = item.id || '';
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = config.render(item);
+                tr.onclick = () => {
+                    selectedDetailItem = item;
+                    tbody.querySelectorAll('tr').forEach(row => row.classList.remove('selected-row'));
+                    tr.classList.add('selected-row');
+                };
+                frag.appendChild(tr);
+            });
+            tbody.innerHTML = '';
+            tbody.appendChild(frag);
+        }
+        renderDetailPager();
+    } catch (err) {
+        if (stale()) return;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; color: red; padding: 20px;">Ошибка загрузки данных с сервера</td></tr>`;
+    } finally {
+        if (!stale() || !DETAIL_PAGE.entity) tbody.style.opacity = '';
+    }
+}
+
+
 function filterDetailTable() {
     const filterRow = document.getElementById('detail-filter-row');
     if (!filterRow) return;
-
+    if (DETAIL_PAGE.entity && Object.prototype.hasOwnProperty.call(DETAIL_PAGED, DETAIL_PAGE.entity)) {
+        const serverFilters = {};
+        filterRow.querySelectorAll('input[data-column]').forEach(input => {
+            const v = input.value.trim();
+            if (v) serverFilters[input.dataset.column] = v;
+        });
+        DETAIL_PAGE.filters = serverFilters;
+        DETAIL_PAGE.page = 1;
+        clearTimeout(DETAIL_PAGE.timer);
+        DETAIL_PAGE.timer = setTimeout(() => loadDetailPage(DETAIL_PAGE.entity, DETAIL_PAGE.parentId), 350);
+        return;
+    }
     const filterInputs = filterRow.querySelectorAll('input[data-column]');
     const filters = {};
 
@@ -13080,7 +13251,17 @@ async function loadDetailData(entity, parentId) {
     if (parentId && typeof parentId === 'object' && !skipObjectCleaning.includes(entity) && !skipObjectCleaning.includes(activeEntity)) {
         cleanParentId = parentId.id || parentId.realization_id || parentId.receipt_id || parentId.customer_id || parentId.car_id || parentId.repair_id || parentId.move_id || parentId.dtp_id || parentId.accident_id || parentId.id_accident || '';
     }
-
+    let detailSameParent = false;
+    const isPagedDetail = Object.prototype.hasOwnProperty.call(DETAIL_PAGED, entity);
+    if (isPagedDetail) {
+        detailSameParent = DETAIL_PAGE.entity === entity && String(DETAIL_PAGE.parentId) === String(cleanParentId);
+        if (!detailSameParent) { DETAIL_PAGE.page = 1; DETAIL_PAGE.filters = {}; }
+        DETAIL_PAGE.entity = entity;
+        DETAIL_PAGE.parentId = cleanParentId;
+        clearTimeout(DETAIL_PAGE.timer);
+    } else {
+        removeDetailPager();
+    }
     let checkEntity = entity;
 
     const configCheck = getConfig(checkEntity); 
@@ -13095,6 +13276,7 @@ async function loadDetailData(entity, parentId) {
         if (tbodyCheck) {
             tbodyCheck.innerHTML = `<tr><td colspan="${colCountCheck}" style="text-align: center; color: #888; padding: 20px;">Выберите элемент в верхней таблице</td></tr>`;
         }
+                removeDetailPager();
         return;
     }
 
@@ -13202,7 +13384,17 @@ async function loadDetailData(entity, parentId) {
             return `<th style="padding: 6px; border-bottom: 1px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
     }
-
+    if (isPagedDetail) {
+        const pagedFilterRow = document.getElementById('detail-filter-row');
+        if (pagedFilterRow) {
+            pagedFilterRow.querySelectorAll('input[data-column]').forEach(input => {
+                const saved = DETAIL_PAGE.filters[input.dataset.column];
+                if (saved) input.value = saved;
+            });
+        }
+        await loadDetailPage(entity, cleanParentId, myDetailToken, !detailSameParent);
+        return;
+    }
             if (activeEntity === 'car_images') {
         const titleElement = document.getElementById('detail-title');
         try {
