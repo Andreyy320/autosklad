@@ -709,7 +709,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             { field: 'name', label: 'Наименование', width: '200px' },
             { field: 'short_name', label: 'Сокр.', width: '120px' },
             { field: 'regex_pattern', label: 'Паттерн (Regex)', width: '180px' },
-            { field: 'error_text', label: 'Текст ошибки' },
+            { field: 'error_text', label: 'Текст ошибки', width: '150px' },
         ],
         render: (item) => `
             <td><b>${item.name || ''}</b></td>
