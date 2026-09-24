@@ -2549,7 +2549,7 @@ function getOrCreateDrawer() {
                         position: fixed; top: 0; right: 0; width: min(420px, 94vw); height: 100%;
             transform: translateX(100%);
             background: #ffffff; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.12);
-            z-index: 1000;                         transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1000;             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex; flex-direction: column; padding: 24px;
             box-sizing: border-box; overflow-y: auto; font-family: inherit;
         `;
@@ -2964,7 +2964,7 @@ async function openEntityForm(entity, item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -3475,7 +3475,7 @@ async function openRealizationWorksForm(item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -3764,7 +3764,7 @@ async function openRepairWorksForm(item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -4079,7 +4079,7 @@ async function openReceiptItemsForm(item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -4377,7 +4377,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -4684,7 +4684,7 @@ async function openRepairItemsForm(item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -4974,7 +4974,7 @@ if (col.field === 'markup_percent' && !val) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -5264,7 +5264,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
         `;
 
         drawer.innerHTML = html;
-        drawer.style.transform = 'translateX(0)';
+        drawer.style.right = '0';
 
         let rawFormElement = drawer.querySelector('#entity-form');
         const formElement = rawFormElement.cloneNode(true);
@@ -5418,7 +5418,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
         `;
 
         drawer.innerHTML = html;
-        drawer.style.transform = 'translateX(0)';
+        drawer.style.right = '0';
 
         const formElement = drawer.querySelector('#accident-image-form');
 
@@ -5561,7 +5561,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -5851,7 +5851,7 @@ async function openReceiptForm(entity, item = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -6318,7 +6318,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -6812,7 +6812,7 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -7423,7 +7423,7 @@ async function openRealizationForm(entity, item = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     let rawFormElement = drawer.querySelector('#entity-form');
     const formElement = rawFormElement.cloneNode(true);
@@ -8260,7 +8260,7 @@ async function openCarDetailsForm(entity, item = null, parentId = null) {
     `;
 
     drawer.innerHTML = html;
-    drawer.style.transform = 'translateX(0)';
+    drawer.style.right = '0';
 
     const formElement = drawer.querySelector('#car-details-form');
 
