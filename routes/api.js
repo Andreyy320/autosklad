@@ -3421,26 +3421,88 @@ router.put('/receipts/:id/post', async (req, res) => {
 
         // НОВОЕ: только сейчас, при проведении, создаём партии на складе (warehouse_batches)
         // для каждой позиции прихода — именно с этого момента товар появляется в остатках.
-        for (const item of itemsRes.rows) {
-            if (item.batch_id) continue; // партия уже есть (на всякий случай, не должно происходить)
+        // Позиции, у которых партия уже есть (на всякий случай, не должно происходить), пропускаем.
+        const itemsToBatch = itemsRes.rows.filter(item => !item.batch_id);
 
-            const batchResult = await client.query(`
-                INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
-                VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
-                RETURNING id;
-            `, [
-                receiptData.warehouse_id,
-                item.zaphasti_id,
-                id,
-                item.price_rub,
-                item.quantity,
-                receiptData.date
-            ]);
+        if (itemsToBatch.length > 0) {
+            const itemIds = itemsToBatch.map(item => item.id);
+            let bulkDone = false;
 
-            await client.query(
-                'UPDATE receipt_items SET batch_id = $1 WHERE id = $2',
-                [batchResult.rows[0].id, item.id]
-            );
+            // БЫСТРЫЙ ПУТЬ: все партии создаются и привязываются к строкам одним запросом
+            // (вместо 2 запросов на каждую позицию). Если что-то пойдёт не так — откатываем
+            // только этот шаг и делаем по-старому, циклом (медленнее, но так же надёжно).
+            await client.query('SAVEPOINT bulk_batches');
+            try {
+                const bulkRes = await client.query(`
+                    WITH todo AS (
+                        SELECT ri.id AS item_id, ri.zaphasti_id, ri.price_rub, ri.quantity,
+                               ROW_NUMBER() OVER (ORDER BY ri.id) AS rn
+                        FROM receipt_items ri
+                        WHERE ri.id = ANY($1)
+                    ),
+                    ins AS (
+                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                        SELECT r.warehouse_id, t.zaphasti_id, r.id, t.price_rub, t.quantity, COALESCE($3, NOW())
+                        FROM todo t
+                        JOIN receipts r ON r.id = $2
+                        ORDER BY t.rn
+                        RETURNING id
+                    ),
+                    numbered AS (
+                        SELECT id AS batch_id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+                        FROM ins
+                    )
+                    UPDATE receipt_items ri
+                    SET batch_id = n.batch_id
+                    FROM todo t
+                    JOIN numbered n ON n.rn = t.rn
+                    WHERE ri.id = t.item_id
+                `, [itemIds, id, receiptData.date]);
+
+                // Проверка: каждой позиции досталась партия с теми же запчастью, ценой и количеством
+                const checkRes = await client.query(`
+                    SELECT COUNT(*)::int AS bad
+                    FROM receipt_items ri
+                    JOIN warehouse_batches wb ON wb.id = ri.batch_id
+                    WHERE ri.id = ANY($1)
+                      AND (wb.zaphasti_id IS DISTINCT FROM ri.zaphasti_id
+                        OR wb.price_rub IS DISTINCT FROM ri.price_rub
+                        OR wb.quantity IS DISTINCT FROM ri.quantity)
+                `, [itemIds]);
+
+                if (bulkRes.rowCount !== itemIds.length || checkRes.rows[0].bad > 0) {
+                    throw new Error(`проверка партий не пройдена (привязано ${bulkRes.rowCount} из ${itemIds.length}, расхождений: ${checkRes.rows[0].bad})`);
+                }
+
+                await client.query('RELEASE SAVEPOINT bulk_batches');
+                bulkDone = true;
+            } catch (bulkErr) {
+                console.warn('Массовое создание партий не сработало, проводим по одной позиции:', bulkErr.message);
+                await client.query('ROLLBACK TO SAVEPOINT bulk_batches');
+            }
+
+            // МЕДЛЕННЫЙ ПУТЬ (как было раньше) — только если быстрый не сработал
+            if (!bulkDone) {
+                for (const item of itemsToBatch) {
+                    const batchResult = await client.query(`
+                        INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
+                        VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
+                        RETURNING id;
+                    `, [
+                        receiptData.warehouse_id,
+                        item.zaphasti_id,
+                        id,
+                        item.price_rub,
+                        item.quantity,
+                        receiptData.date
+                    ]);
+
+                    await client.query(
+                        'UPDATE receipt_items SET batch_id = $1 WHERE id = $2',
+                        [batchResult.rows[0].id, item.id]
+                    );
+                }
+            }
         }
 
         // НОВОЕ: пишем в журнал проведения документов, кто и когда провёл приход
