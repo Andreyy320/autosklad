@@ -12963,14 +12963,17 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         const tr = e.target.closest('tr');
         if (!tr) return;
 
-        const detailEntity = getCurrentDetailEntity();
+              const detailEntity = getCurrentDetailEntity();
         const allowedDetailEntities = [
             'receipt_items',
             'move_items',
             'repair_items',
             'repair_works',
             'realization_items',
-            'realization_works'
+            'realization_works',
+            'customer_cars',
+            'customer_contacts',
+            'postavhik_contacts'
         ];
         if (!allowedDetailEntities.includes(detailEntity)) {
             return;
