@@ -1520,7 +1520,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание', width: '150px' }
+        { field: 'description', label: 'Описание', width: '150px' },
         { field: 'doc_source', label: 'Документ прихода / Исполнитель', width: '200px' }
     ],
     render: (repairsList) => {
@@ -1627,7 +1627,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание', width: '150px' }
+        { field: 'description', label: 'Описание', width: '150px' },
         { field: 'doc_source', label: 'Документ прихода', width: '200px' }
     ],
     render: (repairsList) => {
@@ -1734,7 +1734,7 @@ const isPosted = Boolean(item.is_posted);
         { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание', width: '150px' }
+        { field: 'description', label: 'Описание', width: '150px' },
         { field: 'document', label: 'Документ', width: '250px' }
     ],
     render: (itemsList) => {
