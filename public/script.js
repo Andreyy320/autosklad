@@ -44,12 +44,12 @@ function applyAccessControl() {
     const financeSection = document.getElementById('section-finance');
     const logsSection = document.getElementById('section-logs');
     const employeesLink = document.getElementById('nav-employees');
-    const usersLink = document.getElementById('nav-users'); // ← новая строка
+    const usersLink = document.getElementById('nav-users'); 
     if (role !== 'admin') {
         if (financeSection) financeSection.style.display = 'none';
         if (logsSection) logsSection.style.display = 'none';
         if (employeesLink) employeesLink.style.display = 'none';
-        if (usersLink) usersLink.style.display = 'none'; // ← новая строка
+        if (usersLink) usersLink.style.display = 'none'; 
     }
 }
 
@@ -13828,12 +13828,12 @@ function setDetailToolbarVisible(visible) {
 
 
 (function() {
-    if (!document.getElementById('auto-table-resizer-style')) {
+     if (!document.getElementById('auto-table-resizer-style')) {
         const style = document.createElement('style');
         style.id = 'auto-table-resizer-style';
         style.textContent = `
-    table { table-layout: fixed !important; }
-            th, td { position: relative !important; }
+        table { table-layout: fixed !important; width: 100% !important; }
+            th, td { position: relative !important; overflow: hidden !important; text-overflow: ellipsis !important; }
             th .resizer, td .resizer {
                 position: absolute;
                 top: 0;
@@ -13851,18 +13851,19 @@ function setDetailToolbarVisible(visible) {
             }
         `;
         document.head.appendChild(style);
-    }
+     }
 
      function applyTableResizers() {
     const activeLink = document.querySelector('.nav-link.active');
     const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
     const currentUserId = localStorage.getItem('currentUserId') || 'guest';
 
-        document.querySelectorAll('table').forEach(table => {
+               document.querySelectorAll('table').forEach(table => {
             if (table.parentElement) {
-                table.parentElement.style.overflowX = 'auto';
+                table.parentElement.style.overflowX = 'hidden';
                 table.parentElement.style.maxWidth = '100%';
             }
+            table.style.width = '100%';
 
             const headerRowEl = table.querySelector('thead tr[id]');
             const tableRole = headerRowEl ? headerRowEl.id : 'table';
