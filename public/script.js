@@ -13886,19 +13886,24 @@ function setDetailToolbarVisible(visible) {
             const textCells = textRow.querySelectorAll('th, td');
 
             const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            const textCellsArr = Array.from(textCells);
+            const colCount = textCellsArr.length;
+            if (colCount === 0) return;
 
-                       textCells.forEach((th, colIndex) => {
+            let percents = textCellsArr.map((th, colIndex) => {
                 const widthKey = th.dataset.field || colIndex;
+                if (savedWidths[widthKey] != null) return parseFloat(savedWidths[widthKey]) || (100 / colCount);
+                const w = th.offsetWidth;
+                return w > 0 ? w : (100 / colCount);
+            });
+            const sum = percents.reduce((a, b) => a + b, 0) || 1;
+            percents = percents.map(p => (p / sum) * 100);
 
-                if (savedWidths[widthKey]) {
-                    th.style.width = savedWidths[widthKey];
-                    for (let i = 0; i < textRowIndex; i++) {
-                        const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                        if (upperCell) upperCell.style.width = savedWidths[widthKey];
-                    }
-                } else if (!th.style.width || th.style.width === 'auto') {
-                    const w = th.offsetWidth;
-                    if (w > 0) th.style.width = `${w}px`;
+            textCellsArr.forEach((th, colIndex) => {
+                th.style.width = percents[colIndex] + '%';
+                for (let i = 0; i < textRowIndex; i++) {
+                    const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
+                    if (upperCell) upperCell.style.width = percents[colIndex] + '%';
                 }
 
                 if (th.querySelector('.resizer')) return;
@@ -13908,44 +13913,48 @@ function setDetailToolbarVisible(visible) {
                 th.appendChild(resizer);
 
                 let startX = 0;
-                let startWidth = 0;
+                let startPercents = [];
 
                 resizer.addEventListener('mousedown', function (e) {
+                    if (colIndex >= colCount - 1) return;
                     startX = e.clientX;
-                    startWidth = th.offsetWidth;
+                    startPercents = percents.slice();
                     resizer.classList.add('resizing');
                     document.body.style.cursor = 'col-resize';
 
                     function onMouseMove(e) {
-                        const dx = e.clientX - startX;
-                        const newWidth = Math.max(10, startWidth + dx); 
-                        
-                        th.style.width = `${newWidth}px`;
-
-                        for (let i = 0; i < textRowIndex; i++) {
-                            const upperCell = rows[i].querySelectorAll('th, td')[colIndex];
-                            if (upperCell) {
-                                upperCell.style.width = `${newWidth}px`;
+                        const tableWidth = table.offsetWidth;
+                        if (!tableWidth) return;
+                        const dxPercent = ((e.clientX - startX) / tableWidth) * 100;
+                        let newCur = startPercents[colIndex] + dxPercent;
+                        let newNext = startPercents[colIndex + 1] - dxPercent;
+                        if (newCur < 4) { newNext -= (4 - newCur); newCur = 4; }
+                        if (newNext < 4) { newCur -= (4 - newNext); newNext = 4; }
+                        percents[colIndex] = newCur;
+                        percents[colIndex + 1] = newNext;
+                        [colIndex, colIndex + 1].forEach(ci => {
+                            textCellsArr[ci].style.width = percents[ci] + '%';
+                            for (let i = 0; i < textRowIndex; i++) {
+                                const upperCell = rows[i].querySelectorAll('th, td')[ci];
+                                if (upperCell) upperCell.style.width = percents[ci] + '%';
                             }
-                        }
+                        });
                     }
 
-                                       function onMouseUp() {
+                    function onMouseUp() {
                         resizer.classList.remove('resizing');
                         document.body.style.cursor = '';
                         window.removeEventListener('mousemove', onMouseMove);
                         window.removeEventListener('mouseup', onMouseUp);
-
                         const currentWidths = {};
-                        textRow.querySelectorAll('th, td').forEach((cell, idx) => {
+                        textCellsArr.forEach((cell, idx) => {
                             const key = cell.dataset.field || idx;
-                            currentWidths[key] = cell.style.width;
+                            currentWidths[key] = percents[idx].toFixed(3) + '%';
                         });
                         localStorage.setItem(storageKey, JSON.stringify(currentWidths));
                     }
                     window.addEventListener('mousemove', onMouseMove);
                     window.addEventListener('mouseup', onMouseUp);
-
                     e.preventDefault();
                     e.stopPropagation();
                 });
