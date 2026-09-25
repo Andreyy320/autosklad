@@ -1969,12 +1969,13 @@ LEFT JOIN mol m ON r.mol_id = m.id
             ) works ON works.repair_id = r.id
         `;
         
+              query += ` WHERE r.doc_number NOT LIKE 'ИСТ-%'`;
+
         let queryParams = [];
         if (car_id) {
-            query += ` WHERE r.car_id = $1`;
+            query += ` AND r.car_id = $1`;
             queryParams.push(car_id);
         }
-
         const handled = await trySqlFastPage(pool, req, res, { fromSql: query, orderBySql: 'id DESC', params: queryParams });
         if (handled) return;
 
