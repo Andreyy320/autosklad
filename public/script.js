@@ -13381,12 +13381,13 @@ async function loadDetailData(entity, parentId) {
         }).join('');
     }
 
-    if (headerTr && visibleColumns.length > 0) {
+        if (headerTr && visibleColumns.length > 0) {
         headerTr.innerHTML = visibleColumns.map(col => {
             let widthStyle = col.width ? `width: ${col.width};` : '';
             let alignStyle = col.align ? `text-align: ${col.align};` : 'text-align: left;';
             return `<th style="padding: 6px; border-bottom: 1px solid #ddd; ${widthStyle} ${alignStyle}">${col.label}</th>`;
         }).join('');
+        headerTr.dataset.entity = entity;
     }
     if (isPagedDetail) {
         const pagedFilterRow = document.getElementById('detail-filter-row');
@@ -13869,8 +13870,8 @@ function setDetailToolbarVisible(visible) {
             }
             table.style.width = '100%';
 
-            const headerRowEl = table.querySelector('thead tr[id]');
-            const tableRole = headerRowEl ? headerRowEl.id : 'table';
+                       const headerRowEl = table.querySelector('thead tr[id]');
+            const tableRole = headerRowEl ? (headerRowEl.dataset.entity || headerRowEl.id) : 'table';
             const storageKey = `col_widths_${currentUserId}_${sectionKey}_${tableRole}`;
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
