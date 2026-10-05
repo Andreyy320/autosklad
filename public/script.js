@@ -1528,69 +1528,116 @@ const isPosted = Boolean(item.is_posted);
             return `<tr><td colspan="9" style="text-align: center; color: #888; padding: 20px;">Нет данных по ремонту</td></tr>`;
         }
 
-        let html = '';
+               let html = '';
+
+        // 1. Собираем все плашки (документ + день) в один список
+        const groups = [];
 
         repairsList.forEach((repair, index) => {
             const repairType = repair.repair_type_name || repair.type || 'Ремонт';
             const docNum = repair.doc_number || '';
-            const docDate = repair.doc_date ? new Date(repair.doc_date).toLocaleDateString('ru-RU') : '';
-            const mileage = repair.mileage ? ` | ${repair.mileage} км` : '';
-            const groupId = `repair-group-${repair.id || index}`;
-            
-            let calculatedTotal = 0;
-            if (repair.items && repair.items.length > 0) {
-                repair.items.forEach(item => {
-                    const itemSum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0)) || 0);
-                    calculatedTotal += itemSum;
+
+            // дата документа как запасной вариант
+            const rd = repair.doc_date ? new Date(repair.doc_date) : null;
+            const docKey = (rd && !isNaN(rd))
+                ? `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`
+                : '0000-00-00';
+
+            // если работ нет — одна плашка с описанием ремонта
+            if (!repair.items || repair.items.length === 0) {
+                groups.push({
+                    key: docKey,
+                    repairId: Number(repair.id) || 0,
+                    groupId: `repair-group-${repair.id || index}-${docKey}`,
+                    repairType,
+                    docNum,
+                    items: [],
+                    total: Number(repair.total_cost || repair.sum || 0),
+                    mileage: repair.mileage || '',
+                    emptyRepair: repair
                 });
-            } else {
-                calculatedTotal = Number(repair.total_cost || repair.sum || 0);
+                return;
             }
-            const costVal = calculatedTotal.toFixed(2);
-            
+
+            // раскладываем работы документа по дням
+            const dayMap = {};
+            repair.items.forEach(item => {
+                const desc = item.description || '';
+                const dm = desc.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+                const key = dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : docKey;
+                const mm = desc.match(/пробег\s*:?\s*(\d+)/i);
+                const mileage = mm ? mm[1] : (repair.mileage || '');
+
+                if (!dayMap[key]) dayMap[key] = { items: [], total: 0, mileage: '' };
+                const day = dayMap[key];
+                day.items.push(item);
+                day.total += Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0)) || 0);
+                if (!day.mileage && mileage) day.mileage = mileage;
+            });
+
+            Object.keys(dayMap).forEach(key => {
+                groups.push({
+                    key,
+                    repairId: Number(repair.id) || 0,
+                    groupId: `repair-group-${repair.id || index}-${key}`,
+                    repairType,
+                    docNum,
+                    ...dayMap[key]
+                });
+            });
+        });
+
+        // 2. Сортировка: новые даты сверху, старые внизу
+        groups.sort((a, b) => {
+            if (a.key !== b.key) return a.key < b.key ? 1 : -1;
+            return b.repairId - a.repairId;
+        });
+
+        // 3. Вывод
+        groups.forEach(g => {
+            const [y, m, d] = g.key.split('-');
+            const dateLabel = g.key === '0000-00-00' ? '' : `${d}.${m}.${y}`;
+            const mileageLabel = g.mileage ? ` | ${g.mileage} км` : '';
+
             html += `
-                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleRepairGroup('${groupId}', this)">
+                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleRepairGroup('${g.groupId}', this)">
                     <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
                         <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
-                        <span style="color: #212529;">${repairType} ${docNum} от ${docDate}</span> 
-                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #495057;">${repairType}</span> 
-                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
-                        <span style="color: #0f172a;">Итого: ${costVal} руб.${mileage}</span>
-                                            </td>
-                </tr>
-            `;
+                        <span style="color: #212529;">${g.repairType} ${g.docNum} от ${dateLabel}</span>
+                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span>
+                        <span style="color: #0f172a;">Итого: ${g.total.toFixed(2)} руб.${mileageLabel}</span>
+                    </td>
+                </tr>`;
 
-            if (repair.items && repair.items.length > 0) {
-                repair.items.forEach(item => {
-                    const price = Number(item.price || 0).toFixed(2);
-                    const sum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0))).toFixed(2);
-                    const qty = item.quantity || item.qty || '';
-                    
-                    html += `
-                        <tr class="${groupId}" style="background-color: #ffffff;">
-                            <td style="padding-left: 25px;">${item.article || ''}</td>
-                            <td>${item.code || ''}</td>
-                            <td>${item.name || ''}</td>
-                            <td style="text-align: center;">${qty}</td>
-                            <td style="text-align: center;">${item.unit || 'шт'}</td>
-                            <td style="text-align: right;">${price}</td>
-                            <td style="text-align: right;">${sum}</td>
-                            <td>${item.description || ''}</td>
-                            <td>${item.doc_source || item.contractor || ''}</td>
-                        </tr>
-                    `;
-                });
-            } else {
+            if (g.emptyRepair) {
                 html += `
-                    <tr class="${groupId}" style="background-color: #ffffff;">
+                    <tr class="${g.groupId}" style="background-color: #ffffff;">
                         <td colspan="2"></td>
-                        <td colspan="5" style="color: #333;">${repair.description || '—'}</td>
+                        <td colspan="5" style="color: #333;">${g.emptyRepair.description || '—'}</td>
                         <td></td>
-                        <td style="color: #555;">${repair.contractor || ''}</td>
-                    </tr>
-                `;
+                        <td style="color: #555;">${g.emptyRepair.contractor || ''}</td>
+                    </tr>`;
+                return;
             }
+
+            g.items.forEach(item => {
+                const price = Number(item.price || 0).toFixed(2);
+                const sum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0))).toFixed(2);
+                const qty = item.quantity || item.qty || '';
+
+                html += `
+                    <tr class="${g.groupId}" style="background-color: #ffffff;">
+                        <td style="padding-left: 25px;">${item.article || ''}</td>
+                        <td>${item.code || ''}</td>
+                        <td>${item.name || ''}</td>
+                        <td style="text-align: center;">${qty}</td>
+                        <td style="text-align: center;">${item.unit || ''}</td>
+                        <td style="text-align: right;">${price}</td>
+                        <td style="text-align: right;">${sum}</td>
+                        <td>${item.description || ''}</td>
+                        <td>${item.doc_source || item.contractor || ''}</td>
+                    </tr>`;
+            });
         });
 
         if (typeof window.toggleRepairGroup === 'undefined') {
@@ -1617,6 +1664,7 @@ const isPosted = Boolean(item.is_posted);
         return html;
     }
     },
+    
     receipts_history: {
     title: 'Запчасти по ремонту',
     columns: [
