@@ -7764,7 +7764,6 @@ router.delete('/receipt_items/:id', async (req, res) => {
 
 // POST /api/move_items - перемещение с прямым обновлением warehouse_batches (FIFO по партиями склада с учетом наценки)
 router.post('/move_items', async (req, res) => {
-  
 
     const { zaphasti_id, currency, quantity, description, move_id } = req.body;
     const requestedQty = Number(quantity) || 0;
@@ -7834,6 +7833,16 @@ router.post('/move_items', async (req, res) => {
         if (markupRes.rows.length > 0) {
             markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
         }
+
+        // >>> ДОБАВЛЕНО: особый процент запчасти (если задан) заменяет процент склада
+        const specRes = await client.query(
+            'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
+            [zaphasti_id]
+        );
+        if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
+            markupPercent = Number(specRes.rows[0].move_markup_percent);
+        }
+        // <<< КОНЕЦ ДОБАВЛЕННОГО
 
         // 2. Берем реальные активные партии со склада-источника прямо из warehouse_batches (где количество > 0)
         const batchesQuery = `
@@ -8041,6 +8050,16 @@ router.put('/move_items/:id', async (req, res) => {
         if (markupRes.rows.length > 0) {
             markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
         }
+
+        // >>> ДОБАВЛЕНО: особый процент запчасти (если задан) заменяет процент склада
+        const specRes = await client.query(
+            'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
+            [zaphasti_id]
+        );
+        if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
+            markupPercent = Number(specRes.rows[0].move_markup_percent);
+        }
+        // <<< КОНЕЦ ДОБАВЛЕННОГО
 
         // 3. ШАГ ОТКАТА СТАРЫХ ЗНАЧЕНИЙ — по точным batch_id/dest_batch_id
         if (oldQuantity > 0) {

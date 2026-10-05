@@ -670,6 +670,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             { field: 'name', label: 'Наименование' },
             { field: 'proizvoditel_id', label: 'Производитель', ref: 'proizvoditel_zaphasti' },
             { field: 'ed_izmereniya_id', label: 'Ед. изм.', ref: 'ed_izmereniya' },
+            { field: 'move_markup_percent', label: 'Особый %', type: 'number' },
             { field: 'description', label: 'Описание', width: '150px' }
         ],
         render: (item) => `
@@ -678,6 +679,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             <td><b>${item.name || ''}</b></td>
             <td>${item.proizvoditel_name || '—'}</td>
            <td>${item.ed_izmereniya_name || '—'}</td>
+           <td>${item.move_markup_percent != null ? item.move_markup_percent + '%' : ''}</td>
 <td>${item.description || ''}</td>
         `
     },
