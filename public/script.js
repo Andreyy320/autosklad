@@ -13938,7 +13938,7 @@ function setDetailToolbarVisible(visible) {
         document.head.appendChild(style);
      }
 
-     function applyTableResizers() {
+         function applyTableResizers() {
     const activeLink = document.querySelector('.nav-link.active');
     const sectionKey = activeLink ? activeLink.innerText.trim() : 'global_table';
     const currentUserId = localStorage.getItem('currentUserId') || 'guest';
@@ -13952,7 +13952,13 @@ function setDetailToolbarVisible(visible) {
 
                        const headerRowEl = table.querySelector('thead tr[id]');
             const tableRole = headerRowEl ? (headerRowEl.dataset.entity || headerRowEl.id) : 'table';
-            const storageKey = `col_widths_${currentUserId}_${sectionKey}_${tableRole}`;
+
+            // для таблицы деталей карточки у каждой вкладки (Общая, Запчасти, Ремонт, ДТП...) свои ширины
+            const detailPart = (table.id === 'detail-table' && typeof activeEntity !== 'undefined' && activeEntity)
+                ? `_${activeEntity}`
+                : '';
+            const storageKey = `col_widths_${currentUserId}_${sectionKey}_${tableRole}${detailPart}`;
+
             const rows = Array.from(table.querySelectorAll('tr'));
             let textRowIndex = -1;
 
@@ -13970,14 +13976,22 @@ function setDetailToolbarVisible(visible) {
             const textRow = rows[textRowIndex];
             const textCells = textRow.querySelectorAll('th, td');
 
-            const savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            let savedWidths = {};
+            try {
+                savedWidths = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+            } catch (e) {
+                savedWidths = {};
+            }
             const textCellsArr = Array.from(textCells);
             const colCount = textCellsArr.length;
             if (colCount === 0) return;
 
+            // сохранённые ширины используем только если они есть для ВСЕХ колонок (иначе смешиваются % и px)
+            const hasAllSaved = textCellsArr.every((th, colIndex) => savedWidths[th.dataset.field || colIndex] != null);
+
             let percents = textCellsArr.map((th, colIndex) => {
                 const widthKey = th.dataset.field || colIndex;
-                if (savedWidths[widthKey] != null) return parseFloat(savedWidths[widthKey]) || (100 / colCount);
+                if (hasAllSaved) return parseFloat(savedWidths[widthKey]) || (100 / colCount);
                 const w = th.offsetWidth;
                 return w > 0 ? w : (100 / colCount);
             });
