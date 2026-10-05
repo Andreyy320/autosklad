@@ -1808,7 +1808,6 @@ const isPosted = Boolean(item.is_posted);
             return `<tr><td colspan="8" style="text-align: center; color: #888; padding: 20px;">Нет общих данных по машине</td></tr>`;
         }
 
-        const monthsMap = {};
                const monthNames = [
             'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
             'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
