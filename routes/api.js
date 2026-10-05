@@ -7155,6 +7155,10 @@ router.get('/get-receipt-logs', async (req, res) => {
             LEFT JOIN postavhik p ON rl.supplier_id = p.id
             LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id = u.id
             LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id = e.id
+            -- скрываем записи об удалении (в базе они остаются)
+            WHERE UPPER(COALESCE(rl.action, '')) NOT IN ('DELETE', 'УДАЛЕНИЕ')
+            -- если нужно скрыть ещё и записи по приходам, которых уже нет в базе — раскомментируйте строку ниже:
+            -- AND r.id IS NOT NULL
                         ORDER BY rl.created_at DESC
             LIMIT 200
         `;
