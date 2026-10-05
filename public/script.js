@@ -1637,17 +1637,18 @@ const isPosted = Boolean(item.is_posted);
 
                let html = '';
 
+        // 1. Собираем все плашки (документ + день) в один список
+        const groups = [];
+
         repairsList.forEach((repair, index) => {
             const repairType = repair.repair_type_name || repair.type || 'Ремонт';
             const docNum = repair.doc_number || '';
 
-            // дата документа как запасной вариант
             const rd = repair.doc_date ? new Date(repair.doc_date) : null;
             const docKey = (rd && !isNaN(rd))
                 ? `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`
                 : '0000-00-00';
 
-            // раскладываем запчасти документа по дням
             const dayMap = {};
             (repair.items || []).forEach(item => {
                 const desc = item.description || '';
@@ -1663,56 +1664,57 @@ const isPosted = Boolean(item.is_posted);
                 if (!day.mileage && mileage) day.mileage = mileage;
             });
 
-            const keys = Object.keys(dayMap).sort().reverse();
-
-            if (keys.length === 0) {
-                html += `
-                    <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da;">
-                        <td colspan="9" style="padding: 7px 10px; font-size: 13px;">${repairType} ${docNum}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="2"></td>
-                        <td colspan="5" style="color: #888; font-style: italic;">Нет запчастей для этого ремонта</td>
-                        <td></td><td></td>
-                    </tr>`;
-                return;
-            }
-
-            keys.forEach(key => {
-                const day = dayMap[key];
-                const groupId = `receipts-group-${repair.id || index}-${key}`;
-                const [y, m, d] = key.split('-');
-                const dateLabel = key === '0000-00-00' ? '' : `${d}.${m}.${y}`;
-                const mileageLabel = day.mileage ? ` | ${day.mileage} км` : '';
-
-                html += `
-                    <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleReceiptsGroup('${groupId}', this)">
-                        <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
-                            <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
-                            <span style="color: #212529;">${repairType} ${docNum} от ${dateLabel}</span>
-                            <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span>
-                            <span style="color: #0f172a;">Итого запчастей: ${day.total.toFixed(2)} руб.${mileageLabel}</span>
-                        </td>
-                    </tr>`;
-
-                day.items.forEach(item => {
-                    const price = Number(item.price || 0).toFixed(2);
-                    const sum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0))).toFixed(2);
-                    const qty = item.quantity || item.qty || '';
-
-                    html += `
-                        <tr class="${groupId}" style="background-color: #ffffff;">
-                            <td style="padding-left: 25px;">${item.article || ''}</td>
-                            <td>${item.code || ''}</td>
-                            <td>${item.name || ''}</td>
-                            <td style="text-align: center;">${qty}</td>
-                            <td style="text-align: center;">${item.unit || 'шт'}</td>
-                            <td style="text-align: right;">${price}</td>
-                            <td style="text-align: right;">${sum}</td>
-                            <td>${item.description || ''}</td>
-                            <td>${item.doc_source || ''}</td>
-                        </tr>`;
+            Object.keys(dayMap).forEach(key => {
+                groups.push({
+                    key,
+                    repairId: Number(repair.id) || 0,
+                    groupId: `receipts-group-${repair.id || index}-${key}`,
+                    repairType,
+                    docNum,
+                    ...dayMap[key]
                 });
+            });
+        });
+
+        // 2. Сортировка: новые даты сверху, старые (ИСТ) внизу
+        groups.sort((a, b) => {
+            if (a.key !== b.key) return a.key < b.key ? 1 : -1;
+            return b.repairId - a.repairId;
+        });
+
+        // 3. Вывод
+        groups.forEach(g => {
+            const [y, m, d] = g.key.split('-');
+            const dateLabel = g.key === '0000-00-00' ? '' : `${d}.${m}.${y}`;
+            const mileageLabel = g.mileage ? ` | ${g.mileage} км` : '';
+
+            html += `
+                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleReceiptsGroup('${g.groupId}', this)">
+                    <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
+                        <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
+                        <span style="color: #212529;">${g.repairType} ${g.docNum} от ${dateLabel}</span>
+                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span>
+                        <span style="color: #0f172a;">Итого запчастей: ${g.total.toFixed(2)} руб.${mileageLabel}</span>
+                    </td>
+                </tr>`;
+
+            g.items.forEach(item => {
+                const price = Number(item.price || 0).toFixed(2);
+                const sum = Number(item.total_sum || item.sum || (Number(item.quantity || item.qty || 1) * Number(item.price || 0))).toFixed(2);
+                const qty = item.quantity || item.qty || '';
+
+                html += `
+                    <tr class="${g.groupId}" style="background-color: #ffffff;">
+                        <td style="padding-left: 25px;">${item.article || ''}</td>
+                        <td>${item.code || ''}</td>
+                        <td>${item.name || ''}</td>
+                        <td style="text-align: center;">${qty}</td>
+                        <td style="text-align: center;">${item.unit || 'шт'}</td>
+                        <td style="text-align: right;">${price}</td>
+                        <td style="text-align: right;">${sum}</td>
+                        <td>${item.description || ''}</td>
+                        <td>${item.doc_source || ''}</td>
+                    </tr>`;
             });
         });
 
