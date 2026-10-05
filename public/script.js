@@ -1809,47 +1809,62 @@ const isPosted = Boolean(item.is_posted);
         }
 
         const monthsMap = {};
-        const monthNames = [
-            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
+               const monthNames = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
             'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
         ];
 
-        itemsList.forEach(item => {
-            const dateObj = new Date(item.operational_date || Date.now());
-            const monthName = monthNames[dateObj.getMonth()];
-            const year = dateObj.getFullYear();
-            const groupKey = `${monthName} ${year}`; 
-
-            if (!monthsMap[groupKey]) {
-                monthsMap[groupKey] = { items: [], totalSum: 0 };
+        // Реальная дата строки: у ИСТ-документов берём из описания, у остальных (РЕМ, ДТП) — как раньше
+        const getEffectiveDate = (item) => {
+            let d = new Date(item.operational_date || Date.now());
+            if (String(item.doc_number || '').startsWith('ИСТ-')) {
+                const dm = String(item.description || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+                if (dm) d = new Date(Number(dm[3]), Number(dm[2]) - 1, Number(dm[1]));
             }
+            return d;
+        };
 
-            const itemSum = Number(item.sum || 0);
-            monthsMap[groupKey].items.push(item);
-            monthsMap[groupKey].totalSum += itemSum;
+        // 1. Группируем по месяцам по реальной дате
+        const monthsMap = {};
+        itemsList.forEach(item => {
+            const dateObj = getEffectiveDate(item);
+            const sortKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!monthsMap[sortKey]) {
+                monthsMap[sortKey] = {
+                    label: `${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`,
+                    items: [],
+                    totalSum: 0
+                };
+            }
+            monthsMap[sortKey].items.push({ item, date: dateObj });
+            monthsMap[sortKey].totalSum += Number(item.sum || 0);
         });
 
         let html = '';
         let groupIndex = 0;
 
-        Object.keys(monthsMap).forEach(monthKey => {
+        // 2. Месяцы от новых к старым, внутри месяца строки от новых дат к старым
+        Object.keys(monthsMap).sort().reverse().forEach(monthKey => {
             const group = monthsMap[monthKey];
             const groupId = `general-group-${groupIndex++}`;
             const monthTotal = group.totalSum.toFixed(2);
+
+            group.items.sort((a, b) => b.date - a.date);
 
             html += `
                 <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleGeneralGroup('${groupId}', this)">
                     <td colspan="8" style="padding: 7px 10px; color: #333333; font-size: 13px; text-transform: none;">
                         <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
-                        <span style="color: #212529;">${monthKey}</span> 
-                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span> 
+                        <span style="color: #212529;">${group.label}</span>
+                        <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span>
                         <span style="color: #0f172a;">Итого за месяц: ${monthTotal} руб.</span>
-                                            </td>
+                    </td>
                 </tr>
             `;
 
-            group.items.forEach(item => {
-                const itemDate = item.operational_date ? new Date(item.operational_date).toLocaleDateString('ru-RU') : '';
+            group.items.forEach(({ item, date }) => {
+                const itemDate = date.toLocaleDateString('ru-RU');
                 const price = item.price ? Number(item.price).toFixed(2) : '';
                 const sum = item.sum ? Number(item.sum).toFixed(2) : '';
                 const qty = item.qty || '';

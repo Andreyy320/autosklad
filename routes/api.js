@@ -3182,6 +3182,7 @@ router.get('/car_general', async (req, res) => {
                 ri.price AS price,
                 ROUND(COALESCE(ri.quantity, 0) * COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS sum,
                 ri.description,
+                r.doc_number::text AS doc_number,
                 CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY')) AS document
             FROM repair_items ri
             JOIN repairs r ON ri.repair_id = r.id
@@ -3201,6 +3202,7 @@ router.get('/car_general', async (req, res) => {
                 COALESCE(rw.price, vr.price, 0) AS price,
                 COALESCE(rw.price, vr.price, 0) AS sum,
                 rw.description,
+                r.doc_number::text AS doc_number,
                 CONCAT('Ремонт ', rt.name, ' от ', TO_CHAR(r.doc_date, 'DD.MM.YYYY'), ' | Исполнитель: ', COALESCE(i.name, '—')) AS document
             FROM repair_works rw
             JOIN repairs r ON rw.repair_id = r.id
@@ -3220,6 +3222,7 @@ router.get('/car_general', async (req, res) => {
                 ac.damage_amount AS price,
                 COALESCE(ac.damage_amount, 0) AS sum,
                 ac.description,
+                NULL::text AS doc_number,
                 CONCAT('ДТП от ', TO_CHAR(COALESCE(ac.doc_date, ac.fact_date, ac.detected_date), 'DD.MM.YYYY')) AS document
             FROM accidents ac
             WHERE ac.car_id = $1
