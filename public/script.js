@@ -14120,7 +14120,7 @@ async function loadKubyshka() {
     currentEntity = 'kubyshka';
     selectedItem = null;
     if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
-
+    document.getElementById('table-filter-row')?.remove();
     ['detail-container', 'btn-add', 'btn-edit', 'btn-delete', 'btn-back-expense'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.setProperty('display', 'none', 'important');
@@ -14130,7 +14130,7 @@ async function loadKubyshka() {
 
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
-    if (headers) headers.innerHTML = '<th>Кубышка</th>';
+if (headers) headers.innerHTML = '';
     if (body) body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
