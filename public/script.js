@@ -4098,7 +4098,7 @@ async function openReceiptItemsForm(item = null, parentId = null) {
 
             const formatDisplayName = (refItem) => {
                 if (referenceName === 'zaphasti') {
-                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const art = (refItem.code || refItem.article) ? `[${refItem.code || refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     return `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
                 }
