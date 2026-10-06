@@ -7327,47 +7327,9 @@ async function openRealizationForm(entity, item = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
-        // >>> ДОБАВЛЕНО: поиск по списку машин (если машин больше 10)
-    function attachCarSearch(selectEl) {
-        if (!selectEl || selectEl.tagName !== 'SELECT') return;
-        const old = selectEl.parentNode.querySelector('.car-search-input');
-        if (old) old.remove();
 
-        const allOptions = Array.from(selectEl.options)
-            .filter(o => o.value !== '')
-            .map(o => ({ value: o.value, text: o.textContent }));
-        if (allOptions.length <= 10) return;
 
-        // Русские и латинские буквы-двойники (А/A, Т/T, О/O и т.д.) считаем одинаковыми
-        const norm = (s) => String(s || '').toLowerCase().replace(/[авекмнорстух]/g, ch => ({
-            'а':'a','в':'b','е':'e','к':'k','м':'m','н':'h','о':'o','р':'p','с':'c','т':'t','у':'y','х':'x'
-        }[ch]));
-
-        const search = document.createElement('input');
-        search.type = 'text';
-        search.className = 'car-search-input';
-        search.placeholder = 'Поиск по гос. номеру или марке...';
-        search.autocomplete = 'off';
-        search.style.cssText = 'width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;box-sizing:border-box;';
-        selectEl.parentNode.insertBefore(search, selectEl);
-
-        search.addEventListener('input', () => {
-            const q = norm(search.value.trim());
-            const chosen = selectEl.value;
-            selectEl.innerHTML = '<option value="">-- Не выбрано --</option>';
-            allOptions.forEach(o => {
-                if (!q || norm(o.text).includes(q) || o.value === chosen) {
-                    const opt = document.createElement('option');
-                    opt.value = o.value;
-                    opt.textContent = o.text;
-                    if (o.value === chosen) opt.selected = true;
-                    selectEl.appendChild(opt);
-                }
-            });
-        });
-    }
-    // <<< КОНЕЦ ДОБАВЛЕННОГО
-
+    
     async function loadCarsForCustomer(customerId, targetCarSelect, preselectedCarId = null) {
         targetCarSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
         if (!customerId) return;
@@ -7393,7 +7355,6 @@ async function openRealizationForm(entity, item = null) {
                 }
                 targetCarSelect.appendChild(option);
             });
-            attachCarSearch(targetCarSelect);   // <<< ДОБАВЛЕНО
         } catch (err) {
         }
     }
@@ -7681,8 +7642,6 @@ async function openRealizationForm(entity, item = null) {
         });
     }
 
-    if (carSelect) attachCarSearch(carSelect);   // <<< ДОБАВЛЕНО (для редактирования)
-    
     if (formElement) {
         const warehouseMolPairs = [
             { 
