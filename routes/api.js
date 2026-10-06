@@ -366,7 +366,7 @@ router.use(authMiddleware);
 router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
     
-const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad', '/employees', '/users'];
+const ADMIN_ONLY_PATH_PREFIXES = ['/money_receipts', '/expenses_by_sklad', '/employees', '/users', '/kubyshka'];
 router.use((req, res, next) => {
     const isAdminOnlyRoute = ADMIN_ONLY_PATH_PREFIXES.some(prefix => req.path.startsWith(prefix));
     if (isAdminOnlyRoute && req.user?.role !== 'admin') {
@@ -2234,7 +2234,68 @@ router.get('/receipts_history', async (req, res) => {
     }
 });
 
+router.get('/kubyshka_history', async (req, res) => {
+    try {
+        const skladId = Number(req.query.sklad_id) || 1;
 
+        const query = `
+            SELECT t.*,
+                   SUM(t.amount) OVER (ORDER BY t.op_date ASC, t.src ASC, t.pay_id ASC) AS running_total
+            FROM (
+                -- оплаты клиентов по реализациям (+)
+                SELECT cp.date::timestamp AS op_date, 'Оплата от клиента' AS op_type,
+                       COALESCE(r.doc_number, '—') AS doc_number,
+                       COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty,
+                       COALESCE(CASE WHEN cp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система') AS user_name,
+                       cp.comment, cp.amount::numeric AS amount, cp.id AS pay_id, 1 AS src
+                FROM customer_payments cp
+                JOIN realizations r ON r.id = cp.realization_id
+                LEFT JOIN customers c ON c.id = cp.customer_id
+                LEFT JOIN users u ON cp.user_type = 'user' AND cp.user_id = u.id
+                LEFT JOIN employees e ON cp.user_type = 'employee' AND cp.user_id = e.id
+                WHERE r.sklad_id = $1
+
+                UNION ALL
+
+                -- оплаты по перемещениям с этого склада (+)
+                SELECT wdp.date::timestamp, 'Оплата по перемещению',
+                       COALESCE(m.doc_number, '—'),
+                       COALESCE(sk.name, 'Склад-получатель'),
+                       COALESCE(CASE WHEN wdp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система'),
+                       wdp.comment, wdp.amount::numeric, wdp.id, 2
+                FROM warehouse_debt_payments wdp
+                JOIN moves m ON m.id = wdp.move_id
+                LEFT JOIN skladi sk ON sk.id = m.warehouse_to_id
+                LEFT JOIN users u ON wdp.user_type = 'user' AND wdp.user_id = u.id
+                LEFT JOIN employees e ON wdp.user_type = 'employee' AND wdp.user_id = e.id
+                WHERE m.warehouse_from_id = $1
+
+                UNION ALL
+
+                -- оплаты поставщикам по приходам (−)
+                SELECT sp.date::timestamp, 'Оплата поставщику',
+                       COALESCE(rec.doc_number, '—'),
+                       COALESCE(p.name, '—'),
+                       COALESCE(CASE WHEN sp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система'),
+                       sp.comment, -sp.amount::numeric, sp.id, 3
+                FROM supplier_payments sp
+                JOIN receipts rec ON rec.id = sp.receipt_id
+                LEFT JOIN postavhik p ON p.id = sp.supplier_id
+                LEFT JOIN users u ON sp.user_type = 'user' AND sp.user_id = u.id
+                LEFT JOIN employees e ON sp.user_type = 'employee' AND sp.user_id = e.id
+                WHERE rec.warehouse_id = $1
+            ) t
+            ORDER BY t.op_date DESC, t.src DESC, t.pay_id DESC;
+        `;
+        const result = await pool.query(query, [skladId]);
+        const balance = result.rows.reduce((s, r) => s + Number(r.amount), 0);
+
+        res.json({ balance, rows: result.rows });
+    } catch (err) {
+        console.error('❌ Ошибка истории кубышки:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
 
 router.get('/stock_balances', async (req, res) => {
     try {

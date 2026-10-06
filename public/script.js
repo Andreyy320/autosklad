@@ -14111,56 +14111,102 @@ if (tw && text !== 'Кубышка') tw.style.display = '';
     });
 });
 
+const SKLAD_KUBYSHKA = 1; // центральный склад
+const kFmt = n => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const kEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-async function loadKubyshka() {
-    const SKLAD_ID = 1; // центральный склад
-
+function kubyshkaPrepareUi() {
     resetSharedUiForEntity('kubyshka');
     pagerSuspend();
     currentEntity = 'kubyshka';
     selectedItem = null;
     if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
     document.getElementById('table-filter-row')?.remove();
+
     ['detail-container', 'btn-add', 'btn-edit', 'btn-delete', 'btn-back-expense'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.setProperty('display', 'none', 'important');
     });
     const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+}
 
+async function loadKubyshka() {
+    kubyshkaPrepareUi();
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
     if (headers) headers.innerHTML = '';
-    if (body) body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+    body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
-        const [inRes, outRes] = await Promise.all([
-            fetch(`/api/money_receipts_by_sklad?sklad_id=${SKLAD_ID}`),
-            fetch(`/api/expenses_by_sklad?sklad_id=${SKLAD_ID}`)
-        ]);
-        if (!inRes.ok || !outRes.ok) throw new Error('Нет доступа или ошибка сервера');
+        const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
+        if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
+        const data = await res.json();
 
-        const inRow = (await inRes.json())[0] || {};
-        const outRow = (await outRes.json())[0] || {};
-
-        const income = Number(inRow.total_paid) || 0;
-        const expense = Number(outRow.total_paid) || 0;
-        const balance = income - expense;
-
-        const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const balance = Number(data.balance) || 0;
         const color = balance > 0 ? '#16a34a' : (balance < 0 ? '#dc2626' : '#475569');
 
         body.innerHTML = `
-            <tr><td style="padding:12px 16px;text-align:center;">
-                <div style="font-size:13px;color:#64748b;">${inRow.sklad_name || 'Центральный склад'}</div>
-                <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${fmt(balance)}</div>
-                <div style="font-size:12px;color:#64748b;">
-                    Поступило: ${fmt(income)} &nbsp;|&nbsp; Выплачено поставщикам: ${fmt(expense)}
-                </div>
+            <tr><td onclick="loadKubyshkaHistory()" style="padding:12px 16px;text-align:center;cursor:pointer;" title="Нажмите, чтобы увидеть историю">
+                <div style="font-size:13px;color:#64748b;">Центральный склад</div>
+                <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${kFmt(balance)}</div>
+                <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть историю (${data.rows.length})</div>
             </td></tr>`;
     } catch (err) {
         console.error('Ошибка кубышки:', err);
-        body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${err.message}</td></tr>`;
+        body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${kEsc(err.message)}</td></tr>`;
+    }
+}
+
+async function loadKubyshkaHistory() {
+    kubyshkaPrepareUi();
+
+    const back = document.getElementById('btn-back-expense');
+    if (back) {
+        back.style.setProperty('display', 'flex', 'important');
+        back.onclick = () => loadKubyshka();
+    }
+
+    const headers = document.getElementById('table-headers');
+    const body = document.getElementById('table-body');
+    headers.innerHTML = `
+        <th style="width:140px;">Дата</th>
+        <th style="width:170px;">Операция</th>
+        <th style="width:110px;">Документ</th>
+        <th style="width:220px;">Контрагент</th>
+        <th style="width:150px;">Кто провёл</th>
+        <th>Комментарий</th>
+        <th style="width:120px;text-align:right;">Сумма</th>
+        <th style="width:120px;text-align:right;">Итого</th>`;
+    body.innerHTML = '<tr><td colspan="8" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+
+    try {
+        const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
+        if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
+        const { rows } = await res.json();
+
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
+            return;
+        }
+
+        body.innerHTML = rows.map(r => {
+            const amt = Number(r.amount);
+            const c = amt >= 0 ? '#16a34a' : '#dc2626';
+            return `<tr>
+                <td>${new Date(r.op_date).toLocaleString('ru-RU')}</td>
+                <td>${kEsc(r.op_type)}</td>
+                <td>${kEsc(r.doc_number)}</td>
+                <td>${kEsc(r.counterparty)}</td>
+                <td>${kEsc(r.user_name)}</td>
+                <td>${kEsc(r.comment)}</td>
+                <td style="text-align:right;font-weight:600;color:${c};">${amt > 0 ? '+' : ''}${kFmt(amt)}</td>
+                <td style="text-align:right;">${kFmt(r.running_total)}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        console.error('Ошибка истории кубышки:', err);
+        body.innerHTML = `<tr><td colspan="8" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить историю: ${kEsc(err.message)}</td></tr>`;
     }
 }
 
