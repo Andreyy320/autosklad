@@ -7329,8 +7329,49 @@ async function openRealizationForm(entity, item = null) {
 
 
 
+    // >>> ДОБАВЛЕНО: общие помощники для списка машин
+    function carDisplayName(car) {
+        const gos = car.gos_number || car.car_number || '';
+        const mdl = car.model || car.car_model || '';
+        const brd = car.brand || car.car_brand || '';
+        return (brd || mdl || gos) ? `${brd} ${mdl} (${gos})`.trim() : `Авто #${car.id}`;
+    }
+
+    function carOptionHtml(car) {
+        return `<div class="searchable-option" data-id="${car.id}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">${carDisplayName(car)}</div>`;
+    }
+    // <<< КОНЕЦ ДОБАВЛЕННОГО
     
     async function loadCarsForCustomer(customerId, targetCarSelect, preselectedCarId = null) {
+        // >>> ДОБАВЛЕНО: если гос. номер — поле с поиском, заполняем его выпадающий список
+        const carContainer = targetCarSelect.closest ? targetCarSelect.closest('.car-search-container') : null;
+        if (carContainer) {
+            const carDropdown = carContainer.querySelector('.searchable-select-dropdown');
+            const carVisibleInput = carContainer.querySelector('.searchable-select-input');
+
+            carDropdown.innerHTML = `<div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>`;
+            targetCarSelect.value = '';
+            carVisibleInput.value = '';
+            if (!customerId) return;
+
+            try {
+                const response = await fetch(`/api/customer_cars?customer_id=${customerId}`);
+                if (!response.ok) return;
+                const cars = await response.json();
+
+                cars.forEach(car => {
+                    carDropdown.insertAdjacentHTML('beforeend', carOptionHtml(car));
+                    if (preselectedCarId && String(car.id) === String(preselectedCarId)) {
+                        targetCarSelect.value = car.id;
+                        carVisibleInput.value = carDisplayName(car);
+                    }
+                });
+            } catch (err) {
+            }
+            return;
+        }
+        // <<< КОНЕЦ ДОБАВЛЕННОГО
+
         targetCarSelect.innerHTML = '<option value="">-- Не выбрано --</option>';
         if (!customerId) return;
 
@@ -7463,6 +7504,32 @@ async function openRealizationForm(entity, item = null) {
                     </div>
                 </div>
             `;
+        // >>> ДОБАВЛЕНО: гос. номер — поле с поиском (как покупатель и склад)
+        } else if (col.field === 'car_id' && col.ref) {
+            let carItems = [];
+            const carCustomerId = item ? (item.customer_id || item.customer?.id || item.customer) : null;
+            if (carCustomerId) {
+                try {
+                    const carRes = await fetch(`/api/customer_cars?customer_id=${carCustomerId}`);
+                    if (carRes.ok) carItems = await carRes.json();
+                } catch (e) {
+                }
+            }
+            let selectedDisplayName = '';
+            carItems.forEach(car => {
+                if (String(car.id) === String(val)) selectedDisplayName = carDisplayName(car);
+            });
+            inputHtml = `
+                <div class="searchable-select-container car-search-container" style="position: relative;">
+                    <input type="text" class="searchable-select-input" placeholder=" Начните ввод для поиска..." value="${selectedDisplayName}" style="${controlStyle}" autocomplete="off" ${fieldReadonly ? 'disabled' : ''}>
+                    <input type="hidden" name="${col.field}" id="car-select" value="${val !== '' && val !== null ? val : ''}">
+                    <div class="searchable-select-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div class="searchable-option" data-id="" style="padding: 8px 12px; cursor: pointer; color: #64748b; border-bottom: 1px solid #f1f5f9;">-- Не выбрано --</div>
+                        ${carItems.map(car => carOptionHtml(car)).join('')}
+                    </div>
+                </div>
+            `;
+        // <<< КОНЕЦ ДОБАВЛЕННОГО
         } else if (col.ref) {
             let refItems = [];
             if (col.ref === 'customer_cars' || col.field === 'car_id') {
@@ -7591,6 +7658,7 @@ async function openRealizationForm(entity, item = null) {
     rawFormElement.parentNode.replaceChild(formElement, rawFormElement);
 
     formElement.querySelectorAll('.searchable-select-container').forEach(container => {
+        if (container.classList.contains('car-search-container')) return;   // <<< ДОБАВЛЕНО
         const input = container.querySelector('.searchable-select-input');
         const hiddenInput = container.querySelector('input[type="hidden"]');
         const dropdown = container.querySelector('.searchable-select-dropdown');
@@ -7630,6 +7698,49 @@ async function openRealizationForm(entity, item = null) {
             }
         });
     });
+
+    // >>> ДОБАВЛЕНО: поле «Гос. номер» с поиском (список можно обновлять при смене покупателя)
+    const carSearchContainer = formElement.querySelector('.car-search-container');
+    if (carSearchContainer) {
+        const carInput = carSearchContainer.querySelector('.searchable-select-input');
+        const carHidden = carSearchContainer.querySelector('input[type="hidden"]');
+        const carDropdown = carSearchContainer.querySelector('.searchable-select-dropdown');
+
+        // Русские и латинские буквы-двойники (А/A, Т/T, О/O ...) считаем одинаковыми
+        const normCar = (s) => String(s || '').toLowerCase().replace(/[авекмнорстух]/g, ch => ({
+            'а':'a','в':'b','е':'e','к':'k','м':'m','н':'h','о':'o','р':'p','с':'c','т':'t','у':'y','х':'x'
+        }[ch]));
+
+        carInput.addEventListener('focus', () => {
+            carDropdown.style.display = 'block';
+        });
+
+        carInput.addEventListener('input', () => {
+            const filter = normCar(carInput.value);
+            carDropdown.style.display = 'block';
+            carDropdown.querySelectorAll('.searchable-option').forEach(opt => {
+                opt.style.display = (normCar(opt.textContent).includes(filter) || opt.dataset.id === '') ? 'block' : 'none';
+            });
+        });
+
+        carDropdown.addEventListener('mousedown', (e) => {
+            const opt = e.target.closest('.searchable-option');
+            if (!opt) return;
+            e.preventDefault();
+            carInput.value = opt.dataset.id === '' ? '' : opt.textContent;
+            carHidden.value = opt.dataset.id;
+            carDropdown.style.display = 'none';
+            carHidden.dispatchEvent(new Event('change', { bubbles: true }));
+            carInput.blur();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!carSearchContainer.contains(e.target)) {
+                carDropdown.style.display = 'none';
+            }
+        });
+    }
+    // <<< КОНЕЦ ДОБАВЛЕННОГО
 
     const customerSelect = formElement.querySelector('#customer-select');
     const carSelect = formElement.querySelector('#car-select');
@@ -7825,6 +7936,8 @@ async function openRealizationForm(entity, item = null) {
         }
     });
 }
+
+
 async function openReturnForm(entity, item = null) {
     const drawer = getOrCreateDrawer();
 
