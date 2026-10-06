@@ -13962,7 +13962,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
         
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
-
+    if (text === 'Кубышка') {
+    loadKubyshka();
+    return;
+    }
         let entity = navMap[text] || text.toLowerCase();
         
         if (entity === 'money_receipts' || text === 'Касса: поступления') {
@@ -14104,6 +14107,63 @@ document.querySelectorAll('.nav-link').forEach(link => {
     });
 });
 
+
+async function loadKubyshka() {
+    const SKLAD_ID = 1; // центральный склад
+
+    resetSharedUiForEntity('kubyshka');
+    pagerSuspend();
+    currentEntity = 'kubyshka';
+    selectedItem = null;
+    if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
+
+    ['detail-container', 'btn-add', 'btn-edit', 'btn-delete', 'btn-back-expense'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.setProperty('display', 'none', 'important');
+    });
+    const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+    if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+
+    const headers = document.getElementById('table-headers');
+    const body = document.getElementById('table-body');
+    if (headers) headers.innerHTML = '<th>Кубышка</th>';
+    if (body) body.innerHTML = '<tr><td style="padding:40px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+
+    try {
+        const [inRes, outRes] = await Promise.all([
+            fetch(`/api/money_receipts_by_sklad?sklad_id=${SKLAD_ID}`),
+            fetch(`/api/expenses_by_sklad?sklad_id=${SKLAD_ID}`)
+        ]);
+        if (!inRes.ok || !outRes.ok) throw new Error('Нет доступа или ошибка сервера');
+
+        const inRow = (await inRes.json())[0] || {};
+        const outRow = (await outRes.json())[0] || {};
+
+        const income = Number(inRow.total_paid) || 0;
+        const expense = Number(outRow.total_paid) || 0;
+        const balance = income - expense;
+
+        const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+        const color = balance >= 0 ? '#16a34a' : '#dc2626';
+
+        body.innerHTML = `
+            <tr><td style="padding:50px 20px;text-align:center;">
+                <div style="font-size:14px;color:#64748b;margin-bottom:8px;">
+                    ${inRow.sklad_name || 'Центральный склад'}
+                </div>
+                <div style="font-size:48px;font-weight:700;color:${color};">${fmt(balance)}</div>
+                <div style="margin-top:18px;font-size:13px;color:#64748b;">
+                    Поступило: ${fmt(income)} &nbsp;|&nbsp; Выплачено поставщикам: ${fmt(expense)}
+                </div>
+            </td></tr>`;
+    } catch (err) {
+        console.error('Ошибка кубышки:', err);
+        body.innerHTML = `<tr><td style="padding:40px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${err.message}</td></tr>`;
+    }
+}   
+
+
+
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {
         const content = header.nextElementSibling;
@@ -14129,6 +14189,9 @@ function setDetailToolbarVisible(visible) {
         el.style.setProperty('display', visible ? 'flex' : 'none', 'important');
     }
 }
+
+
+
 
 
 
@@ -14296,6 +14359,12 @@ function setDetailToolbarVisible(visible) {
 
     setTimeout(applyTableResizers, 300);
 })();
+
+
+
+
+
+
 
 
 
