@@ -14123,8 +14123,44 @@ async function kubyshkaRows() {
     if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
     return res.json(); // { balance, rows }
 }
+function kubyshkaPrepareUi() {
+    resetSharedUiForEntity('kubyshka');
+    pagerSuspend();
+    currentEntity = 'kubyshka';
+    selectedItem = null;
+    if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
+    document.getElementById('table-filter-row')?.remove();
 
-// 2) ЗАМЕНИ функцию loadKubyshkaHistory целиком на эту
+    ['detail-container', 'btn-add', 'btn-edit', 'btn-delete', 'btn-back-expense'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.setProperty('display', 'none', 'important');
+    });
+    const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
+    if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+}
+
+async function loadKubyshka() {
+    kubyshkaPrepareUi();
+    const headers = document.getElementById('table-headers');
+    const body = document.getElementById('table-body');
+    if (headers) headers.innerHTML = '';
+    body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+
+    try {
+        const { balance } = await kubyshkaRows();
+        const color = balance > 0 ? '#16a34a' : (balance < 0 ? '#dc2626' : '#475569');
+
+        body.innerHTML = `
+            <tr><td onclick="loadKubyshkaHistory()" style="padding:12px 16px;text-align:center;cursor:pointer;" title="Нажмите, чтобы увидеть из чего сложилась сумма">
+                <div style="font-size:13px;color:#64748b;">Центральный склад</div>
+                <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${kFmt(balance)}</div>
+                <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
+            </td></tr>`;
+    } catch (err) {
+        console.error('Ошибка кубышки:', err);
+        body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${kEsc(err.message)}</td></tr>`;
+    }
+}
 async function loadKubyshkaHistory() {
     kubyshkaPrepareUi();
 
