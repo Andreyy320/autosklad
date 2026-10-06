@@ -2235,10 +2235,7 @@ router.get('/receipts_history', async (req, res) => {
 });
 
 // ЗАМЕНИ в api.js весь маршрут router.get('/kubyshka_history', ...) на этот
-router.get('/kubyshka_history', async (req, res) => {
-    try {
-        const skladId = Number(req.query.sklad_id) || 1;
-
+async function getKubyshkaData(db, skladId) {
         const query = `
             WITH real_docs AS (
                 SELECT real.id, real.doc_number, real.doc_date, real.customer_id,
@@ -2367,15 +2364,20 @@ router.get('/kubyshka_history', async (req, res) => {
             ) t
             ORDER BY t.op_date DESC, t.src DESC, t.pay_id DESC;
         `;
-        const result = await pool.query(query, [skladId]);
+              const result = await db.query(query, [skladId]);
         const balance = result.rows.reduce((s, r) => s + Number(r.amount), 0);
+        return { balance, rows: result.rows };
+}
 
-        res.json({ balance, rows: result.rows });
+router.get('/kubyshka_history', async (req, res) => {
+    try {
+        const skladId = Number(req.query.sklad_id) || 1;
+        res.json(await getKubyshkaData(pool, skladId));
     } catch (err) {
         console.error('❌ Ошибка истории кубышки:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
-}); 
+});
 
 router.get('/stock_balances', async (req, res) => {
     try {
@@ -6559,7 +6561,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
             }
 
             appliedPayments.push({ doc_id: row.doc_id, applied: toApply });
-            remaining -= toApply;
+                     remaining -= toApply;
         }
 
         await client.query('COMMIT');
@@ -7022,7 +7024,12 @@ router.post('/expenses_by_receipts/:id/pay', async (req, res) => {
         }
 
         const supplierId = postavhik_id ? parseInt(postavhik_id) : receiptCheck.rows[0].supplier_id;
-
+        const kub = await getKubyshkaData(pool, 1);
+        if (paymentAmount > kub.balance + 0.005) {
+            return res.status(400).json({
+                error: `Недостаточно средств в кубышке. Доступно: ${Math.max(0, kub.balance).toFixed(2)} руб, вы пытаетесь оплатить: ${paymentAmount.toFixed(2)} руб`
+            });
+        }
         // Кто провёл оплату — берём из проверенного токена
                 const currentUserId = req.headers['x-user-id'] || null;
         const currentUserType = req.headers['x-user-type'] || 'user';
@@ -7240,10 +7247,21 @@ AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') <= $2)
                 [id, row.receipt_id, toApply, comment || (monthFilter ? `Оплата за ${monthFilter}` : 'Оплата накопленного долга'), req.headers['x-user-id'] || null, getServerNowString(), req.headers['x-user-type'] || 'user']
             );
 
-            appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
+                       appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
             remaining -= toApply;
         }
 
+        // Проверка кубышки: платить больше, чем есть, нельзя
+        await client.query('SELECT pg_advisory_xact_lock(7771)');
+        const applied = paymentAmount - remaining;
+        const kub = await getKubyshkaData(client, 1);
+        if (kub.balance < -0.005) {
+            await client.query('ROLLBACK');
+            const available = Math.max(0, kub.balance + applied);
+            return res.status(400).json({
+                error: `Недостаточно средств в кубышке. Доступно: ${available.toFixed(2)} руб, вы пытаетесь оплатить: ${applied.toFixed(2)} руб`
+            });
+        }
         await client.query('COMMIT');
 
         if (remaining > 0) {

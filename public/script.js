@@ -2287,7 +2287,7 @@ const isPosted = Boolean(item.is_posted);
         const cumulativeDebt = cumulativeDebtNum.toFixed(2);
 
         const paidHtml = totalPaidNum > 0
-    ? `<span onclick="openCustomerPaymentHistory('${item.group_key}', '${item.counterparty_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат за месяц">${totalPaid}</span>`
+    ? `<span onclick="openCustomerPaymentHistory('${item.group_key}', '${jsq(item.counterparty_name)}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат за месяц">${totalPaid}</span>`
     : totalPaid;
 
         return `
@@ -2307,7 +2307,7 @@ const isPosted = Boolean(item.is_posted);
             </td>            
             <td style="text-align: center;">
               ${cumulativeDebtNum > 0
-    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${item.counterparty_name} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
+    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${jsq(item.counterparty_name)} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
 }
             </td>
@@ -2333,7 +2333,7 @@ money_receipts_by_customers_totals: {
         const totalDebt = debtNum.toFixed(2);
         const actionHtml = debtNum <= 0
             ? `<span style="color:#64748b;font-weight:500;font-size:12px;">Оплачено</span>`
-            : `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${item.counterparty_name}', '', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить всё</button>`;
+            : `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${totalDebt}', '${jsq(item.counterparty_name)}', '', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить всё</button>`;
         return `
             <td><span style="font-weight:600;color:#0f172a;">${item.counterparty_name || '—'}</span></td>
             <td><span style="color:#334155;">${item.sklad_name || '—'}</span></td>
@@ -2440,7 +2440,7 @@ money_receipts_by_customers_totals: {
 
 const actionHtml = cumulativeDebtNum <= 0
     ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${item.postavhik_name} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+    : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${cumulativeDebt}', '${jsq(item.postavhik_name)} (${item.month_str})', '${item.month_str}')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
         Оплатить
       </button>`;
 
@@ -2452,7 +2452,7 @@ const actionHtml = cumulativeDebtNum <= 0
             <td style="text-align: right; font-weight: 600; color: #0f172a;">${expenseSum}</td>
             <td style="text-align: right; color: #334155;">
                 ${Number(item.total_paid || 0) > 0
-                    ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${item.postavhik_name}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
+                    ? `<span onclick="event.stopPropagation(); openSupplierPaymentHistory('${item.postavhik_id}', '${jsq(item.postavhik_name)}', '${item.month_str}')" style="cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" title="Посмотреть историю оплат">${totalPaid}</span>`
                     : totalPaid
                 }
             </td>
@@ -2510,7 +2510,7 @@ const actionHtml = cumulativeDebtNum <= 0
         const totalDebt = debtNum.toFixed(2);
         const actionHtml = debtNum <= 0
             ? `<span style="color: #64748b; font-weight: 500; font-size: 12px;">Оплачено</span>`
-            : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${item.postavhik_name}', '')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+            : `<button type="button" onclick="event.stopPropagation(); openPaymentDrawer('${item.postavhik_id}', '${totalDebt}', '${jsq(item.postavhik_name)}', '')" style="background: #16a34a; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                 Оплатить всё
               </button>`;
 
@@ -9114,7 +9114,11 @@ async function refreshData() {
         } else if (previousEntity === 'expense_items') {
             parentParam = lockedReceiptId || savedSelectedItem;
         }
-        await loadExpenseMainData(previousEntity, parentParam);
+         await loadExpenseMainData(previousEntity, parentParam);
+    }
+    else if (previousEntity === 'kubyshka') {
+        if (window._kubyshkaView === 'history') await loadKubyshkaHistory();
+        else await loadKubyshka();
     }
     else {
         const activeLink = document.querySelector('.nav-link.active');
@@ -14114,10 +14118,11 @@ if (tw && text !== 'Кубышка') tw.style.display = '';
 
 
 const SKLAD_KUBYSHKA = 1; // центральный склад
+const jsq = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\r?\n/g, ' ');
 const kFmt = n => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const K_KIND = { 1: 'Покупатель', 4: 'Покупатель', 2: 'Склад', 5: 'Склад', 3: 'Поставщик', 6: 'Поставщик' };
+const K_KIND = { 1: 'Покупатель', 4: 'Покупатель', 2: 'ВИП клиент', 5: 'ВИП клиент', 3: 'Поставщик', 6: 'Поставщик' };
 
 async function kubyshkaRows() {
     const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
@@ -14142,6 +14147,7 @@ function kubyshkaPrepareUi() {
 
 async function loadKubyshka() {
     kubyshkaPrepareUi();
+    window._kubyshkaView = 'main';
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
     if (headers) headers.innerHTML = '';
@@ -14162,8 +14168,10 @@ async function loadKubyshka() {
         body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${kEsc(err.message)}</td></tr>`;
     }
 }
+
 async function loadKubyshkaHistory() {
     kubyshkaPrepareUi();
+    window._kubyshkaView = 'history';
 
     const back = document.getElementById('btn-back-expense');
     if (back) {
@@ -14174,52 +14182,58 @@ async function loadKubyshkaHistory() {
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
     headers.innerHTML = `
+       <th style="width:160px;">Дата</th>
         <th style="width:140px;">Тип</th>
         <th>Контрагент</th>
         <th style="width:260px;">Операция</th>
         <th style="width:160px;text-align:right;">Сумма</th>`;
-    body.innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
         const { balance, rows } = await kubyshkaRows();
 
-        // одна строка на контрагента и вид операции
+        // одна строка на контрагента и вид операции + дата последней операции
         const map = new Map();
         rows.forEach(r => {
             const kind = K_KIND[r.src] || '—';
             const key = kind + '|' + r.counterparty + '|' + r.op_type;
-            if (!map.has(key)) map.set(key, { kind, name: r.counterparty, op: r.op_type, sum: 0 });
-            map.get(key).sum += Number(r.amount);
+            if (!map.has(key)) map.set(key, { kind, name: r.counterparty, op: r.op_type, sum: 0, last: null, cnt: 0 });
+            const g = map.get(key);
+            g.sum += Number(r.amount);
+            g.cnt += 1;
+            const d = r.op_date ? new Date(r.op_date) : null;
+            if (d && !isNaN(d) && (!g.last || d > g.last)) g.last = d;
         });
 
         const groups = [...map.values()]
             .filter(g => Math.abs(g.sum) > 0.005)
-            .sort((a, b) => a.kind.localeCompare(b.kind, 'ru')
-                || a.name.localeCompare(b.name, 'ru')
-                || b.sum - a.sum);
+                     .sort((a, b) => (b.last ? b.last.getTime() : 0) - (a.last ? a.last.getTime() : 0)
+                || a.name.localeCompare(b.name, 'ru'));
 
         if (!groups.length) {
-            body.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
             return;
         }
 
         const col = n => n > 0 ? '#16a34a' : (n < 0 ? '#dc2626' : '#475569');
         const sign = n => (n > 0 ? '+' : '') + kFmt(n);
+        const fmtDate = d => d ? d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—';
 
         body.innerHTML = groups.map(g => `
             <tr>
+                <td>${fmtDate(g.last)}${g.cnt > 1 ? `<div style="font-size:11px;color:#94a3b8;">последняя из ${g.cnt}</div>` : ''}</td>
                 <td>${kEsc(g.kind)}</td>
                 <td>${kEsc(g.name)}</td>
                 <td>${kEsc(g.op)}</td>
                 <td style="text-align:right;font-weight:600;color:${col(g.sum)};">${sign(g.sum)}</td>
             </tr>`).join('') + `
             <tr style="background:#f1f5f9;font-weight:700;">
-                <td colspan="3" style="text-align:right;">Кубышка</td>
+                <td colspan="4" style="text-align:right;">Кубышка</td>
                 <td style="text-align:right;color:${col(balance)};">${kFmt(balance)}</td>
             </tr>`;
     } catch (err) {
         console.error('Ошибка кубышки:', err);
-        body.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить: ${kEsc(err.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="5" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить: ${kEsc(err.message)}</td></tr>`;
     }
 }
 
