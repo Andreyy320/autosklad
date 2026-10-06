@@ -4034,6 +4034,29 @@ async function openReceiptItemsForm(item = null, parentId = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
+    // >>> ДОБАВЛЕНО: остатки на складе прихода для подсказки в списке запчастей
+    const stockMap = {};
+    let stockLoaded = false;
+    try {
+        if (parentId) {
+            const recsRes = await fetch('/api/receipts');
+            if (recsRes.ok) {
+                const recsData = await recsRes.json();
+                const recsList = Array.isArray(recsData) ? recsData : (recsData.data || recsData.items || []);
+                const curReceipt = recsList.find(r => String(r.id) === String(parentId));
+                if (curReceipt && curReceipt.warehouse_id) {
+                    const stRes = await fetch(`/api/stock_balances?warehouse_id=${curReceipt.warehouse_id}`);
+                    if (stRes.ok) {
+                        (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
+                        stockLoaded = true;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Остатки для списка запчастей не загружены:', e);
+    }
+    // <<< КОНЕЦ ДОБАВЛЕННОГО
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
@@ -4097,10 +4120,12 @@ async function openReceiptItemsForm(item = null, parentId = null) {
             if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
 
             const formatDisplayName = (refItem) => {
-                if (referenceName === 'zaphasti') {
+                  if (referenceName === 'zaphasti') {
                     const art = (refItem.code || refItem.article) ? `[${refItem.code || refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
-                    return `${art}${nm}`.trim() || `Запчасть #${refItem.id}`;
+                    const prod = refItem.proizvoditel_name ? ` - ${refItem.proizvoditel_name}` : '';
+                    const stk = stockLoaded ? ` (ост.: ${stockMap[refItem.id] || 0})` : '';
+                    return `${art}${nm}${prod}${stk}`.trim() || `Запчасть #${refItem.id}`;
                 }
                 return refItem.name || refItem.title || `Запись #${refItem.id}`;
             };
