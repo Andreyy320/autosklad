@@ -2650,8 +2650,10 @@ function openDrawer() {
     const drawer = getOrCreateDrawer();
     const backdrop = document.getElementById('entity-drawer-backdrop');
     
-       drawer.style.transform = 'translateX(0)';
-    if (backdrop) {
+    drawer.style.right = '0';
+    drawer.style.width = 'min(420px, 94vw)';
+    drawer.style.transform = 'translateX(0)';
+        if (backdrop) {
         backdrop.style.opacity = '1';
         backdrop.style.pointerEvents = 'auto';
     }
@@ -10219,8 +10221,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
         <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-    <label ...>Сумма к оплате (с учётом прошлых месяцев): <span ...>${debtSum}</span></label>
-                <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
+                <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма к оплате (с учётом прошлых месяцев): <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>                <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
             </div>
 
