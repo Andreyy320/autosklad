@@ -14130,7 +14130,7 @@ async function loadKubyshka() {
 
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
-if (headers) headers.innerHTML = '';
+    if (headers) headers.innerHTML = '';
     if (body) body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
@@ -14147,7 +14147,7 @@ if (headers) headers.innerHTML = '';
         const expense = Number(outRow.total_paid) || 0;
         const balance = income - expense;
 
-        const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20BD';
+        const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const color = balance > 0 ? '#16a34a' : (balance < 0 ? '#dc2626' : '#475569');
 
         body.innerHTML = `
