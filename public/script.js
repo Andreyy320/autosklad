@@ -13967,8 +13967,9 @@ document.querySelectorAll('.nav-link').forEach(link => {
         
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
-        const kv = document.getElementById('kubyshka-view');
+       const kv = document.getElementById('kubyshka-view');
 if (kv) kv.style.display = 'none';
+document.getElementById('kub-toolbar-btns')?.remove();
 const tw = document.getElementById('data-table')?.parentElement;
 if (tw && text !== 'Кубышка') tw.style.display = '';
     if (text === 'Кубышка') {
@@ -14122,7 +14123,7 @@ const jsq = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").rep
 const kFmt = n => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const K_KIND = { 1: 'Покупатель', 4: 'Покупатель', 2: 'ВИП клиент', 5: 'ВИП клиент', 3: 'Поставщик', 6: 'Поставщик' };
+const K_KIND = { 1: 'Покупатель', 4: 'Покупатель', 2: 'ВИП клиент', 5: 'ВИП клиент', 3: 'Поставщик', 6: 'Поставщик', 7: 'Кубышка' };
 
 async function kubyshkaRows() {
     const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
@@ -14142,9 +14143,9 @@ function kubyshkaPrepareUi() {
         if (el) el.style.setProperty('display', 'none', 'important');
     });
     const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-    if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+      if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+    ensureKubyshkaToolbarButtons();
 }
-
 async function loadKubyshka() {
     kubyshkaPrepareUi();
     window._kubyshkaView = 'main';
@@ -14161,8 +14162,8 @@ async function loadKubyshka() {
             <tr><td onclick="loadKubyshkaHistory()" style="padding:12px 16px;text-align:center;cursor:pointer;" title="Нажмите, чтобы увидеть из чего сложилась сумма">
                 <div style="font-size:13px;color:#64748b;">Центральный склад</div>
                 <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${kFmt(balance)}</div>
-                <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
-            </td></tr>`;
+                             <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
+                        </td></tr>`;
     } catch (err) {
         console.error('Ошибка кубышки:', err);
         body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${kEsc(err.message)}</td></tr>`;
@@ -14196,7 +14197,7 @@ async function loadKubyshkaHistory() {
         const map = new Map();
         rows.forEach(r => {
             const kind = K_KIND[r.src] || '—';
-            const key = kind + '|' + r.counterparty + '|' + r.op_type;
+                        const key = kind + '|' + r.counterparty + '|' + r.op_type + (r.src === 7 ? '|' + r.pay_id : '');
             if (!map.has(key)) map.set(key, { kind, name: r.counterparty, op: r.op_type, sum: 0, last: null, cnt: 0 });
             const g = map.get(key);
             g.sum += Number(r.amount);
@@ -14239,8 +14240,87 @@ async function loadKubyshkaHistory() {
 
 // 3) В loadKubyshka замени подпись под цифрой на:
 //    <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
+function ensureKubyshkaToolbarButtons() {
+    document.getElementById('kub-toolbar-btns')?.remove();
+    const all = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Обновить');
+    const refresh = all.find(b => b.offsetParent !== null) || all[0];
+    if (!refresh) return;
 
+    const wrap = document.createElement('span');
+    wrap.id = 'kub-toolbar-btns';
+    wrap.style.cssText = 'display:inline-flex;gap:6px;margin-left:6px;';
 
+    const mk = (text, color, type) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = refresh.className;
+        b.textContent = text;
+        b.style.color = color;
+        b.style.fontWeight = '600';
+        b.onclick = () => openKubyshkaOpDrawer(type);
+        return b;
+    };
+
+    wrap.appendChild(mk('+ Внести', '#16a34a', 'deposit'));
+    wrap.appendChild(mk('− Снять', '#dc2626', 'withdraw'));
+    refresh.insertAdjacentElement('afterend', wrap);
+}
+function openKubyshkaOpDrawer(type) {
+    const isDeposit = type === 'deposit';
+    const drawer = getOrCreateDrawer();
+    drawer.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 style="margin:0;font-size:16px;color:#0f172a;font-weight:600;">${isDeposit ? 'Внести в кубышку' : 'Снять из кубышки'}</h3>
+            <button onclick="closeDrawer()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+        </div>
+        <form onsubmit="submitKubyshkaOp(event, '${type}')" style="display:flex;flex-direction:column;gap:16px;">
+            <div>
+                <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;">Сумма</label>
+                <input type="number" step="0.01" min="0.01" id="kub-op-amount" required
+                    style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box;color:#0f172a;">
+            </div>
+            <div>
+                <label style="display:block;font-size:13px;color:#475569;margin-bottom:6px;">Комментарий</label>
+                <textarea id="kub-op-comment" placeholder="Например: свои деньги на закупку"
+                    style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;resize:vertical;min-height:60px;color:#0f172a;"></textarea>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:10px;">
+                <button type="submit" style="flex:1;background:${isDeposit ? '#16a34a' : '#dc2626'};color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-weight:500;">${isDeposit ? 'Внести' : 'Снять'}</button>
+                <button type="button" onclick="closeDrawer()" style="flex:1;background:#e2e8f0;color:#334151;border:none;padding:10px;border-radius:6px;cursor:pointer;">Отмена</button>
+            </div>
+        </form>`;
+    openDrawer();
+}
+
+async function submitKubyshkaOp(event, type) {
+    event.preventDefault();
+    if (window._payBusy) return;
+    window._payBusy = true;
+    setTimeout(() => { window._payBusy = false; }, 3000);
+
+    const amount = parseFloat(document.getElementById('kub-op-amount').value);
+    const comment = document.getElementById('kub-op-comment').value;
+
+    try {
+        const resp = await fetch('/api/kubyshka_operations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, amount, comment })
+        });
+        if (resp.ok) {
+            closeDrawer();
+            showAppNotification(type === 'deposit' ? 'Деньги внесены в кубышку' : 'Деньги сняты из кубышки', 'success');
+            if (window._kubyshkaView === 'history') await loadKubyshkaHistory();
+            else await loadKubyshka();
+        } else {
+            const errData = await resp.json().catch(() => ({}));
+            showAppNotification(errData.error || 'Ошибка при сохранении операции', 'error');
+        }
+    } catch (err) {
+        console.error('Ошибка сети:', err);
+        showAppNotification('Не удалось отправить данные на сервер', 'error');
+    }
+}
 
 document.querySelectorAll('.accordion-header').forEach(header => {
     header.addEventListener('click', () => {

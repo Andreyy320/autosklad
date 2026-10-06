@@ -2360,7 +2360,20 @@ async function getKubyshkaData(db, skladId) {
                        d.doc_number::text, COALESCE(p.name, '—')::text,
                        '—', 'Товар возвращён поставщику, оплата за него вернулась', (d.paid - d.paid_eff)::numeric, d.id, 6
                 FROM receipt_docs d LEFT JOIN postavhik p ON p.id = d.supplier_id
-                WHERE ABS(d.paid - d.paid_eff) > 0.005
+                                WHERE ABS(d.paid - d.paid_eff) > 0.005
+
+                UNION ALL
+                -- (+/−) ручное внесение или снятие
+                SELECT ko.date::timestamp,
+                       CASE WHEN ko.amount > 0 THEN 'Внесение в кубышку' ELSE 'Снятие из кубышки' END,
+                       '—',
+                       COALESCE(NULLIF(TRIM(ko.comment), ''), 'Без комментария')::text,
+                       COALESCE(CASE WHEN ko.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система'),
+                       ko.comment::text, ko.amount::numeric, ko.id, 7
+                FROM kubyshka_operations ko
+                LEFT JOIN users u ON ko.user_type = 'user' AND ko.user_id = u.id
+                LEFT JOIN employees e ON ko.user_type = 'employee' AND ko.user_id = e.id
+                WHERE ko.sklad_id = $1
             ) t
             ORDER BY t.op_date DESC, t.src DESC, t.pay_id DESC;
         `;
@@ -2368,7 +2381,49 @@ async function getKubyshkaData(db, skladId) {
         const balance = result.rows.reduce((s, r) => s + Number(r.amount), 0);
         return { balance, rows: result.rows };
 }
+router.post('/kubyshka_operations', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { type, amount, comment } = req.body;
+        const sum = Math.round(Number(amount) * 100) / 100;
+        if (!sum || !isFinite(sum) || sum <= 0) {
+            return res.status(400).json({ error: 'Некорректная сумма' });
+        }
+        if (type !== 'deposit' && type !== 'withdraw') {
+            return res.status(400).json({ error: 'Некорректный тип операции' });
+        }
+        const skladId = 1;
+        const signed = type === 'deposit' ? sum : -sum;
 
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(7771)');
+
+        if (type === 'withdraw') {
+            const kub = await getKubyshkaData(client, skladId);
+            if (sum > kub.balance + 0.005) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({
+                    error: `Недостаточно средств в кубышке. Доступно: ${Math.max(0, kub.balance).toFixed(2)} ₽`
+                });
+            }
+        }
+
+        const r = await client.query(
+            `INSERT INTO kubyshka_operations (sklad_id, amount, comment, user_id, user_type)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [skladId, signed, (comment || '').trim() || null, req.headers['x-user-id'] || null, req.headers['x-user-type'] || 'user']
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, operation: r.rows[0] });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ Ошибка ручной операции кубышки:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    } finally {
+        client.release();
+    }
+});
 router.get('/kubyshka_history', async (req, res) => {
     try {
         const skladId = Number(req.query.sklad_id) || 1;
