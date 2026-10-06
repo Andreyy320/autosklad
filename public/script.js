@@ -14117,7 +14117,6 @@ async function loadKubyshka() {
 
     resetSharedUiForEntity('kubyshka');
     pagerSuspend();
-    PAGER.reload = loadKubyshka; // чтобы работала кнопка «Обновить»
     currentEntity = 'kubyshka';
     selectedItem = null;
     if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
@@ -14129,17 +14128,10 @@ async function loadKubyshka() {
     const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
     if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
 
-    // прячем таблицу и показываем свой блок
-    const tableWrap = document.getElementById('data-table').parentElement;
-    tableWrap.style.display = 'none';
-    let view = document.getElementById('kubyshka-view');
-    if (!view) {
-        view = document.createElement('div');
-        view.id = 'kubyshka-view';
-        tableWrap.parentElement.insertBefore(view, tableWrap);
-    }
-    view.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
-    view.innerHTML = '<div style="color:#64748b;">Загрузка...</div>';
+    const headers = document.getElementById('table-headers');
+    const body = document.getElementById('table-body');
+    if (headers) headers.innerHTML = '<th>Кубышка</th>';
+    if (body) body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
         const [inRes, outRes] = await Promise.all([
@@ -14158,14 +14150,19 @@ async function loadKubyshka() {
         const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20BD';
         const color = balance > 0 ? '#16a34a' : (balance < 0 ? '#dc2626' : '#475569');
 
-        view.innerHTML = `
-            <div style="font-size:16px;color:#64748b;">Кубышка</div>
-            <div style="font-size:64px;font-weight:700;color:${color};">${fmt(balance)}</div>`;
+        body.innerHTML = `
+            <tr><td style="padding:12px 16px;text-align:center;">
+                <div style="font-size:13px;color:#64748b;">${inRow.sklad_name || 'Центральный склад'}</div>
+                <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${fmt(balance)}</div>
+                <div style="font-size:12px;color:#64748b;">
+                    Поступило: ${fmt(income)} &nbsp;|&nbsp; Выплачено поставщикам: ${fmt(expense)}
+                </div>
+            </td></tr>`;
     } catch (err) {
         console.error('Ошибка кубышки:', err);
-        view.innerHTML = `<div style="color:#dc2626;">Не удалось загрузить кубышку: ${err.message}</div>`;
+        body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${err.message}</td></tr>`;
     }
-} 
+}
 
 
 
