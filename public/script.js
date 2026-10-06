@@ -4444,7 +4444,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
 
             const formatDisplayName = (refItem) => {
                                if (referenceName === 'zaphasti') {
-                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const art = (refItem.code || refItem.article) ? `[${refItem.code || refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     const prod = refItem.proizvoditel_name ? ` - ${refItem.proizvoditel_name}` : '';
                     const stk = stockLoaded ? ` (ост.: ${stockMap[refItem.id] || 0})` : '';
@@ -4762,7 +4762,7 @@ async function openRepairItemsForm(item = null, parentId = null) {
 
             const formatDisplayName = (refItem) => {
                                if (referenceName === 'zaphasti') {
-                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const art = (refItem.code || refItem.article) ? `[${refItem.code || refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     const prod = refItem.proizvoditel_name ? ` — ${refItem.proizvoditel_name}` : '';
                     const stk = stockLoaded ? ` (ост.: ${stockMap[refItem.id] || 0})` : '';
@@ -5085,7 +5085,7 @@ if (col.field === 'markup_percent' && !val) {
 
             const formatDisplayName = (refItem) => {
                                if (referenceName === 'zaphasti') {
-                    const art = refItem.article ? `[${refItem.article}] ` : '';
+                    const art = (refItem.code || refItem.article) ? `[${refItem.code || refItem.article}] ` : '';
                     const nm = refItem.name || refItem.title || '';
                     const prod = refItem.proizvoditel_name ? ` - ${refItem.proizvoditel_name}` : '';
                     const stk = stockLoaded ? ` (ост.: ${stockMap[refItem.id] || 0})` : '';
