@@ -2234,56 +2234,136 @@ router.get('/receipts_history', async (req, res) => {
     }
 });
 
+// ЗАМЕНИ в api.js весь маршрут router.get('/kubyshka_history', ...) на этот
 router.get('/kubyshka_history', async (req, res) => {
     try {
         const skladId = Number(req.query.sklad_id) || 1;
 
         const query = `
+            WITH real_docs AS (
+                SELECT real.id, real.doc_number, real.doc_date, real.customer_id,
+                       COALESCE(p.paid, 0) AS paid,
+                       LEAST(COALESCE(p.paid, 0),
+                             GREATEST(COALESCE(i.s, 0) - COALESCE(rt.s, 0), 0) + COALESCE(w.s, 0)) AS paid_eff,
+                       rt.last_date
+                FROM realizations real
+                LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s
+                           FROM realization_items GROUP BY realization_id) i ON i.realization_id = real.id
+                LEFT JOIN (SELECT realization_id, SUM(COALESCE(NULLIF(total_rub, 0), price * quantity, 0)) AS s
+                           FROM realization_works GROUP BY realization_id) w ON w.realization_id = real.id
+                LEFT JOIN (SELECT realization_id, SUM(amount) AS paid
+                           FROM customer_payments GROUP BY realization_id) p ON p.realization_id = real.id
+                LEFT JOIN (SELECT ret.realization_id,
+                                  SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS s,
+                                  MAX(COALESCE(ret.fact_date::timestamp, ret.date::timestamp)) AS last_date
+                           FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
+                           WHERE ret.is_posted = true AND ret.realization_id IS NOT NULL
+                           GROUP BY ret.realization_id) rt ON rt.realization_id = real.id
+                WHERE real.is_posted = true AND real.sklad_id = $1
+            ),
+            move_docs AS (
+                SELECT m.id, m.doc_number, m.date AS doc_date, m.warehouse_to_id,
+                       COALESCE(p.paid, 0) AS paid,
+                       LEAST(COALESCE(p.paid, 0), GREATEST(COALESCE(i.s, 0) - COALESCE(rt.s, 0), 0)) AS paid_eff,
+                       rt.last_date
+                FROM moves m
+                LEFT JOIN (SELECT move_id, SUM(total_rub) AS s FROM move_items GROUP BY move_id) i ON i.move_id = m.id
+                LEFT JOIN (SELECT move_id, SUM(amount) AS paid
+                           FROM warehouse_debt_payments WHERE move_id IS NOT NULL GROUP BY move_id) p ON p.move_id = m.id
+                LEFT JOIN (SELECT ret.move_id,
+                                  SUM(COALESCE(reti.total_rub, reti.price_rub * reti.quantity, 0)) AS s,
+                                  MAX(COALESCE(ret.fact_date::timestamp, ret.date::timestamp)) AS last_date
+                           FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
+                           WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
+                           GROUP BY ret.move_id) rt ON rt.move_id = m.id
+                WHERE m.is_posted = true AND m.warehouse_from_id = $1
+            ),
+            receipt_docs AS (
+                SELECT rec.id, rec.doc_number, rec.date AS doc_date, rec.supplier_id,
+                       COALESCE(p.paid, 0) AS paid,
+                       LEAST(COALESCE(i.s, 0) - COALESCE(rt.s, 0), COALESCE(p.paid, 0)) AS paid_eff,
+                       rt.last_date
+                FROM receipts rec
+                LEFT JOIN (SELECT receipt_id, SUM(total_rub) AS s FROM receipt_items GROUP BY receipt_id) i ON i.receipt_id = rec.id
+                LEFT JOIN (SELECT receipt_id, SUM(amount) AS paid
+                           FROM supplier_payments WHERE receipt_id IS NOT NULL GROUP BY receipt_id) p ON p.receipt_id = rec.id
+                LEFT JOIN (SELECT ret.receipt_id, SUM(reti.total_rub) AS s,
+                                  MAX(COALESCE(ret.fact_date::timestamp, ret.date::timestamp)) AS last_date
+                           FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
+                           WHERE ret.is_posted = true GROUP BY ret.receipt_id) rt ON rt.receipt_id = rec.id
+                WHERE rec.is_posted = true AND rec.is_opening_balance IS NOT TRUE AND rec.warehouse_id = $1
+            )
             SELECT t.*,
                    SUM(t.amount) OVER (ORDER BY t.op_date ASC, t.src ASC, t.pay_id ASC) AS running_total
             FROM (
-                -- оплаты клиентов по реализациям (+)
-                SELECT cp.date::timestamp AS op_date, 'Оплата от клиента' AS op_type,
-                       COALESCE(r.doc_number, '—') AS doc_number,
-                       COALESCE(c.name_full, c.name_short, 'Розничный покупатель') AS counterparty,
-                       COALESCE(CASE WHEN cp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система') AS user_name,
-                       cp.comment, cp.amount::numeric AS amount, cp.id AS pay_id, 1 AS src
+                -- (+) оплаты клиентов по реализациям
+                SELECT cp.date::timestamp AS op_date, 'Оплата от клиента'::text AS op_type,
+                       COALESCE(r.doc_number, '—')::text AS doc_number,
+                       COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty,
+                       COALESCE(CASE WHEN cp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система')::text AS user_name,
+                       cp.comment::text AS comment, cp.amount::numeric AS amount, cp.id AS pay_id, 1 AS src
                 FROM customer_payments cp
                 JOIN realizations r ON r.id = cp.realization_id
                 LEFT JOIN customers c ON c.id = cp.customer_id
                 LEFT JOIN users u ON cp.user_type = 'user' AND cp.user_id = u.id
                 LEFT JOIN employees e ON cp.user_type = 'employee' AND cp.user_id = e.id
-                WHERE r.sklad_id = $1
+                WHERE r.sklad_id = $1 AND r.is_posted = true
 
                 UNION ALL
-
-                -- оплаты по перемещениям с этого склада (+)
+                -- (+) оплаты по перемещениям с этого склада
                 SELECT wdp.date::timestamp, 'Оплата по перемещению',
                        COALESCE(m.doc_number, '—'),
                        COALESCE(sk.name, 'Склад-получатель'),
                        COALESCE(CASE WHEN wdp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система'),
-                       wdp.comment, wdp.amount::numeric, wdp.id, 2
+                       wdp.comment::text, wdp.amount::numeric, wdp.id, 2
                 FROM warehouse_debt_payments wdp
                 JOIN moves m ON m.id = wdp.move_id
                 LEFT JOIN skladi sk ON sk.id = m.warehouse_to_id
                 LEFT JOIN users u ON wdp.user_type = 'user' AND wdp.user_id = u.id
                 LEFT JOIN employees e ON wdp.user_type = 'employee' AND wdp.user_id = e.id
-                WHERE m.warehouse_from_id = $1
+                WHERE m.warehouse_from_id = $1 AND m.is_posted = true
 
                 UNION ALL
-
-                -- оплаты поставщикам по приходам (−)
+                -- (−) оплаты поставщикам по приходам
                 SELECT sp.date::timestamp, 'Оплата поставщику',
                        COALESCE(rec.doc_number, '—'),
                        COALESCE(p.name, '—'),
                        COALESCE(CASE WHEN sp.user_type = 'employee' THEN e.name ELSE COALESCE(u.name, u.login) END, 'Система'),
-                       sp.comment, -sp.amount::numeric, sp.id, 3
+                       sp.comment::text, -sp.amount::numeric, sp.id, 3
                 FROM supplier_payments sp
                 JOIN receipts rec ON rec.id = sp.receipt_id
                 LEFT JOIN postavhik p ON p.id = sp.supplier_id
                 LEFT JOIN users u ON sp.user_type = 'user' AND sp.user_id = u.id
                 LEFT JOIN employees e ON sp.user_type = 'employee' AND sp.user_id = e.id
-                WHERE rec.warehouse_id = $1
+                WHERE rec.warehouse_id = $1 AND rec.is_posted = true AND rec.is_opening_balance IS NOT TRUE
+
+                UNION ALL
+                -- (−) возврат от покупателя
+                SELECT COALESCE(d.last_date, d.doc_date::timestamp),
+                       CASE WHEN d.last_date IS NOT NULL THEN 'Возврат от покупателя' ELSE 'Корректировка (оплата больше суммы)' END,
+                       d.doc_number::text,
+                       COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text,
+                       '—', 'Сумма документа уменьшилась, лишняя оплата вычтена', (d.paid_eff - d.paid)::numeric, d.id, 4
+                FROM real_docs d LEFT JOIN customers c ON c.id = d.customer_id
+                WHERE ABS(d.paid_eff - d.paid) > 0.005
+
+                UNION ALL
+                -- (−) возврат по перемещению
+                SELECT COALESCE(d.last_date, d.doc_date::timestamp),
+                       CASE WHEN d.last_date IS NOT NULL THEN 'Возврат по перемещению' ELSE 'Корректировка (оплата больше суммы)' END,
+                       d.doc_number::text, COALESCE(sk.name, 'Склад-получатель')::text,
+                       '—', 'Сумма документа уменьшилась, лишняя оплата вычтена', (d.paid_eff - d.paid)::numeric, d.id, 5
+                FROM move_docs d LEFT JOIN skladi sk ON sk.id = d.warehouse_to_id
+                WHERE ABS(d.paid_eff - d.paid) > 0.005
+
+                UNION ALL
+                -- (+) возврат поставщику: деньги за возвращённый товар вернулись
+                SELECT COALESCE(d.last_date, d.doc_date::timestamp),
+                       CASE WHEN d.last_date IS NOT NULL THEN 'Возврат поставщику' ELSE 'Корректировка (оплата больше суммы)' END,
+                       d.doc_number::text, COALESCE(p.name, '—')::text,
+                       '—', 'Товар возвращён поставщику, оплата за него вернулась', (d.paid - d.paid_eff)::numeric, d.id, 6
+                FROM receipt_docs d LEFT JOIN postavhik p ON p.id = d.supplier_id
+                WHERE ABS(d.paid - d.paid_eff) > 0.005
             ) t
             ORDER BY t.op_date DESC, t.src DESC, t.pay_id DESC;
         `;
@@ -2295,7 +2375,7 @@ router.get('/kubyshka_history', async (req, res) => {
         console.error('❌ Ошибка истории кубышки:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
-});
+}); 
 
 router.get('/stock_balances', async (req, res) => {
     try {

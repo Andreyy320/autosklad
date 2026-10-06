@@ -14111,53 +14111,20 @@ if (tw && text !== 'Кубышка') tw.style.display = '';
     });
 });
 
+
 const SKLAD_KUBYSHKA = 1; // центральный склад
 const kFmt = n => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function kubyshkaPrepareUi() {
-    resetSharedUiForEntity('kubyshka');
-    pagerSuspend();
-    currentEntity = 'kubyshka';
-    selectedItem = null;
-    if (typeof updateFilterPanels === 'function') updateFilterPanels('kubyshka');
-    document.getElementById('table-filter-row')?.remove();
+const K_KIND = { 1: 'Покупатель', 4: 'Покупатель', 2: 'Склад', 5: 'Склад', 3: 'Поставщик', 6: 'Поставщик' };
 
-    ['detail-container', 'btn-add', 'btn-edit', 'btn-delete', 'btn-back-expense'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.setProperty('display', 'none', 'important');
-    });
-    const actionBar = document.querySelector('.action-buttons') || document.getElementById('action-buttons-bar');
-    if (actionBar) actionBar.style.setProperty('display', 'none', 'important');
+async function kubyshkaRows() {
+    const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
+    if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
+    return res.json(); // { balance, rows }
 }
 
-async function loadKubyshka() {
-    kubyshkaPrepareUi();
-    const headers = document.getElementById('table-headers');
-    const body = document.getElementById('table-body');
-    if (headers) headers.innerHTML = '';
-    body.innerHTML = '<tr><td style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
-
-    try {
-        const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
-        if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
-        const data = await res.json();
-
-        const balance = Number(data.balance) || 0;
-        const color = balance > 0 ? '#16a34a' : (balance < 0 ? '#dc2626' : '#475569');
-
-        body.innerHTML = `
-            <tr><td onclick="loadKubyshkaHistory()" style="padding:12px 16px;text-align:center;cursor:pointer;" title="Нажмите, чтобы увидеть историю">
-                <div style="font-size:13px;color:#64748b;">Центральный склад</div>
-                <div style="font-size:28px;font-weight:700;color:${color};margin:4px 0;">${kFmt(balance)}</div>
-                <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть историю (${data.rows.length})</div>
-            </td></tr>`;
-    } catch (err) {
-        console.error('Ошибка кубышки:', err);
-        body.innerHTML = `<tr><td style="padding:12px;text-align:center;color:#dc2626;">Не удалось загрузить кубышку: ${kEsc(err.message)}</td></tr>`;
-    }
-}
-
+// 2) ЗАМЕНИ функцию loadKubyshkaHistory целиком на эту
 async function loadKubyshkaHistory() {
     kubyshkaPrepareUi();
 
@@ -14170,45 +14137,57 @@ async function loadKubyshkaHistory() {
     const headers = document.getElementById('table-headers');
     const body = document.getElementById('table-body');
     headers.innerHTML = `
-        <th style="width:140px;">Дата</th>
-        <th style="width:170px;">Операция</th>
-        <th style="width:110px;">Документ</th>
-        <th style="width:220px;">Контрагент</th>
-        <th style="width:150px;">Кто провёл</th>
-        <th>Комментарий</th>
-        <th style="width:120px;text-align:right;">Сумма</th>
-        <th style="width:120px;text-align:right;">Итого</th>`;
-    body.innerHTML = '<tr><td colspan="8" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+        <th style="width:140px;">Тип</th>
+        <th>Контрагент</th>
+        <th style="width:260px;">Операция</th>
+        <th style="width:160px;text-align:right;">Сумма</th>`;
+    body.innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
 
     try {
-        const res = await fetch(`/api/kubyshka_history?sklad_id=${SKLAD_KUBYSHKA}`);
-        if (!res.ok) throw new Error('Нет доступа или ошибка сервера');
-        const { rows } = await res.json();
+        const { balance, rows } = await kubyshkaRows();
 
-        if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
+        // одна строка на контрагента и вид операции
+        const map = new Map();
+        rows.forEach(r => {
+            const kind = K_KIND[r.src] || '—';
+            const key = kind + '|' + r.counterparty + '|' + r.op_type;
+            if (!map.has(key)) map.set(key, { kind, name: r.counterparty, op: r.op_type, sum: 0 });
+            map.get(key).sum += Number(r.amount);
+        });
+
+        const groups = [...map.values()]
+            .filter(g => Math.abs(g.sum) > 0.005)
+            .sort((a, b) => a.kind.localeCompare(b.kind, 'ru')
+                || a.name.localeCompare(b.name, 'ru')
+                || b.sum - a.sum);
+
+        if (!groups.length) {
+            body.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
             return;
         }
 
-        body.innerHTML = rows.map(r => {
-            const amt = Number(r.amount);
-            const c = amt >= 0 ? '#16a34a' : '#dc2626';
-            return `<tr>
-                <td>${new Date(r.op_date).toLocaleString('ru-RU')}</td>
-                <td>${kEsc(r.op_type)}</td>
-                <td>${kEsc(r.doc_number)}</td>
-                <td>${kEsc(r.counterparty)}</td>
-                <td>${kEsc(r.user_name)}</td>
-                <td>${kEsc(r.comment)}</td>
-                <td style="text-align:right;font-weight:600;color:${c};">${amt > 0 ? '+' : ''}${kFmt(amt)}</td>
-                <td style="text-align:right;">${kFmt(r.running_total)}</td>
+        const col = n => n > 0 ? '#16a34a' : (n < 0 ? '#dc2626' : '#475569');
+        const sign = n => (n > 0 ? '+' : '') + kFmt(n);
+
+        body.innerHTML = groups.map(g => `
+            <tr>
+                <td>${kEsc(g.kind)}</td>
+                <td>${kEsc(g.name)}</td>
+                <td>${kEsc(g.op)}</td>
+                <td style="text-align:right;font-weight:600;color:${col(g.sum)};">${sign(g.sum)}</td>
+            </tr>`).join('') + `
+            <tr style="background:#f1f5f9;font-weight:700;">
+                <td colspan="3" style="text-align:right;">Кубышка</td>
+                <td style="text-align:right;color:${col(balance)};">${kFmt(balance)}</td>
             </tr>`;
-        }).join('');
     } catch (err) {
-        console.error('Ошибка истории кубышки:', err);
-        body.innerHTML = `<tr><td colspan="8" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить историю: ${kEsc(err.message)}</td></tr>`;
+        console.error('Ошибка кубышки:', err);
+        body.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить: ${kEsc(err.message)}</td></tr>`;
     }
 }
+
+// 3) В loadKubyshka замени подпись под цифрой на:
+//    <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
 
 
 
