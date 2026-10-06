@@ -12,6 +12,10 @@ window.fetch = async function(url, options = {}) {
 
     const response = await _originalFetch(url, options);
 
+    const refreshedToken = response.headers.get('x-new-token');
+    if (isApiCall && refreshedToken) {
+        localStorage.setItem('token', refreshedToken);
+    }
     if (isApiCall && response.status === 401) {
         console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
     localStorage.removeItem('token');

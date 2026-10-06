@@ -318,7 +318,7 @@ const loginLimiter = rateLimit({
            const token = jwt.sign(
         { id: user.id, login: user.login, type: actorType, role: user.role || 'employee' },
         process.env.JWT_SECRET,
-        { expiresIn: '3h' }
+                { expiresIn: '12h' }
     );
 
     return res.json({ success: true, user: safeUser, token });
@@ -347,6 +347,16 @@ function authMiddleware(req, res, next) {
         req.user = decoded;
         req.headers['x-user-id'] = decoded.id;
         req.headers['x-user-type'] = decoded.type || 'user';
+
+        const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
+        if (secondsLeft < 6 * 60 * 60) {
+            const freshToken = jwt.sign(
+                { id: decoded.id, login: decoded.login, type: decoded.type, role: decoded.role },
+                process.env.JWT_SECRET,
+                { expiresIn: '12h' }
+            );
+            res.setHeader('x-new-token', freshToken);
+        }
                 next();
     } catch (err) {
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
