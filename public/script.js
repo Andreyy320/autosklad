@@ -7321,8 +7321,8 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
                 showAppNotification('Данные успешно сохранены', 'success');
 
                if (!parentId && !isEdit && savedDoc && savedDoc.id) {
-    selectedItem = savedDoc;
-}
+       selectedItem = savedDoc;
+    }
 
                 if (entity === 'repair_items' && parentId) {
                     loadDetailData(entity, parentId);
@@ -7344,7 +7344,6 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
     });
 }
 
-
 async function openRealizationForm(entity, item = null) {
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
@@ -7355,9 +7354,7 @@ async function openRealizationForm(entity, item = null) {
     }
 
     const config = getConfig('realizations');
-
     const drawer = getOrCreateDrawer();
-
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
