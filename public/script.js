@@ -2,12 +2,29 @@ const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
 
-    if (isApiCall) {
+       if (isApiCall) {
         const token = localStorage.getItem('token');
         options.headers = {
             ...(options.headers || {}),
             'Authorization': token ? `Bearer ${token}` : ''
         };
+    }
+
+    if (isApiCall && typeof options.body === 'string' && /^(POST|PUT|PATCH)$/i.test(options.method || '')) {
+        try {
+            const obj = JSON.parse(options.body);
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+                const numKeys = ['quantity', 'price', 'retail_price', 'sale_price', 'price_rub', 'amount', 'percent'];
+                let changed = false;
+                numKeys.forEach(function (k) {
+                    if (typeof obj[k] === 'string' && /^\s*-?\d+,\d+\s*$/.test(obj[k])) {
+                        obj[k] = obj[k].replace(',', '.').trim();
+                        changed = true;
+                    }
+                });
+                if (changed) options.body = JSON.stringify(obj);
+            }
+        } catch (e) {}
     }
 
     const response = await _originalFetch(url, options);
@@ -16,14 +33,11 @@ window.fetch = async function(url, options = {}) {
     if (isApiCall && refreshedToken) {
         localStorage.setItem('token', refreshedToken);
     }
-   if (isApiCall && response.status === 401) {
-    if (!options._retried) {
-        await new Promise(r => setTimeout(r, 300));
-        return window.fetch(url, { ...options, _retried: true });
-    }
+    if (isApiCall && response.status === 401) {
+        console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
     localStorage.removeItem('token');
-    location.reload();
-}
+            location.reload();
+    }
 
     return response;
 };
@@ -5817,7 +5831,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
+                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 if (parentId) loadDetailData(entity, parentId); 
                 
                 else refreshData();
@@ -13283,7 +13297,10 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
             'realization_works',
             'customer_cars',
             'customer_contacts',
-            'postavhik_contacts'
+            'postavhik_contacts',
+               'accident_invoices',
+            'accident_payments',
+            'accident_events'
         ];
         if (!allowedDetailEntities.includes(detailEntity)) {
             return;
