@@ -12873,6 +12873,7 @@ if (tableBody) {
                 const activeAccidentTab = document.querySelector('.accident-tab-btn.active') || document.querySelector('.accident-tab-btn');
                 const match = activeAccidentTab && activeAccidentTab.getAttribute('onclick')?.match(/'([^']+)'/);
                 const subTab = match ? match[1] : 'accident_invoices';
+                if (activeAccidentTab && !activeAccidentTab.classList.contains('active')) activeAccidentTab.classList.add('active');
                 if (typeof currentAccidentSubTab !== 'undefined') currentAccidentSubTab = subTab;
                 loadDetailData(subTab, itemId);
             } else if (currentEntity === 'repairs') {
