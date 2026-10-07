@@ -6254,9 +6254,9 @@ async function openReceiptForm(entity, item = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
-                if (!isEdit && savedDoc && savedDoc.id) {
-                    selectedItem = savedDoc;
-                }
+              if (!parentId && !isEdit && savedDoc && savedDoc.id) {
+    selectedItem = savedDoc;
+}
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -6734,9 +6734,9 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
-                if (!isEdit && savedDoc && savedDoc.id) {
-                    selectedItem = savedDoc;
-                }
+               if (!parentId && !isEdit && savedDoc && savedDoc.id) {
+    selectedItem = savedDoc;
+}
 
                 if (entity === 'move_items' && parentId) {
                     loadDetailData(entity, parentId);
@@ -7320,9 +7320,9 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
 
-                if (!isEdit && savedDoc && savedDoc.id) {
-                    selectedItem = savedDoc;
-                }
+               if (!parentId && !isEdit && savedDoc && savedDoc.id) {
+    selectedItem = savedDoc;
+}
 
                 if (entity === 'repair_items' && parentId) {
                     loadDetailData(entity, parentId);
