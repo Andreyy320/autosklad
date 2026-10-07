@@ -7985,7 +7985,6 @@ async function openRealizationForm(entity, item = null) {
     });
 }
 
-
 async function openReturnForm(entity, item = null) {
     const drawer = getOrCreateDrawer();
 
