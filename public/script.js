@@ -1945,8 +1945,8 @@ const isPosted = Boolean(item.is_posted);
         { field: 'customer_id', label: 'Покупатель', width: '150px', ref: 'customers' },
         { field: 'sklad_id', label: 'Склад', width: '130px', ref: 'skladi' },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
-        { field: 'car_id', label: 'Гос. номер', width: '120px', ref: 'customer_cars', formatRef: (car) => car.gos_number || car.car_number || `ID #${car.id}` },
-        { field: 'car_id', label: 'Марка авто', width: '140px', ref: 'customer_cars', formatRef: (car) => `${car.brand || ''} ${car.model || ''}`.trim() || '—' },
+        { field: 'car_id', label: 'Гос. номер', tableLabel: 'Гос. номер / Марка', width: '170px', ref: 'customer_cars', formatRef: (car) => car.gos_number || car.car_number || `ID #${car.id}` },
+{ field: 'car_id', label: 'Марка авто', width: '140px', ref: 'customer_cars', formatRef: (car) => `${car.brand || ''} ${car.model || ''}`.trim() || '—', table: false },
         { field: 'sum_parts', label: 'Запчасти', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_work', label: 'Работа', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'sum_total', label: 'Всего', width: '90px', insert: false, update: false, readonly: true, align: 'right' },
@@ -1988,8 +1988,7 @@ const isPosted = Boolean(item.is_posted);
             <td>${item.customer_name || item.customer_id || '—'}</td>
             <td>${item.sklad_name || item.sklad_id || '—'}</td>
             <td>${item.mol_name || item.mol_id || '—'}</td>
-            <td><b>${gosNumber}</b></td>
-            <td>${carBrandModel}</td>
+           <td><b>${gosNumber}</b><br>${carBrandModel}</td>
             <td style="text-align: right;">${sumPartsVal}</td>
             <td style="text-align: right;">${sumWorkVal}</td>
             <td style="text-align: right; font-weight: bold;">${sumTotalVal}</td>
