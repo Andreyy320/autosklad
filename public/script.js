@@ -5814,7 +5814,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
+                if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 if (parentId) loadDetailData(entity, parentId); 
                 
                 else refreshData();
