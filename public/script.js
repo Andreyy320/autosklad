@@ -7967,7 +7967,7 @@ async function openRealizationForm(entity, item = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Реализация успешно сохранена', 'success');
-                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
+                if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
