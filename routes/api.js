@@ -3436,8 +3436,8 @@ router.get('/car_general', async (req, res) => {
                 CONCAT('ДТП / Ущерб №', COALESCE(ac.doc_number, ac.id::text)) AS name,
                 1 AS qty,
                 'шт' AS unit,
-                ac.damage_amount AS price,
-                COALESCE(ac.damage_amount, 0) AS sum,
+                ac.account_number AS price,
+COALESCE(ac.account_number, 0) AS sum,
                 ac.description,
                 NULL::text AS doc_number,
                 CONCAT('ДТП от ', TO_CHAR(COALESCE(ac.doc_date, ac.fact_date, ac.detected_date), 'DD.MM.YYYY')) AS document

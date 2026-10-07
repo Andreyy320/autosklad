@@ -1206,8 +1206,8 @@ render: (item) => {
         { label: "Обнаружено", field: "detected_date", type: 'datetime-local', width: "110px" },
         { label: "Водитель", field: "driver", width: "180px" },
         { label: "Виновник", field: "culprit", width: "180px" },
-        { label: "Ущерб", tableLabel: "Ущерб / Счет", field: "damage_amount", width: "110px", align: "right" },
-{ label: "Счет", field: "account_number", width: "90px", edit: false, table: false },
+       { label: "Ущерб", field: "damage_amount", width: "110px", align: "right", insert: false, update: false, table: false },
+    { label: "Счет", field: "account_number", width: "90px", edit: false },
         { label: "Выплачено", field: "paid_amount", width: "100px", align: "right", edit: false },
         { label: "Дата факт", field: "actual_date", type: 'datetime-local', width: "130px", edit: false },
         { label: "Проведен", field: "is_posted", width: "200px", insert: false, update: false },
@@ -1255,7 +1255,7 @@ render: (item) => {
             <td>${formatDT(item.detected_date)}</td>
             <td>${item.driver || '—'}</td>
             <td>${item.culprit || '—'}</td>
-                    <td style="text-align: right;"><b>${damageVal}</b><br><span style="color: #2563eb; font-weight: 600;">${accountVal}</span></td>
+                    <td style="${accountStyle}">${accountVal}</td>
             <td style="${paidStyle}">${paidVal}</td>
             <td>${formatDT(item.actual_date)}</td>
             <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
