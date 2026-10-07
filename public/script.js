@@ -1422,7 +1422,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
      { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
     { field: 'warehouse_id', label: 'Склад/Сервис', width: '150px', ref: 'skladi' },
     { field: 'customer_id', label: 'Сервис', width: '150px', ref: 'customers', table: false },
-    { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol' },
+        { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol', table: false },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
               { field: 'is_posted', label: 'Проведен', width: '200px' },
@@ -1466,7 +1466,7 @@ const isPosted = Boolean(item.is_posted);
             <td>${item.car_model || '—'}</td>
             <td style="text-align: right;">${mileageVal}</td>
 <td>${skladServiceVal}</td>
-            <td>${item.mol_name || item.mol_id || '—'}</td>
+            
             <td style="text-align: right; font-weight: bold;">${sumVal}</td>
             <td>${formatDT(item.fact_date)}</td>
                         <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
@@ -7344,6 +7344,7 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
     });
 }
 
+
 async function openRealizationForm(entity, item = null) {
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
@@ -8100,7 +8101,7 @@ async function openReturnForm(entity, item = null) {
                 <textarea name="comment" ${fieldLock} style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; min-height: 60px;">${item.comment || ''}</textarea>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
-                ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #16a34a; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
+                ${!isPosted ? '<button type="submit" id="save-btn" style="flex: 1; background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Сохранить</button>' : '<div style="flex: 1; color: #16a34a; font-weight: 600; font-size: 13px; display: flex; align-items: center;">Документ проведен и заблокирован от изменений</div>'}
                 ${item.id && !isPosted ? `<button type="button" id="delete-btn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">Удалить</button>` : ''}
                 <button type="button" onclick="closeDrawer()" style="background: #e2e8f0; color: #334151; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">${isPosted ? 'Закрыть' : 'Отмена'}</button>
             </div>
@@ -8949,7 +8950,7 @@ function openReturnQtyDrawer(btn, returnDoc) {
                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size:16px;">
         </div>
         <div style="display: flex; gap: 10px;">
-            <button type="button" id="return-drawer-save-btn" style="flex:1; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
+            <button type="button" id="return-drawer-save-btn" style="flex:1; background:#2563eb; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Сохранить</button>
             ${currentQty > 0 ? `<button type="button" id="return-drawer-remove-btn" style="background:#dc2626; color:white; border:none; padding:10px 16px; border-radius:6px; cursor:pointer;">Убрать</button>` : ''}
             <button type="button" onclick="closeDrawer()" style="flex:1; background:#e2e8f0; color:#334151; border:none; padding:10px; border-radius:6px; cursor:pointer;">Отмена</button>
         </div>
@@ -9084,7 +9085,8 @@ async function refreshData() {
     const savedSelectedItem = selectedItem;
     const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
     const previousEntity = currentEntity;
-
+    const detailBox = document.getElementById('detail-container');
+    const detailWasOpen = !!(detailBox && getComputedStyle(detailBox).display !== 'none');
     const lockedSkladId = window.currentSkladId;
     const lockedPostavhikId = window.currentPostavhikId;
     const lockedReceiptId = window.currentReceiptId;
@@ -9182,10 +9184,14 @@ async function refreshData() {
                 loadExpenseDetailTable(url);
             }
 
-            if (previousEntity === 'realizations') {
+                      if (previousEntity === 'realizations') {
                 const activeTabBtn = document.querySelector('#tabs-for-realizations button.active');
                 const detailEntity = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'realization_items';
                 loadDetailData(detailEntity, savedSelectedItem.id);
+            }
+
+            if (detailWasOpen && ['repairs', 'accidents', 'receipts', 'moves', 'customers', 'cars', 'postavhik', 'counterparties'].includes(previousEntity)) {
+                foundRow.click();
             }
         }
     }
@@ -14408,7 +14414,7 @@ function setDetailToolbarVisible(visible) {
     const currentUserId = localStorage.getItem('currentUserId') || 'guest';
 
                document.querySelectorAll('table').forEach(table => {
-            if (table.parentElement) {
+                        if (table.parentElement && table.id !== 'data-table' && table.id !== 'detail-table') {
                 table.parentElement.style.overflowX = 'hidden';
                 table.parentElement.style.maxWidth = '100%';
             }
@@ -14621,4 +14627,110 @@ function setDetailToolbarVisible(visible) {
     }
     const densityObserver = new MutationObserver(() => initDensitySelector());
     densityObserver.observe(document.body, { childList: true, subtree: true });
+})();
+
+// ===== Горизонтальная прокрутка + липкая шапка для основной и детальной таблиц =====
+(function () {
+    const COL_MIN = 120;      // минимальная ширина колонки, px (больше = меньше обрезается, больше прокрутки)
+   
+    const IDS = ['data-table', 'detail-table'];
+
+    if (!document.getElementById('table-scroll-style')) {
+        const st = document.createElement('style');
+        st.id = 'table-scroll-style';
+        st.textContent = `
+            .content-area { min-width: 0; }
+                        .tbl-scroll thead th { position: sticky !important; z-index: 5; }
+            .tbl-scroll thead th .resizer { z-index: 6; }
+            .tbl-scroll td, .tbl-scroll th { white-space: nowrap; }
+        `;
+        document.head.appendChild(st);
+    }
+
+    function visibleCells(tr) {
+        return Array.from(tr.children).filter(c => getComputedStyle(c).display !== 'none');
+    }
+ 
+       function setupTable(table) {
+        const wrap = table.parentElement;
+        const thead = table.querySelector('thead');
+        if (!wrap || !thead) return;
+        wrap.classList.add('tbl-scroll');
+        wrap.style.setProperty('overflow', 'auto', 'important');
+        wrap.style.setProperty('max-width', '100%', 'important');
+
+        // минимальная ширина по числу видимых колонок
+        let cols = 0;
+        thead.querySelectorAll('tr').forEach(tr => { cols = Math.max(cols, visibleCells(tr).length); });
+        if (cols) table.style.minWidth = (cols * COL_MIN) + 'px';
+
+        // липкая шапка ...
+        let top = 0;
+        thead.querySelectorAll('tr').forEach(tr => {
+            tr.querySelectorAll('th').forEach(th => {
+                th.style.top = top + 'px';
+                const bg = getComputedStyle(th).backgroundColor;
+                if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') th.style.backgroundColor = '#fff';
+            });
+            top += tr.offsetHeight;
+        });
+    }
+
+    let scheduled = false;
+    function schedule() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => {
+            scheduled = false;
+            IDS.forEach(id => {
+                const t = document.getElementById(id);
+                if (t) setupTable(t);
+            });
+        });
+    }
+
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', schedule);
+    setTimeout(schedule, 300);
+
+    // подсказка с полным текстом, если ячейка обрезана
+    document.addEventListener('mouseover', (e) => {
+        const td = e.target.closest && e.target.closest('#data-table td, #detail-table td');
+        if (td && !td.title && td.scrollWidth > td.clientWidth) td.title = td.textContent.trim();
+    });
+})();
+
+
+// ===== Компактная форма справа (одна колонка, помещается на экран) =====
+(function () {
+    if (document.getElementById('drawer-compact-style')) return;
+    const st = document.createElement('style');
+    st.id = 'drawer-compact-style';
+    st.textContent = `
+        #entity-drawer { padding: 14px 20px !important; }
+        #entity-drawer > div:first-child { margin-bottom: 10px !important; padding-bottom: 8px !important; }
+        #entity-drawer #entity-form { gap: 8px !important; }
+        #entity-drawer #entity-form > label { gap: 3px !important; }
+        #entity-drawer #entity-form input:not([type="checkbox"]):not([type="radio"]),
+        #entity-drawer #entity-form select,
+        #entity-drawer #entity-form textarea { padding: 5px 10px !important; }
+        #entity-drawer #entity-form textarea { height: 56px !important; min-height: 0 !important; }
+              #entity-drawer #entity-form > div:last-child {
+            margin-top: 4px !important;
+            padding: 10px 0 4px !important;
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+        }
+        #entity-drawer #entity-form > label { font-size: 15px !important; }
+        #entity-drawer #entity-form input:not([type="checkbox"]):not([type="radio"]),
+        #entity-drawer #entity-form select,
+        #entity-drawer #entity-form textarea { font-size: 15px !important; }
+        #entity-drawer #entity-form button { font-size: 14px !important; }
+        #entity-drawer > div:first-child h3 { font-size: 18px !important; }
+                #entity-drawer { overflow: hidden !important; }
+        #entity-drawer > div:first-child { flex-shrink: 0; }
+        #entity-drawer #entity-form { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 8px; }
+    `;
+    document.head.appendChild(st);
 })();
