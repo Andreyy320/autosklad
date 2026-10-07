@@ -334,11 +334,19 @@ const loginLimiter = rateLimit({
         }
     });
 
+const secretFp = () => require('crypto').createHash('sha256')
+    .update(String(process.env.JWT_SECRET || '')).digest('hex').slice(0, 8);
+
 function authMiddleware(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    res.setHeader('x-pid', process.pid);
+
+    const who = `pid=${process.pid} fp=${secretFp()} ip=${req.ip} ua=${req.headers['user-agent']} ${req.method} ${req.originalUrl}`;
 
     if (!token) {
+        const hdr = authHeader === undefined ? 'нет заголовка' : (authHeader === '' ? 'пустой' : 'без Bearer');
+        console.warn(`[AUTH 401 НЕТ ТОКЕНА] ${who} | Authorization: ${hdr}`);
         return res.status(401).json({ error: 'Не авторизован: токен отсутствует' });
     }
 
@@ -357,8 +365,9 @@ function authMiddleware(req, res, next) {
             );
             res.setHeader('x-new-token', freshToken);
         }
-                next();
+        next();
     } catch (err) {
+        console.warn(`[AUTH 401 ТОКЕН] ${who} | ${err.name}: ${err.message} | token ...${token.slice(-8)} len=${token.length}`);
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
     }
 }
