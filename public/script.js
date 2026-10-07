@@ -7344,7 +7344,6 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
     });
 }
 
-
 async function openRealizationForm(entity, item = null) {
     if (entity && typeof entity === 'object' && (entity.id !== undefined || entity.doc_number)) {
         item = entity;
