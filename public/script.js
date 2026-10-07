@@ -686,13 +686,13 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
         zaphasti: {
         title: 'Запчасти',
         columns: [
-            { field: 'article', label: 'Артикул' },
-            { field: 'code', label: 'Код' },
-            { field: 'name', label: 'Наименование' },
-            { field: 'proizvoditel_id', label: 'Производитель', ref: 'proizvoditel_zaphasti' },
-            { field: 'ed_izmereniya_id', label: 'Ед. изм.', ref: 'ed_izmereniya' },
-            { field: 'move_markup_percent', label: 'Особый %', type: 'number' },
-            { field: 'description', label: 'Описание', width: '150px' }
+        { field: 'article', label: 'Артикул', width: '130px' },
+{ field: 'code', label: 'Код', width: '148px' },
+{ field: 'name', label: 'Наименование', width: '273px' },
+{ field: 'proizvoditel_id', label: 'Производитель', ref: 'proizvoditel_zaphasti', width: '157px' },
+{ field: 'ed_izmereniya_id', label: 'Ед. изм.', ref: 'ed_izmereniya', width: '83px' },
+{ field: 'move_markup_percent', label: 'Особый %', type: 'number', width: '109px' },
+{ field: 'description', label: 'Описание', width: '740px' }
         ],
         render: (item) => `
             <td>${item.article || ''}</td>
