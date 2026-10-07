@@ -1200,14 +1200,14 @@ render: (item) => {
                 return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
             }
         },
-        { label: "Гос номер", field: "car_id", width: "120px", ref: "cars" },
-        { label: "Модель", field: "car_model", width: "150px", insert: false, update: false, readonly: true },
+        { label: "Гос номер", tableLabel: "Гос номер / Модель", field: "car_id", width: "170px", ref: "cars" },
+    { label: "Модель", field: "car_model", width: "150px", insert: false, update: false, readonly: true, table: false },
         { label: "Факт", field: "fact_date", type: 'datetime-local', width: "110px" },
         { label: "Обнаружено", field: "detected_date", type: 'datetime-local', width: "110px" },
         { label: "Водитель", field: "driver", width: "180px" },
         { label: "Виновник", field: "culprit", width: "180px" },
-        { label: "Ущерб", field: "damage_amount", width: "100px", align: "right" },
-        { label: "Счет", field: "account_number", width: "90px", edit: false },
+        { label: "Ущерб", tableLabel: "Ущерб / Счет", field: "damage_amount", width: "110px", align: "right" },
+{ label: "Счет", field: "account_number", width: "90px", edit: false, table: false },
         { label: "Выплачено", field: "paid_amount", width: "100px", align: "right", edit: false },
         { label: "Дата факт", field: "actual_date", type: 'datetime-local', width: "130px", edit: false },
         { label: "Проведен", field: "is_posted", width: "200px", insert: false, update: false },
@@ -1250,14 +1250,12 @@ render: (item) => {
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.doc_date)}</td>
-            <td>${item.car_number || item.car_id || '—'}</td>
-            <td>${item.car_model || '—'}</td>
+            <td><b>${item.car_number || item.car_id || '—'}</b><br>${item.car_model || '—'}</td>
             <td>${formatDT(item.fact_date)}</td>
             <td>${formatDT(item.detected_date)}</td>
             <td>${item.driver || '—'}</td>
             <td>${item.culprit || '—'}</td>
-                        <td style="text-align: right;">${damageVal}</td>
-            <td style="${accountStyle}">${accountVal}</td>
+                    <td style="text-align: right;"><b>${damageVal}</b><br><span style="color: #2563eb; font-weight: 600;">${accountVal}</span></td>
             <td style="${paidStyle}">${paidVal}</td>
             <td>${formatDT(item.actual_date)}</td>
             <td style="overflow: visible; white-space: nowrap; text-overflow: clip;">
@@ -5831,7 +5829,7 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
-                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
+                if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 if (parentId) loadDetailData(entity, parentId); 
                 
                 else refreshData();
@@ -9947,7 +9945,7 @@ async function loadData(entity, title, customParams = {}, opts = {}) {
         let headersHtml = visibleColumns.map(col => {
             let styleAttr = col.style ? `style="${col.style}"` : (col.width ? `style="width: ${col.width};"` : '');
             let refAttr = col.ref ? `data-ref="${col.ref}"` : '';
-            return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.label}</th>`;
+          return `<th ${styleAttr} data-field="${col.field}" ${refAttr}>${col.tableLabel || col.label}</th>`;
         }).join('');
 
         headerTr.innerHTML = headersHtml;
