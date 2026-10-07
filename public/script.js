@@ -1413,10 +1413,10 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
                 return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
             }
         },
-        { field: 'doc_type', label: 'Тип документа', width: '130px', ref: 'doc_types' },
-        { field: 'repair_type', label: 'Тип ремонта', width: '130px', ref: 'repair_types' },
-        { field: 'car_id', label: 'Гос номер', width: '100px', ref: 'cars' },
-        { field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true },
+       { field: 'doc_type', label: 'Тип документа', tableLabel: 'Тип документа / Тип ремонта', width: '170px', ref: 'doc_types' },
+{ field: 'repair_type', label: 'Тип ремонта', width: '130px', ref: 'repair_types', table: false },
+{ field: 'car_id', label: 'Гос номер', tableLabel: 'Гос номер / Модель', width: '170px', ref: 'cars' },
+{ field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true, table: false },
      { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
     { field: 'warehouse_id', label: 'Склад/Сервис', width: '150px', ref: 'skladi' },
     { field: 'customer_id', label: 'Сервис', width: '150px', ref: 'customers', table: false },
@@ -1458,10 +1458,8 @@ const isPosted = Boolean(item.is_posted);
         return `
             <td><b>${item.doc_number || ''}</b></td>
             <td>${formatDT(item.doc_date)}</td>
-            <td>${item.doc_type_name || item.doc_type || '—'}</td>
-            <td>${item.repair_type_name || item.repair_type || '—'}</td>
-            <td>${item.car_number || item.car_id || '—'}</td>
-            <td>${item.car_model || '—'}</td>
+            <td><b>${item.doc_type_name || item.doc_type || '—'}</b><br>${item.repair_type_name || item.repair_type || '—'}</td>
+<td><b>${item.car_number || item.car_id || '—'}</b><br>${item.car_model || '—'}</td>
             <td style="text-align: right;">${mileageVal}</td>
 <td>${skladServiceVal}</td>
             
