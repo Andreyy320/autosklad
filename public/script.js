@@ -16,11 +16,14 @@ window.fetch = async function(url, options = {}) {
     if (isApiCall && refreshedToken) {
         localStorage.setItem('token', refreshedToken);
     }
-    if (isApiCall && response.status === 401) {
-        console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
-    localStorage.removeItem('token');
-            location.reload();
+   if (isApiCall && response.status === 401) {
+    if (!options._retried) {
+        await new Promise(r => setTimeout(r, 300));
+        return window.fetch(url, { ...options, _retried: true });
     }
+    localStorage.removeItem('token');
+    location.reload();
+}
 
     return response;
 };
