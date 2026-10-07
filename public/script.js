@@ -14575,7 +14575,8 @@ function setDetailToolbarVisible(visible) {
                 padding: ${cfg.padY}px ${cfg.padX}px !important;
             }
         `;
-        localStorage.setItem(STORAGE_KEY, level);
+               localStorage.setItem(STORAGE_KEY, level);
+        window.dispatchEvent(new Event('resize'));
               const input = document.getElementById('density-select-input');
         if (input) {
             input.value = LABELS[level] || LABELS.standard;
