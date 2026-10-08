@@ -92,6 +92,9 @@ const idMapConfigs = [
     { key: 'gruppa_tsen_id',    url: '/api/gruppa_tsen',         label: r => r.name },
     { key: 'proizvoditel_id',   url: '/api/proizvoditel_zaphasti', label: r => r.name },
     { key: 'ed_izmereniya_id',  url: '/api/ed_izmereniya',       label: r => r.name },
+        { key: 'ispolnitel_id',     url: '/api/ispolnitel',          label: r => r.name },
+    { key: 'vidy_rabot_id',     url: '/api/vidy_rabot',          label: r => r.name },
+    { key: 'repair_id',         url: '/api/repairs',             label: r => r.doc_number || ('Ремонт #' + r.id) },
     { key: 'employee_id',       url: '/api/employees',           label: r => r.name || r.fio }
 ];
 
@@ -238,6 +241,7 @@ const fieldNamesRu = {
     'status': 'Статус',
     'status_id': 'Статус',
     'ispolnitel_id': 'Исполнитель',
+        'vidy_rabot_id': 'Вид работ',
     'gruppa_tsen_id': 'Группа цен',
     'proizvoditel_id': 'Производитель',
     'ed_izmereniya_id': 'Единица измерения',
