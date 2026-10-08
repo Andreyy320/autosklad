@@ -92,7 +92,3 @@ tbody tr.row-insert td:first-child { box-shadow: inset 4px 0 0 #28a745; }
 tbody tr.row-update td:first-child { box-shadow: inset 4px 0 0 #f5b301; }
 tbody tr.row-delete td:first-child { box-shadow: inset 4px 0 0 #dc3545; }
 
-/* ===== Техническое (ID записи, IP) мельче и серым, колонка сжимается ===== */
-td.col-muted, th.col-muted { width: 1%; white-space: nowrap; }
-td.col-muted { font-size: 11px; color: #98a2b3; }
-thead th.col-muted { color: #98a2b3; }
