@@ -763,3 +763,67 @@ async function loadReferenceMaps() {
     await loadReferenceMaps();
     loadLogs('Приход', '/api/get-receipt-logs');
 });
+
+
+
+
+// ===== Визуальные улучшения журнала: липкая шапка, цветная полоска, приглушённые ID/IP =====
+(function () {
+    const MUTED_HEADERS = ['IP-адрес', 'ID записи'];
+    let scheduled = false;
+
+    function syncSticky() {
+        const thead = document.getElementById('table-head');
+        if (!thead) return;
+        let top = 0;
+        thead.querySelectorAll('tr').forEach(function (tr) {
+            tr.querySelectorAll('th').forEach(function (th) { th.style.top = top + 'px'; });
+            top += tr.offsetHeight;
+        });
+    }
+
+    function decorate() {
+        const thead = document.getElementById('table-head');
+        const tbody = document.getElementById('logs-table-body');
+        if (!thead || !tbody) return;
+
+        const mutedIdx = [];
+        const headRow = thead.querySelector('tr');
+        if (headRow) {
+            Array.from(headRow.children).forEach(function (th, i) {
+                if (MUTED_HEADERS.indexOf(th.textContent.trim()) !== -1) {
+                    mutedIdx.push(i);
+                    th.classList.add('col-muted');
+                }
+            });
+        }
+
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            if (tr.dataset.decorated || tr.children.length <= 1) return;
+            tr.dataset.decorated = '1';
+            if (tr.querySelector('.badge-insert')) tr.classList.add('row-insert');
+            else if (tr.querySelector('.badge-update')) tr.classList.add('row-update');
+            else if (tr.querySelector('.badge-delete')) tr.classList.add('row-delete');
+            mutedIdx.forEach(function (i) {
+                if (tr.children[i]) tr.children[i].classList.add('col-muted');
+            });
+        });
+    }
+
+    function schedule() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(function () {
+            scheduled = false;
+            decorate();
+            syncSticky();
+        });
+    }
+
+    const thead = document.getElementById('table-head');
+    const tbody = document.getElementById('logs-table-body');
+    if (thead) new MutationObserver(schedule).observe(thead, { childList: true });
+    if (tbody) new MutationObserver(schedule).observe(tbody, { childList: true });
+    window.addEventListener('resize', schedule);
+    schedule();
+})();
