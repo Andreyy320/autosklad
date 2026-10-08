@@ -9215,30 +9215,168 @@ function openImageLightbox(url) {
     const existing = document.getElementById('image-lightbox-overlay');
     if (existing) existing.remove();
 
+    const MIN_SCALE = 0.3;
+    const MAX_SCALE = 10;
+    let scale = 1, tx = 0, ty = 0;
+    let moved = false;
+    const pointers = new Map();
+    let lastDist = 0;
+    let startX = 0, startY = 0;
+    let downTarget = null;
+
     const overlay = document.createElement('div');
     overlay.id = 'image-lightbox-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 10000;
-        display: flex; align-items: center; justify-content: center;
-        cursor: zoom-out; padding: 20px; box-sizing: border-box;
+        background: rgba(0,0,0,0.88); z-index: 10000; overflow: hidden;
+        user-select: none; -webkit-user-select: none; touch-action: none;
     `;
 
-    overlay.innerHTML = `
-        <img src="${url}" style="max-width: 95%; max-height: 95%; object-fit: contain; border-radius: 6px; box-shadow: 0 4px 30px rgba(0,0,0,0.5);" />
-        <button id="image-lightbox-close" style="position: fixed; top: 16px; right: 24px; background: rgba(255,255,255,0.15); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 22px; cursor: pointer; line-height: 1;">&times;</button>
+    const img = document.createElement('img');
+    img.src = url;
+    img.draggable = false;
+    img.style.cssText = `
+        position: absolute; top: 50%; left: 50%;
+        max-width: 95%; max-height: 90%; object-fit: contain;
+        border-radius: 6px; box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+        cursor: grab; transform-origin: center center; will-change: transform;
     `;
 
-    overlay.onclick = () => overlay.remove();
+    const btnStyle = 'background: rgba(255,255,255,0.15); color: #fff; border: none; min-width: 40px; height: 40px; border-radius: 20px; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 12px;';
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'position: fixed; top: 16px; right: 24px; display: flex; gap: 8px; align-items: center; z-index: 2;';
+    toolbar.innerHTML = `
+        <button type="button" data-act="out" style="${btnStyle}" title="Уменьшить (−)">−</button>
+        <button type="button" data-act="reset" style="${btnStyle} font-size: 14px;" title="Сбросить (0)"><span id="image-lightbox-zoom">100%</span></button>
+        <button type="button" data-act="in" style="${btnStyle}" title="Приблизить (+)">+</button>
+        <button type="button" data-act="close" style="${btnStyle} font-size: 22px;" title="Закрыть (Esc)">&times;</button>
+    `;
+
+    const hint = document.createElement('div');
+    hint.textContent = 'Колесо мыши — масштаб · перетаскивание — сдвиг · двойной щелчок — приблизить';
+    hint.style.cssText = 'position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 12px; pointer-events: none; white-space: nowrap;';
+
+    overlay.appendChild(img);
+    overlay.appendChild(toolbar);
+    overlay.appendChild(hint);
     document.body.appendChild(overlay);
 
-    const escHandler = (e) => {
-        if (e.key === 'Escape') {
-            overlay.remove();
-            document.removeEventListener('keydown', escHandler);
+    const zoomLabel = toolbar.querySelector('#image-lightbox-zoom');
+
+    function apply() {
+        img.style.transform = `translate(-50%, -50%) translate(${tx}px, ${ty}px) scale(${scale})`;
+        zoomLabel.textContent = Math.round(scale * 100) + '%';
+    }
+
+    // масштаб относительно точки (px, py) в координатах окна, чтобы точка под курсором оставалась на месте
+    function zoomAt(factor, px, py) {
+        const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+        const k = next / scale;
+        const dx = px - window.innerWidth / 2;
+        const dy = py - window.innerHeight / 2;
+        tx = dx - (dx - tx) * k;
+        ty = dy - (dy - ty) * k;
+        scale = next;
+        if (Math.abs(scale - 1) < 0.001) { scale = 1; tx = 0; ty = 0; }
+        apply();
+    }
+
+    function zoomCenter(factor) {
+        zoomAt(factor, window.innerWidth / 2, window.innerHeight / 2);
+    }
+
+    function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+
+    function close() {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+    }
+
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+        else if (e.key === '+' || e.key === '=') zoomCenter(1.25);
+        else if (e.key === '-' || e.key === '_') zoomCenter(1 / 1.25);
+        else if (e.key === '0') reset();
+    }
+    document.addEventListener('keydown', onKey);
+
+    toolbar.addEventListener('pointerdown', e => e.stopPropagation());
+    toolbar.addEventListener('click', e => {
+        e.stopPropagation();
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const act = btn.dataset.act;
+        if (act === 'in') zoomCenter(1.25);
+        else if (act === 'out') zoomCenter(1 / 1.25);
+        else if (act === 'reset') reset();
+        else if (act === 'close') close();
+    });
+
+    // колесо мыши
+    overlay.addEventListener('wheel', e => {
+        e.preventDefault();
+        zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY);
+    }, { passive: false });
+
+    // двойной щелчок: приблизить / вернуть
+    img.addEventListener('dblclick', e => {
+        e.preventDefault();
+        if (scale > 1.01) reset();
+        else zoomAt(2.5, e.clientX, e.clientY);
+    });
+
+    // перетаскивание и щипок двумя пальцами
+    overlay.addEventListener('pointerdown', e => {
+        if (e.target !== img && e.target !== overlay) return;
+        moved = false;
+        downTarget = e.target;
+        startX = e.clientX; startY = e.clientY;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 2) {
+            const pts = Array.from(pointers.values());
+            lastDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
         }
-    };
-    document.addEventListener('keydown', escHandler);
+        try { overlay.setPointerCapture(e.pointerId); } catch (err) {}
+        if (e.target === img) img.style.cursor = 'grabbing';
+    });
+
+    overlay.addEventListener('pointermove', e => {
+        const p = pointers.get(e.pointerId);
+        if (!p) return;
+        if (pointers.size === 1) {
+            const dx = e.clientX - p.x;
+            const dy = e.clientY - p.y;
+            if (!moved && Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) > 4) moved = true;
+            tx += dx; ty += dy;
+            p.x = e.clientX; p.y = e.clientY;
+            apply();
+        } else if (pointers.size === 2) {
+            p.x = e.clientX; p.y = e.clientY;
+            const pts = Array.from(pointers.values());
+            const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+            if (lastDist > 0) {
+                zoomAt(dist / lastDist, (pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+            }
+            lastDist = dist;
+            moved = true;
+        }
+    });
+
+    function endPointer(e) {
+        pointers.delete(e.pointerId);
+        lastDist = 0;
+        img.style.cursor = 'grab';
+    }
+    overlay.addEventListener('pointerup', endPointer);
+    overlay.addEventListener('pointercancel', endPointer);
+
+    // закрытие по клику на тёмный фон (но не после перетаскивания)
+    overlay.addEventListener('click', e => {
+        if (moved) { moved = false; return; }
+        if (downTarget === overlay) close();
+    });
+
+    apply();
 }
 
 function showConfirmModal(title, text, onConfirm) {
