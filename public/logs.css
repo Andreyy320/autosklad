@@ -48,3 +48,35 @@ body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 
         .filter-input::placeholder { color: #999; }
         .filter-input:hover { background: #fff; }
         .filter-input:focus { background: #fff; border-color: #80bdff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
+
+
+        /* ===== Обновлённый вид журнала (добавлено в конец) ===== */
+body { background: #f1f4f8; padding: 16px; }
+.container { max-width: 1800px; padding: 22px 24px; border-radius: 10px; box-shadow: 0 1px 4px rgba(16,24,40,.08); }
+h1 { font-size: 22px; font-weight: 700; margin: 6px 0 16px; }
+.back-btn { padding: 7px 14px; font-size: 13px; background: #eef1f5; color: #344054; margin-bottom: 8px; }
+.back-btn:hover { background: #e2e7ee; }
+
+/* вкладки */
+.tabs { gap: 6px; border-bottom: 1px solid #e4e7ec; padding-bottom: 12px; }
+.tab-btn { padding: 7px 14px; font-size: 13px; font-weight: 600; background: #f2f4f7; color: #475467; border-radius: 999px; transition: background .15s; }
+.tab-btn:hover { background: #e4e7ec; }
+.tab-btn.active { background: #1d6fe0; color: #fff; }
+
+/* шапка и фильтры */
+thead th { background: #f2f4f7; color: #344054; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 2px solid #d0d5dd; }
+thead .filter-row th { background: #f9fafb; border-top: none; border-bottom: 1px solid #e4e7ec; padding: 6px 8px; }
+.filter-input { background: #fff; border: 1px solid #d0d5dd; }
+
+/* строки */
+tbody td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid #eef0f3; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+tbody tr:hover { background: #f0f6ff; }
+tbody td:first-child { white-space: nowrap; }
+.badge { padding: 2px 9px; border-radius: 999px; margin-top: 5px; }
+
+/* детали изменений: без внутренней прокрутки, в несколько колонок */
+.audit-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 20px; max-height: none; overflow: visible; padding: 0; }
+.audit-field-row { background: none; border-radius: 0; padding: 3px 0; border-bottom: 1px dashed #e4e7ec; font-size: 12.5px; }
+.audit-field-label { color: #667085; font-weight: 600; }
+.json-details { max-height: none; }
