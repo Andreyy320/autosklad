@@ -1532,31 +1532,25 @@ const isPosted = Boolean(item.is_posted);
     repair_history: {
     title: 'Ремонт машины',
     columns: [
-        { field: 'article', label: 'Артикул', width: '100px' },
-        { field: 'code', label: 'Код', width: '80px' },
-        { field: 'name', label: 'Наименование', width: '220px' },
-        { field: 'qty', label: 'Кол-во', width: '70px', align: 'center' },
-        { field: 'unit', label: 'Ед.изм', width: '70px', align: 'center' },
+             { field: 'name', label: 'Наименование', width: '300px' },
         { field: 'price', label: 'Цена РУБ', width: '90px', align: 'right' },
         { field: 'sum', label: 'Сумма РУБ', width: '90px', align: 'right' },
-        { field: 'description', label: 'Описание', width: '150px' },
-        { field: 'doc_source', label: 'Документ прихода / Исполнитель', width: '200px' }
+        { field: 'description', label: 'Описание', width: '200px' },
+        { field: 'doc_source', label: 'Исполнитель', width: '220px' }
     ],
     render: (repairsList) => {
         if (!Array.isArray(repairsList) || repairsList.length === 0) {
-            return `<tr><td colspan="9" style="text-align: center; color: #888; padding: 20px;">Нет данных по ремонту</td></tr>`;
+            return `<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Нет данных по ремонту</td></tr>`;
         }
 
                let html = '';
 
-        // 1. Собираем все плашки (документ + день) в один список
         const groups = [];
 
         repairsList.forEach((repair, index) => {
             const repairType = repair.repair_type_name || repair.type || 'Ремонт';
             const docNum = repair.doc_number || '';
 
-            // дата документа как запасной вариант
             const rd = repair.doc_date ? new Date(repair.doc_date) : null;
             const docKey = (rd && !isNaN(rd))
                 ? `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`
@@ -1620,7 +1614,7 @@ const isPosted = Boolean(item.is_posted);
 
             html += `
                 <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 2px solid #dee2e6; border-bottom: 2px solid #ced4da; cursor: pointer;" onclick="toggleRepairGroup('${g.groupId}', this)">
-                    <td colspan="9" style="padding: 7px 10px; color: #333333; font-size: 13px;">
+                    <td colspan="5" style="padding: 7px 10px; color: #333333; font-size: 13px;">
                         <i class="fas fa-minus-square toggle-icon" style="color: #495057; margin-right: 6px;"></i>
                         <span style="color: #212529;">${g.repairType} ${g.docNum} от ${dateLabel}</span>
                         <span style="color: #6c757d; font-weight: normal; margin: 0 6px;">|</span>
@@ -1631,8 +1625,7 @@ const isPosted = Boolean(item.is_posted);
             if (g.emptyRepair) {
                 html += `
                     <tr class="${g.groupId}" style="background-color: #ffffff;">
-                        <td colspan="2"></td>
-                        <td colspan="5" style="color: #333;">${g.emptyRepair.description || '—'}</td>
+                                             <td colspan="3" style="padding-left: 25px; color: #333;">${g.emptyRepair.description || '—'}</td>
                         <td></td>
                         <td style="color: #555;">${g.emptyRepair.contractor || ''}</td>
                     </tr>`;
@@ -1646,11 +1639,7 @@ const isPosted = Boolean(item.is_posted);
 
                 html += `
                     <tr class="${g.groupId}" style="background-color: #ffffff;">
-                        <td style="padding-left: 25px;">${item.article || ''}</td>
-                        <td>${item.code || ''}</td>
-                        <td>${item.name || ''}</td>
-                        <td style="text-align: center;">${qty}</td>
-                        <td style="text-align: center;">${item.unit || ''}</td>
+                                             <td style="padding-left: 25px;">${item.name || ''}</td>
                         <td style="text-align: right;">${price}</td>
                         <td style="text-align: right;">${sum}</td>
                         <td>${item.description || ''}</td>
