@@ -1273,7 +1273,6 @@ render: (item) => {
         { field: 'detected_date', label: 'Обнаружено', width: '110px' },
         { field: 'driver', label: 'Водитель', width: '160px' },
         { field: 'culprit', label: 'Виновник', width: '160px' },
-        { field: 'damage_amount', label: 'Ущерб', width: '90px', align: 'right' },
         { field: 'account_number', label: 'Счет', width: '90px', align: 'right' },
         { field: 'paid_amount', label: 'Выплачено', width: '90px', align: 'right' },
         { field: 'description', label: 'Описание', width: '150px' },
@@ -1299,7 +1298,6 @@ render: (item) => {
             <td>${formatOnlyDate(item.detected_date)}</td>
             <td>${item.driver || '—'}</td>
             <td>${item.culprit || '—'}</td>
-            <td style="text-align: right;">${damageVal}</td>
             <td style="text-align: right;">${billVal}</td>
             <td style="text-align: right;">${paidVal}</td>
             <td>${item.description || ''}</td>
