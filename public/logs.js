@@ -497,9 +497,8 @@ async function loadReferenceMaps() {
                     <th>Запчасть (Артикул)</th>
                     <th class="text-center">Количество</th>
                     <th class="text-right">Цена</th>
-                    <th class="text-right">Скидка</th>
                     <th class="text-right">Итого</th>
-                    <th>Направление / Причина / Детали</th>
+                    <th>Направление / Детали</th>
                 </tr>
             `;
         }
@@ -551,7 +550,7 @@ async function loadReferenceMaps() {
         currentEndpoint = endpoint;
         renderTableHead(type);
 
-        let colspanCount = 10;
+        let colspanCount = 9;
         if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
         if (type === 'Реализация') colspanCount = 10;
         if (type === 'Аудит') colspanCount = 6;
@@ -737,8 +736,7 @@ async function loadReferenceMaps() {
                         <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
                         <td class="text-center"><strong>${log.quantity || 0}</strong></td>
                         <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
-                        <td class="text-right">${log.discount || '—'}</td>
-                        <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
+                            <td class="text-right"><strong>${Number(log.total_amount || log.total_rub || 0).toLocaleString()} руб.</strong></td>
                         <td>${directionOrReason}</td>
                     `;
                 }
