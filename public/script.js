@@ -3456,6 +3456,8 @@ async function openRealizationWorksForm(item = null, parentId = null) {
         item = { id: null };
     }
 
+
+
     let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eef2f7; padding-bottom: 12px;">
             <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e293b;">${item && item.id ? 'Редактировать' : 'Добавить'}: ${config.title}</h3>
@@ -3739,6 +3741,24 @@ async function openRepairWorksForm(item = null, parentId = null) {
 
     if (!item || item.id === null || item.id === undefined || item.id === '') {
         item = { id: null };
+    }
+
+    // Новая работа: подставляем исполнителя из последней работы этого же документа (можно сменить)
+    if (!item.id && parentId) {
+        try {
+            const prevResp = await fetch(`/api/repair_works?repair_id=${encodeURIComponent(parentId)}`);
+            if (prevResp.ok) {
+                const prevWorks = await prevResp.json();
+                if (Array.isArray(prevWorks) && prevWorks.length > 0) {
+                    const lastWork = prevWorks[prevWorks.length - 1];
+                    if (lastWork && lastWork.ispolnitel_id) {
+                        item = { id: null, ispolnitel_id: lastWork.ispolnitel_id };
+                    }
+                }
+            }
+        } catch (err) {
+            // не критично: если запрос не удался, форма просто откроется пустой, как раньше
+        }
     }
 
     let html = `
