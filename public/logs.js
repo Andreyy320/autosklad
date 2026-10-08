@@ -95,6 +95,8 @@ const idMapConfigs = [
         { key: 'ispolnitel_id',     url: '/api/ispolnitel',          label: r => r.name },
     { key: 'vidy_rabot_id',     url: '/api/vidy_rabot',          label: r => r.name },
     { key: 'repair_id',         url: '/api/repairs',             label: r => r.doc_number || ('Ремонт #' + r.id) },
+        { key: 'doc_type_id',       url: '/api/doc_types',           label: r => r.name },
+    { key: 'repair_type_id',    url: '/api/repair_types',        label: r => r.name },
     { key: 'employee_id',       url: '/api/employees',           label: r => r.name || r.fio }
 ];
 
