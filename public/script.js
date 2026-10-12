@@ -3660,9 +3660,10 @@ async function openRealizationWorksForm(item = null, parentId = null) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+                           if (parentId) {
+    loadDetailData(entity, parentId);
+    refreshData();
+} else {
                                 refreshData();
                             }
                         } else {
@@ -3968,8 +3969,9 @@ async function openRepairWorksForm(item = null, parentId = null) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
                             if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+    loadDetailData(entity, parentId);
+    refreshData();
+    } else {
                                 refreshData();
                             }
                         } else {
@@ -4300,8 +4302,9 @@ async function openReceiptItemsForm(item = null, parentId = null) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
                             if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+    loadDetailData(entity, parentId);
+    refreshData();
+    } else {
                                 refreshData();
                             }
                         } else {
@@ -4623,8 +4626,9 @@ async function openMoveItemsForm(item = null, parentId = null) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
                             if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+    loadDetailData(entity, parentId);
+    refreshData();
+} else {
                                 refreshData();
                             }
                         } else {
@@ -4932,8 +4936,9 @@ async function openRepairItemsForm(item = null, parentId = null) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
                             if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+    loadDetailData(entity, parentId);
+    refreshData();
+    } else {
                                 refreshData();
                             }
                         } else {
@@ -5269,9 +5274,10 @@ if (col.field === 'markup_percent' && !val) {
                         if (response.ok) {
                             closeDrawer();
                             showAppNotification('Запись успешно удалена', 'success');
-                            if (parentId) {
-                                loadDetailData(entity, parentId);
-                            } else {
+                           if (parentId) {
+    loadDetailData(entity, parentId);
+    refreshData();
+    } else {
                                 refreshData();
                             }
                         } else {
@@ -5788,8 +5794,8 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                     if (response.ok) {
                         closeDrawer();
                         showAppNotification('Запись успешно удалена', 'success');
-                        if (parentId) loadDetailData(entity, parentId);
-                        else refreshData();
+                       if (parentId) loadDetailData(entity, parentId);
+    refreshData();
                     } else {
                         const errData = await response.json().catch(() => ({}));
                         showAppNotification(errData.error || 'Ошибка при удалении записи', 'error');
@@ -5834,9 +5840,8 @@ async function openAccidentForm(entity, item = null, parentId = null) {
                 closeDrawer();
                 showAppNotification('Данные успешно сохранены', 'success');
                 if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
-                if (parentId) loadDetailData(entity, parentId); 
-                
-                else refreshData();
+                if (parentId) loadDetailData(entity, parentId);
+    refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
                 showAppNotification(errData.error || 'Ошибка при сохранении данных', 'error');
@@ -6672,6 +6677,7 @@ async function openMoveForm(entityOrItem, itemArg = null, parentIdArg = null) {
 
                             if (entity === 'move_items' && parentId) {
                                 loadDetailData(entity, parentId);
+                                refreshData();
                             } else {
                                 refreshData();
                             }
@@ -7259,6 +7265,7 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
 
                             if (entity === 'repair_items' && parentId) {
                                 loadDetailData(entity, parentId);
+                                refreshData();
                             } else {
                                 refreshData();
                             }
@@ -8691,6 +8698,7 @@ function deleteSelectedEntity() {
 
                     if (specialEntities.includes(currentEntity) && typeof parentId !== 'undefined' && parentId) {
                         loadDetailData(currentEntity, parentId);
+    refreshData();
                     } else {
                         refreshData();
                     }
@@ -12672,7 +12680,8 @@ async function deleteDetailItem() {
                 if (response.ok) {
                     selectedDetailItem = null; 
                     showAppNotification('Позиция успешно удалена', 'success');
-                    loadDetailData(detailEntity, selectedItem.id);
+                  loadDetailData(detailEntity, selectedItem.id);
+refreshData();
                 } else {
                     showAppNotification(resultData.error || 'Ошибка при удалении позиции', 'error');
                 }
