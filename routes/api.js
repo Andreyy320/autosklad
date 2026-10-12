@@ -3460,7 +3460,7 @@ router.get('/car_general', async (req, res) => {
 
 router.get('/accidents', async (req, res) => {
     try {
-        const query = `
+         const query = `
             SELECT 
                 a.*, 
                 c.gos_number AS car_number, 
@@ -3470,10 +3470,12 @@ router.get('/accidents', async (req, res) => {
             LEFT JOIN cars c ON a.car_id = c.id
             LEFT JOIN car_models cm ON c.model_id = cm.id
             LEFT JOIN accident_statuses s ON a.status_id = s.id
-            ORDER BY a.id DESC
         `;
-        
-        const result = await pool.query(query);
+
+        const handled = await trySqlFastPage(pool, req, res, { fromSql: query, orderBySql: 'id DESC' });
+        if (handled) return;
+
+        const result = await pool.query(query + ' ORDER BY a.id DESC');
         res.json(result.rows);
     } catch (err) {
         console.error('Ошибка при получении списка ДТП:', err);
