@@ -7437,7 +7437,7 @@ router.get('/get-repair-logs', async (req, res) => {
         const query = `
     SELECT 
         rl.*,
-        w.name AS warehouse_name,
+                COALESCE(w.name, w_rp.name) AS warehouse_name,
         COALESCE(cust.name_full, cust.name_short) AS service_name,
         (rl.zaphast_id IS NULL) AS is_work,
         z.name AS part_name,
@@ -7449,6 +7449,7 @@ router.get('/get-repair-logs', async (req, res) => {
     LEFT JOIN repairs rp ON rl.repair_id = rp.id
     LEFT JOIN customers cust ON rp.customer_id = cust.id
     LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
+        LEFT JOIN skladi w_rp ON rp.warehouse_id = w_rp.id
     LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
     LEFT JOIN cars c ON rl.car_id::text = c.id::text
     LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
@@ -10214,6 +10215,8 @@ router.get('/get-audit-logs', async (req, res) => {
             FROM audit_logs al
             LEFT JOIN users u ON al.user_type = 'user' AND al.user_id::text = u.id::text
             LEFT JOIN employees e ON al.user_type = 'employee' AND al.user_id::text = e.id::text
+                        WHERE COALESCE(al.table_name, '') <> 'repair_works'
+              AND COALESCE(al.entity, '') <> 'repair_works'
             ORDER BY al.created_at DESC
             LIMIT 500;
         `;

@@ -641,7 +641,7 @@ async function loadReferenceMaps() {
     if (isWork) {
         const m = /^Работа:\s*(.*?)\s*\|\s*Исполнитель:\s*(.*?)(?:\s*\|\s*(.*))?$/.exec(log.description || '');
         const workName = m ? m[1] : (log.description || '—');
-        partCell = `<span style="color:#2563eb;font-weight:600;">Услуга:</span> ${workName}`;
+        partCell = `Услуга: ${workName}`;
         qtyCell = '—';
         detailsCell = m ? `Исполнитель: ${m[2]}${m[3] ? ' | ' + m[3] : ''}` : '—';
     } else {
