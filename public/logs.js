@@ -329,6 +329,8 @@ window.fetch = async function(url, options = {}) {
         };
     }
     const response = await _originalFetch(url, options);
+    const newToken = response.headers.get('x-new-token');
+if (isApiCall && newToken) localStorage.setItem('token', newToken);
     if (isApiCall && response.status === 401) {
         alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
         localStorage.clear();

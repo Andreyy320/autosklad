@@ -6,7 +6,7 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const DEFAULT_MARKUP_PERCENT = 30; // потом можно вынести в settings-таблицу
-
+const TOKEN_TTL_SEC = 3 * 24 * 60 * 60; // 3 дня простоя до выхода
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
@@ -318,7 +318,7 @@ const loginLimiter = rateLimit({
            const token = jwt.sign(
         { id: user.id, login: user.login, type: actorType, role: user.role || 'employee' },
         process.env.JWT_SECRET,
-                { expiresIn: '12h' }
+                { expiresIn: TOKEN_TTL_SEC }
     );
 
     return res.json({ success: true, user: safeUser, token });
@@ -356,15 +356,15 @@ function authMiddleware(req, res, next) {
         req.headers['x-user-id'] = decoded.id;
         req.headers['x-user-type'] = decoded.type || 'user';
 
-        const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
-        if (secondsLeft < 6 * 60 * 60) {
-            const freshToken = jwt.sign(
-                { id: decoded.id, login: decoded.login, type: decoded.type, role: decoded.role },
-                process.env.JWT_SECRET,
-                { expiresIn: '12h' }
-            );
-            res.setHeader('x-new-token', freshToken);
-        }
+      const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
+if (secondsLeft < TOKEN_TTL_SEC - 60 * 60) {   // продлеваем, если с выдачи прошёл хотя бы час
+    const freshToken = jwt.sign(
+        { id: decoded.id, login: decoded.login, type: decoded.type, role: decoded.role },
+        process.env.JWT_SECRET,
+        { expiresIn: TOKEN_TTL_SEC }
+    );
+    res.setHeader('x-new-token', freshToken);
+}
         next();
     } catch (err) {
         console.warn(`[AUTH 401 ТОКЕН] ${who} | ${err.name}: ${err.message} | token ...${token.slice(-8)} len=${token.length}`);
