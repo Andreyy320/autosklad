@@ -6256,9 +6256,9 @@ async function openReceiptForm(entity, item = null) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
                 showAppNotification('Приход успешно сохранен', 'success');
-              if (!parentId && !isEdit && savedDoc && savedDoc.id) {
-    selectedItem = savedDoc;
-}
+                              if (!isEdit && savedDoc && savedDoc.id) {
+                    selectedItem = savedDoc;
+                }
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
@@ -7968,8 +7968,8 @@ async function openRealizationForm(entity, item = null) {
                         if (response.ok) {
                 const savedDoc = await response.json().catch(() => null);
                 closeDrawer();
-                showAppNotification('Реализация успешно сохранена', 'success');
-                if (!parentId && !isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
+                                showAppNotification('Реализация успешно сохранена', 'success');
+                if (!isEdit && savedDoc && savedDoc.id) selectedItem = savedDoc;
                 refreshData();
             } else {
                 const errData = await response.json().catch(() => ({}));
