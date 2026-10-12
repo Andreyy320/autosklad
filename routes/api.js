@@ -7438,7 +7438,7 @@ router.get('/get-repair-logs', async (req, res) => {
             SELECT 
                 rl.*,
                 w.name AS warehouse_name,
-                z.name AS part_name,
+                COALESCE(z.name, 'Работа (услуга)') AS part_name,
                 COALESCE(z.article, z.code, '—') AS part_article,
                 c.gos_number AS car_number,
                 COALESCE(c.model, '—') AS car_model,
@@ -7660,6 +7660,49 @@ async function writeRepairLog(client, req, data) {
         console.error('Ошибка записи лога ремонта (не критично):', logErr.message);
     }
 }
+
+
+// Запись в repair_logs для работ (repair_works)
+async function logRepairWork(req, action, work) {
+    try {
+        if (!work || !work.repair_id) return;
+
+        const repRes = await pool.query(
+            'SELECT doc_number, warehouse_id, car_id FROM repairs WHERE id = $1',
+            [work.repair_id]
+        );
+        const rep = repRes.rows[0] || {};
+
+        const namesRes = await pool.query(
+            `SELECT
+                (SELECT name FROM vidy_rabot WHERE id = $1) AS work_name,
+                (SELECT name FROM ispolnitel WHERE id = $2) AS ispolnitel_name`,
+            [work.vidy_rabot_id || null, work.ispolnitel_id || null]
+        );
+        const n = namesRes.rows[0] || {};
+
+        const price = Number(work.price) || 0;
+        const desc = `Работа: ${n.work_name || '—'} | Исполнитель: ${n.ispolnitel_name || '—'}` +
+                     (work.description ? ` | ${work.description}` : '');
+
+        await writeRepairLog(pool, req, {
+            action,
+            repair_id: work.repair_id,
+            document_number: rep.doc_number || null,
+            warehouse_id: rep.warehouse_id || null,
+            car_id: rep.car_id || null,
+            zaphast_id: null,
+            quantity: 1,
+            price: price,
+            total: price,
+            receipt_id: null,
+            description: desc
+        });
+    } catch (e) {
+        console.error('Ошибка лога работы ремонта (не критично):', e.message);
+    }
+}
+
 
 // POST /api/receipt_items - добавление позиции в приход
 router.post('/receipt_items', async (req, res) => {
@@ -10440,8 +10483,11 @@ router.post('/:entity', async (req, res) => {
         }
         // ======================================================================================
  
-        await client.query('COMMIT');
- 
+    await client.query('COMMIT');
+
+    if (entity === 'repair_works') {
+    await logRepairWork(req, 'INSERT', newRecord);
+    } 
         browserLog(`[SUCCESS] Запись успешно добавлена в таблицу ${entity}, ID: ${newRecord.id}`);
         
         // Возвращаем запись и логи для браузера
@@ -10747,6 +10793,10 @@ router.put('/:entity/:id', async (req, res) => {
 
         await client.query('COMMIT');
 
+    if (entity === 'repair_works') {
+    await logRepairWork(req, 'UPDATE', updatedDoc);
+    }
+
         // Никогда не отправляем хеш пароля на клиент, даже для таблицы users
         if (entity === 'users' && updatedDoc && updatedDoc.password_hash !== undefined) {
             const { password_hash, ...safeDoc } = updatedDoc;
@@ -11046,8 +11096,12 @@ router.delete('/:entity/:id', async (req, res) => {
         }
         // ============================================================================
 
-        await client.query('COMMIT');
-        res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
+    await client.query('COMMIT');
+
+    if (entity === 'repair_works') {
+    await logRepairWork(req, 'DELETE', result.rows[0]);
+    }        
+    res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
 
     } catch (err) {
         await client.query('ROLLBACK');
