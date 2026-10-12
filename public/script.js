@@ -84,7 +84,7 @@ let selectedItem = null;
 const PAGER = {
     entity: null,  
     page: 1,
-    limit: 100,
+    limit: 50,
     total: 0,
     search: '',
     filters: {},   
@@ -207,7 +207,7 @@ function ensurePagerBar() {
     pageInput.addEventListener('change', () => pagerGo(pageInput.value));
     pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') pagerGo(pageInput.value); });
     bar.querySelector('#pager-limit').addEventListener('change', (e) => {
-        PAGER.limit = parseInt(e.target.value, 10) || 100;
+        PAGER.limit = parseInt(e.target.value, 10) || 50;
         PAGER.page = 1;
         if (PAGER.reload) PAGER.reload();
     });
@@ -4389,24 +4389,42 @@ async function openMoveItemsForm(item = null, parentId = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
-    // >>> ДОБАВЛЕНО: остатки на складе-источнике для подсказки в списке запчастей
+        // >>> ДОБАВЛЕНО: остатки на складе-источнике для подсказки в списке запчастей
     const stockMap = {};
     let stockLoaded = false;
+    let realSkladId = null;   // склад-источник (нужен и для выбора партии)
     try {
         if (parentId) {
-            const movesRes = await fetch('/api/moves');
-            if (movesRes.ok) {
-                const movesData = await movesRes.json();
-                const movesList = Array.isArray(movesData) ? movesData : (movesData.data || movesData.items || []);
-                const curMove = movesList.find(m => String(m.id) === String(parentId));
-                if (curMove && curMove.warehouse_from_id) {
-                    const stRes = await fetch(`/api/stock_balances?warehouse_id=${curMove.warehouse_from_id}`);
-                    if (stRes.ok) {
-                        (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
-                        stockLoaded = true;
-                    }
+            // 1) берём документ перемещения из уже выбранной строки
+            let curMove = null;
+            if (typeof selectedItem !== 'undefined' && selectedItem && String(selectedItem.id) === String(parentId)) {
+                curMove = selectedItem;
+            }
+            // 2) если там нет склада - ищем в списке перемещений
+            if (!curMove || !curMove.warehouse_from_id) {
+                const movesRes = await fetch('/api/moves');
+                if (movesRes.ok) {
+                    const movesData = await movesRes.json();
+                    const movesList = Array.isArray(movesData) ? movesData : (movesData.data || movesData.items || []);
+                    curMove = movesList.find(m => String(m.id) === String(parentId)) || curMove;
+                } else {
+                    console.warn('Перемещения не загружены, статус:', movesRes.status);
                 }
             }
+            if (curMove && curMove.warehouse_from_id) {
+                realSkladId = curMove.warehouse_from_id;
+                const stRes = await fetch(`/api/stock_balances?warehouse_id=${curMove.warehouse_from_id}`);
+                if (stRes.ok) {
+                    (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
+                    stockLoaded = true;
+                } else {
+                    console.warn('Остатки не загружены, статус:', stRes.status);
+                }
+            } else {
+                console.warn('Склад-источник перемещения не определён:', { parentId, curMove });
+            }
+        } else {
+            console.warn('Не передан parentId (ID документа перемещения)');
         }
     } catch (e) {
         console.warn('Остатки для списка запчастей не загружены:', e);
@@ -4524,8 +4542,24 @@ async function openMoveItemsForm(item = null, parentId = null) {
         `;
     }
 
-    for (const col of config.columns) {
+       for (const col of config.columns) {
         html += await renderField(col);
+        if (col.field === 'zaphasti_id') {
+            html += `
+                <div style="display: flex; flex-direction: column; font-size: 15px; font-weight: 500; color: #475569; gap: 5px;">
+                    Партия:
+                    <div id="batch-picker" style="position: relative;">
+                        <input type="hidden" id="batch-select" name="batch_id" value="">
+                        <button type="button" id="batch-btn" ${isPosted ? 'disabled' : ''}
+                            style="width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 5px 10px; background: #fff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 400;">
+                            <span id="batch-btn-text" style="flex: 1; min-width: 0; white-space: normal; word-break: break-word; line-height: 1.35;">Авто — по порядку прихода</span>
+                            <span style="color: #64748b; flex-shrink: 0;">▾</span>
+                        </button>
+                        <div id="batch-panel" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 1000; box-shadow: 0 8px 20px rgba(15,23,42,0.12);"></div>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     html += `
@@ -4603,7 +4637,115 @@ async function openMoveItemsForm(item = null, parentId = null) {
             }
         });
     }
+    // ===== Выбор партии =====
+    const batchInput = formElement.querySelector('#batch-select');
+    const batchBtn = formElement.querySelector('#batch-btn');
+    const batchBtnText = formElement.querySelector('#batch-btn-text');
+    const batchPanel = formElement.querySelector('#batch-panel');
+    const isEditMode = !!(item && item.id);
+    let batchOptions = [];
+    let batchLoadSeq = 0;
 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtDate = (d) => { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('ru-RU'); };
+
+    function optionHtml(o, selected) {
+        const bg = selected ? '#eff6ff' : '#fff';
+        const bar = selected ? '#2563eb' : 'transparent';
+        return `
+            <div class="batch-opt" data-batch="${esc(o.id)}"
+                 style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; border-left: 3px solid ${bar}; background: ${bg};"
+                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
+                <div style="font-size: 13px; font-weight: 600; color: #0f172a;">${esc(o.title)}${o.current ? ' <span style="font-weight:500;font-size:10px;color:#2563eb;background:#dbeafe;border-radius:4px;padding:1px 5px;margin-left:6px;">текущая</span>' : ''}</div>
+                ${o.sub ? `<div style="font-size: 11px; font-weight: 400; color: #64748b; margin-top: 1px; white-space: normal; word-break: break-word; line-height: 1.3;">${esc(o.sub)}</div>` : ''}
+            </div>`;
+    }
+
+    function renderBatchPanel() {
+        const cur = String(batchInput.value || '');
+        let h = optionHtml({ id: '', title: 'Авто — по порядку прихода', sub: '' }, cur === '');
+        batchOptions.forEach(o => { h += optionHtml(o, cur === String(o.id)); });
+        batchPanel.innerHTML = h;
+    }
+
+    function setBatch(id) {
+        batchInput.value = id === null || id === undefined ? '' : String(id);
+        const o = batchOptions.find(x => String(x.id) === String(batchInput.value));
+        batchBtnText.innerHTML = o
+            ? `<b style="font-weight:600;">${esc(o.title)}</b>${o.sub ? `<br><span style="font-size:11px;color:#64748b;">${esc(o.sub)}</span>` : ''}`
+            : 'Авто — по порядку прихода';
+        renderBatchPanel();
+    }
+
+    async function loadBatches(zId) {
+        if (!batchInput) return;
+        const mySeq = ++batchLoadSeq;
+        batchOptions = [];
+        setBatch('');
+        if (!zId || !realSkladId) return;
+        try {
+            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1`);
+            if (!r.ok || mySeq !== batchLoadSeq) return;
+            const d = await r.json();
+            const list = d.batches || [];
+
+            // текущая партия позиции (при редактировании): точно по batch_id,
+            // для старых строк без batch_id — по документу прихода
+            let curId = null;
+            if (isEditMode && String(zId) === String(item.zaphasti_id)) {
+                if (item.batch_id) {
+                    curId = String(item.batch_id);
+                } else if (item.income_document_id) {
+                    const m = list.find(b => String(b.receipt_id) === String(item.income_document_id));
+                    if (m) curId = String(m.batch_id);
+                }
+            }
+
+            list.forEach(b => {
+                const cur = curId !== null && String(b.batch_id) === curId;
+                // количество самой позиции уже списано со склада — возвращаем в доступное
+                const avail = Number(b.available_qty) + (cur ? (Number(item.quantity) || 0) : 0);
+                if (avail <= 0) return;
+                               const doc = b.move_doc_number
+                    ? `Перемещение ${b.move_doc_number}${b.move_date ? ' от ' + fmtDate(b.move_date) : ''} · из прихода ${b.doc_number || ''}`
+                    : `Приход ${b.doc_number || ''}${b.receipt_date ? ' от ' + fmtDate(b.receipt_date) : ''}`.trim();
+                const showSupplier = !b.move_doc_number && b.supplier_name && !String(b.doc_number || '').includes(b.supplier_name);
+                batchOptions.push({
+                    id: b.batch_id,
+                    current: cur,
+                    title: `${avail} шт · по ${(Number(b.purchase_price) || 0).toFixed(2)}`,
+                    sub: showSupplier ? `${b.supplier_name} · ${doc}` : doc
+                });
+            });
+
+            const c = batchOptions.find(o => o.current);
+            setBatch(c ? c.id : '');
+        } catch (e) {
+            console.warn('Партии не загружены:', e);
+        }
+    }
+
+    if (batchBtn && batchPanel) {
+        batchBtn.addEventListener('click', () => {
+            batchPanel.style.display = batchPanel.style.display === 'block' ? 'none' : 'block';
+        });
+        batchPanel.addEventListener('mousedown', (e) => {
+            const el = e.target.closest('.batch-opt');
+            if (!el) return;
+            e.preventDefault();
+            setBatch(el.dataset.batch);
+            batchPanel.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => {
+            if (!formElement.isConnected) return;
+            if (!formElement.querySelector('#batch-picker').contains(e.target)) batchPanel.style.display = 'none';
+        });
+    }
+
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', () => loadBatches(zaphastiSelect.value));
+        if (zaphastiSelect.value) loadBatches(zaphastiSelect.value);
+    }
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -4712,9 +4854,10 @@ async function openRepairItemsForm(item = null, parentId = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
-    // >>> ДОБАВЛЕНО: остатки на складе ремонта для подсказки в списке запчастей
+       // >>> ДОБАВЛЕНО: остатки на складе ремонта для подсказки в списке запчастей
     const stockMap = {};
     let stockLoaded = false;
+    let repairSkladId = null;   // <<< НОВОЕ
     try {
         if (parentId) {
             const repsRes = await fetch('/api/repairs');
@@ -4723,6 +4866,7 @@ async function openRepairItemsForm(item = null, parentId = null) {
                 const repsList = Array.isArray(repsData) ? repsData : (repsData.data || repsData.items || []);
                 const curRepair = repsList.find(r => String(r.id) === String(parentId));
                 if (curRepair && curRepair.warehouse_id) {
+                    repairSkladId = curRepair.warehouse_id;   // <<< НОВОЕ (этой строки не хватало)
                     const stRes = await fetch(`/api/stock_balances?warehouse_id=${curRepair.warehouse_id}`);
                     if (stRes.ok) {
                         (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
@@ -4858,8 +5002,24 @@ async function openRepairItemsForm(item = null, parentId = null) {
     }
 
     for (const col of config.columns) {
-        html += await renderField(col);
+    html += await renderField(col);
+    if (col.field === 'zaphast_id') {
+        html += `
+            <div style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
+                Партия:
+                <div id="batch-picker" style="position: relative;">
+                    <input type="hidden" id="batch-select" name="batch_id" value="">
+                    <button type="button" id="batch-btn" ${isPosted ? 'disabled' : ''}
+                        style="width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 12px; background: #fff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 400;">
+                        <span id="batch-btn-text" style="flex: 1; min-width: 0; white-space: normal; word-break: break-word; line-height: 1.35;">Авто — по порядку прихода</span>
+                        <span style="color: #64748b; flex-shrink: 0;">▾</span>
+                    </button>
+                    <div id="batch-panel" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; max-height: 280px; overflow-y: auto; z-index: 1000; box-shadow: 0 8px 20px rgba(15,23,42,0.12);"></div>
+                </div>
+            </div>
+        `;
     }
+}
 
     html += `
                 <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eef2f7;">
@@ -4913,7 +5073,115 @@ async function openRepairItemsForm(item = null, parentId = null) {
             }
         });
     });
+// ===== Выбор партии =====
+const zaphastiSelect = formElement.querySelector('[name="zaphast_id"]');
+const batchInput = formElement.querySelector('#batch-select');
+const batchBtn = formElement.querySelector('#batch-btn');
+const batchBtnText = formElement.querySelector('#batch-btn-text');
+const batchPanel = formElement.querySelector('#batch-panel');
+const isEditMode = !!(item && item.id);
+let batchOptions = [];
+let batchLoadSeq = 0;
 
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('ru-RU'); };
+
+function isCurrentBatch(b) {
+    if (!isEditMode) return false;
+    if (item.batch_id) return String(b.batch_id) === String(item.batch_id);
+    // старые строки без batch_id — по приходу и цене
+    return item.receipt_id && String(b.receipt_id) === String(item.receipt_id) &&
+        Math.abs(Number(b.purchase_price) - Number(item.price)) < 0.005;
+}
+
+function optionHtml(o, selected) {
+    const bg = selected ? '#eff6ff' : '#fff';
+    const bar = selected ? '#2563eb' : 'transparent';
+    return `
+        <div class="batch-opt" data-batch="${esc(o.id)}"
+             style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; border-left: 3px solid ${bar}; background: ${bg};"
+             onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
+            <div style="font-size: 13px; font-weight: 600; color: #0f172a;">${esc(o.title)}${o.current ? ' <span style="font-weight:500;font-size:10px;color:#2563eb;background:#dbeafe;border-radius:4px;padding:1px 5px;margin-left:6px;">текущая</span>' : ''}</div>
+            ${o.sub ? `<div style="font-size: 11px; font-weight: 400; color: #64748b; margin-top: 1px; white-space: normal; word-break: break-word; line-height: 1.3;">${esc(o.sub)}</div>` : ''}
+        </div>`;
+}
+
+function renderBatchPanel() {
+    const cur = String(batchInput.value || '');
+    let h = optionHtml({ id: '', title: 'Авто — по порядку прихода', sub: 'Сначала списывается самая старая партия' }, cur === '');
+    batchOptions.forEach(o => { h += optionHtml(o, cur === String(o.id)); });
+    batchPanel.innerHTML = h;
+}
+
+function setBatch(id) {
+    batchInput.value = id === null || id === undefined ? '' : String(id);
+    const o = batchOptions.find(x => String(x.id) === String(batchInput.value));
+    batchBtnText.innerHTML = o
+        ? `<b style="font-weight:600;">${esc(o.title)}</b>${o.sub ? `<br><span style="font-size:12px;color:#64748b;">${esc(o.sub)}</span>` : ''}`
+        : 'Авто — по порядку прихода';
+    renderBatchPanel();
+}
+
+async function loadBatches(zId) {
+    if (!batchInput) return;
+    const mySeq = ++batchLoadSeq;
+    batchOptions = [];
+    setBatch('');
+    if (!zId || !repairSkladId) return;
+    try {
+        const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(repairSkladId)}&with_empty=1`);
+        if (!r.ok || mySeq !== batchLoadSeq) return;
+        const d = await r.json();
+
+        (d.batches || []).forEach(b => {
+            const cur = isCurrentBatch(b);
+            // у редактируемой позиции её количество уже списано — возвращаем в доступное
+            const avail = Number(b.available_qty) + (cur ? (Number(item.quantity) || 0) : 0);
+            if (avail <= 0) return;
+            const doc = b.move_doc_number
+                ? `Перемещение ${b.move_doc_number}${b.move_date ? ' от ' + fmtDate(b.move_date) : ''} · из прихода ${b.doc_number || ''}`
+                : `Приход ${b.doc_number || ''}${b.receipt_date ? ' от ' + fmtDate(b.receipt_date) : ''}`.trim();
+            const showSupplier = !b.move_doc_number && b.supplier_name && !String(b.doc_number || '').includes(b.supplier_name);
+            batchOptions.push({
+                id: b.batch_id,
+                current: cur,
+                title: `${avail} шт · по ${(Number(b.purchase_price) || 0).toFixed(2)}`,
+                sub: showSupplier ? `${b.supplier_name} · ${doc}` : doc
+            });
+        });
+
+        let pre = '';
+        if (isEditMode && String(zId) === String(item.zaphast_id)) {
+            const c = batchOptions.find(o => o.current);
+            if (c) pre = c.id;
+        }
+        setBatch(pre);
+    } catch (e) {
+        console.warn('Партии не загружены:', e);
+    }
+}
+
+if (batchBtn && batchPanel) {
+    batchBtn.addEventListener('click', () => {
+        batchPanel.style.display = batchPanel.style.display === 'block' ? 'none' : 'block';
+    });
+    batchPanel.addEventListener('mousedown', (e) => {
+        const el = e.target.closest('.batch-opt');
+        if (!el) return;
+        e.preventDefault();
+        setBatch(el.dataset.batch);
+        batchPanel.style.display = 'none';
+    });
+    document.addEventListener('click', (e) => {
+        if (!formElement.isConnected) return;
+        if (!formElement.querySelector('#batch-picker').contains(e.target)) batchPanel.style.display = 'none';
+    });
+}
+
+if (zaphastiSelect) {
+    zaphastiSelect.addEventListener('change', () => loadBatches(zaphastiSelect.value));
+    if (zaphastiSelect.value) loadBatches(zaphastiSelect.value);
+}
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -5028,8 +5296,9 @@ async function openRealizationItemsForm(item = null, parentId = null) {
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
     // >>> ДОБАВЛЕНО: остатки на складе реализации для подсказки в списке запчастей
-    const stockMap = {};
+       const stockMap = {};
     let stockLoaded = false;
+    let realSkladId = null;          // <<< НОВОЕ
     try {
         if (parentId) {
             const realsRes = await fetch('/api/realizations');
@@ -5037,7 +5306,8 @@ async function openRealizationItemsForm(item = null, parentId = null) {
                 const realsData = await realsRes.json();
                 const realsList = Array.isArray(realsData) ? realsData : (realsData.data || realsData.items || []);
                 const curReal = realsList.find(r => String(r.id) === String(parentId));
-                if (curReal && curReal.sklad_id) {
+                 if (curReal && curReal.sklad_id) {
+                    realSkladId = curReal.sklad_id;   // <<< НОВОЕ
                     const stRes = await fetch(`/api/stock_balances?warehouse_id=${curReal.sklad_id}`);
                     if (stRes.ok) {
                         (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
@@ -5173,8 +5443,24 @@ if (col.field === 'markup_percent' && !val) {
         `;
     }
 
-    for (const col of config.columns) {
+                 for (const col of config.columns) {
         html += await renderField(col);
+        if (col.field === 'zaphasti_id') {
+            html += `
+                <div style="display: flex; flex-direction: column; font-size: 15px; font-weight: 500; color: #475569; gap: 5px;">
+                    Партия:
+                    <div id="batch-picker" style="position: relative;">
+                        <input type="hidden" id="batch-select" name="batch_id" value="">
+                        <button type="button" id="batch-btn" ${isPosted ? 'disabled' : ''}
+                            style="width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 12px; background: #fff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 400;">
+                            <span id="batch-btn-text" style="flex: 1; min-width: 0; white-space: normal; word-break: break-word; line-height: 1.35;">Авто — по порядку прихода</span>
+                            <span style="color: #64748b; flex-shrink: 0;">▾</span>
+                        </button>
+                        <div id="batch-panel" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; max-height: 280px; overflow-y: auto; z-index: 1000; box-shadow: 0 8px 20px rgba(15,23,42,0.12);"></div>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     html += `
@@ -5252,7 +5538,115 @@ if (col.field === 'markup_percent' && !val) {
             }
         });
     }
+       // ===== Выбор партии =====
+    const batchInput = formElement.querySelector('#batch-select');
+    const batchBtn = formElement.querySelector('#batch-btn');
+    const batchBtnText = formElement.querySelector('#batch-btn-text');
+    const batchPanel = formElement.querySelector('#batch-panel');
+    const isEditMode = !!(item && item.id);
+    let batchOptions = [];
+    let batchLoadSeq = 0;
 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtDate = (d) => { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('ru-RU'); };
+
+    function isCurrentBatch(b) {
+        return isEditMode &&
+            item.income_document_id !== null && item.income_document_id !== undefined && item.income_document_id !== '' &&
+            String(b.receipt_id) === String(item.income_document_id) &&
+            Math.abs(Number(b.purchase_price) - Number(item.purchase_price)) < 0.005;
+    }
+
+    function optionHtml(o, selected) {
+        const bg = selected ? '#eff6ff' : '#fff';
+        const bar = selected ? '#2563eb' : 'transparent';
+        return `
+                       <div class="batch-opt" data-batch="${esc(o.id)}"
+                 style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; border-left: 3px solid ${bar}; background: ${bg};"
+                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
+                <div style="font-size: 13px; font-weight: 600; color: #0f172a;">${esc(o.title)}${o.current ? ' <span style="font-weight:500;font-size:10px;color:#2563eb;background:#dbeafe;border-radius:4px;padding:1px 5px;margin-left:6px;">текущая</span>' : ''}</div>
+                ${o.sub ? `<div style="font-size: 11px; font-weight: 400; color: #64748b; margin-top: 1px; white-space: normal; word-break: break-word; line-height: 1.3;">${esc(o.sub)}</div>` : ''}
+            </div>`;
+    }
+
+    function renderBatchPanel() {
+        const cur = String(batchInput.value || '');
+        let h = optionHtml({ id: '', title: 'Авто — по порядку прихода', sub: 'Сначала списывается самая старая партия' }, cur === '');
+        batchOptions.forEach(o => { h += optionHtml(o, cur === String(o.id)); });
+        batchPanel.innerHTML = h;
+    }
+
+    function setBatch(id) {
+        batchInput.value = id === null || id === undefined ? '' : String(id);
+        const o = batchOptions.find(x => String(x.id) === String(batchInput.value));
+        batchBtnText.innerHTML = o
+            ? `<b style="font-weight:600;">${esc(o.title)}</b>${o.sub ? `<br><span style="font-size:12px;color:#64748b;">${esc(o.sub)}</span>` : ''}`
+            : 'Авто — по порядку прихода';
+        renderBatchPanel();
+    }
+
+    async function loadBatches(zId) {
+        if (!batchInput) return;
+        const mySeq = ++batchLoadSeq;
+        batchOptions = [];
+        setBatch('');
+        if (!zId || !realSkladId) return;
+        try {
+            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1`);
+            if (!r.ok || mySeq !== batchLoadSeq) return;
+            const d = await r.json();
+
+            (d.batches || []).forEach(b => {
+                const cur = isCurrentBatch(b);
+                // у редактируемой позиции её количество уже списано со склада — возвращаем в доступное
+                const avail = Number(b.available_qty) + (cur ? (Number(item.quantity) || 0) : 0);
+                if (avail <= 0) return;
+                                const doc = b.move_doc_number
+                    ? `Перемещение ${b.move_doc_number}${b.move_date ? ' от ' + fmtDate(b.move_date) : ''} · из прихода ${b.doc_number || ''}`
+                    : `Приход ${b.doc_number || ''}${b.receipt_date ? ' от ' + fmtDate(b.receipt_date) : ''}`.trim();
+                const showSupplier = !b.move_doc_number && b.supplier_name && !String(b.doc_number || '').includes(b.supplier_name);
+                batchOptions.push({
+                    id: b.batch_id,
+                    current: cur,
+                    title: `${avail} шт · по ${(Number(b.purchase_price) || 0).toFixed(2)}`,
+                    sub: showSupplier ? `${b.supplier_name} · ${doc}` : doc
+                });
+            });
+
+            let pre = '';
+            if (isEditMode && String(zId) === String(item.zaphasti_id)) {
+                const c = batchOptions.find(o => o.current);
+                if (c) pre = c.id;
+            }
+            setBatch(pre);
+        } catch (e) {
+            console.warn('Партии не загружены:', e);
+        }
+    }
+
+    if (batchBtn && batchPanel) {
+        batchBtn.addEventListener('click', () => {
+            batchPanel.style.display = batchPanel.style.display === 'block' ? 'none' : 'block';
+        });
+        batchPanel.addEventListener('mousedown', (e) => {
+            const el = e.target.closest('.batch-opt');
+            if (!el) return;
+            e.preventDefault();
+            setBatch(el.dataset.batch);
+            batchPanel.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => {
+            if (!formElement.isConnected) return;
+            if (!formElement.querySelector('#batch-picker').contains(e.target)) batchPanel.style.display = 'none';
+        });
+    }
+
+    if (zaphastiSelect) {
+        zaphastiSelect.addEventListener('change', () => loadBatches(zaphastiSelect.value));
+        if (zaphastiSelect.value) loadBatches(zaphastiSelect.value);
+    }
+
+    
     const deleteBtn = drawer.querySelector('#delete-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
