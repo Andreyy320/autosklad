@@ -424,9 +424,9 @@ async function loadReferenceMaps() {
                 <tr>
                     <th>Дата / Время / Действие</th>
                     <th>Пользователь</th>
-                    <th>Склад</th>
+                    <th>Склад / Сервис</th>
                     <th>Автомобиль</th>
-                    <th>Запчасть (Артикул)</th>
+                    <th>Запчасть / Услуга</th>
                     <th class="text-center">Количество</th>
                     <th class="text-right">Цена</th>
                     <th class="text-right">Сумма (руб.)</th>
@@ -632,25 +632,39 @@ async function loadReferenceMaps() {
                         <td class="text-right"><strong>${Number(log.total_rub || log.total_amount || 0).toLocaleString()} руб.</strong></td>
                         <td>${log.description || log.reason || '—'}</td>
                     `;
-                } else if (currentType === 'Ремонт') {
-                    const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
-                    const carInfo = log.car_number ? `${log.car_number} (${log.car_model || '—'})` : (log.car_id ? `Авто ID: ${log.car_id}` : '—');
+               } else if (currentType === 'Ремонт') {
+    const isWork = log.is_work === true || !log.zaphast_id;
+    const whName = log.warehouse_name || log.service_name || warehousesMap[log.warehouse_id] || '—';
+    const carInfo = log.car_number ? `${log.car_number} (${log.car_model || '—'})` : (log.car_id ? `Авто ID: ${log.car_id}` : '—');
 
-                    tr.innerHTML = `
-                        <td>
-                            ${formattedDate}<br>
-                            ${actionBadge}
-                        </td>
-                        <td><strong>${log.user_name || 'Система'}</strong></td>
-                        <td>${whName}</td>
-                        <td>${carInfo}</td>
-                        <td>${partName} <br><small style="color: #666;">Арт: ${partArticle}</small></td>
-                        <td class="text-center"><strong>${log.quantity || 0}</strong></td>
-                        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
-                        <td class="text-right"><strong>${Number(log.total || 0).toLocaleString()} руб.</strong></td>
-                        <td>${log.description || '—'}</td>
-                    `;
-                } else if (currentType === 'Реализация') {
+    let partCell, qtyCell, detailsCell;
+    if (isWork) {
+        const m = /^Работа:\s*(.*?)\s*\|\s*Исполнитель:\s*(.*?)(?:\s*\|\s*(.*))?$/.exec(log.description || '');
+        const workName = m ? m[1] : (log.description || '—');
+        partCell = `<span style="color:#2563eb;font-weight:600;">Услуга:</span> ${workName}`;
+        qtyCell = '—';
+        detailsCell = m ? `Исполнитель: ${m[2]}${m[3] ? ' | ' + m[3] : ''}` : '—';
+    } else {
+        partCell = `${partName} <br><small style="color: #666;">Арт: ${partArticle}</small>`;
+        qtyCell = `<strong>${log.quantity || 0}</strong>`;
+        detailsCell = log.description || '—';
+    }
+
+    tr.innerHTML = `
+        <td>
+            ${formattedDate}<br>
+            ${actionBadge}
+        </td>
+        <td><strong>${log.user_name || 'Система'}</strong></td>
+        <td>${whName}</td>
+        <td>${carInfo}</td>
+        <td>${partCell}</td>
+        <td class="text-center">${qtyCell}</td>
+        <td class="text-right">${Number(log.price || 0).toLocaleString()} руб.</td>
+        <td class="text-right"><strong>${Number(log.total || 0).toLocaleString()} руб.</strong></td>
+        <td>${detailsCell}</td>
+    `;
+    } else if (currentType === 'Реализация') {
                     const whName = log.warehouse_name || warehousesMap[log.warehouse_id] || log.warehouse_id || 'Склад';
                     const customerOrCar = [log.customer_name, log.car_number ? `${log.car_number} (${log.car_model})` : null].filter(Boolean).join(' / ') || '—';
 

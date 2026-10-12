@@ -7435,23 +7435,27 @@ router.get('/get-repair-logs', async (req, res) => {
     const client = await pool.connect();
     try {
         const query = `
-            SELECT 
-                rl.*,
-                w.name AS warehouse_name,
-                COALESCE(z.name, 'Работа (услуга)') AS part_name,
-                COALESCE(z.article, z.code, '—') AS part_article,
-                c.gos_number AS car_number,
-                COALESCE(c.model, '—') AS car_model,
-                               COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
-            FROM repair_logs rl
-            LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
-            LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
-            LEFT JOIN cars c ON rl.car_id::text = c.id::text
-            LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
-            LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id::text = e.id::text
-            ORDER BY rl.created_at DESC
-            LIMIT 500;
-        `;
+    SELECT 
+        rl.*,
+        w.name AS warehouse_name,
+        COALESCE(cust.name_full, cust.name_short) AS service_name,
+        (rl.zaphast_id IS NULL) AS is_work,
+        z.name AS part_name,
+        COALESCE(z.article, z.code, '—') AS part_article,
+        c.gos_number AS car_number,
+        COALESCE(c.model, '—') AS car_model,
+        COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
+    FROM repair_logs rl
+    LEFT JOIN repairs rp ON rl.repair_id = rp.id
+    LEFT JOIN customers cust ON rp.customer_id = cust.id
+    LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
+    LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
+    LEFT JOIN cars c ON rl.car_id::text = c.id::text
+    LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
+    LEFT JOIN employees e ON rl.user_type = 'employee' AND rl.user_id::text = e.id::text
+    ORDER BY rl.created_at DESC
+    LIMIT 500;
+`;
         const result = await client.query(query);
         return res.json(result.rows);
     } catch (err) {
