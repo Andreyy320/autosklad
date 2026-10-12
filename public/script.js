@@ -1,15 +1,38 @@
+function clearAuthStorage() {
+    ['token', 'isLoggedIn', 'currentUser', 'currentUserId', 'userRole']
+        .forEach(k => localStorage.removeItem(k));
+}
+
+function tokenAlive(t) {
+    try {
+        const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return p.exp * 1000 > Date.now();
+    } catch (e) { return false; }
+}
+
+setInterval(function () {
+    const t = localStorage.getItem('token');
+    const appScreen = document.getElementById('app-screen');
+    const appVisible = appScreen && appScreen.style.display !== 'none';
+    if (appVisible && t && !tokenAlive(t) && !window.__loggingOut) {
+        window.__loggingOut = true;
+        clearAuthStorage();
+        location.reload();
+    }
+}, 60000);
+
 const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
 
-       if (isApiCall) {
-        const token = localStorage.getItem('token');
+     let usedToken = null;
+    if (isApiCall) {
+        usedToken = localStorage.getItem('token');
         options.headers = {
             ...(options.headers || {}),
-            'Authorization': token ? `Bearer ${token}` : ''
+            'Authorization': usedToken ? `Bearer ${usedToken}` : ''
         };
     }
-
     if (isApiCall && typeof options.body === 'string' && /^(POST|PUT|PATCH)$/i.test(options.method || '')) {
         try {
             const obj = JSON.parse(options.body);
@@ -33,17 +56,23 @@ window.fetch = async function(url, options = {}) {
     if (isApiCall && refreshedToken) {
         localStorage.setItem('token', refreshedToken);
     }
-    if (isApiCall && response.status === 401) {
+       if (isApiCall && response.status === 401 && usedToken
+        && localStorage.getItem('token') === usedToken && !window.__loggingOut) {
+        window.__loggingOut = true;
         console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
-    localStorage.removeItem('token');
-            location.reload();
+        clearAuthStorage();
+        location.reload();
     }
 
     return response;
 };
 
 setTimeout(function tryAutoLogin() {
-    const savedToken = localStorage.getItem('token');
+    let savedToken = localStorage.getItem('token');
+    if (savedToken && !tokenAlive(savedToken)) {   // просроченный токен убираем сразу
+        clearAuthStorage();
+        savedToken = null;
+    }
     if (savedToken) {
         const loginScreen = document.getElementById('login-screen');
         const appScreen = document.getElementById('app-screen');
@@ -9445,6 +9474,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         const result = await response.json();
 
         if (response.ok && result.success) {
+                       clearAuthStorage();
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('currentUser', login);
             localStorage.setItem('token', result.token);
@@ -9478,10 +9508,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
 });
 
 function logout() {
-    localStorage.removeItem('token');
-        location.reload();
+    clearAuthStorage();
+    location.reload();
 }
-
 async function refreshData() {
     const savedSelectedItem = selectedItem;
     const savedId = savedSelectedItem ? (savedSelectedItem.id || savedSelectedItem.sklad_id || savedSelectedItem.postavhik_id || savedSelectedItem.receipt_id) : null;
