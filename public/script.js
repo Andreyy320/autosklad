@@ -48,6 +48,7 @@ setInterval(function () {
     const appVisible = appScreen && appScreen.style.display !== 'none';
     if (appVisible && t && !tokenAlive(t) && !window.__loggingOut) {
         window.__loggingOut = true;
+                sessionStorage.setItem('authMsg', 'Сессия истекла по времени. Пожалуйста, войдите снова.');
         clearAuthStorage();
         location.reload();
     }
@@ -148,6 +149,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 setTimeout(function tryAutoLogin() {
     let savedToken = localStorage.getItem('token');
     if (savedToken && !tokenAlive(savedToken)) {    
+                sessionStorage.setItem('authMsg', 'Сессия истекла. Пожалуйста, войдите снова.');
         clearAuthStorage();
         savedToken = null;
     }
@@ -9631,6 +9633,18 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorDiv.innerText = 'Ошибка соединения с сервером';
     }
 });
+
+(function showAuthMessage() {
+    const msg = sessionStorage.getItem('authMsg');
+    if (!msg) return;
+    sessionStorage.removeItem('authMsg');
+    const el = document.getElementById('error-msg');
+    if (el) {
+        el.style.display = 'block';
+        el.innerText = msg;
+    }
+})();
+
 
 function logout() {
     clearAuthStorage();
