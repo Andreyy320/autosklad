@@ -16,7 +16,62 @@
         }
     });
 })();
+(function () {
+    if (window.__fetchPatched) return;
+    window.__fetchPatched = true;
 
+    function tokenExp(t) {
+        try {
+            return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000;
+        } catch (e) { return 0; }
+    }
+    function tokenAlive(t) { return tokenExp(t) > Date.now(); }
+
+    function logoutToLogin(msg) {
+        if (window.__loggingOut) return;
+        window.__loggingOut = true;
+        if (msg) sessionStorage.setItem('authMsg', msg);
+        ['token', 'isLoggedIn', 'currentUser', 'currentUserId', 'userRole']
+            .forEach(k => localStorage.removeItem(k));
+        window.location.href = '/';
+    }
+
+    const _orig = window.fetch.bind(window);
+
+    window.fetch = async function (url, options = {}) {
+        const isApi = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
+        if (!isApi) return _orig(url, options);
+
+        const usedToken = localStorage.getItem('token');
+        if (!usedToken || !tokenAlive(usedToken)) {
+            logoutToLogin('Сессия истекла, войдите снова');
+            return new Response(null, { status: 401 });
+        }
+
+        const send = (tok) => {
+            const headers = new Headers(options.headers || {});
+            headers.set('Authorization', 'Bearer ' + tok);
+            return _orig(url, { ...options, headers });
+        };
+
+        let response = await send(usedToken);
+
+        const refreshed = response.headers.get('x-new-token');
+        if (refreshed && refreshed.split('.').length === 3 &&
+            tokenExp(refreshed) > tokenExp(localStorage.getItem('token') || '')) {
+            localStorage.setItem('token', refreshed);
+        }
+
+        if (response.status === 401) {
+            const cur = localStorage.getItem('token');
+            if (cur && cur !== usedToken && tokenAlive(cur)) {
+                response = await send(cur);
+            }
+            if (response.status === 401) logoutToLogin('Сессия истекла, войдите снова');
+        }
+        return response;
+    };
+})();
 let currentType = 'Приход';
 let currentEndpoint = '/api/get-receipt-logs';
 let idMaps = {};
