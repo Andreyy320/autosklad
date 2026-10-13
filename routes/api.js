@@ -374,8 +374,8 @@ function authMiddleware(req, res, next) {
         req.headers['x-user-id'] = decoded.id;
         req.headers['x-user-type'] = decoded.type || 'user';
 
-      const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
-if (secondsLeft < TOKEN_TTL_SEC - 60 * 60) {   // продлеваем, если с выдачи прошёл хотя бы час
+   const tokenAge = Math.floor(Date.now() / 1000) - decoded.iat;
+if (tokenAge >= TOKEN_TTL_SEC / 2) {   // прошла половина срока жизни, выдаём новый токен
     const freshToken = jwt.sign(
         { id: decoded.id, login: decoded.login, type: decoded.type, role: decoded.role },
         process.env.JWT_SECRET,
@@ -2110,11 +2110,6 @@ router.get('/repair_items', async (req, res) => {
         query += ' ORDER BY ri.id DESC';
 
         const result = await pool.query(query, params);
-        
-              // Выводим в консоль то, что реально вернулась из базы по каждой запчасти
-        result.rows.forEach(row => {
-            console.log(`[DEBUG ITEM] ID запчасти в ремонте: ${row.id}, Наименование: ${row.zaphasti_name}, zaphast_id: ${row.zaphast_id}, Склад/ВИП-клиент: ${row.price_group_name}, Процент наценки: ${row.markup_percent}%`);
-        });
 
         res.json(result.rows);
     } catch (err) {
