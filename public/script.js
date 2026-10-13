@@ -62,14 +62,14 @@ window.fetch = async function(url, options = {}) {
             console.error('Обнаружен поврежденный токен в localStorage:', usedToken);
             clearAuthStorage();
             window.__loggingOut = true;
-            sessionStorage.setItem('authMsg', 'Ошибка авторизации. Войдите снова.');
+            sessionStorage.setItem('authMsg', 'Ошибка безопасности: поврежден токен авторизации.');
             location.reload();
             return new Response(null, { status: 401 });
         }
 
         if (usedToken && !tokenAlive(usedToken) && !window.__loggingOut) {
             window.__loggingOut = true;
-            sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
+            sessionStorage.setItem('authMsg', 'Сессия истекла по времени. Пожалуйста, войдите снова.');
             clearAuthStorage();
             location.reload();
             return new Response(null, { status: 401 });
@@ -104,9 +104,11 @@ window.fetch = async function(url, options = {}) {
     if (isApiCall && refreshedToken) {
         localStorage.setItem('token', refreshedToken);
     }
-        if (isApiCall && response.status === 401 && !window.__loggingOut) {
+      if (isApiCall && response.status === 401 && !window.__loggingOut) {
     const currentToken = localStorage.getItem('token');
-    if (currentToken && currentToken !== usedToken && !options.__retried) {
+
+    if (!options.__retried && currentToken && (currentToken !== usedToken || tokenAlive(currentToken))) {
+        if (currentToken === usedToken) await new Promise(r => setTimeout(r, 1500));
         return window.fetch(url, { ...options, __retried: true });
     }
     window.__loggingOut = true;
@@ -134,7 +136,8 @@ const r = await _originalFetch('/api/version', {
         } catch (e) {}
     }
     checkVersion();
-    setInterval(checkVersion, 60000);
+setInterval(() => { if (!document.hidden) checkVersion(); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
 })();
 
 setTimeout(function tryAutoLogin() {
@@ -372,6 +375,17 @@ async function pagerFetchAllRowsHtml() {
     }
     const config = getConfig(currentEntity);
     return items.map(item => `<tr>${config.render(item)}</tr>`).join('');
+}
+// Растягивает выпадающий список поиска до низа формы (но не ниже)
+function fitSearchDropdown(input, dropdown) {
+    const drawer = document.getElementById('entity-drawer');
+    const limit = Math.min(
+        drawer ? drawer.getBoundingClientRect().bottom : window.innerHeight,
+        window.innerHeight
+    );
+    const top = input.getBoundingClientRect().bottom;
+    const h = Math.floor(limit - top - 30);   // 24px отступ формы + небольшой зазор
+    dropdown.style.maxHeight = Math.max(h, 120) + 'px';
 }
 
 const referenceDataCache = {};
@@ -3573,8 +3587,11 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 
     function formatDisplayName(referenceName, refItem) {
         if (referenceName === 'vidy_rabot') {
-            return refItem.name || refItem.title || `Работа #${refItem.id}`;
-        }
+    const nm = refItem.name || refItem.title || `Работа #${refItem.id}`;
+    const pr = (refItem.price !== undefined && refItem.price !== null && refItem.price !== '')
+        ? ` - ${Number(refItem.price).toFixed(2)}` : '';
+    return `${nm}${pr}`;
+}
         return refItem.name || refItem.title || `Запись #${refItem.id}`;
     }
 
@@ -3678,6 +3695,7 @@ async function openRealizationWorksForm(item = null, parentId = null) {
 
         input.addEventListener('focus', () => {
             dropdown.style.display = 'block';
+            
         });
 
         input.addEventListener('input', () => {
@@ -3877,8 +3895,11 @@ async function openRepairWorksForm(item = null, parentId = null) {
 
     function formatDisplayName(referenceName, refItem) {
         if (referenceName === 'vidy_rabot') {
-            return refItem.name || refItem.title || `Работа #${refItem.id}`;
-        }
+    const nm = refItem.name || refItem.title || `Работа #${refItem.id}`;
+    const pr = (refItem.price !== undefined && refItem.price !== null && refItem.price !== '')
+        ? ` - ${Number(refItem.price).toFixed(2)}` : '';
+    return `${nm}${pr}`;
+}
         if (referenceName === 'ispolnitel') {
             return refItem.name || refItem.title || `Исполнитель #${refItem.id}`;
         }
@@ -4582,7 +4603,14 @@ async function openMoveItemsForm(item = null, parentId = null) {
 
         if (col.ref) {
             const referenceName = col.ref;
-            const refItems = await fetchReferenceData(referenceName);
+            let refItems = await fetchReferenceData(referenceName);
+
+    if (referenceName === 'zaphasti' && stockLoaded) {
+    refItems = refItems.filter(r =>
+        (stockMap[r.id] || 0) > 0 ||
+        String(r.id) === String(val)   
+    );
+    }
 
             let extraAttributes = '';
             if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
@@ -4685,6 +4713,8 @@ async function openMoveItemsForm(item = null, parentId = null) {
 
         input.addEventListener('focus', () => {
             dropdown.style.display = 'block';
+                fitSearchDropdown(input, dropdown);   // <<< ДОБАВИТЬ
+
         });
 
         input.addEventListener('input', () => {
@@ -5029,7 +5059,15 @@ async function openRepairItemsForm(item = null, parentId = null) {
 
         if (col.ref) {
             const referenceName = col.ref;
-            const refItems = await fetchReferenceData(referenceName);
+            let refItems = await fetchReferenceData(referenceName);
+
+    // Для запчастей показываем только те, что реально есть на складе ремонта
+    if (referenceName === 'zaphasti' && stockLoaded) {
+    refItems = refItems.filter(r =>
+        (stockMap[r.id] || 0) > 0 ||
+        String(r.id) === String(val)   // уже выбранная запчасть остаётся в списке при редактировании
+    );
+    }
             let extraAttributes = '';
 
             const formatDisplayName = (refItem) => {
@@ -5144,6 +5182,8 @@ async function openRepairItemsForm(item = null, parentId = null) {
 
         input.addEventListener('focus', () => {
             dropdown.style.display = 'block';
+                fitSearchDropdown(input, dropdown);   // <<< ДОБАВИТЬ
+
         });
 
         input.addEventListener('input', () => {
@@ -5477,7 +5517,15 @@ if (col.field === 'markup_percent' && !val) {
 
         if (col.ref) {
             const referenceName = col.ref;
-            const refItems = await fetchReferenceData(referenceName);
+            let refItems = await fetchReferenceData(referenceName);
+
+    // Для запчастей показываем только те, что реально есть на складе реализации
+    if (referenceName === 'zaphasti' && stockLoaded) {
+    refItems = refItems.filter(r =>
+        (stockMap[r.id] || 0) > 0 ||
+        String(r.id) === String(val)   // уже выбранная запчасть остаётся в списке при редактировании
+    );
+    }
 
             let extraAttributes = '';
             if (col.field === 'zaphasti_id') extraAttributes = 'id="zaphasti-select"';
@@ -5586,6 +5634,8 @@ if (col.field === 'markup_percent' && !val) {
 
         input.addEventListener('focus', () => {
             dropdown.style.display = 'block';
+                fitSearchDropdown(input, dropdown);   // <<< ДОБАВИТЬ
+
         });
 
         input.addEventListener('input', () => {
