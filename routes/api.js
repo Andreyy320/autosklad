@@ -288,7 +288,6 @@ async function trySqlFastPage(pool, req, res, { fromSql, orderBySql = 'id ASC', 
     res.json(rows);
     return true;
 }
-// <<< FAST-PAGE-END
 
 module.exports = (pool) => {
     
@@ -357,7 +356,8 @@ function authMiddleware(req, res, next) {
     if (!token) {
         const hdr = authHeader === undefined ? 'нет заголовка' : (authHeader === '' ? 'пустой' : 'без Bearer');
         console.warn(`[AUTH 401 НЕТ ТОКЕНА] ${who} | Authorization: ${hdr}`);
-        return res.status(401).json({ error: 'Не авторизован: токен отсутствует' });
+        return res.status(401).json({ error: 'Не авторизован: токен отсутствует', code: 'NO_TOKEN' });
+
     }
 
     try {
@@ -378,7 +378,7 @@ if (secondsLeft < TOKEN_TTL_SEC - 60 * 60) {   // продлеваем, если
         next();
     } catch (err) {
         console.warn(`[AUTH 401 ТОКЕН] ${who} | ${err.name}: ${err.message} | token ...${token.slice(-8)} len=${token.length}`);
-        return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк' });
+        return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк', code: err.name });
     }
 }
 router.use(authMiddleware);

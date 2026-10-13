@@ -1,3 +1,23 @@
+(function () {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+        if (k === 'token') {
+            const s = String(v);
+            const where = (new Error().stack.split('\n')[2] || '').trim();
+            sessionStorage.setItem('tokenTrace', (sessionStorage.getItem('tokenTrace') || '')
+                + new Date().toISOString() + ' len=' + s.length + ' ' + where + '\n');
+        }
+        return orig.apply(this, arguments);
+    };
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'token') {
+            sessionStorage.setItem('tokenTrace', (sessionStorage.getItem('tokenTrace') || '')
+                + new Date().toISOString() + ' ДРУГАЯ ВКЛАДКА len=' + String(e.newValue).length + '\n');
+        }
+    });
+})();
+
+
 function clearAuthStorage() {
     ['token', 'isLoggedIn', 'currentUser', 'currentUserId', 'userRole']
         .forEach(k => localStorage.removeItem(k));
@@ -9,6 +29,15 @@ function tokenAlive(t) {
         return p.exp * 1000 > Date.now();
     } catch (e) { return false; }
 }
+
+window.addEventListener('storage', (e) => {
+    if (window.__loggingOut) return;
+    if ((e.key === 'as_token' && !e.newValue) || (e.key === 'as_currentUserId' && e.newValue !== e.oldValue)) {
+        window.__loggingOut = true;
+        location.reload();
+    }
+}); 
+
 
 setInterval(function () {
     const t = localStorage.getItem('token');
@@ -56,12 +85,18 @@ window.fetch = async function(url, options = {}) {
     if (isApiCall && refreshedToken) {
         localStorage.setItem('token', refreshedToken);
     }
-       if (isApiCall && response.status === 401 && usedToken
-        && localStorage.getItem('token') === usedToken && !window.__loggingOut) {
-        window.__loggingOut = true;
-        console.warn('⚠️ Сессия истекла или недействительна — возврат на экран входа');
-        clearAuthStorage();
-        location.reload();
+        if (isApiCall && response.status === 401 && !window.__loggingOut) {
+        const currentToken = localStorage.getItem('as_token');
+        // токен успел смениться (продление или другая вкладка), повторяем один раз
+        if (currentToken && currentToken !== usedToken && !options.__retried) {
+            return window.fetch(url, { ...options, __retried: true });
+        }
+        if (currentToken === usedToken) {
+            window.__loggingOut = true;
+            sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
+            clearAuthStorage();
+            location.reload();
+        }
     }
 
     return response;
@@ -69,7 +104,7 @@ window.fetch = async function(url, options = {}) {
 
 setTimeout(function tryAutoLogin() {
     let savedToken = localStorage.getItem('token');
-    if (savedToken && !tokenAlive(savedToken)) {   // просроченный токен убираем сразу
+    if (savedToken && !tokenAlive(savedToken)) {    
         clearAuthStorage();
         savedToken = null;
     }

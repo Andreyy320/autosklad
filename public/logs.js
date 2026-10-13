@@ -1,3 +1,22 @@
+(function () {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+        if (k === 'token') {
+            const s = String(v);
+            const where = (new Error().stack.split('\n')[2] || '').trim();
+            sessionStorage.setItem('tokenTrace', (sessionStorage.getItem('tokenTrace') || '')
+                + new Date().toISOString() + ' len=' + s.length + ' ' + where + '\n');
+        }
+        return orig.apply(this, arguments);
+    };
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'token') {
+            sessionStorage.setItem('tokenTrace', (sessionStorage.getItem('tokenTrace') || '')
+                + new Date().toISOString() + ' ДРУГАЯ ВКЛАДКА len=' + String(e.newValue).length + '\n');
+        }
+    });
+})();
+
 let currentType = 'Приход';
 let currentEndpoint = '/api/get-receipt-logs';
 let idMaps = {};
@@ -331,9 +350,11 @@ window.fetch = async function(url, options = {}) {
     const response = await _originalFetch(url, options);
     const newToken = response.headers.get('x-new-token');
 if (isApiCall && newToken) localStorage.setItem('token', newToken);
-    if (isApiCall && response.status === 401) {
+        if (isApiCall && response.status === 401 && !window.__loggingOut) {
+        window.__loggingOut = true;
+        ['token', 'isLoggedIn', 'currentUser', 'currentUserId', 'userRole']
+            .forEach(k => localStorage.removeItem(k));
         alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
-        localStorage.clear();
         window.location.href = '/';
     }
     return response;
