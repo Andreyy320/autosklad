@@ -102,6 +102,21 @@ window.fetch = async function(url, options = {}) {
     return response;
 };
 
+(function () {
+    let known = null;
+    async function checkVersion() {
+        try {
+            const r = await _originalFetch('/api/version', { cache: 'no-store' });
+            if (!r.ok) return;
+            const data = await r.json();
+            if (known === null) known = data.v;
+            else if (data.v !== known) location.reload();
+        } catch (e) {}
+    }
+    checkVersion();
+    setInterval(checkVersion, 60000);
+})();
+
 setTimeout(function tryAutoLogin() {
     let savedToken = localStorage.getItem('token');
     if (savedToken && !tokenAlive(savedToken)) {    

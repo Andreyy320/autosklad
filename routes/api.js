@@ -381,6 +381,12 @@ if (secondsLeft < TOKEN_TTL_SEC - 60 * 60) {   // продлеваем, если
         return res.status(401).json({ error: 'Не авторизован: токен недействителен или истёк', code: err.name });
     }
 }
+const APP_VERSION = String(Date.now());   // меняется при каждом перезапуске сервера
+router.get('/version', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ v: APP_VERSION });
+});
+
 router.use(authMiddleware);
 router.use(paginationMiddleware); // ?page=&limit=&search=&filters= для всех GET-списков
 
