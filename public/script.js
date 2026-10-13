@@ -29,7 +29,11 @@ function tokenAlive(t) {
         return p.exp * 1000 > Date.now();
     } catch (e) { return false; }
 }
-
+function tokenExp(t) {
+    try {
+        return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000;
+    } catch (e) { return 0; }
+}
 window.addEventListener('storage', (e) => {
     if (window.__loggingOut) return;
     if ((e.key === 'token' && !e.newValue) || (e.key === 'currentUserId' && e.newValue !== e.oldValue)) {
@@ -100,8 +104,9 @@ window.fetch = async function(url, options = {}) {
 
     const response = await _originalFetch(url, options);
 
-    const refreshedToken = response.headers.get('x-new-token');
-    if (isApiCall && refreshedToken) {
+        const refreshedToken = response.headers.get('x-new-token');
+    if (isApiCall && refreshedToken && refreshedToken.split('.').length === 3 &&
+        tokenExp(refreshedToken) > tokenExp(localStorage.getItem('token') || '')) {
         localStorage.setItem('token', refreshedToken);
     }
       if (isApiCall && response.status === 401 && !window.__loggingOut) {

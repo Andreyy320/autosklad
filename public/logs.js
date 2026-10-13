@@ -337,28 +337,6 @@ function formatFieldValue(key, val) {
     return val;
 }
 
-const _originalFetch = window.fetch;
-window.fetch = async function(url, options = {}) {
-    const isApiCall = typeof url === 'string' && url.startsWith('/api/');
-    if (isApiCall) {
-        const token = localStorage.getItem('token');
-        options.headers = {
-            ...(options.headers || {}),
-            'Authorization': token ? `Bearer ${token}` : ''
-        };
-    }
-    const response = await _originalFetch(url, options);
-    const newToken = response.headers.get('x-new-token');
-if (isApiCall && newToken) localStorage.setItem('token', newToken);
-        if (isApiCall && response.status === 401 && !window.__loggingOut) {
-        window.__loggingOut = true;
-        ['token', 'isLoggedIn', 'currentUser', 'currentUserId', 'userRole']
-            .forEach(k => localStorage.removeItem(k));
-        alert('Сессия истекла или вы не авторизованы. Сейчас вы будете перенаправлены на страницу входа.');
-        window.location.href = '/';
-    }
-    return response;
-};
 
 async function loadReferenceMaps() {
     const uniqueUrls = [...new Set(idMapConfigs.map(c => c.url))];
