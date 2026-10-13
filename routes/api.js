@@ -6,7 +6,7 @@ const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const DEFAULT_MARKUP_PERCENT = 30; // потом можно вынести в settings-таблицу
-const TOKEN_TTL_SEC = 20; // 1 минута для теста
+const TOKEN_TTL_SEC = 11 * 60 * 60; // 15 часов = 54000 секунд
 
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
