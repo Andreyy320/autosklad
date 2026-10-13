@@ -32,12 +32,11 @@ function tokenAlive(t) {
 
 window.addEventListener('storage', (e) => {
     if (window.__loggingOut) return;
-    if ((e.key === 'as_token' && !e.newValue) || (e.key === 'as_currentUserId' && e.newValue !== e.oldValue)) {
+    if ((e.key === 'token' && !e.newValue) || (e.key === 'currentUserId' && e.newValue !== e.oldValue)) {
         window.__loggingOut = true;
         location.reload();
     }
-}); 
-
+});
 
 setInterval(function () {
     const t = localStorage.getItem('token');
@@ -56,7 +55,14 @@ window.fetch = async function(url, options = {}) {
 
      let usedToken = null;
     if (isApiCall) {
-        usedToken = localStorage.getItem('token');
+       usedToken = localStorage.getItem('token');
+if (usedToken && !tokenAlive(usedToken) && !window.__loggingOut) {
+    window.__loggingOut = true;
+    sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
+    clearAuthStorage();
+    location.reload();
+    return new Response(null, { status: 401 });
+}
         options.headers = {
             ...(options.headers || {}),
             'Authorization': usedToken ? `Bearer ${usedToken}` : ''
@@ -86,18 +92,15 @@ window.fetch = async function(url, options = {}) {
         localStorage.setItem('token', refreshedToken);
     }
         if (isApiCall && response.status === 401 && !window.__loggingOut) {
-        const currentToken = localStorage.getItem('as_token');
-        // токен успел смениться (продление или другая вкладка), повторяем один раз
-        if (currentToken && currentToken !== usedToken && !options.__retried) {
-            return window.fetch(url, { ...options, __retried: true });
-        }
-        if (currentToken === usedToken) {
-            window.__loggingOut = true;
-            sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
-            clearAuthStorage();
-            location.reload();
-        }
+    const currentToken = localStorage.getItem('token');
+    if (currentToken && currentToken !== usedToken && !options.__retried) {
+        return window.fetch(url, { ...options, __retried: true });
     }
+    window.__loggingOut = true;
+    sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
+    clearAuthStorage();
+    location.reload();
+}
 
     return response;
 };
@@ -106,7 +109,11 @@ window.fetch = async function(url, options = {}) {
     let known = null;
     async function checkVersion() {
         try {
-            const r = await _originalFetch('/api/version', { cache: 'no-store' });
+            const t = localStorage.getItem('token');
+const r = await _originalFetch('/api/version', {
+    cache: 'no-store',
+    headers: t ? { 'Authorization': 'Bearer ' + t } : {}
+});
             if (!r.ok) return;
             const data = await r.json();
             if (known === null) known = data.v;
