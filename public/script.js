@@ -53,21 +53,34 @@ const _originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const isApiCall = typeof url === 'string' && url.startsWith('/api/') && !url.startsWith('/api/login');
 
-     let usedToken = null;
+    let usedToken = null;
     if (isApiCall) {
-       usedToken = localStorage.getItem('token');
-if (usedToken && !tokenAlive(usedToken) && !window.__loggingOut) {
-    window.__loggingOut = true;
-    sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
-    clearAuthStorage();
-    location.reload();
-    return new Response(null, { status: 401 });
-}
+        usedToken = localStorage.getItem('token');
+
+        // ЗАЩИТА: Если токен есть, но он слишком короткий или невалидный по структуре
+        if (usedToken && (usedToken.length < 20 || !usedToken.includes('.'))) {
+            console.error('Обнаружен поврежденный токен в localStorage:', usedToken);
+            clearAuthStorage();
+            window.__loggingOut = true;
+            sessionStorage.setItem('authMsg', 'Ошибка авторизации. Войдите снова.');
+            location.reload();
+            return new Response(null, { status: 401 });
+        }
+
+        if (usedToken && !tokenAlive(usedToken) && !window.__loggingOut) {
+            window.__loggingOut = true;
+            sessionStorage.setItem('authMsg', 'Сессия истекла, войдите снова');
+            clearAuthStorage();
+            location.reload();
+            return new Response(null, { status: 401 });
+        }
+
         options.headers = {
             ...(options.headers || {}),
             'Authorization': usedToken ? `Bearer ${usedToken}` : ''
         };
     }
+    // ... дальше ваш код
     if (isApiCall && typeof options.body === 'string' && /^(POST|PUT|PATCH)$/i.test(options.method || '')) {
         try {
             const obj = JSON.parse(options.body);
