@@ -951,6 +951,18 @@ router.get('/ispolnitel', async (req, res) => {
     }
 });
 
+
+// ПОЛУЧЕНИЕ СПИСКА СЕРВИСОВ
+router.get('/servis', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM servis ORDER BY id ASC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Ошибка при получении сервисов:", err.message);
+        res.status(500).send('Ошибка сервера');
+    }
+});
+
 // ПОЛУЧЕНИЕ СПИСКА ТИПОВ РЕМОНТА
 router.get('/repair_types', async (req, res) => {
     try {
@@ -2019,7 +2031,7 @@ router.get('/repairs', async (req, res) => {
     c.gos_number AS car_number,
     COALESCE(c.model, cm.name, 'Не указана') AS car_model,
     s.name AS warehouse_name,
-    COALESCE(cust.name_full, cust.name_short) AS service_name,
+    COALESCE(sv.name, cust.name_full, cust.name_short) AS service_name,
     u.name AS mol_name,
                 -- Итоговая сумма: чистые запчасти (количество * цена) + работы
                 (
@@ -2033,6 +2045,7 @@ router.get('/repairs', async (req, res) => {
             LEFT JOIN car_models cm ON c.model_id = cm.id
            LEFT JOIN skladi s ON r.warehouse_id = s.id
 LEFT JOIN customers cust ON r.customer_id = cust.id
+LEFT JOIN servis sv ON r.servis_id = sv.id
 LEFT JOIN mol m ON r.mol_id = m.id
             LEFT JOIN users u ON m.user_id = u.id
             LEFT JOIN (
@@ -7687,7 +7700,7 @@ router.get('/get-repair-logs', async (req, res) => {
     SELECT 
         rl.*,
                 COALESCE(w.name, w_rp.name) AS warehouse_name,
-        COALESCE(cust.name_full, cust.name_short) AS service_name,
+COALESCE(sv.name, cust.name_full, cust.name_short) AS service_name,
         (rl.zaphast_id IS NULL) AS is_work,
         z.name AS part_name,
         COALESCE(z.article, z.code, '—') AS part_article,
@@ -7696,7 +7709,7 @@ router.get('/get-repair-logs', async (req, res) => {
         COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
     FROM repair_logs rl
     LEFT JOIN repairs rp ON rl.repair_id = rp.id
-    LEFT JOIN customers cust ON rp.customer_id = cust.id
+    LEFT JOIN servis sv ON rp.servis_id = sv.id
     LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
         LEFT JOIN skladi w_rp ON rp.warehouse_id = w_rp.id
     LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
@@ -10661,7 +10674,7 @@ router.post('/:entity', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees','servis'
         ];
  
         if (!allowedTables.includes(entity)) {
@@ -10889,7 +10902,7 @@ router.put('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works', 'mol_users', 'counterparty_contacts', 
-            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees'
+            'postavhik_contacts', 'customer_contacts','part_discounts','service_discounts','customer_cars','realizations','returns','employees','servis'
         ];
 
                if (!allowedTables.includes(entity)) {
@@ -11209,7 +11222,7 @@ router.delete('/:entity/:id', async (req, res) => {
             'moves', 'statuses', 
             'autoservices', 'payment_types', 'accidents',
             'accident_invoices', 'accident_payments', 'accident_events', 'repairs', 'repair_works','mol_users','counterparty_contacts','postavhik_contacts', 'customer_contacts',
-            'customer_cars','part_discounts','service_discounts','realizations','returns','employees'
+            'customer_cars','part_discounts','service_discounts','realizations','returns','employees','servis'
         ];
 
         if (!allowedTables.includes(entity)) {

@@ -763,6 +763,18 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото" style="width: 20
             <td>${item.description || ''}</td>
         `
     },
+
+    servis: {
+    title: 'Сервис',
+    columns: [
+        { field: 'name', label: 'Имя / Название', width: '250px' },
+        { field: 'description', label: 'Описание', width: '150px' }
+    ],
+    render: (item) => `
+        <td><b>${item.name || ''}</b></td>
+        <td>${item.description || ''}</td>
+    `
+},
     repair_types: {
         title: 'Типы ремонта',
         columns: [
@@ -1537,7 +1549,7 @@ ${item.image_url ? `<img src="${item.image_url}" alt="Фото ДТП" style="wi
 { field: 'car_model', label: 'Модель авто', width: '130px', insert: false, update: false, readonly: true, table: false },
      { field: 'mileage', label: 'Пробег', width: '90px', align: 'right' },
     { field: 'warehouse_id', label: 'Склад/Сервис', width: '150px', ref: 'skladi' },
-    { field: 'customer_id', label: 'Сервис', width: '150px', ref: 'customers', table: false },
+    { field: 'servis_id', label: 'Сервис', width: '150px', ref: 'servis', table: false },
         { field: 'mol_id', label: 'МОЛ', width: '130px', ref: 'mol', table: false },
         { field: 'sum', label: 'Сумма', width: '100px', insert: false, update: false, readonly: true, align: 'right' },
         { field: 'fact_date', label: 'Дата факт', width: '160px', type: 'datetime-local' },
@@ -7486,11 +7498,11 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
                     </div>
                 </div>
             `;
-        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id' || col.field === 'customer_id') {
+        } else if (col.field === 'warehouse_from_id' || col.field === 'warehouse_to_id' || col.field === 'warehouse_id' || col.field === 'sklad_id' || col.field === 'customer_id' || col.field === 'servis_id') {
 
             const referenceName = col.ref;
             const refItems = await fetchReferenceData(referenceName);
-            const fallbackLabel = col.field === 'customer_id' ? 'Сервис' : 'Склад';
+           const fallbackLabel = (col.field === 'customer_id' || col.field === 'servis_id') ? 'Сервис' : 'Склад';
 
             let selectedDisplayName = '';
             refItems.forEach(refItem => {
@@ -7558,7 +7570,7 @@ async function openRepairForm(entityOrItem, itemArg = null, parentIdArg = null) 
             inputHtml = `<input type="text" name="${col.field}" value="${val}" ${fieldReadonly ? 'readonly' : ''} style="${controlStyle}">`;
         }
 
-const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id') ? ' id="repair-warehouse-field"' : ((entity === 'repairs' && col.field === 'customer_id') ? ' id="repair-service-field"' : ((entity === 'repairs' && col.field === 'mol_id') ? ' id="repair-mol-field"' : ''));        html += `
+const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id') ? ' id="repair-warehouse-field"' : ((entity === 'repairs' && col.field === 'servis_id') ? ' id="repair-service-field"' : ((entity === 'repairs' && col.field === 'mol_id') ? ' id="repair-mol-field"' : ''));        html += `
             <label${repairFieldWrapId} style="display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #475569; gap: 5px;">
                 ${col.label}:
                 ${inputHtml}
@@ -14670,6 +14682,7 @@ const navMap = {
     'Накладные поставщика': 'expenses_by_receipts',
     'Спецификация расходов': 'expense_items',
         'Сотрудники': 'employees',
+        'Сервис': 'servis',
     'История всех оплат':'expense_payments'  
          
 };
