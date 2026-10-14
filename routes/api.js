@@ -7707,11 +7707,12 @@ COALESCE(sv.name, cust.name_full, cust.name_short) AS service_name,
         c.gos_number AS car_number,
         COALESCE(c.model, '—') AS car_model,
         COALESCE(CASE WHEN rl.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
-    FROM repair_logs rl
+       FROM repair_logs rl
     LEFT JOIN repairs rp ON rl.repair_id = rp.id
+    LEFT JOIN customers cust ON rp.customer_id = cust.id
     LEFT JOIN servis sv ON rp.servis_id = sv.id
     LEFT JOIN skladi w ON rl.warehouse_id::text = w.id::text
-        LEFT JOIN skladi w_rp ON rp.warehouse_id = w_rp.id
+    LEFT JOIN skladi w_rp ON rp.warehouse_id = w_rp.id
     LEFT JOIN zaphasti z ON rl.zaphast_id::text = z.id::text
     LEFT JOIN cars c ON rl.car_id::text = c.id::text
     LEFT JOIN users u ON rl.user_type = 'user' AND rl.user_id::text = u.id::text
