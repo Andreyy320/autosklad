@@ -8059,9 +8059,14 @@ async function openRealizationForm(entity, item = null) {
             let hasItems = false;
             if (item && item.id) {
                 try {
-                    const itemsRes = await fetch(`/api/realization_items?realization_id=${item.id}`);
-                    const itemsList = await itemsRes.json();
-                    hasItems = Array.isArray(itemsList) && itemsList.length > 0;
+                 const [itemsRes, worksRes] = await Promise.all([
+    fetch(`/api/realization_items?realization_id=${item.id}`),
+    fetch(`/api/realization_works?realization_id=${item.id}`)
+    ]);
+    const itemsList = itemsRes.ok ? await itemsRes.json() : [];
+    const worksList = worksRes.ok ? await worksRes.json() : [];
+    hasItems = (Array.isArray(itemsList) && itemsList.length > 0) ||
+           (Array.isArray(worksList) && worksList.length > 0);
                 } catch (e) {
                     hasItems = false;
                 }
@@ -13341,13 +13346,16 @@ async function postReceipt(receiptId) {
                     body: JSON.stringify({ is_posted: true })
                 });
 
-                if (!response.ok) throw new Error('Ошибка при проведении документа');
+                if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || 'Ошибка при проведении документа');
+    }
 
                 showAppNotification('Документ прихода успешно проведен', 'success');
                 refreshData();
             } catch (err) {
                 console.error(err);
-                showAppNotification('Не удалось провести документ', 'error');
+                showAppNotification(err.message || 'Не удалось провести документ', 'error');
             }
         }
     );
@@ -13395,13 +13403,16 @@ async function postRepair(repairId) {
                     body: JSON.stringify({ is_posted: true })
                 });
 
-                if (!response.ok) throw new Error('Ошибка при проведении документа');
+                if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || 'Ошибка при проведении документа');
+    }
 
                 showAppNotification('Документ ремонта успешно проведен', 'success');
                 refreshData();
             } catch (err) {
                 console.error(err);
-                showAppNotification('Не удалось провести документ', 'error');
+                showAppNotification(err.message || 'Не удалось провести документ', 'error');
             }
         }
     );
@@ -13422,13 +13433,16 @@ async function postRealization(realizationId) {
                     body: JSON.stringify({ is_posted: true })
                 });
 
-                if (!response.ok) throw new Error('Ошибка при проведении документа');
+                if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || 'Ошибка при проведении документа');
+        }
 
                 showAppNotification('Документ реализации успешно проведен', 'success');
                 refreshData();
             } catch (err) {
                 console.error(err);
-                showAppNotification('Не удалось провести документ', 'error');
+                showAppNotification(err.message || 'Не удалось провести документ', 'error');
             }
         }
     );
@@ -13447,13 +13461,16 @@ async function postAccident(accidentId) {
                     body: JSON.stringify({ is_posted: true })
                 });
 
-                if (!response.ok) throw new Error('Ошибка при проведении документа');
+               if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || 'Ошибка при проведении документа');
+    }
 
                 showAppNotification('Документ ДТП успешно проведен', 'success');
                 refreshData();
             } catch (err) {
                 console.error(err);
-                showAppNotification('Не удалось провести документ', 'error');
+                showAppNotification(err.message || 'Не удалось провести документ', 'error');
             }
         }
     );

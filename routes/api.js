@@ -4041,12 +4041,16 @@ router.put('/realizations/:id/post', async (req, res) => {
             return res.status(404).json({ error: 'Документ не найден' });
         }
 
-        // НОВОЕ: нельзя провести документ, если в нём нет ни одной позиции
-        const itemsCheck = await pool.query('SELECT COUNT(*) AS cnt FROM realization_items WHERE realization_id = $1', [id]);
-        if (Number(itemsCheck.rows[0].cnt) === 0) {
-            return res.status(400).json({ error: 'Нельзя провести пустой документ реализации — добавьте хотя бы одну позицию' });
-        }
-
+        // нельзя провести документ, если нет ни запчастей, ни услуг
+    const itemsCheck = await pool.query(
+    `SELECT
+        (SELECT COUNT(*) FROM realization_items WHERE realization_id = $1) +
+        (SELECT COUNT(*) FROM realization_works WHERE realization_id = $1) AS cnt`,
+    [id]
+    );
+    if (Number(itemsCheck.rows[0].cnt) === 0) {
+    return res.status(400).json({ error: 'Нельзя провести пустой документ реализации — добавьте хотя бы одну запчасть или услугу' });
+    }
         const factDate = getServerNowString();
 
         const result = await pool.query(
