@@ -3445,7 +3445,7 @@ WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
                 UNION ALL
                 
                                 -- 2. Перемещения (приход)
-                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, (mi.quantity * COALESCE(mi.price_rub, mi.price, 0)) AS sum, 'in' as op_type
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, COALESCE(NULLIF(mi.total_rub, 0), mi.quantity * COALESCE(mi.price_rub, mi.price, 0)) AS sum, 'in' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
                 WHERE m.warehouse_to_id IS NOT NULL AND (m.is_posted::text IN ('true', '1', '2'))
@@ -3454,7 +3454,7 @@ WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
                 
                                -- 3. Перемещения (расход)
                 SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,
-                       (mi.quantity * COALESCE(mi.price_rub / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.price_rub, mi.price, 0)) AS sum,
+                      COALESCE(NULLIF(mi.total_rub, 0) / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.quantity * COALESCE(mi.price_rub, mi.price, 0)) AS sum,
                        'out' as op_type
                 FROM move_items mi 
                 JOIN moves m ON mi.move_id = m.id 
@@ -4429,7 +4429,12 @@ const manualPriceValue = Number(price);
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
+              const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
+
+        // Наценка только с центрального склада; с остальных складов — 0% (как в перемещении)
+        if (Number(sklad_id) !== CENTRAL_SKLAD_ID) {
+            markupPercent = 0;
+        }
 
         const isDocumentPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
         if (isDocumentPosted) {
@@ -4501,11 +4506,11 @@ const manualPriceValue = Number(price);
                     : `Недостаточно товара на складе! Доступно: ${totalAvailableStock > 0 ? totalAvailableStock : 0} шт., а вы пытаетесь добавить: ${requestedQty} шт.`
             });
         }
-        // 4. Скидка клиента
+                // 4. Скидка клиента (только с центрального склада; с остальных складов — розница без скидки)
         let discountPercent = 0;
         let discountText = 'Розница (0%)';
 
-        if (customer_id) {
+        if (customer_id && Number(sklad_id) === CENTRAL_SKLAD_ID) {
             const customerDiscountQuery = `
                 SELECT pd.name, pd.discount_percent 
                 FROM customers c
@@ -4562,9 +4567,9 @@ const total_rub = Number((takeQty * finalPrice).toFixed(2));
     INSERT INTO realization_items (
         realization_id, zaphasti_id, article, code, name, 
         quantity, unit, purchase_price, retail_price, price, 
-        discount, total_rub, description, income_document_id, markup_percent, is_manual_price
+               discount, total_rub, description, income_document_id, markup_percent, is_manual_price, batch_id
     ) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
 `;
 
@@ -4572,9 +4577,8 @@ const values = [
     realization_id, zaphasti_id, zap.article, zap.code, zap.name, 
     takeQty, zap.unit || 'шт', purchase_price, baseRetailPrice, finalPrice, 
     appliedDiscountText, total_rub, description || null, batch.receipt_id,
-    appliedMarkupPercent, manualMode
+      appliedMarkupPercent, manualMode, batch.batch_id
 ];
-
             const result = await client.query(insertQuery, values);
             const newRecord = result.rows[0];
             createdRecords.push(newRecord);
@@ -4618,13 +4622,44 @@ const values = [
     }
 });
 
+// Возврат количества СТРОГО в ту партию, из которой оно было списано
+async function returnRealizationQtyToBatch(client, item, skladId) {
+    const qty = Number(item.quantity) || 0;
+    if (qty <= 0 || !item.zaphasti_id) return;
 
+    if (item.batch_id) {
+        const r = await client.query(
+            'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2',
+            [qty, item.batch_id]
+        );
+        if (r.rowCount > 0) return;
+    }
+
+    // Старые строки без batch_id: ищем партию по приходу и цене
+    const found = await client.query(`
+        SELECT id FROM warehouse_batches
+        WHERE zaphasti_id = $1 AND warehouse_id = $2
+          AND receipt_id IS NOT DISTINCT FROM $3
+          AND price_rub = $4
+        ORDER BY id LIMIT 1
+        FOR UPDATE
+    `, [item.zaphasti_id, skladId, item.income_document_id || null, item.purchase_price || 0]);
+
+    if (found.rows.length > 0) {
+        await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, found.rows[0].id]);
+    } else {
+        await client.query(`
+            INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [item.zaphasti_id, skladId, item.income_document_id || null, item.purchase_price || 0, qty]);
+    }
+}
 
 router.put('/realization_items/:id', async (req, res) => {
  
 
     const { id } = req.params;
-const { realization_id, zaphasti_id, quantity, description, markup_percent, price, is_manual_price, batch_id } = req.body;
+    const { realization_id, zaphasti_id, quantity, description, markup_percent, price, is_manual_price, batch_id } = req.body;
     let markupPercent = Number(markup_percent);
     if (isNaN(markupPercent) || markupPercent < 0) {
         markupPercent = DEFAULT_MARKUP_PERCENT;
@@ -4696,8 +4731,12 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
             return res.status(404).json({ error: 'Реализация не найдена' });
         }
 
-        const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
+                const { sklad_id, customer_id, is_posted, doc_number } = realizationRes.rows[0];
 
+        // Наценка только с центрального склада; с остальных складов — 0% (как в перемещении)
+        if (Number(sklad_id) !== CENTRAL_SKLAD_ID) {
+            markupPercent = 0;
+        }
         const isDocumentPosted = is_posted === true || is_posted === 'true' || is_posted === 1 || is_posted === '1' || is_posted === 2 || is_posted === '2';
         if (isDocumentPosted) {
             await client.query('ROLLBACK');
@@ -4708,53 +4747,9 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'В документе реализации не указан склад, с которого списываются запчасти.' });
         }
-
-        // Возвращаем количество старой позиции обратно на склад в таблицу warehouse_batches (без кривого ON CONFLICT без индекса)
-        if (currentItem.income_document_id && currentItem.zaphasti_id) {
-            // Сначала проверяем, существует ли точно такая же партия
-            const existingBatchCheck = await client.query(`
-                SELECT id FROM warehouse_batches 
-                WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4
-            `, [currentItem.zaphasti_id, sklad_id, currentItem.income_document_id, currentItem.purchase_price || 0]);
-
-            if (existingBatchCheck.rows.length > 0) {
-                // Если есть — обновляем количество
-                await client.query(`
-                    UPDATE warehouse_batches 
-                    SET quantity = quantity + $1 
-                    WHERE id = $2
-                `, [currentItem.quantity, existingBatchCheck.rows.length > 0 ? existingBatchCheck.rows[0].id : null]);
-            } else {
-                // Если нет — вставляем новую строку партии
-                await client.query(`
-                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
-                    VALUES ($1, $2, $3, $4, $5)
-                `, [
-                    currentItem.zaphasti_id, 
-                    sklad_id, 
-                    currentItem.income_document_id, 
-                    currentItem.purchase_price || 0, 
-                    currentItem.quantity
-                ]);
-            }
-        } else {
-            // Если income_document_id не был задан, находим любую подходящую партию или первую попавшуюся на складе для возврата
-            const fallbackBatch = await client.query(`
-                SELECT id FROM warehouse_batches 
-                WHERE zaphasti_id = $1 AND warehouse_id = $2 
-                ORDER BY created_at ASC LIMIT 1
-            `, [currentItem.zaphasti_id, sklad_id]);
-
-            if (fallbackBatch.rows.length > 0) {
-                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, fallbackBatch.rows[0].id]);
-            } else {
-                // Если вообще нет партий для этой запчасти на складе, создаем базовую запись партии
-                await client.query(`
-                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
-                    VALUES ($1, $2, NULL, $3, $4)
-                `, [currentItem.zaphasti_id, sklad_id, currentItem.purchase_price || 0, currentItem.quantity]);
-            }
-        }
+ 
+               // Возвращаем старое количество СТРОГО в ту же партию (по batch_id)
+        await returnRealizationQtyToBatch(client, currentItem, sklad_id);
 
         // 3. Получаем справочные данные новой/текущей запчасти
         const zaphastiQuery = `SELECT * FROM zaphasti WHERE id = $1`;
@@ -4815,11 +4810,11 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
             });
         }
 
-        // 5. Скидка клиента
+                // 5. Скидка клиента (только с центрального склада; с остальных складов — розница без скидки)
         let discountPercent = 0;
         let discountText = 'Розница (0%)';
 
-        if (customer_id) {
+        if (customer_id && Number(sklad_id) === CENTRAL_SKLAD_ID) {
             const customerDiscountQuery = `
                 SELECT pd.name, pd.discount_percent 
                 FROM customers c
@@ -4835,36 +4830,36 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
             }
         }
 
-        let remainingToDistribute = requestedQty;
-        let chosenPurchasePrice = 0;
-        let chosenIncomeDocumentId = null;
+              // Одна позиция = ОДНА партия.
+        // Приоритет: выбранная в форме -> прежняя партия позиции -> самая старая, где хватает количества
+        const sameZaphasti = String(targetZaphastiId) === String(currentItem.zaphasti_id);
+        const effectiveBatchId = batch_id || (sameZaphasti ? currentItem.batch_id : null);
 
-        // 6. Распределяем по FIFO через warehouse_batches с уменьшением остатка в партиях
-        for (const batch of batches) {
-            if (remainingToDistribute <= 0) break;
-
-            const takeQty = Math.min(remainingToDistribute, batch.available);
-            if (takeQty <= 0) continue;
-
-            if (chosenPurchasePrice === 0) {
-                chosenPurchasePrice = batch.purchase_price;
-                chosenIncomeDocumentId = batch.receipt_id;
-            }
-
-
-            await client.query(
-                'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
-                [takeQty, batch.batch_id]
-            );
-
-            remainingToDistribute -= takeQty;
+        let pickedBatch = null;
+        if (effectiveBatchId) {
+            pickedBatch = batches.find(b => String(b.batch_id) === String(effectiveBatchId)) || null;
+        }
+        if (!pickedBatch && !batch_id) {
+            pickedBatch = batches.find(b => b.available >= requestedQty) || null;
         }
 
-        if (remainingToDistribute > 0) {
+        if (!pickedBatch || pickedBatch.available < requestedQty) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Ошибка распределения партий FIFO при редактировании: не удалось покрыть требуемый объем.' });
+            return res.status(400).json({
+                error: pickedBatch
+                    ? `В выбранной партии доступно только ${pickedBatch.available} шт., а вы пытаетесь установить: ${requestedQty} шт.`
+                    : 'Ни в одной партии нет нужного количества. Выберите партию вручную или уменьшите количество.'
+            });
         }
 
+        const chosenPurchasePrice = pickedBatch.purchase_price;
+        const chosenIncomeDocumentId = pickedBatch.receipt_id;
+        const chosenBatchId = pickedBatch.batch_id;
+
+        await client.query(
+            'UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2',
+            [requestedQty, chosenBatchId]
+        );
                let baseRetailPrice, finalPrice, appliedMarkupPercent, appliedDiscountText;
 
         if (manualMode && !isNaN(manualPriceValue) && manualPriceValue > 0) {
@@ -4902,8 +4897,9 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
                 description = $13, 
                 income_document_id = $14,
                 markup_percent = $15,
-                is_manual_price = $16
-            WHERE id = $17
+                               is_manual_price = $16,
+                batch_id = $17
+            WHERE id = $18
             RETURNING *
         `;
         
@@ -4923,7 +4919,8 @@ const { realization_id, zaphasti_id, quantity, description, markup_percent, pric
             finalDescription, 
             chosenIncomeDocumentId,
             appliedMarkupPercent,
-            manualMode,
+                        manualMode,
+            chosenBatchId,
             id
         ];
 
@@ -5048,53 +5045,8 @@ router.delete('/realization_items/:id', async (req, res) => {
         }
         currentItem = lockedItemRes.rows[0];
 
-        // 3. Возвращаем количество удаляемой позиции обратно на склад в таблицу warehouse_batches (без некорректного ON CONFLICT без уникального индекса)
-        if (currentItem.income_document_id && currentItem.zaphasti_id) {
-            // Проверяем наличие точной партии на складе
-            const existingBatchCheck = await client.query(`
-                SELECT id FROM warehouse_batches 
-                WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4
-            `, [currentItem.zaphasti_id, sklad_id, currentItem.income_document_id, currentItem.purchase_price || 0]);
-
-            if (existingBatchCheck.rows.length > 0) {
-                // Если партия найдена — просто увеличиваем её остаток
-                await client.query(`
-                    UPDATE warehouse_batches 
-                    SET quantity = quantity + $1 
-                    WHERE id = $2
-                `, [currentItem.quantity, existingBatchCheck.rows[0].id]);
-            } else {
-                // Если партия не найдена — создаем новую запись партии
-                await client.query(`
-                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity)
-                    VALUES ($1, $2, $3, $4, $5)
-                `, [
-                    currentItem.zaphasti_id, 
-                    sklad_id, 
-                    currentItem.income_document_id, 
-                    currentItem.purchase_price || 0, 
-                    currentItem.quantity
-                ]);
-            }
-        } else {
-            // Если income_document_id по какой-то причине не был сохранен, находим любую активную партию этой запчасти на складе для возврата
-            const fallbackBatch = await client.query(`
-                SELECT id FROM warehouse_batches 
-                WHERE zaphasti_id = $1 AND warehouse_id = $2 
-                ORDER BY created_at ASC LIMIT 1
-            `, [currentItem.zaphasti_id, sklad_id]);
-
-            if (fallbackBatch.rows.length > 0) {
-                await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [currentItem.quantity, fallbackBatch.rows[0].id]);
-            } else {
-                // Если партий вообще нет, создаем новую запись прихода-заглушки в warehouse_batches
-                await client.query(`
-                    INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, price_rub, quantity)
-                    VALUES ($1, $2, $3, $4)
-                `, [currentItem.zaphasti_id, sklad_id, currentItem.purchase_price || 0, currentItem.quantity]);
-            }
-        }
-
+               // 3. Возвращаем количество СТРОГО в ту же партию (по batch_id)
+        await returnRealizationQtyToBatch(client, currentItem, sklad_id);
         // 4. Удаляем позицию из realization_items
         const deleteQuery = `DELETE FROM realization_items WHERE id = $1 RETURNING *`;
         const result = await client.query(deleteQuery, [itemId]);
@@ -8558,7 +8510,7 @@ router.put('/move_items/:id', async (req, res) => {
 
     const itemId = req.params.id;
     // <<< ИЗМЕНЕНО (1/3): добавлен batch_id
-    const { quantity, price, currency, description, batch_id } = req.body;
+       const { quantity, price, currency, description, batch_id, zaphasti_id: bodyZaphastiId } = req.body;
     // >>> КОНЕЦ ИЗМЕНЕНИЯ (1/3)
 
     const client = await pool.connect();
@@ -8573,8 +8525,10 @@ router.put('/move_items/:id', async (req, res) => {
         }
 
         const currentItem = itemCheck.rows[0];
-        const move_id = currentItem.move_id;
-        const zaphasti_id = currentItem.zaphasti_id;
+              const move_id = currentItem.move_id;
+        const oldZaphastiId = currentItem.zaphasti_id;
+        const zaphasti_id = bodyZaphastiId || oldZaphastiId;   // новая (или прежняя) запчасть
+        const samePart = String(zaphasti_id) === String(oldZaphastiId);
         const oldQuantity = Number(currentItem.quantity) || 0;
         const oldReceiptId = currentItem.income_document_id;
         const oldSourceBatchId = currentItem.batch_id;
@@ -8643,13 +8597,16 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                     await client.query(`
                         INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
                         VALUES ($1, $2, $3, $4, $5, NOW())
-                    `, [warehouseFromId, zaphasti_id, oldReceiptId, currentItem.price_rub, oldQuantity]);
+                                        `, [warehouseFromId, oldZaphastiId, oldReceiptId, currentItem.price_rub, oldQuantity]);
                 }
             } else if (oldReceiptId) {
                 // запасной вариант для старых строк без batch_id
-                await client.query(
-                    'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4',
-                    [oldQuantity, warehouseFromId, zaphasti_id, oldReceiptId]
+                              await client.query(
+                    `UPDATE warehouse_batches SET quantity = quantity + $1
+                     WHERE id = (SELECT id FROM warehouse_batches
+                                 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                                 ORDER BY id LIMIT 1)`,
+                    [oldQuantity, warehouseFromId, oldZaphastiId, oldReceiptId]
                 );
             }
 
@@ -8658,8 +8615,8 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                 targetBatchCheck = await client.query('SELECT id, quantity FROM warehouse_batches WHERE id = $1 FOR UPDATE', [oldDestBatchId]);
             } else if (oldReceiptId) {
                 targetBatchCheck = await client.query(
-                    'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 FOR UPDATE',
-                    [warehouseToId, zaphasti_id, oldReceiptId]
+                                      'SELECT id, quantity FROM warehouse_batches WHERE warehouse_id = $1 AND zaphasti_id = $2 AND receipt_id = $3 ORDER BY id LIMIT 1 FOR UPDATE',
+                    [warehouseToId, oldZaphastiId, oldReceiptId]
                 );
             }
 
@@ -8677,9 +8634,12 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                     // иначе FK move_items_dest_batch_id_fkey не даёт её удалить
                     await client.query('UPDATE move_items SET dest_batch_id = NULL WHERE dest_batch_id = $1', [targetBatch.id]);
                     await client.query('DELETE FROM warehouse_batches WHERE id = $1', [targetBatch.id]);
-                } else {
+                              } else {
                     await client.query('UPDATE warehouse_batches SET quantity = quantity - $1 WHERE id = $2', [oldQuantity, targetBatch.id]);
                 }
+            } else if (oldDestBatchId) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Нельзя изменить позицию: партия на складе-получателе уже не найдена (товар использован или удалён).' });
             }
         }
 
@@ -8721,9 +8681,11 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
         if (batch_id) {
             chosenBatch = batches.find(b => String(b.id) === String(batch_id) && Number(b.quantity) >= requestedQty);
         } else {
-            chosenBatch = batches.find(b => b.id === oldSourceBatchId && Number(b.quantity) >= requestedQty);
-            if (!chosenBatch) {
-                chosenBatch = batches.find(b => b.receipt_id === oldReceiptId && Number(b.quantity) >= requestedQty);
+                       if (samePart) {
+                chosenBatch = batches.find(b => b.id === oldSourceBatchId && Number(b.quantity) >= requestedQty);
+                if (!chosenBatch) {
+                    chosenBatch = batches.find(b => b.receipt_id === oldReceiptId && Number(b.quantity) >= requestedQty);
+                }
             }
             if (!chosenBatch) {
                 chosenBatch = batches.find(b => Number(b.quantity) >= requestedQty);
@@ -8739,7 +8701,14 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                     : `Нужное количество (${requestedQty} шт.) есть на складе только по частям из нескольких разных партий поступления. Сейчас перемещение одной позицией списывает только из одной партии — уменьшите количество до размера одной партии или создайте отдельную позицию перемещения.`
             });
         }
-
+        const dupCheck = await client.query(
+            'SELECT id FROM move_items WHERE move_id = $1 AND zaphasti_id = $2 AND batch_id = $3 AND id <> $4',
+            [move_id, zaphasti_id, chosenBatch.id, itemId]
+        );
+        if (dupCheck.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Из этой партии позиция уже есть в документе. Измените существующую позицию или удалите её.' });
+        }
         const basePrice = Number(chosenBatch.price_rub);
         
         // Если пользователь явно передал цену в теле запроса — используем её, иначе рассчитываем по базовой цене партии с учетом наценки
@@ -8787,8 +8756,9 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                 "income_document_id" = $7,
                 "markup_percent" = $8,
                 "batch_id" = $9,
-                "dest_batch_id" = $10
-            WHERE id = $11 
+                                "dest_batch_id" = $10,
+                "zaphasti_id" = $12
+            WHERE id = $11
             RETURNING *;
         `;
 
@@ -8802,8 +8772,9 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
             chosenBatch.receipt_id,
             markupPercent,
             chosenBatch.id,
-            newDestBatchId,
-            itemId
+                       newDestBatchId,
+            itemId,
+            zaphasti_id
         ];
 
         const result = await client.query(updateQuery, values);
@@ -9282,7 +9253,7 @@ router.put('/repair_items/:id', async (req, res) => {
    
     const itemId = req.params.id;
     // <<< ИЗМЕНЕНО (1/4): добавлен batch_id
-    const { quantity, description, price, batch_id } = req.body;
+       const { quantity, description, price, batch_id, zaphast_id: bodyZaphastId } = req.body;
     // >>> КОНЕЦ ИЗМЕНЕНИЯ (1/4)
     const requestedQty = Number(quantity);
 
@@ -9302,8 +9273,9 @@ router.put('/repair_items/:id', async (req, res) => {
         }
 
         const currentItem = itemCheck.rows[0];
-        const repair_id = currentItem.repair_id;
-        const zaphast_id = currentItem.zaphast_id;
+               const repair_id = currentItem.repair_id;
+        const oldZaphastId = currentItem.zaphast_id;
+        const zaphast_id = bodyZaphastId || oldZaphastId;   // новая (или прежняя) запчасть
         const oldQuantity = Number(currentItem.quantity);
         const oldReceiptId = currentItem.receipt_id;
         const oldBatchId = currentItem.batch_id; // Точный ID старой партии
@@ -9359,14 +9331,16 @@ router.put('/repair_items/:id', async (req, res) => {
                     await client.query(`
                         INSERT INTO warehouse_batches (warehouse_id, zaphasti_id, receipt_id, price_rub, quantity, created_at)
                         VALUES ($1, $2, $3, $4, $5, NOW())
-                    `, [warehouseId, zaphast_id, oldReceiptId || null, currentItem.price, oldQuantity]);
+                                        `, [warehouseId, oldZaphastId, oldReceiptId || null, currentItem.price, oldQuantity]);
                 }
-            } else if (oldReceiptId) {
+                       } else if (oldReceiptId) {
                 await client.query(`
                     UPDATE warehouse_batches 
                     SET quantity = quantity + $1 
-                    WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
-                `, [oldQuantity, warehouseId, zaphast_id, oldReceiptId]);
+                    WHERE id = (SELECT id FROM warehouse_batches
+                                WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                                ORDER BY id LIMIT 1)
+                `, [oldQuantity, warehouseId, oldZaphastId, oldReceiptId]);
             }
         }
 
@@ -9585,10 +9559,12 @@ router.delete('/repair_items/:id', async (req, res) => {
             }
         } else {
             // Запасной fallback на случай старых записей до добавления batch_id
-            await client.query(`
+                        await client.query(`
                 UPDATE warehouse_batches 
                 SET quantity = quantity + $1 
-                WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                WHERE id = (SELECT id FROM warehouse_batches
+                            WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                            ORDER BY id LIMIT 1)
             `, [quantityToReturn, warehouseId, zaphast_id, receiptId]);
         }
 
@@ -11386,8 +11362,11 @@ router.delete('/:entity/:id', async (req, res) => {
                             );
                         }
                     } else {
-                        await client.query(
-                            'UPDATE warehouse_batches SET quantity = quantity + $1 WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4',
+                                             await client.query(
+                            `UPDATE warehouse_batches SET quantity = quantity + $1
+                             WHERE id = (SELECT id FROM warehouse_batches
+                                         WHERE warehouse_id = $2 AND zaphasti_id = $3 AND receipt_id = $4
+                                         ORDER BY id LIMIT 1)`,
                             [qty, warehouseId, item.zaphast_id, item.receipt_id]
                         );
                     }
@@ -11401,36 +11380,9 @@ router.delete('/:entity/:id', async (req, res) => {
             const skladId = realInfo.rows[0]?.sklad_id;
             const itemsRes = await client.query('SELECT * FROM realization_items WHERE realization_id = $1 FOR UPDATE', [id]);
 
-            for (const item of itemsRes.rows) {
-                const qty = Number(item.quantity) || 0;
-                if (qty > 0 && skladId) {
-                    if (item.income_document_id && item.zaphasti_id) {
-                        const b = await client.query(
-                            'SELECT id FROM warehouse_batches WHERE zaphasti_id = $1 AND warehouse_id = $2 AND receipt_id = $3 AND price_rub = $4',
-                            [item.zaphasti_id, skladId, item.income_document_id, item.purchase_price || 0]
-                        );
-                        if (b.rows.length > 0) {
-                            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, b.rows[0].id]);
-                        } else {
-                            await client.query(
-                                'INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, receipt_id, price_rub, quantity) VALUES ($1, $2, $3, $4, $5)',
-                                [item.zaphasti_id, skladId, item.income_document_id, item.purchase_price || 0, qty]
-                            );
-                        }
-                    } else {
-                        const fb = await client.query(
-                            'SELECT id FROM warehouse_batches WHERE zaphasti_id = $1 AND warehouse_id = $2 ORDER BY created_at ASC LIMIT 1',
-                            [item.zaphasti_id, skladId]
-                        );
-                        if (fb.rows.length > 0) {
-                            await client.query('UPDATE warehouse_batches SET quantity = quantity + $1 WHERE id = $2', [qty, fb.rows[0].id]);
-                        } else {
-                            await client.query(
-                                'INSERT INTO warehouse_batches (zaphasti_id, warehouse_id, price_rub, quantity) VALUES ($1, $2, $3, $4)',
-                                [item.zaphasti_id, skladId, item.purchase_price || 0, qty]
-                            );
-                        }
-                    }
+                    for (const item of itemsRes.rows) {
+                if (skladId) {
+                    await returnRealizationQtyToBatch(client, item, skladId);
                 }
             }
             await client.query('DELETE FROM realization_items WHERE realization_id = $1', [id]);

@@ -4525,7 +4525,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
             id: null
         };
     }
-
+   
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
         // >>> ДОБАВЛЕНО: остатки на складе-источнике для подсказки в списке запчастей
@@ -4762,7 +4762,27 @@ async function openMoveItemsForm(item = null, parentId = null) {
             }
         });
     });
+        // ===== Запоминание слова поиска запчасти (в рамках документа) =====
+    window.__moveSearchSeed = window.__moveSearchSeed || {};
+    const partBox = formElement.querySelector('.searchable-select-container');
+    if (partBox && !isPosted) {
+        const pInput = partBox.querySelector('.searchable-select-input');
+        const pDropdown = partBox.querySelector('.searchable-select-dropdown');
 
+        // запоминаем то, что печатали в поиске
+        pInput.addEventListener('input', () => {
+            if (parentId && pInput.value.trim()) window.__moveSearchSeed[parentId] = pInput.value.trim();
+        });
+
+        // новая позиция: подставляем в поиск прошлое слово ("масло"), запчасть при этом НЕ выбрана
+        const seed = parentId ? (window.__moveSearchSeed[parentId] || '') : '';
+        if (!item.id && seed) {
+            pInput.value = seed;
+            pInput.dispatchEvent(new Event('input'));   // отфильтровать список по слову
+            pDropdown.style.display = 'none';           // список откроется по клику
+            pInput.addEventListener('focus', () => setTimeout(() => pInput.select(), 0), { once: true });
+        }
+    }
     const zaphastiSelect = formElement.querySelector('#zaphasti-select');
     if (zaphastiSelect) {
         zaphastiSelect.addEventListener('change', async () => {
@@ -5231,6 +5251,28 @@ async function openRepairItemsForm(item = null, parentId = null) {
             }
         });
     });
+// ===== Запоминание слова поиска запчасти (в рамках документа) =====
+window.__repairSearchSeed = window.__repairSearchSeed || {};
+const partBox = formElement.querySelector('.searchable-select-container');
+if (partBox && !isPosted) {
+    const pInput = partBox.querySelector('.searchable-select-input');
+    const pDropdown = partBox.querySelector('.searchable-select-dropdown');
+
+    // запоминаем то, что печатали в поиске
+    pInput.addEventListener('input', () => {
+        if (parentId && pInput.value.trim()) window.__repairSearchSeed[parentId] = pInput.value.trim();
+    });
+
+    // новая позиция: подставляем в поиск прошлое слово ("масло"), запчасть при этом НЕ выбрана
+    const seed = parentId ? (window.__repairSearchSeed[parentId] || '') : '';
+    if (!item.id && seed) {
+        pInput.value = seed;
+        pInput.dispatchEvent(new Event('input'));   // отфильтровать список по слову
+        pDropdown.style.display = 'none';           // список откроется по клику
+        pInput.addEventListener('focus', () => setTimeout(() => pInput.select(), 0), { once: true });
+    }
+}
+
 // ===== Выбор партии =====
 const zaphastiSelect = formElement.querySelector('[name="zaphast_id"]');
 const batchInput = formElement.querySelector('#batch-select');
@@ -5521,8 +5563,12 @@ const allowedFields = ['zaphasti_id', 'quantity', 'markup_percent', 'is_manual_p
         if (col.field === 'currency' && !val) {
             val = 'Рубль ПМР';
         }
-if (col.field === 'markup_percent' && !val) {
-    val = 30;
+if (col.field === 'markup_percent') {
+    if (realSkladId && Number(realSkladId) !== 1) {
+        val = 0;                       // не центральный склад: наценка 0
+    } else if (val === '' || val === null || val === undefined) {
+        val = 30;                      // центральный: как было
+    }
 }
         let inputHtml = '';
         let fieldReadonly = col.readonly;
@@ -5706,6 +5752,28 @@ if (col.field === 'markup_percent' && !val) {
             }
         });
     }
+
+        // ===== Запоминание слова поиска запчасти (в рамках документа) =====
+    window.__realizationSearchSeed = window.__realizationSearchSeed || {};
+    const partBox = formElement.querySelector('.searchable-select-container');
+    if (partBox && !isPosted) {
+        const pInput = partBox.querySelector('.searchable-select-input');
+        const pDropdown = partBox.querySelector('.searchable-select-dropdown');
+
+        // запоминаем то, что печатали в поиске
+        pInput.addEventListener('input', () => {
+            if (parentId && pInput.value.trim()) window.__realizationSearchSeed[parentId] = pInput.value.trim();
+        });
+
+        // новая позиция: подставляем в поиск прошлое слово ("масло"), запчасть при этом НЕ выбрана
+        const seed = parentId ? (window.__realizationSearchSeed[parentId] || '') : '';
+        if (!item.id && seed) {
+            pInput.value = seed;
+            pInput.dispatchEvent(new Event('input'));   // отфильтровать список по слову
+            pDropdown.style.display = 'none';           // список откроется по клику
+            pInput.addEventListener('focus', () => setTimeout(() => pInput.select(), 0), { once: true });
+        }
+    }
        // ===== Выбор партии =====
     const batchInput = formElement.querySelector('#batch-select');
     const batchBtn = formElement.querySelector('#batch-btn');
@@ -5718,7 +5786,8 @@ if (col.field === 'markup_percent' && !val) {
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmtDate = (d) => { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('ru-RU'); };
 
-    function isCurrentBatch(b) {
+        function isCurrentBatch(b) {
+        if (isEditMode && item.batch_id) return String(b.batch_id) === String(item.batch_id);
         return isEditMode &&
             item.income_document_id !== null && item.income_document_id !== undefined && item.income_document_id !== '' &&
             String(b.receipt_id) === String(item.income_document_id) &&
