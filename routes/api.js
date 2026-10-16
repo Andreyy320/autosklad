@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const DEFAULT_MARKUP_PERCENT = 30; // потом можно вынести в settings-таблицу
 const TOKEN_TTL_SEC = 11 * 60 * 60; // 15 часов = 54000 секунд
-
+const CENTRAL_SKLAD_ID = 1; // центральный склад (тот же id, что и у кубышки)
 const upload = multer({
     dest: path.join(__dirname, '../uploads/'),
     limits: { fileSize: 10 * 1024 * 1024 }, 
@@ -8380,28 +8380,27 @@ router.post('/move_items', async (req, res) => {
         }
         // >>> КОНЕЦ ИЗМЕНЕНИЯ (1/3)
 
-        // 1.1. Наценка берется только со склада-получателя. Если у склада не указано — 0%.
-        const markupQuery = `
-            SELECT COALESCE(markup_percent, 0) as markup_percent
-            FROM skladi
-            WHERE id = $1
-        `;
-        const markupRes = await client.query(markupQuery, [warehouseToId]);
+       // 1.1. Наценка действует ТОЛЬКО если склад-источник — центральный.
+// Со всех остальных складов товар уходит по цене партии, без наценки.
+let markupPercent = 0;
+if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
+    const markupRes = await client.query(
+        'SELECT COALESCE(markup_percent, 0) AS markup_percent FROM skladi WHERE id = $1',
+        [warehouseToId]
+    );
+    if (markupRes.rows.length > 0) {
+        markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
+    }
 
-        let markupPercent = 0;
-        if (markupRes.rows.length > 0) {
-            markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
-        }
-
-        // >>> ДОБАВЛЕНО: особый процент запчасти (если задан) заменяет процент склада
-        const specRes = await client.query(
-            'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
-            [zaphasti_id]
-        );
-        if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
-            markupPercent = Number(specRes.rows[0].move_markup_percent);
-        }
-        // <<< КОНЕЦ ДОБАВЛЕННОГО
+    // особый % запчасти заменяет процент склада (тоже только с центрального)
+    const specRes = await client.query(
+        'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
+        [zaphasti_id]
+    );
+    if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
+        markupPercent = Number(specRes.rows[0].move_markup_percent);
+    }
+}
 
         // <<< ИЗМЕНЕНО (2/3): берём партии со склада-источника.
         // Если выбрана конкретная партия - только она, иначе все по порядку (FIFO).
@@ -8612,27 +8611,27 @@ router.put('/move_items/:id', async (req, res) => {
             return res.status(400).json({ error: 'Количество товара должно быть больше нуля.' });
         }
 
-        // 2.1. Наценка берется только со склада-получателя (как в POST). Если не указано — 0%.
-        const markupQuery = `
-            SELECT COALESCE(markup_percent, 0) as markup_percent
-            FROM skladi
-            WHERE id = $1
-        `;
-        const markupRes = await client.query(markupQuery, [warehouseToId]);
-        let markupPercent = 0;
-        if (markupRes.rows.length > 0) {
-            markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
-        }
+       // 1.1. Наценка действует ТОЛЬКО если склад-источник — центральный.
+// Со всех остальных складов товар уходит по цене партии, без наценки.
+let markupPercent = 0;
+if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
+    const markupRes = await client.query(
+        'SELECT COALESCE(markup_percent, 0) AS markup_percent FROM skladi WHERE id = $1',
+        [warehouseToId]
+    );
+    if (markupRes.rows.length > 0) {
+        markupPercent = Number(markupRes.rows[0].markup_percent) || 0;
+    }
 
-        // >>> ДОБАВЛЕНО: особый процент запчасти (если задан) заменяет процент склада
-        const specRes = await client.query(
-            'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
-            [zaphasti_id]
-        );
-        if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
-            markupPercent = Number(specRes.rows[0].move_markup_percent);
-        }
-        // <<< КОНЕЦ ДОБАВЛЕННОГО
+    // особый % запчасти заменяет процент склада (тоже только с центрального)
+    const specRes = await client.query(
+        'SELECT move_markup_percent FROM zaphasti WHERE id = $1',
+        [zaphasti_id]
+    );
+    if (specRes.rows.length > 0 && specRes.rows[0].move_markup_percent !== null) {
+        markupPercent = Number(specRes.rows[0].move_markup_percent);
+    }
+}
 
         // 3. ШАГ ОТКАТА СТАРЫХ ЗНАЧЕНИЙ — по точным batch_id/dest_batch_id
         if (oldQuantity > 0) {
