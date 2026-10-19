@@ -10665,6 +10665,11 @@ router.post('/:entity', async (req, res) => {
             });
         }
  
+             if (entity === 'accidents' && (req.body.car_id === undefined || req.body.car_id === null || req.body.car_id === '')) {
+            browserLog('[ERROR] ДТП без car_id');
+            return res.status(400).json({ error: 'Не выбрана машина', serverLogs: logsBuffer });
+        }
+
         // Открываем транзакцию — всё, что ниже (проверки, генерация номера, вставка,
         // лог) либо целиком применится, либо целиком откатится при ошибке.
         await client.query('BEGIN');

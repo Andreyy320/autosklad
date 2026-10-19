@@ -6195,6 +6195,12 @@ async function openAccidentForm(entity, item = null, parentId = null) {
 
             try {
                 const isEdit = item && item.id;
+                                if (!isEdit && !data.car_id) {
+                    showAppNotification('Выберите машину', 'error');
+                    isSubmitting = false;
+                    if (saveButton) saveButton.disabled = false;
+                    return;
+                }
                 const url = isEdit ? `/api/accidents/${item.id}` : `/api/accidents`;
                 const method = isEdit ? 'PUT' : 'POST';
                 const currentUserId = localStorage.getItem('currentUserId') || '';
