@@ -624,7 +624,7 @@ async function loadReferenceMaps() {
         const tbody = document.getElementById('logs-table-body');
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" style="text-align: center;">Загрузка...</td></tr>`;
 
-        console.log(`Фронтенд: отправляем запрос на ${endpoint}`);
+        
 
         try {
             const url = `${endpoint}?page=${LOGS_PAGER.page}&limit=${LOGS_PAGER.limit}`;
@@ -636,7 +636,7 @@ async function loadReferenceMaps() {
             }
 
             const logs = await response.json();
-            console.log(`Фронтенд: получено записей от сервера:`, logs);
+           
 
             const totalHeader = parseInt(response.headers.get('X-Total-Count'), 10);
             LOGS_PAGER.total = Number.isFinite(totalHeader) ? totalHeader : logs.length;

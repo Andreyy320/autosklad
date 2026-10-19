@@ -6385,12 +6385,7 @@ router.get('/money_receipts_detail', async (req, res) => {
         
         const result = await pool.query(cleanQuery, queryParams);
         
-        result.rows.forEach(r => {
-            if (r.doc_number && r.doc_number.startsWith('ПЕРЕМЕЩЕНИЕ')) {
-                console.log(`🔍 [DEBUG MOVE ITEM]: Документ: ${r.doc_number}, Товар: ${r.item_name}, Кол-во: ${r.quantity}, Закупка: ${r.purchase_price}, Итог с наценкой: ${r.total_rub}`);
-            }
-        });
-
+       
         res.json(result.rows);
 
     } catch (err) {
@@ -8375,10 +8370,6 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
         // >>> КОНЕЦ ИЗМЕНЕНИЯ (2/3)
 
         const totalAvailableStock = batches.reduce((sum, b) => sum + Number(b.quantity), 0);
-
-        batches.forEach((b, idx) => {
-            console.log(` Партия #${idx + 1} (Batch ID: ${b.id}) | Приход ID: ${b.receipt_id} | Базовая цена: ${b.price_rub} руб. | Доступно на складе: ${b.quantity} шт.`);
-        });
 
         // <<< ИЗМЕНЕНО (3/3): понятное сообщение, если выбрана партия
         if (requestedQty > totalAvailableStock) {
@@ -10613,10 +10604,7 @@ async function writeAuditLog(client, req, data) {
 
 router.post('/:entity', async (req, res) => {
     const logsBuffer = []; // Буфер для сбора логов и отправки в браузер
-    const browserLog = (msg) => {
-        console.log(msg);
-        logsBuffer.push(msg);
-    };
+   const browserLog = () => {};
  
     browserLog(`\n----------------------------------------`);
     browserLog(`[POST REQUEST] Сущность: ${req.params.entity}`);
