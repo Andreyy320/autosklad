@@ -10786,7 +10786,16 @@ router.post('/:entity', async (req, res) => {
             return res.status(400).json({ error: 'Нет данных для сохранения', serverLogs: logsBuffer });
         }
  
-        const processedValues = values.map(val => val === '' ? null : val);
+                const processedValues = values.map(val => val === '' ? null : val);
+
+        if (entity === 'vidy_rabot') {
+            const priceIdx = keys.indexOf('price');
+            const priceVal = priceIdx === -1 ? null : processedValues[priceIdx];
+            if (priceVal === null || isNaN(Number(priceVal))) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Укажите стоимость вида работы', serverLogs: logsBuffer });
+            }
+        }
         const columns = keys.map(k => `"${k}"`).join(', ');
         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
  
@@ -11079,7 +11088,15 @@ router.put('/:entity/:id', async (req, res) => {
         }
 
         const setClause = keys.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
-        const processedValues = values.map(val => (val === '' || val === undefined ? null : val));
+                const processedValues = values.map(val => (val === '' || val === undefined ? null : val));
+
+        if (entity === 'vidy_rabot') {
+            const priceIdx = keys.indexOf('price');
+            if (priceIdx !== -1 && (processedValues[priceIdx] === null || isNaN(Number(processedValues[priceIdx])))) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Стоимость не может быть пустой', serverLogs: logsBuffer });
+            }
+        }
 
         const query = `UPDATE "${entity}" SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *;`;
         const result = await client.query(query, [...processedValues, id]);

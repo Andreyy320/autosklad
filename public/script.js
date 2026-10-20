@@ -3474,6 +3474,17 @@ async function openEntityForm(entity, item = null, parentId = null) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+                if (entity === 'vidy_rabot') {
+            const priceNum = Number(String(data.price ?? '').replace(',', '.'));
+            if (data.price === undefined || String(data.price).trim() === '' || isNaN(priceNum)) {
+                showAppNotification('Укажите стоимость вида работы числом', 'error');
+                if (saveButton) saveButton.disabled = false;
+                isSubmitting = false;
+                return;
+            }
+            data.price = priceNum;
+        }
+
         let pendingPasswordChange = null;
         if ((entity === 'users' || entity === 'employees') && item && item.id && Object.prototype.hasOwnProperty.call(data, 'password_hash')) {
             const newPasswordValue = (data.password_hash || '').trim();
