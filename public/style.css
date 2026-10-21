@@ -115,7 +115,7 @@ body, html {
 }
 
 .sidebar {
-    width: 220px;
+    width: 191px;
     background: #ffffff;
     overflow-y: auto;          
     overflow-x: hidden;
@@ -140,7 +140,7 @@ body, html {
 
 .accordion-header span {
     color: var(--text-header);
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 700;
@@ -153,11 +153,11 @@ body, html {
 }
 
 .nav-link {
-    padding: 5px 10px 5px 16px;
+        padding: 6px 6px 6px 14px;
     color: #455a64;
     text-decoration: none;
     display: block;
-    font-size: 12px;
+    font-size: 13px;
     border-bottom: 1px solid #f9f9f9;
     border-left: 3px solid transparent;
 }

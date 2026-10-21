@@ -413,7 +413,11 @@ async function fetchReferenceData(refEntity) {
         
         if (response.ok) {
             const data = await response.json();
-            return Array.isArray(data) ? data : (data.data || data.items || []);
+            const list = Array.isArray(data) ? data : (data.data || data.items || []);
+if (refEntity === 'zaphasti') {
+    list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru', { sensitivity: 'base', numeric: true }));
+}
+return list;
         } else {
             const errorText = await response.text();
             console.warn(`Справочник ${refEntity} вернул статус ${response.status}:`, errorText);
@@ -1225,7 +1229,7 @@ render: (item) => {
             <td>${item.source_info || ''}</td>
             <td>${item.dest_info || ''}</td>
             <td style="text-align: right;">${item.qty || 0}</td>
-            <td style="text-align: right;">${item.price !== undefined ? Number(item.price).toFixed(2) : '0.00'}</td>
+                     <td style="text-align: right;">${item.price !== undefined && item.price !== null ? Number(item.price).toFixed(2) : ''}</td>
             <td style="text-align: right; font-weight: bold;">${item.sum !== undefined ? Number(item.sum).toFixed(2) : '0.00'}</td>
             <td>${item.description || ''}</td>
         `;
@@ -1239,7 +1243,7 @@ render: (item) => {
         { field: 'code', label: 'Код', width: '90px', align: 'center' },
         { field: 'name', label: 'Наименование', width: '220px' },
         { field: 'document_name', label: 'Документ прихода / перемещения', width: '240px' },
-        { field: 'doc_date', label: 'Дата', width: '100px', align: 'center' },
+                { field: 'doc_date', label: 'Дата', width: '140px', align: 'center' },
         { field: 'supplier_name', label: 'Поставщик', width: '160px' },
         { field: 'qty', label: 'Кол-во', width: '70px', align: 'right' },
         { field: 'unit', label: 'Ед. изм.', width: '60px', align: 'center' },
@@ -1249,7 +1253,12 @@ render: (item) => {
     ],
     render: (item) => {
         if (!item) return '';
-        let formattedDate = item.doc_date ? new Date(item.doc_date).toLocaleDateString('ru-RU') : '';
+                let formattedDate = item.doc_date
+            ? new Date(item.doc_date).toLocaleString('ru-RU', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+              }).replace(',', '')
+            : '';
         
         let rawPurchasePrice = item.purchase_price !== undefined ? Number(item.purchase_price) : 0;
         let retailPrice = item.retail_price !== undefined ? item.retail_price : (rawPurchasePrice * 1.3).toFixed(2);
@@ -1270,28 +1279,32 @@ render: (item) => {
     }
     },
 
-    stock_movement: {
+       stock_movement: {
         title: 'Движение запчастей',
-        columns: [
-            { field: 'artikul', label: 'Артикул', width: '110px' },
-            { field: 'code', label: 'Код', width: '90px', align: 'center' },
-            { field: 'name', label: 'Наименование', width: '250px' },
-            { field: 'manufacturer', label: 'Производитель', width: '120px' },
-            { field: 'sklad', label: 'Склад', width: '120px' },
-            { field: 'unit', label: 'Ед.изм', width: '60px', align: 'center' },
-            { field: 'income_qty', label: 'Кол-во', width: '60px', align: 'right' },
-            { field: 'income_sum', label: 'Сумма', width: '80px', align: 'right' },
-            { field: 'outcome_qty', label: 'Кол-во', width: '60px', align: 'right' },
-            { field: 'outcome_sum', label: 'Сумма', width: '80px', align: 'right' },
-            { field: 'end_qty', label: 'Кол-во', width: '60px', align: 'right' },
-            { field: 'end_sum', label: 'Сумма', width: '80px', align: 'right' },
-            { field: 'description', label: 'Описание', width: '150px' }
+               columns: [
+            { field: 'artikul', label: 'Артикул', width: '30px' },
+            { field: 'code', label: 'Код', width: '30px', align: 'center' },
+            { field: 'name', label: 'Наименование', width: '100px' },
+            { field: 'manufacturer', label: 'Производитель', width: '40px' },
+            { field: 'sklad', label: 'Склад', width: '60px' },
+            { field: 'unit', label: 'Ед.изм', width: '30px', align: 'center' },
+            { field: 'start_qty', label: 'Было', width: '30px', align: 'right' },
+            { field: 'start_sum', label: 'Сумма', width: '30px', align: 'right' },
+            { field: 'income_qty', label: 'Пришло', width: '30px', align: 'right' },
+            { field: 'income_sum', label: 'Сумма', width: '30px', align: 'right' },
+            { field: 'outcome_qty', label: 'Ушло', width: '30px', align: 'right' },
+            { field: 'outcome_sum', label: 'Сумма', width: '30px', align: 'right' },
+            { field: 'end_qty', label: 'Стало', width: '30px', align: 'right' },
+            { field: 'end_sum', label: 'Сумма', width: '30px', align: 'right' },
+                        { field: 'description', label: 'Описание', width: '90px' }
         ],
         rowAttributes: (item) => {
             return `data-zaphasti-id="${item.id || item.zaphasti_id || ''}" data-warehouse-id="${item.warehouse_id || ''}"`;
         },
         render: (item) => {
             if (!item) return '';
+                        const q = (v) => Number(v || 0).toFixed(2);
+            const s = (v) => Number(v || 0).toFixed(2);
 
             return `
                 <td>${item.artikul || ''}</td>
@@ -1300,19 +1313,23 @@ render: (item) => {
                 <td>${item.manufacturer || ''}</td>
                 <td>${item.sklad || ''}</td>
                 <td style="text-align: center;">${item.unit || 'шт'}</td>
-                
-                <!-- Приход -->
-                <td style="text-align: right; color: #006600;">${item.income_qty || ''}</td>
-                <td style="text-align: right; color: #006600;">${item.income_sum ? Number(item.income_sum).toFixed(2) : ''}</td>
-                
-                <!-- Расход -->
-                <td style="text-align: right; color: #b30000;">${item.outcome_qty || ''}</td>
-                <td style="text-align: right; color: #b30000;">${item.outcome_sum ? Number(item.outcome_sum).toFixed(2) : ''}</td>
-                
-                <!-- Остаток на конец -->
-                <td style="text-align: right; font-weight: bold;">${item.end_qty !== undefined ? item.end_qty : 0}</td>
-                <td style="text-align: right; font-weight: bold;">${item.end_sum !== undefined ? Number(item.end_sum).toFixed(2) : '0.00'}</td>
-                
+
+                <!-- Было -->
+                <td style="text-align: right; color: #475569;">${q(item.start_qty)}</td>
+                <td style="text-align: right; color: #475569;">${s(item.start_sum)}</td>
+
+                <!-- Пришло -->
+                <td style="text-align: right; color: #006600;">${q(item.income_qty)}</td>
+                <td style="text-align: right; color: #006600;">${s(item.income_sum)}</td>
+
+                <!-- Ушло -->
+                <td style="text-align: right; color: #b30000;">${q(item.outcome_qty)}</td>
+                <td style="text-align: right; color: #b30000;">${s(item.outcome_sum)}</td>
+
+                <!-- Стало -->
+                <td style="text-align: right; font-weight: bold;">${q(item.end_qty)}</td>
+                <td style="text-align: right; font-weight: bold;">${s(item.end_sum)}</td>
+
                 <td>${item.description || ''}</td>
             `;
         }
@@ -4543,6 +4560,7 @@ async function openMoveItemsForm(item = null, parentId = null) {
     const stockMap = {};
     let stockLoaded = false;
     let realSkladId = null;   // склад-источник (нужен и для выбора партии)
+        let realMoveDate = null;  // дата документа перемещения
     try {
         if (parentId) {
             // 1) берём документ перемещения из уже выбранной строки
@@ -4562,8 +4580,12 @@ async function openMoveItemsForm(item = null, parentId = null) {
                 }
             }
             if (curMove && curMove.warehouse_from_id) {
-                realSkladId = curMove.warehouse_from_id;
-                const stRes = await fetch(`/api/stock_balances?warehouse_id=${curMove.warehouse_from_id}`);
+                                realSkladId = curMove.warehouse_from_id;
+                realMoveDate = curMove.date || null;
+                                const dateQs = realMoveDate
+                    ? `&date=${encodeURIComponent(String(realMoveDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}`
+                    : '';
+                const stRes = await fetch(`/api/available_parts?warehouse_id=${curMove.warehouse_from_id}${dateQs}`);
                 if (stRes.ok) {
                     (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
                     stockLoaded = true;
@@ -4863,7 +4885,8 @@ async function openMoveItemsForm(item = null, parentId = null) {
         setBatch('');
         if (!zId || !realSkladId) return;
         try {
-            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1`);
+                       const dateQs = realMoveDate ? `&date=${encodeURIComponent(String(realMoveDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}` : '';
+            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1${dateQs}`);
             if (!r.ok || mySeq !== batchLoadSeq) return;
             const d = await r.json();
             const list = d.batches || [];
@@ -5036,7 +5059,8 @@ async function openRepairItemsForm(item = null, parentId = null) {
        // >>> ДОБАВЛЕНО: остатки на складе ремонта для подсказки в списке запчастей
     const stockMap = {};
     let stockLoaded = false;
-    let repairSkladId = null;   // <<< НОВОЕ
+    let repairSkladId = null;
+let repairDocDate = null;   // дата документа ремонта
     try {
         if (parentId) {
             const repsRes = await fetch('/api/repairs');
@@ -5045,8 +5069,12 @@ async function openRepairItemsForm(item = null, parentId = null) {
                 const repsList = Array.isArray(repsData) ? repsData : (repsData.data || repsData.items || []);
                 const curRepair = repsList.find(r => String(r.id) === String(parentId));
                 if (curRepair && curRepair.warehouse_id) {
-                    repairSkladId = curRepair.warehouse_id;   // <<< НОВОЕ (этой строки не хватало)
-                    const stRes = await fetch(`/api/stock_balances?warehouse_id=${curRepair.warehouse_id}`);
+                   repairSkladId = curRepair.warehouse_id;
+repairDocDate = curRepair.doc_date || null;
+const dateQs = repairDocDate
+    ? `&date=${encodeURIComponent(String(repairDocDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}`
+    : '';
+const stRes = await fetch(`/api/available_parts?warehouse_id=${curRepair.warehouse_id}${dateQs}`);
                     if (stRes.ok) {
                         (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
                         stockLoaded = true;
@@ -5340,7 +5368,8 @@ async function loadBatches(zId) {
     setBatch('');
     if (!zId || !repairSkladId) return;
     try {
-        const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(repairSkladId)}&with_empty=1`);
+       const dateQs = repairDocDate ? `&date=${encodeURIComponent(String(repairDocDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}` : '';
+const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(repairSkladId)}&with_empty=1${dateQs}`);
         if (!r.ok || mySeq !== batchLoadSeq) return;
         const d = await r.json();
 
@@ -5506,10 +5535,10 @@ async function openRealizationItemsForm(item = null, parentId = null) {
 
     const isPosted = item && (item.is_posted === true || item.is_posted === 'true' || item.is_posted === 1);
 
-    // >>> ДОБАВЛЕНО: остатки на складе реализации для подсказки в списке запчастей
        const stockMap = {};
     let stockLoaded = false;
-    let realSkladId = null;          // <<< НОВОЕ
+    let realSkladId = null;
+    let realDocDate = null;   // дата документа реализации
     try {
         if (parentId) {
             const realsRes = await fetch('/api/realizations');
@@ -5517,12 +5546,18 @@ async function openRealizationItemsForm(item = null, parentId = null) {
                 const realsData = await realsRes.json();
                 const realsList = Array.isArray(realsData) ? realsData : (realsData.data || realsData.items || []);
                 const curReal = realsList.find(r => String(r.id) === String(parentId));
-                 if (curReal && curReal.sklad_id) {
-                    realSkladId = curReal.sklad_id;   // <<< НОВОЕ
-                    const stRes = await fetch(`/api/stock_balances?warehouse_id=${curReal.sklad_id}`);
+                if (curReal && curReal.sklad_id) {
+                    realSkladId = curReal.sklad_id;
+                    realDocDate = curReal.doc_date || null;
+                    const dateQs = realDocDate
+                        ? `&date=${encodeURIComponent(String(realDocDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}`
+                        : '';
+                    const stRes = await fetch(`/api/available_parts?warehouse_id=${curReal.sklad_id}${dateQs}`);
                     if (stRes.ok) {
                         (await stRes.json()).forEach(r => { stockMap[r.id] = Number(r.qty) || 0; });
                         stockLoaded = true;
+                    } else {
+                        console.warn('Остатки не загружены, статус:', stRes.status);
                     }
                 }
             }
@@ -5840,7 +5875,8 @@ if (col.field === 'markup_percent') {
         setBatch('');
         if (!zId || !realSkladId) return;
         try {
-            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1`);
+                        const dateQs = realDocDate ? `&date=${encodeURIComponent(String(realDocDate).replace('T', ' ').replace(/(\.\d+)?Z$/, '').substring(0, 19))}` : '';
+            const r = await fetch(`/api/available_batches?zaphasti_id=${encodeURIComponent(zId)}&warehouse_id=${encodeURIComponent(realSkladId)}&with_empty=1${dateQs}`);
             if (!r.ok || mySeq !== batchLoadSeq) return;
             const d = await r.json();
 
@@ -7945,6 +7981,22 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
 
         if (data.is_posted !== undefined && data.is_posted !== '') {
             data.is_posted = data.is_posted === 'true' || data.is_posted === true || data.is_posted === '1' || data.is_posted === 1;
+        }
+
+        if (entity === 'repairs') {
+            const carId = String(data.car_id || '').trim();
+            const mileageNum = Number(String(data.mileage || '').replace(/\s/g, '').replace(',', '.'));
+            let validationError = '';
+            if (!carId) validationError = 'Выберите машину';
+            else if (!data.mileage || !isFinite(mileageNum) || mileageNum <= 0) validationError = 'Укажите пробег (число больше нуля)';
+
+            if (validationError) {
+                showAppNotification(validationError, 'error');
+                isSubmitting = false;
+                if (saveButton) saveButton.disabled = false;
+                return;
+            }
+            data.mileage = mileageNum;
         }
 
         if (entity === 'repair_items') {
@@ -14472,7 +14524,8 @@ async function loadDetailData(entity, parentId) {
             zId = parts[0];
             wId = parts[1];
         }
-        fetchUrl = `/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}`;
+                const dParam = (parentId && typeof parentId === 'object' && parentId.date) ? `&date=${encodeURIComponent(parentId.date)}` : '';
+        fetchUrl = `/api/stock_batches?zaphasti_id=${zId}&warehouse_id=${wId}${dParam}`;
     } else if (entity === 'part_movement_details') {
         let zId = parentId && typeof parentId === 'object' ? (parentId.zaphasti_id || parentId.id) : '';
         let wId = parentId && typeof parentId === 'object' ? (parentId.warehouse_id || parentId.sklad_id || parentId.id_sklad) : '';
@@ -15487,7 +15540,9 @@ function setDetailToolbarVisible(visible) {
         // минимальная ширина по числу видимых колонок
         let cols = 0;
         thead.querySelectorAll('tr').forEach(tr => { cols = Math.max(cols, visibleCells(tr).length); });
-        if (cols) table.style.minWidth = (cols * COL_MIN) + 'px';
+              let colMin = COL_MIN;
+        if (table.id === 'data-table' && typeof currentEntity !== 'undefined' && currentEntity === 'stock_movement') colMin = 70;
+        if (cols) table.style.minWidth = (cols * colMin) + 'px';
 
         // липкая шапка ...
         let top = 0;
