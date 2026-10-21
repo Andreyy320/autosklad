@@ -1,0 +1,16 @@
+@media (max-width: 900px) {
+    body { padding: 8px; }
+    .container { padding: 12px; border-radius: 8px; }
+    h1 { font-size: 18px; margin: 4px 0 12px; }
+    .back-btn { padding: 9px 14px; }
+
+    .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn { flex-shrink: 0; padding: 9px 14px; }
+
+    .container table { display: block; overflow: auto; -webkit-overflow-scrolling: touch; max-height: 70dvh; min-width: 0; }
+    .container table th, .container table td { min-width: 90px; }
+
+    .audit-fields { grid-template-columns: 1fr; }
+}
+@media (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }
