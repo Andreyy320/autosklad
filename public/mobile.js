@@ -61,7 +61,27 @@
     window.addEventListener('appinstalled', function () {
         var b = document.getElementById('install-app-btn'); if (b) b.remove();
     });
+    // Список «Плотность» открывается поверх панели, а не внутри неё (чтобы прокрутка панели его не обрезала)
+    document.addEventListener('click', function (e) {
+        if (!mq.matches || !e.target.closest || !e.target.closest('#density-select-container')) return;
+        var inp = document.getElementById('density-select-input');
+        var dd = document.getElementById('density-select-dropdown');
+        if (!inp || !dd) return;
+        var r = inp.getBoundingClientRect();
+        dd.style.position = 'fixed';
+        dd.style.top = r.bottom + 'px';
+        dd.style.left = r.left + 'px';
+        dd.style.right = 'auto';
+        dd.style.width = Math.max(r.width, 150) + 'px';
+    }, true);
 
+    // Крутим панель пальцем — список закрывается
+    document.addEventListener('scroll', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('toolbar')) {
+            var dd = document.getElementById('density-select-dropdown');
+            if (dd) dd.style.display = 'none';
+        }
+    }, true);
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMenu);
     else initMenu();
 })();

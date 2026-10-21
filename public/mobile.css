@@ -29,9 +29,9 @@ button, a, .nav-link, .accordion-header, tr { touch-action: manipulation; }
     .accordion-header { padding: 12px 14px; }
     .nav-link { padding: 11px 14px 11px 20px; font-size: 14px; }
 
-       .toolbar { flex-wrap: wrap; padding: 6px 8px; gap: 6px; }
-    .toolbar .separator { display: none; }
-    #density-select-container { width: 130px !important; }
+        .toolbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 6px 8px; gap: 6px; scrollbar-width: none; }
+    .toolbar::-webkit-scrollbar { display: none; }
+    .toolbar > * { flex-shrink: 0; }
     .tool-btn { padding: 8px 12px; font-size: 13px; min-height: 36px; white-space: nowrap; }
     #mobile-menu-btn { display: flex; font-size: 18px; padding: 6px 12px; }
 
