@@ -6313,7 +6313,8 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     COALESCE(c.name_full, c.name_short, 'Розничный покупатель')::text AS counterparty_name,
                     sk.name::text AS sklad_name,
                     (GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0) + COALESCE(sub_w.works_sum, 0))::numeric AS total_realization_sum,
-                    GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
+                                    GREATEST(COALESCE(sub_i.parts_sum, 0) - COALESCE(ret_i.returned_sum, 0), 0)::numeric AS parts_sum,
+                    COALESCE(sub_w.works_sum, 0)::numeric AS works_sum,
                     -- Оплата не может быть больше, чем сумма документа после вычета возврата
                     LEAST(
                         COALESCE(sub_p.paid_sum, 0),
@@ -6359,7 +6360,8 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0)::numeric AS total_realization_sum,
-                    GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0)::numeric AS parts_sum,
+                                       GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0)::numeric AS parts_sum,
+                    0::numeric AS works_sum,
                     LEAST(COALESCE(m_p.paid_sum, 0), GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0))::numeric AS total_paid,
                     COALESCE(m_ret.returned_sum, 0)::numeric AS returned_sum
                 FROM moves m
@@ -6406,7 +6408,7 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                 COUNT(*)::integer AS total_orders,
                 COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
                 COALESCE(SUM(returned_sum), 0)::numeric AS total_returned_sum,
-                COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
+                                COALESCE(SUM(LEAST(total_paid, parts_sum) + works_sum), 0)::numeric AS total_paid,
                 COALESCE(SUM(GREATEST(parts_sum - total_paid, 0)), 0)::numeric AS total_debt
             FROM calc_data
             GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name
