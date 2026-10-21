@@ -5851,8 +5851,14 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
                     LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
-                    LEFT JOIN receipts r_ret ON mi_ret.income_document_id = r_ret.id
-                    LEFT JOIN receipt_items ri_ret ON ri_ret.receipt_id = r_ret.id AND ri_ret.zaphasti_id = mi_ret.zaphasti_id
+                   LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi_ret.income_document_id
+      AND rix.zaphasti_id = mi_ret.zaphasti_id
+    ORDER BY (rix.batch_id = mi_ret.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_ret ON true
                     WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
@@ -6015,8 +6021,14 @@ router.get('/money_receipts', async (req, res) => {
                         ) AS total_purchase_sum,
                         SUM(COALESCE(mi.total_rub, mi.price * mi.quantity, 0)) AS total_sum
                     FROM move_items mi
-                    LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
-                    LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
+                    LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi.income_document_id
+      AND rix.zaphasti_id = mi.zaphasti_id
+    ORDER BY (rix.batch_id = mi.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_orig ON true
                     GROUP BY mi.move_id
                 ) m_items ON m.id = m_items.move_id
                 LEFT JOIN (
@@ -6040,8 +6052,14 @@ router.get('/money_receipts', async (req, res) => {
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
                     LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
-                    LEFT JOIN receipts r_ret ON mi_ret.income_document_id = r_ret.id
-                    LEFT JOIN receipt_items ri_ret ON ri_ret.receipt_id = r_ret.id AND ri_ret.zaphasti_id = mi_ret.zaphasti_id
+                    LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi_ret.income_document_id
+      AND rix.zaphasti_id = mi_ret.zaphasti_id
+    ORDER BY (rix.batch_id = mi_ret.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_ret ON true
                     WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
@@ -6225,8 +6243,14 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                         ) AS total_purchase_sum,
                         SUM(COALESCE(mi.total_rub, mi.price * mi.quantity, 0)) AS total_sum
                     FROM move_items mi
-                    LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
-                    LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
+                    LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi.income_document_id
+      AND rix.zaphasti_id = mi.zaphasti_id
+    ORDER BY (rix.batch_id = mi.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_orig ON true
                     GROUP BY mi.move_id
                 ) m_items ON m.id = m_items.move_id
                 LEFT JOIN (
@@ -6250,8 +6274,14 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
                     LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
-                    LEFT JOIN receipts r_ret ON mi_ret.income_document_id = r_ret.id
-                    LEFT JOIN receipt_items ri_ret ON ri_ret.receipt_id = r_ret.id AND ri_ret.zaphasti_id = mi_ret.zaphasti_id
+                    LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi_ret.income_document_id
+      AND rix.zaphasti_id = mi_ret.zaphasti_id
+    ORDER BY (rix.batch_id = mi_ret.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_ret ON true
                     WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
@@ -6391,8 +6421,14 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     FROM return_items reti
                     JOIN returns ret ON reti.return_id = ret.id
                     LEFT JOIN move_items mi_ret ON reti.move_item_id = mi_ret.id
-                    LEFT JOIN receipts r_ret ON mi_ret.income_document_id = r_ret.id
-                    LEFT JOIN receipt_items ri_ret ON ri_ret.receipt_id = r_ret.id AND ri_ret.zaphasti_id = mi_ret.zaphasti_id
+                    LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi_ret.income_document_id
+      AND rix.zaphasti_id = mi_ret.zaphasti_id
+    ORDER BY (rix.batch_id = mi_ret.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_ret ON true
                     WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
@@ -6540,8 +6576,14 @@ router.get('/money_receipts_detail', async (req, res) => {
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
                 LEFT JOIN zaphasti z ON mi.zaphasti_id = z.id
-                LEFT JOIN receipts r_orig ON mi.income_document_id = r_orig.id
-                LEFT JOIN receipt_items ri_orig ON ri_orig.receipt_id = r_orig.id AND ri_orig.zaphasti_id = mi.zaphasti_id
+                LEFT JOIN LATERAL (
+    SELECT rix.price_rub, rix.price
+    FROM receipt_items rix
+    WHERE rix.receipt_id = mi.income_document_id
+      AND rix.zaphasti_id = mi.zaphasti_id
+    ORDER BY (rix.batch_id = mi.batch_id) DESC NULLS LAST, rix.id
+    LIMIT 1
+) ri_orig ON true
                 WHERE m.is_posted = true
             ) sub
            WHERE 
@@ -7029,15 +7071,14 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                      remaining -= toApply;
         }
 
-        await client.query('COMMIT');
-
-        if (remaining > 0) {
-            return res.status(200).json({
-                success: true,
-                warning: `Сумма превышает долг. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
-                appliedPayments
+              if (remaining > 0.005) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: `Сумма оплаты (${paymentAmount.toFixed(2)} руб.) превышает долг на ${remaining.toFixed(2)} руб. Переплата запрещена!`
             });
         }
+
+        await client.query('COMMIT');
 
         res.status(200).json({ success: true, appliedPayments });
 
@@ -7715,7 +7756,12 @@ AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') <= $2)
                        appliedPayments.push({ receipt_id: row.receipt_id, applied: toApply });
             remaining -= toApply;
         }
-
+        if (remaining > 0.005) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: `Сумма оплаты (${paymentAmount.toFixed(2)} руб.) превышает долг на ${remaining.toFixed(2)} руб. Переплата запрещена!`
+            });
+        }
         // Проверка кубышки: платить больше, чем есть, нельзя
         await client.query('SELECT pg_advisory_xact_lock(7771)');
         const applied = paymentAmount - remaining;
@@ -7727,15 +7773,7 @@ AND ($2::text IS NULL OR TO_CHAR(rec.date, 'YYYY-MM') <= $2)
                 error: `Недостаточно средств в кубышке. Доступно: ${available.toFixed(2)} руб, вы пытаетесь оплатить: ${applied.toFixed(2)} руб`
             });
         }
-        await client.query('COMMIT');
-
-        if (remaining > 0) {
-            return res.status(200).json({
-                success: true,
-                warning: `Сумма превышает долг. Распределено: ${(paymentAmount - remaining).toFixed(2)}, осталось нераспределённых: ${remaining.toFixed(2)}`,
-                appliedPayments
-            });
-        }
+               await client.query('COMMIT');
 
         res.status(200).json({ success: true, appliedPayments });
 
