@@ -3558,7 +3558,7 @@ router.get('/part_movement_details', async (req, res) => {
                 --    затем оценка по последнему приходу
                 SELECT 
                     COALESCE(r_rel.doc_date, NOW()) AS op_date,
-                    CAST(r_rel.id AS VARCHAR) AS doc_num,
+                                       COALESCE(NULLIF(r_rel.doc_number, ''), 'РЛ-' || r_rel.id) AS doc_num,
                     'Реализация (продажа)' AS doc_type,
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
                     CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
