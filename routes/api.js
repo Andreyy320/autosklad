@@ -6273,7 +6273,7 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     COALESCE(SUM(returned_sum), 0)::numeric AS total_returned_sum,
                     COALESCE(SUM(parts_profit), 0)::numeric AS total_parts_profit,
                     COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
-                    COALESCE(SUM(total_paid), 0)::numeric AS total_paid,
+                                        COALESCE(SUM(LEAST(total_paid, parts_sum) + works_sum), 0)::numeric AS total_paid,
                     COALESCE(SUM(GREATEST(parts_sum - total_paid, 0)), 0)::numeric AS total_debt
                 FROM calc_data
                 GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name, TO_CHAR(date, 'YYYY-MM')
