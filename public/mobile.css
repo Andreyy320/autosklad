@@ -41,7 +41,17 @@ button, a, .nav-link, .accordion-header, tr { touch-action: manipulation; }
     #movement-filter-panel input, #movement-filter-panel select { flex: 1 1 auto; min-width: 0; width: auto !important; }
     #parts-filter-panel > button, #movement-filter-panel > button { width: 100%; justify-content: center; padding: 9px 14px !important; }
 
-    #pager-search { flex: 1 1 100% !important; max-width: none !important; }
+    #pager-bar, #detail-pager {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;   /* иначе у detail-pager левая часть недоступна для прокрутки */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+#pager-bar::-webkit-scrollbar, #detail-pager::-webkit-scrollbar { display: none; }
+#pager-bar > *, #detail-pager > * { flex-shrink: 0 !important; }
+#pager-search { flex: 0 0 200px !important; width: 200px; max-width: none !important; }
+#pager-info { margin-left: 0 !important; }
     .content-area > div { -webkit-overflow-scrolling: touch; }
 
     #detail-container { height: 42dvh !important; max-height: 42dvh !important; }

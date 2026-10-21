@@ -10,7 +10,14 @@
 
     .container table { display: block; overflow: auto; -webkit-overflow-scrolling: touch; max-height: 70dvh; min-width: 0; }
     .container table th, .container table td { min-width: 90px; }
-
+    #logs-pager-bar {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    #logs-pager-bar::-webkit-scrollbar { display: none; }
+    #logs-pager-bar > * { flex-shrink: 0; }
     .audit-fields { grid-template-columns: 1fr; }
 }
 @media (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }

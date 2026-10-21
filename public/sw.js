@@ -1,4 +1,4 @@
-const CACHE = 'avtodetal-v1';
+const CACHE = 'avtodetal-v2';
 const CORE = [
   '/', '/style.css', '/script.js', '/resizable-columns.js',
   '/mobile.css', '/mobile.js', '/manifest.webmanifest',
