@@ -1796,7 +1796,10 @@ router.put('/moves/:id', async (req, res) => {
     return val;
     }
 
-                const finalDate = toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date);
+              // у проведённого документа дату не меняем, что бы ни прислал клиент
+const finalDate = oldIsPostedBool
+    ? toSafeTimestampString(oldDoc.date)
+    : (toSafeTimestampString(date) || toSafeTimestampString(oldDoc.date));
 
         if (!oldIsPostedBool && finalDate) {
             const lateRes = await client.query(`
