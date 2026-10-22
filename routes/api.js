@@ -76,8 +76,10 @@ async function validateRepairCarMileage(client, body, oldDoc) {
     const m = Number(String(mileage ?? '').replace(',', '.'));
     if (!isFinite(m) || m <= 0) return 'Укажите пробег (число больше нуля)';
 
-    const whId = has('warehouse_id') ? body.warehouse_id : oldDoc?.warehouse_id;
-    if (whId) {
+        const whId = has('warehouse_id') ? body.warehouse_id : oldDoc?.warehouse_id;
+    const carChanged = !oldDoc || String(carId) !== String(oldDoc.car_id ?? '');
+    const whChanged = !oldDoc || String(whId ?? '') !== String(oldDoc.warehouse_id ?? '');
+    if (whId && (carChanged || whChanged)) {
         const carRes = await client.query('SELECT sklad_id FROM cars WHERE id = $1', [carId]);
         if (carRes.rows.length === 0) return 'Машина не найдена';
         if (String(carRes.rows[0].sklad_id ?? '') !== String(whId)) {

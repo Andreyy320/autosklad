@@ -3220,7 +3220,11 @@ async function openEntityForm(entity, item = null, parentId = null) {
         input.addEventListener('input', () => {
             const filter = input.value.toLowerCase();
             dropdown.style.display = 'block';
-            options.forEach(opt => {
+                        options.forEach(opt => {
+                if (opt.dataset.skladHidden === '1') {
+                    opt.style.display = 'none';
+                    return;
+                }
                 const text = opt.textContent.toLowerCase();
                 if (text.includes(filter) || opt.dataset.id === '') {
                     opt.style.display = 'block';
@@ -7899,12 +7903,13 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
                 const selectedSkladId = skladForCarSelect.value;
                 let currentCarStillValid = !selectedSkladId;
 
-                carOptions.forEach(opt => {
+                                carOptions.forEach(opt => {
                     if (opt.dataset.id === '') {
                         opt.style.display = 'block';
                         return;
                     }
                     const match = !selectedSkladId || String(opt.dataset.skladId) === String(selectedSkladId);
+                    opt.dataset.skladHidden = match ? '0' : '1';
                     opt.style.display = match ? 'block' : 'none';
                     if (match && String(opt.dataset.id) === String(carHiddenInput.value)) {
                         currentCarStillValid = true;
@@ -7918,6 +7923,16 @@ const repairFieldWrapId = (entity === 'repairs' && col.field === 'warehouse_id')
             }
 
             skladForCarSelect.addEventListener('change', () => filterCarOptionsBySklad(true));
+                        const applySkladOnly = () => {
+                const sid = skladForCarSelect.value;
+                if (!sid) return;
+                carOptions.forEach(opt => {
+                    if (opt.dataset.id === '') return;
+                    if (String(opt.dataset.skladId) !== String(sid)) opt.style.display = 'none';
+                });
+            };
+            carVisibleInput.addEventListener('input', applySkladOnly);
+            carVisibleInput.addEventListener('focus', applySkladOnly);
 
             if (skladForCarSelect.value) {
                 filterCarOptionsBySklad(false);
