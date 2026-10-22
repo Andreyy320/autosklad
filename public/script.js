@@ -13335,8 +13335,7 @@ function openDetailForm(mode) {
 
     const detailEntity = getCurrentDetailEntity();
 
-const readOnlyDetailEntities = ['car_general', 'car_details', 'car_parts', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'car_images', 'accident_images'];        if (readOnlyDetailEntities.includes(detailEntity)) {
-        return;
+const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'car_images'];        return;
     }
 
     if (detailEntity === 'accident_images') {
