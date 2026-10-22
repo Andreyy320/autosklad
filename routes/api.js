@@ -3799,7 +3799,7 @@ router.get('/car_general', async (req, res) => {
                 (ri.quantity - COALESCE(ret.returned_qty, 0)) AS qty,
                 COALESCE(z.unit, 'шт') AS unit,
                 ri.price AS price,
-                ROUND((COALESCE(ri.quantity, 0) - COALESCE(ret.returned_qty, 0)) * COALESCE(ri.price, 0) * (1 + COALESCE(sk.markup_percent, 0) / 100.0), 2) AS sum,
+                ROUND((COALESCE(ri.quantity, 0) - COALESCE(ret.returned_qty, 0)) * COALESCE(ri.price, 0) * (1 + (CASE WHEN r.warehouse_id = 1 THEN COALESCE(sk.markup_percent, 0) ELSE 0 END) / 100.0), 2) AS sum,
                 CASE 
                     WHEN COALESCE(ret.returned_qty, 0) > 0 
                     THEN CONCAT_WS(' ', ri.description, '(возвращено ' || ret.returned_qty::text || ' шт.)')
