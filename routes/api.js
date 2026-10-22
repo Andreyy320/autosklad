@@ -2369,7 +2369,8 @@ router.get('/receipts_history', async (req, res) => {
                 z.code AS code,
                 COALESCE(z.name, ri.description, 'Запчасть') AS name,
                 COALESCE(z.unit, 'шт') AS unit,
-                                             ROUND((COALESCE(ri.quantity, 0) - COALESCE(ret.returned_qty, 0)) * COALESCE(ri.price, 0) * (1 + (CASE WHEN rp.warehouse_id = 1 THEN COALESCE(sk.markup_percent, 0) ELSE 0 END) / 100.0), 2) AS sum,
+                                                            ROUND((COALESCE(ri.quantity, 0) - COALESCE(ret.returned_qty, 0)) * COALESCE(ri.price, 0) * (1 + (CASE WHEN rp.warehouse_id = 1 THEN COALESCE(sk.markup_percent, 0) ELSE 0 END) / 100.0), 2) AS sum,
+                COALESCE(
                     CASE 
                         WHEN rec.fact_date IS NOT NULL 
                         THEN CONCAT(rec.doc_number, ' от ', TO_CHAR(rec.fact_date, 'DD.MM.YYYY'))
