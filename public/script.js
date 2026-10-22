@@ -13315,12 +13315,14 @@ function getCurrentDetailEntity() {
                 return match[1];
             }
         }
-        return 'car_details';
+              return 'car_general';
     }
     
     return 'receipt_items';
 }
+
 function openDetailForm(mode) {
+    if (currentEntity === 'car_cards') return;   // карточка авто — только просмотр, на всех вкладках
     if (!selectedItem) {
         showAppNotification('Сначала выберите документ в верхней таблице!', 'warning');
         return;
@@ -13333,8 +13335,7 @@ function openDetailForm(mode) {
 
     const detailEntity = getCurrentDetailEntity();
 
-    const readOnlyDetailEntities = ['car_general', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'car_images'];
-        if (readOnlyDetailEntities.includes(detailEntity)) {
+const readOnlyDetailEntities = ['car_general', 'car_details', 'car_parts', 'repair_history', 'receipts_history', 'dtp_history', 'car_accidents', 'car_images', 'accident_images'];        if (readOnlyDetailEntities.includes(detailEntity)) {
         return;
     }
 
@@ -14161,15 +14162,17 @@ let currentMoneyReceiptSubTab = 'money_receipts_detail';
         document.querySelectorAll('#detail-body tr').forEach(row => row.style.background = '');
         tr.style.background = '#e2e8f0';
 
-        const id = tr.getAttribute('data-id');
-        selectedDetailItem = currentDetailItems.find(i => i.id == id);
+                const id = tr.getAttribute('data-id');
+        selectedDetailItem = id ? currentDetailItems.find(i => i.id == id) : null;
     });
 
-    detailBody.addEventListener('dblclick', (e) => {
+       detailBody.addEventListener('dblclick', (e) => {
+        if (currentEntity === 'car_cards' || window.currentMainEntity === 'car_cards') return;
         const tr = e.target.closest('tr');
         if (!tr) return;
         
         const id = tr.getAttribute('data-id');
+        if (!id) return;
         const item = currentDetailItems.find(i => i.id == id);
         if (item) {
             selectedDetailItem = item;
