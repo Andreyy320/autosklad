@@ -2649,9 +2649,113 @@ function normalizeStartDateTime(s) {
     return (h !== undefined) ? `${y}-${mo}-${d} ${h}:${mi}:00` : `${y}-${mo}-${d} 00:00:00`;
 }
  
+
+// Общий список ВСЕХ движений товара (приходы/расходы) — по нему считаем остаток на любую дату
+const ALL_OPERATIONS_SQL = `
+                -- 1. Приходы
+SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
+FROM receipt_items ri 
+JOIN receipts r ON ri.receipt_id = r.id 
+WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
+                
+                UNION ALL
+                
+                -- 2. Перемещения (приход)
+                SELECT mi.zaphasti_id, m.warehouse_to_id AS warehouse_id, m.date, mi.quantity AS qty, COALESCE(NULLIF(mi.total_rub, 0), mi.quantity * COALESCE(mi.price_rub, mi.price, 0)) AS sum, 'in' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                WHERE m.warehouse_to_id IS NOT NULL AND (m.is_posted::text IN ('true', '1', '2'))
+                
+                UNION ALL
+                
+                -- 3. Перемещения (расход)
+                SELECT mi.zaphasti_id, m.warehouse_from_id AS warehouse_id, m.date, mi.quantity AS qty,
+                      COALESCE(NULLIF(mi.total_rub, 0) / NULLIF(1 + COALESCE(mi.markup_percent, 0) / 100, 0), mi.quantity * COALESCE(mi.price_rub, mi.price, 0)) AS sum,
+                       'out' as op_type
+                FROM move_items mi 
+                JOIN moves m ON mi.move_id = m.id 
+                WHERE m.warehouse_from_id IS NOT NULL AND (m.is_posted::text IN ('true', '1', '2'))
+                
+                UNION ALL
+                
+                -- 4. Списания в ремонт
+                SELECT rep_i.zaphast_id AS zaphasti_id, rep.warehouse_id, rep.doc_date AS date, rep_i.quantity AS qty, (rep_i.quantity * COALESCE(rep_i.price, 0)) AS sum, 'out' as op_type
+                FROM repair_items rep_i 
+                JOIN repairs rep ON rep_i.repair_id = rep.id 
+                WHERE rep.warehouse_id IS NOT NULL AND (rep.is_posted::text IN ('true', '1', '2'))
+                
+                UNION ALL
+                
+                -- 5. Реализации (продажи)
+                SELECT ri_rel.zaphasti_id, r_rel.sklad_id AS warehouse_id, COALESCE(r_rel.doc_date, NOW()) AS date, ri_rel.quantity AS qty, (ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, 0)) AS sum, 'out' as op_type
+                FROM realization_items ri_rel 
+                JOIN realizations r_rel ON ri_rel.realization_id = r_rel.id 
+                WHERE r_rel.sklad_id IS NOT NULL AND (r_rel.is_posted::text IN ('true', '1', '2'))
+ 
+                UNION ALL
+ 
+                -- 6. Возвраты поставщику (расход)
+                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty, reti.total_rub AS sum, 'out' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                WHERE ret.warehouse_id IS NOT NULL
+                  AND reti.move_item_id IS NULL
+                  AND reti.realization_item_id IS NULL
+                  AND reti.repair_item_id IS NULL
+ 
+                UNION ALL
+ 
+                -- 7. Возвраты от покупателя — ПРИХОД на свой склад
+                SELECT reti.zaphasti_id, ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty,
+                       (reti.quantity * COALESCE(reti.price_rub / NULLIF(1 + COALESCE(mi_ret3.markup_percent, 0) / 100, 0), reti.price_rub)) AS sum,
+                       'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                LEFT JOIN move_items mi_ret3 ON reti.move_item_id = mi_ret3.id
+                WHERE ret.warehouse_id IS NOT NULL
+                  AND reti.move_item_id IS NOT NULL
+ 
+                UNION ALL
+ 
+                -- 8. Возвраты от покупателя — РАСХОД со склада покупателя
+                SELECT reti.zaphasti_id, mv2.warehouse_to_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, reti.quantity AS qty,
+                       (reti.quantity * COALESCE(reti.price_rub, 0)) AS sum,
+                       'out' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN moves mv2 ON ret.move_id = mv2.id
+                WHERE reti.move_item_id IS NOT NULL
+ 
+                UNION ALL
+ 
+                -- 9. Возвраты от покупателя (по реализации, приход)
+                SELECT reti.zaphasti_id, real_ret.sklad_id AS warehouse_id, COALESCE(ret.fact_date, ret.date) AS date, 
+                       reti.quantity AS qty, (reti.quantity * COALESCE(ri_relret.purchase_price, reti.price_rub, 0)) AS sum, 'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN realization_items ri_relret ON reti.realization_item_id = ri_relret.id
+                JOIN realizations real_ret ON ri_relret.realization_id = real_ret.id
+                WHERE real_ret.sklad_id IS NOT NULL
+                  AND reti.realization_item_id IS NOT NULL
+ 
+                UNION ALL
+ 
+                -- 10. Возвраты с ремонта (приход обратно на склад)
+                SELECT reti.zaphasti_id, rep_ret.warehouse_id, COALESCE(ret.fact_date, ret.date) AS date,
+                       reti.quantity AS qty, (reti.quantity * COALESCE(reti.price_rub, 0)) AS sum, 'in' as op_type
+                FROM return_items reti
+                JOIN returns ret ON reti.return_id = ret.id
+                JOIN repair_items ri_rep_ret ON reti.repair_item_id = ri_rep_ret.id
+                JOIN repairs rep_ret ON ri_rep_ret.repair_id = rep_ret.id
+                WHERE rep_ret.warehouse_id IS NOT NULL
+                  AND reti.repair_item_id IS NOT NULL
+`;
+
 router.get('/stock_balances', async (req, res) => {
     try {
-        const { date, warehouse_id, mol_id } = req.query;
+       const { warehouse_id, mol_id } = req.query;
+const date = req.query.date || req.query.end_date || req.query.as_of || req.query.to_date || req.query.on_date;
+
 
         const queryParams = [];
         let paramIndex = 1;
@@ -2660,10 +2764,15 @@ router.get('/stock_balances', async (req, res) => {
         let warehouseFilterForSkladi = '';
         let molFilterClause = '';
         let dateFilterClause = '';
-let dateJoinClause = '';
+    let dateJoinClause = '';
+let hasDate = false;
+let dateParamIdx = null;
+let warehouseFilterForOps = '';
 
-if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
+    if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
       queryParams.push(normalizeDateTime(date) || date);
+      hasDate = true;
+dateParamIdx = paramIndex;
     dateJoinClause = `
         LEFT JOIN receipts r_d ON wb.receipt_id = r_d.id
         LEFT JOIN LATERAL (
@@ -2676,10 +2785,11 @@ if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
         ) mv_d ON true`;
        dateFilterClause = ` AND COALESCE(mv_d.date, r_d.date, wb.created_at) <= $${paramIndex}::timestamp`;
     paramIndex++;
-}
+    }
         if (warehouse_id && warehouse_id.trim() !== '' && warehouse_id !== 'undefined' && warehouse_id !== 'null') {
             queryParams.push(warehouse_id);
             warehouseFilterForBatches = ` AND wb.warehouse_id = $${paramIndex}`;
+            warehouseFilterForOps = ` AND warehouse_id = $${paramIndex}`;
             warehouseFilterForSkladi = ` AND s.id = $${paramIndex}`;
             paramIndex++;
         }
@@ -2699,18 +2809,24 @@ if (date && date.trim() !== '' && date !== 'undefined' && date !== 'null') {
         // Примечание: этот эндпоинт не пересчитывает движения, а суммирует уже готовую
         // таблицу warehouse_batches, поэтому правка цены "возврата по реализации" сюда не относится.
         const query = `
-            WITH aggregated_stocks AS (
-                SELECT 
-                    wb.zaphasti_id,
-                    wb.warehouse_id,
-                    SUM(wb.quantity) AS total_qty
+                        WITH ${hasDate ? `
+            aggregated_stocks AS (
+                SELECT zaphasti_id, warehouse_id,
+                       SUM(CASE WHEN op_type = 'in' THEN qty ELSE -qty END) AS total_qty
+                FROM (${ALL_OPERATIONS_SQL}) ops
+                WHERE date <= $${dateParamIdx}::timestamp
+                ${warehouseFilterForOps}
+                GROUP BY zaphasti_id, warehouse_id
+                HAVING SUM(CASE WHEN op_type = 'in' THEN qty ELSE -qty END) <> 0
+` : `
+            aggregated_stocks AS (
+                SELECT wb.zaphasti_id, wb.warehouse_id, SUM(wb.quantity) AS total_qty
                 FROM warehouse_batches wb
-${dateJoinClause}
-WHERE 1=1 
-${dateFilterClause}
+                WHERE 1=1
                 ${warehouseFilterForBatches}
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
-                HAVING SUM(wb.quantity) <> 0 -- ИЗМЕНЕНО: показываем только ненулевые остатки
+                HAVING SUM(wb.quantity) <> 0
+`}
             ),
             latest_mol AS (
                 SELECT DISTINCT ON (warehouse_id)
@@ -2746,6 +2862,7 @@ ${dateFilterClause}
         `;
 
         const result = await pool.query(query, queryParams);
+        
         res.json(result.rows);
 
     } catch (err) {
@@ -2792,7 +2909,7 @@ router.get('/stock_batches', async (req, res) => {
         // чтобы учитывался выбор конкретной партии (перемещение / реализация / ремонт).
         // Штуки, вернувшиеся по возврату, показываем отдельной строкой "Возврат ... + номер".
         // Если задана дата — работает старый расчёт по документам ниже (истории партий нет).
-        {
+                if (!hasDate) {
             const nowParams = [zaphasti_id];
             let nowWhCond = '';
             let nowDateCond = '';
@@ -3005,7 +3122,7 @@ router.get('/stock_batches', async (req, res) => {
          THEN to_date(substring(rep_i.description from '((?:0[1-9]|[12][0-9]|3[01])\.(?:0[1-9]|1[0-2])\.20[0-9]{2})'), 'DD.MM.YYYY')::timestamp
     END,
     rep.doc_date, NOW()
-) AS doc_date,
+    ) AS doc_date,
                     rep_i.description,
                     (-1 * rep_i.quantity) AS qty,
                     rep_i.price,
@@ -3232,10 +3349,10 @@ router.get('/stock_movement', async (req, res) => {
         const query = `
             WITH all_operations AS (
                 -- 1. Приходы
-SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
-FROM receipt_items ri 
-JOIN receipts r ON ri.receipt_id = r.id 
-WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
+    SELECT ri.zaphasti_id, r.warehouse_id, r.date, ri.quantity AS qty, (ri.quantity * COALESCE(ri.price_rub, ri.price, 0)) AS sum, 'in' as op_type
+    FROM receipt_items ri 
+    JOIN receipts r ON ri.receipt_id = r.id 
+    WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
                 
                 UNION ALL
                 
@@ -3357,8 +3474,8 @@ WHERE r.warehouse_id IS NOT NULL AND (r.is_posted::text IN ('true', '1', '2'))
                     SUM(CASE WHEN op_type = 'out' THEN sum ELSE 0 END) AS outcome_sum
                 FROM all_operations
                 WHERE 1=1
-${startDateVal ? `AND date >= ${startParam}::timestamp` : ''}
-${endDateVal ? `AND date <= ${endParam}::timestamp` : ''}
+    ${startDateVal ? `AND date >= ${startParam}::timestamp` : ''}
+    ${endDateVal ? `AND date <= ${endParam}::timestamp` : ''}
                 ${warehouseFilter}
                 GROUP BY zaphasti_id, warehouse_id
             ),

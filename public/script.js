@@ -1270,7 +1270,7 @@ render: (item) => {
             <td>${item.document_name || ''}</td>
             <td style="text-align: center;">${formattedDate}</td>
             <td>${item.supplier_name || ''}</td>
-            <td style="text-align: right; font-weight: bold; color: #0044cc;">${item.qty !== undefined ? item.qty : 0}</td>
+                        <td style="text-align: right;">${item.qty !== undefined ? item.qty : 0}</td>
             <td style="text-align: center;">${item.unit || 'шт'}</td>
             <td style="text-align: right;">${rawPurchasePrice}</td>
             <td style="text-align: right; font-weight: bold; color: #16a34a;">${retailPrice}</td>
@@ -10235,7 +10235,9 @@ async function applyFilters(fromPager) {
 
     const params = new URLSearchParams();
     if (dateVal) params.append('date', dateVal);
-    if (warehouseId) params.append('warehouse_id', warehouseId);
+       if (warehouseId) params.append('warehouse_id', warehouseId);
+    const molIdVal = document.getElementById('filter-mol')?.value || '';
+    if (molIdVal) params.append('mol_id', molIdVal);
     PAGER.baseUrl = '/api/stock_balances';
     PAGER.baseQuery = params.toString();
     pagerParams(params);
