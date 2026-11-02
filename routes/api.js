@@ -11525,7 +11525,7 @@ router.put('/:entity/:id', async (req, res) => {
             const priceIdx = keys.indexOf('price');
             if (priceIdx !== -1 && (processedValues[priceIdx] === null || isNaN(Number(processedValues[priceIdx])))) {
                 await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Стоимость не может быть пустой', serverLogs: logsBuffer });
+               return res.status(400).json({ error: 'Стоимость не может быть пустой' });
             }
         }
 
@@ -11681,7 +11681,21 @@ router.delete('/:entity/:id', async (req, res) => {
                 }
             }
         }
-
+if (entity === 'vidy_rabot') {
+    const usage = await client.query(
+        `SELECT
+            (SELECT COUNT(*) FROM repair_works      WHERE vidy_rabot_id = $1) AS repairs_cnt,
+            (SELECT COUNT(*) FROM realization_works WHERE vidy_rabot_id = $1) AS realizations_cnt`,
+        [id]
+    );
+    const { repairs_cnt, realizations_cnt } = usage.rows[0];
+    if (Number(repairs_cnt) > 0 || Number(realizations_cnt) > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+            error: `Нельзя удалить: этот вид работ используется в ремонтах (${repairs_cnt}) и реализациях (${realizations_cnt}).`
+        });
+    }
+}
         if (entity === 'receipts') {
             // Приход сам СОЗДАЁТ партию на складе, поэтому при удалении документа
             // партию нужно удалить (а не просто выбросить строки receipt_items).
@@ -11880,16 +11894,21 @@ router.delete('/:entity/:id', async (req, res) => {
         }
         // ============================================================================
 
-    await client.query('COMMIT');
+           await client.query('COMMIT');
 
-    if (entity === 'repair_works') {
-    await logRepairWork(req, 'DELETE', result.rows[0]);
-    }        
-    res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
+        if (entity === 'repair_works') {
+            await logRepairWork(req, 'DELETE', result.rows[0]);
+        }
+        res.json({ message: 'Запись успешно удалена', deleted: result.rows[0] });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("Ошибка при удалении из БД:", err.message);
+        if (err.code === '23503') {
+            return res.status(409).json({
+                error: 'Нельзя удалить запись: она используется в других документах или справочниках.'
+            });
+        }
         res.status(500).json({ error: 'Ошибка сервера при удалении: ' + err.message });
     } finally {
         client.release();
