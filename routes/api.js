@@ -1619,6 +1619,7 @@ router.get('/available_batches', async (req, res) => {
         LIMIT 1
       ) mv ON true
           WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2${withEmpty ? '' : ' AND wb.quantity > 0'}${dateCond}
+AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
       ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC`,
       qParams);
     res.json({ batches: rows });
@@ -1653,6 +1654,7 @@ router.get('/available_parts', async (req, res) => {
         LIMIT 1
       ) mv ON true
       WHERE wb.warehouse_id = $1 AND wb.quantity > 0${dateCond}
+AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
       GROUP BY wb.zaphasti_id`, params);
 
     res.json(rows);
@@ -2458,7 +2460,7 @@ async function getKubyshkaData(db, skladId) {
                            FROM return_items reti JOIN returns ret ON reti.return_id = ret.id
                            WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                            GROUP BY ret.move_id) rt ON rt.move_id = m.id
-                WHERE m.is_posted = true AND m.warehouse_from_id = $1
+                WHERE m.is_posted = true AND eff_from(m.warehouse_from_id) = $1
             ),
             receipt_docs AS (
                 SELECT rec.id, rec.doc_number, rec.date AS doc_date, rec.supplier_id,
@@ -2503,7 +2505,7 @@ async function getKubyshkaData(db, skladId) {
                 LEFT JOIN skladi sk ON sk.id = m.warehouse_to_id
                 LEFT JOIN users u ON wdp.user_type = 'user' AND wdp.user_id = u.id
                 LEFT JOIN employees e ON wdp.user_type = 'employee' AND wdp.user_id = e.id
-                WHERE m.warehouse_from_id = $1 AND m.is_posted = true
+                WHERE eff_from(m.warehouse_from_id) = $1 AND m.is_posted = true
 
                 UNION ALL
                 -- (−) оплаты поставщикам по приходам
@@ -2824,6 +2826,7 @@ dateParamIdx = paramIndex;
                 FROM warehouse_batches wb
                 WHERE 1=1
                 ${warehouseFilterForBatches}
+AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
                 GROUP BY wb.zaphasti_id, wb.warehouse_id
                 HAVING SUM(wb.quantity) <> 0
 `}
@@ -2950,6 +2953,7 @@ router.get('/stock_batches', async (req, res) => {
                         LIMIT 1
                     ) mv ON true
                     WHERE wb.zaphasti_id = $1 AND wb.quantity > 0${nowWhCond}${nowDateCond}
+AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
                 ),
                 ret_in AS (
                     -- возвраты, при которых товар ПРИХОДИТ на склад: в какую партию и каким документом
@@ -4772,6 +4776,7 @@ const manualPriceValue = Number(price);
                 LIMIT 1
             ) mv ON true
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
               AND COALESCE(mv.date, r.date, wb.created_at) <= (SELECT doc_date FROM realizations WHERE id = $3)${batchFilter}
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
@@ -5086,6 +5091,7 @@ router.put('/realization_items/:id', async (req, res) => {
                 LIMIT 1
             ) mv ON true
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
               AND COALESCE(mv.date, r.date, wb.created_at) <= (SELECT doc_date FROM realizations WHERE id = $3)${batchFilter}
             ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
@@ -5938,7 +5944,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                 --    и реально оплаченную сумму из warehouse_debt_payments — а не "всегда оплачено")
                 SELECT 
                     m.id,
-                    m.warehouse_from_id AS sklad_id,
+                    eff_from(m.warehouse_from_id) AS sklad_id,
                     GREATEST(COALESCE(m_items.total_qty, 0) - COALESCE(m_ret.returned_qty, 0), 0) AS total_qty,
                     GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0) AS parts_sum,
                     0 AS works_sum,
@@ -5985,6 +5991,8 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
                 WHERE m.is_posted = true
+  AND NOT EXISTS (SELECT 1 FROM skladi t WHERE t.id = m.warehouse_to_id AND t.is_transit = true)
+                
             )
             SELECT 
                 sk.id AS id,
@@ -6013,7 +6021,7 @@ router.get('/money_receipts_by_sklad', async (req, res) => {
 
 router.get('/money_receipts', async (req, res) => {
     try {
-        const { sklad_id, start_date, end_date, customer_id, debtor_warehouse_id } = req.query;
+        const { sklad_id, start_date, end_date, customer_id, debtor_warehouse_id, from_sklad_name } = req.query;
 
         const query = `
             WITH calc_data AS (
@@ -6185,11 +6193,13 @@ router.get('/money_receipts', async (req, res) => {
                     WHERE ret.is_posted = true AND ret.move_id IS NOT NULL
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
-                WHERE m.is_posted = true
-                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+              WHERE m.is_posted = true
+  AND NOT EXISTS (SELECT 1 FROM skladi t WHERE t.id = m.warehouse_to_id AND t.is_transit = true)
+                  AND ($1::integer IS NULL OR eff_from(m.warehouse_from_id) = $1)
                   AND ($2::date IS NULL OR m.date::date >= $2::date)
                   AND ($3::date IS NULL OR m.date::date <= $3::date)
                   AND ($5::integer IS NULL OR sk_to.id = $5)
+AND ($6::text IS NULL OR sk_from.name = $6::text)
             AND ($4::integer IS NULL)
                   )
                    SELECT 
@@ -6224,9 +6234,8 @@ router.get('/money_receipts', async (req, res) => {
             FROM calc_data
             ORDER BY date DESC;
         `;
-
-    const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, debtor_warehouse_id || null]);
-        let totalPeriodPaid = 0;
+const result = await pool.query(query, [sklad_id || null, start_date || null, end_date || null, customer_id || null, debtor_warehouse_id || null, from_sklad_name || null]);
+ let totalPeriodPaid = 0;
         let totalPeriodProfit = 0;
         result.rows.forEach(row => {
             totalPeriodPaid += Number(row.total_paid || 0);
@@ -6334,7 +6343,7 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                                         m.date AS date,
                     NULL::integer AS customer_id,
                     sk_to.id AS debtor_warehouse_id,
-                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                  CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     1 AS total_orders,
                     GREATEST(COALESCE(m_items.total_qty, 0) - COALESCE(m_ret.returned_qty, 0), 0)::numeric AS parts_qty,
@@ -6408,7 +6417,8 @@ router.get('/money_receipts_by_customers', async (req, res) => {
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
                 WHERE m.is_posted = true
-                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+  AND NOT EXISTS (SELECT 1 FROM skladi t WHERE t.id = m.warehouse_to_id AND t.is_transit = true)
+                  AND ($1::integer IS NULL OR eff_from(m.warehouse_from_id) = $1)
             ),
             monthly AS (
                 SELECT
@@ -6433,9 +6443,9 @@ router.get('/money_receipts_by_customers', async (req, res) => {
             SELECT
                 *,
                 SUM(total_debt) OVER (
-                    PARTITION BY group_key
-                    ORDER BY month_str ASC
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                                        PARTITION BY group_key, sklad_name
+                                       ORDER BY month_str ASC
+                    RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                 )::numeric AS cumulative_debt
             FROM monthly
             WHERE ($2::text IS NULL OR group_key = $2)
@@ -6509,7 +6519,7 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     m.id AS id,
                     NULL::integer AS customer_id,
                     sk_to.id AS debtor_warehouse_id,
-                    CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
+                  CONCAT('Склад: ', COALESCE(sk_to.name, 'Не указан'))::text AS counterparty_name,
                     sk_from.name::text AS sklad_name,
                     GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0)::numeric AS total_realization_sum,
                                        GREATEST(COALESCE(m_items.total_sum, 0) - COALESCE(m_ret.returned_sum, 0), 0)::numeric AS parts_sum,
@@ -6555,21 +6565,22 @@ router.get('/money_receipts_by_customers_totals', async (req, res) => {
                     GROUP BY ret.move_id
                 ) m_ret ON m.id = m_ret.move_id
                 WHERE m.is_posted = true
-                  AND ($1::integer IS NULL OR m.warehouse_from_id = $1)
+  AND NOT EXISTS (SELECT 1 FROM skladi t WHERE t.id = m.warehouse_to_id AND t.is_transit = true)
+                  AND ($1::integer IS NULL OR eff_from(m.warehouse_from_id) = $1)
             )
             SELECT
                 COALESCE(customer_id::text, 'wh_' || debtor_warehouse_id::text) AS group_key,
                 customer_id,
                 debtor_warehouse_id,
-                counterparty_name,
-                sklad_name,
+                                counterparty_name,
+                STRING_AGG(DISTINCT sklad_name, ', ')::text AS sklad_name,
                 COUNT(*)::integer AS total_orders,
                 COALESCE(SUM(total_realization_sum), 0)::numeric AS total_sum,
                 COALESCE(SUM(returned_sum), 0)::numeric AS total_returned_sum,
                                 COALESCE(SUM(LEAST(total_paid, parts_sum) + works_sum), 0)::numeric AS total_paid,
                 COALESCE(SUM(GREATEST(parts_sum - total_paid, 0)), 0)::numeric AS total_debt
             FROM calc_data
-            GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name, sklad_name
+                       GROUP BY group_key, customer_id, debtor_warehouse_id, counterparty_name
             ORDER BY counterparty_name ASC;
         `;
 
@@ -6693,7 +6704,7 @@ router.get('/money_receipts_detail', async (req, res) => {
                     COALESCE(mi.description, '')::text AS description,
                     m.id AS rel_id,
                     m.warehouse_to_id AS cust_id,
-                    m.warehouse_from_id AS skl_id,
+                    eff_from(m.warehouse_from_id) AS skl_id,
                     'move' AS doc_type
                 FROM move_items mi
                 JOIN moves m ON mi.move_id = m.id
@@ -6707,6 +6718,7 @@ router.get('/money_receipts_detail', async (req, res) => {
     LIMIT 1
 ) ri_orig ON true
                 WHERE m.is_posted = true
+  AND NOT EXISTS (SELECT 1 FROM skladi t WHERE t.id = m.warehouse_to_id AND t.is_transit = true)
             ) sub
            WHERE 
     (
@@ -7068,7 +7080,7 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-    const { amount, month_str, sklad_id, comment, doc_ids } = req.body;
+    const { amount, month_str, sklad_id, comment, doc_ids, from_sklad_name } = req.body;
         
         
         const paymentAmount = Number(amount);
@@ -7125,12 +7137,13 @@ router.post('/money_receipts_by_customers/:id/pay_month', async (req, res) => {
                 WHERE m.warehouse_to_id = $1
                   AND m.is_posted = true
     AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') <= $2)
-                  AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
-                  AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
+                  AND ($3::integer IS NULL OR eff_from(m.warehouse_from_id) = $3::integer)
+                                    AND ($4::integer[] IS NULL OR m.id = ANY($4::integer[]))
+                  AND ($5::text IS NULL OR m.warehouse_from_id IN (SELECT id FROM skladi WHERE name = $5::text))
                 ORDER BY m.date ASC, m.id ASC
                 FOR UPDATE OF m
             `;
-            docsParams = [realId, monthFilter, sklad_id || null, docIdsFilter];
+            docsParams = [realId, monthFilter, sklad_id || null, docIdsFilter, from_sklad_name || null];
         } else {
             // Долг покупателя за реализации
             docsQuery = `
@@ -7232,7 +7245,7 @@ router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
                 LEFT JOIN moves m ON wdp.move_id = m.id
                 WHERE wdp.warehouse_to_id = $1
                   AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
-                  AND ($3::integer IS NULL OR wdp.warehouse_from_id = $3::integer)
+                  AND ($3::integer IS NULL OR eff_from(wdp.warehouse_from_id) = $3::integer)
 
                 UNION ALL
 
@@ -7249,7 +7262,7 @@ router.get('/money_receipts_by_customers/:id/payments', async (req, res) => {
                 WHERE ret.is_posted = true
                   AND m.warehouse_to_id = $1
                   AND ($2::text IS NULL OR TO_CHAR(m.date, 'YYYY-MM') = $2)
-                  AND ($3::integer IS NULL OR m.warehouse_from_id = $3::integer)
+                  AND ($3::integer IS NULL OR eff_from(m.warehouse_from_id) = $3::integer)
 
                 ORDER BY date DESC, id DESC;
             `;
@@ -8719,6 +8732,7 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                 LIMIT 1
             ) mv ON true
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
               AND COALESCE(mv.date, r.date, wb.created_at) <= (SELECT date FROM moves WHERE id = $3)${batchFilter}
             ORDER BY wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
@@ -9014,6 +9028,7 @@ if (Number(warehouseFromId) === CENTRAL_SKLAD_ID) {
                 LIMIT 1
             ) mv ON true
             WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
               AND COALESCE(mv.date, r.date, wb.created_at) <= (SELECT date FROM moves WHERE id = $3)${batchFilter}
             ORDER BY wb.created_at ASC, wb.id ASC
             FOR UPDATE OF wb;
@@ -9483,6 +9498,7 @@ const batchesQuery = `
         LIMIT 1
     ) mv ON true
     WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
       AND COALESCE(mv.date, r.date, wb.created_at) <= COALESCE((SELECT doc_date FROM repairs WHERE id = $3), NOW())${batchFilter}
     ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
     FOR UPDATE OF wb;
@@ -9735,6 +9751,7 @@ const batchesQuery = `
         LIMIT 1
     ) mv ON true
     WHERE wb.zaphasti_id = $1 AND wb.warehouse_id = $2 AND wb.quantity > 0
+  AND NOT EXISTS (SELECT 1 FROM move_items mi3 JOIN moves m3 ON m3.id = mi3.move_id WHERE mi3.dest_batch_id = wb.id AND m3.is_posted IS NOT TRUE)
       AND COALESCE(mv.date, r.date, wb.created_at) <= COALESCE((SELECT doc_date FROM repairs WHERE id = $3), NOW())${batchFilter}
     ORDER BY r.date ASC, wb.created_at ASC, wb.id ASC
     FOR UPDATE OF wb;

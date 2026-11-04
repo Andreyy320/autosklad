@@ -2455,7 +2455,7 @@ const isPosted = Boolean(item.is_posted);
             </td>            
             <td style="text-align: center;">
               ${cumulativeDebtNum > 0
-    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${jsq(item.counterparty_name)} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
+    ? `<button type="button" onclick="event.stopPropagation(); openReceiptCustomerPaymentDrawer('${item.group_key}', '${cumulativeDebt}', '${jsq(item.counterparty_name)} (${item.month_str})', '${item.month_str}', '${window.currentSkladId || ''}', '${item.debtor_warehouse_id ? jsq(item.sklad_name) : ''}')" style="background:#16a34a;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Оплатить</button>`
     : ''
 }
             </td>
@@ -11114,7 +11114,7 @@ async function openSupplierPaymentHistory(postavhikId, postavhikName, monthStr) 
     }
 }
 
-async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr, skladId) {
+async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, monthStr, skladId, fromSkladName) {
     const drawer = getOrCreateDrawer();
 
        drawer.innerHTML = `
@@ -11125,7 +11125,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
 
         <div id="pay-docs-list" style="margin-bottom: 16px; color: #64748b; font-size: 13px;">Загрузка накладных...</div>
 
-        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}')" style="display: flex; flex-direction: column; gap: 16px;">
+        <form id="pay-form" onsubmit="submitReceiptCustomerPayment(event, '${groupKey}', '${monthStr}', '${skladId || ''}', '${jsq(fromSkladName || '')}')" style="display: flex; flex-direction: column; gap: 16px;">
             <div>
                 <label style="display: block; font-size: 13px; color: #475569; margin-bottom: 6px;">Сумма к оплате (с учётом прошлых месяцев): <span style="color:rgb(2, 3, 2); font-weight: 600;">${debtSum}</span></label>                <input type="number" step="0.01" id="receipt-payment-amount" value="${debtSum}" required
                     style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; color: #0f172a;">
@@ -11153,6 +11153,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
     const skladParam = skladId ? `&sklad_id=${skladId}` : '';
     const idParam = isWarehouseDebtor ? `debtor_warehouse_id=${realId}` : `customer_id=${realId}`;
     let requestUrl = `/api/money_receipts?${idParam}${skladParam}`;
+    if (isWarehouseDebtor && fromSkladName) requestUrl += `&from_sklad_name=${encodeURIComponent(fromSkladName)}`;
     if (!isPayAll) {
     const [year, month] = monthStr.split('-').map(Number);
     const lastDay = new Date(year, month, 0).getDate();
@@ -11277,7 +11278,7 @@ async function openReceiptCustomerPaymentDrawer(groupKey, debtSum, titleLabel, m
     }
 }
 
-async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) {
+async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId, fromSkladName) {
     event.preventDefault();
     if (window._payBusy) return;
     window._payBusy = true;
@@ -11296,7 +11297,8 @@ async function submitReceiptCustomerPayment(event, groupKey, monthStr, skladId) 
                 comment,
                 month_str: monthStr,
                 sklad_id: skladId || null,   
-                doc_ids: docIds.length > 0 ? docIds : null
+                doc_ids: docIds.length > 0 ? docIds : null,
+                from_sklad_name: fromSkladName || null
             })
         });
 
@@ -12267,7 +12269,8 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
 
                 window.currentCustomerId = customerId || null;
-        window.currentDebtorWarehouseId = debtorWarehouseId || null;
+      window.currentDebtorWarehouseId = debtorWarehouseId || null;
+window.currentFromSkladName = (parentId && typeof parentId === 'object' && parentId.from_sklad_name) || '';
         window.currentReceiptsStartDate = explicitStart || null;
         window.currentReceiptsEndDate = explicitEnd || null;
         window.currentRealizationId = null;
@@ -12291,6 +12294,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
         }
         if (debtorWarehouseId) {
             queryParams.push(`debtor_warehouse_id=${debtorWarehouseId}`);
+if (window.currentFromSkladName) queryParams.push(`from_sklad_name=${encodeURIComponent(window.currentFromSkladName)}`);
         }
         
                 if (explicitStart) queryParams.push(`start_date=${explicitStart}`);
@@ -12523,6 +12527,7 @@ async function loadReceiptMainData(entity = 'money_receipts_by_sklad', parentId 
                             let payload = { sklad_id: window.currentSkladId };
                             if (item.customer_id) payload.customer_id = item.customer_id;
                             if (item.debtor_warehouse_id) payload.debtor_warehouse_id = item.debtor_warehouse_id;
+if (selectedItem.debtor_warehouse_id && selectedItem.sklad_name) payload.from_sklad_name = selectedItem.sklad_name;
                             if (item.month_str) {
                                 const [year, month] = item.month_str.split('-').map(Number);
                                 payload.start_date = `${item.month_str}-01`;
@@ -12957,7 +12962,8 @@ if (e.target.closest('button, [onclick]')) {
             } else if (activeEntity === 'money_receipts_by_customers') {
                 let payload = { sklad_id: window.currentSkladId };
                 if (selectedItem.customer_id) payload.customer_id = selectedItem.customer_id;
-                if (selectedItem.debtor_warehouse_id) payload.debtor_warehouse_id = selectedItem.debtor_warehouse_id;
+               if (selectedItem.debtor_warehouse_id) payload.debtor_warehouse_id = selectedItem.debtor_warehouse_id;
+if (selectedItem.debtor_warehouse_id && selectedItem.sklad_name) payload.from_sklad_name = selectedItem.sklad_name;
                 if (selectedItem.month_str) {
                     const [year, month] = selectedItem.month_str.split('-').map(Number);
                     payload.start_date = `${selectedItem.month_str}-01`;
@@ -15111,29 +15117,42 @@ async function loadKubyshkaHistory() {
         <th style="width:140px;">Тип</th>
         <th>Контрагент</th>
         <th style="width:260px;">Операция</th>
-        <th style="width:160px;text-align:right;">Сумма</th>`;
-    body.innerHTML = '<tr><td colspan="5" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
+                <th style="width:160px;text-align:right;">Сумма</th>`;
 
+    // строка фильтров над заголовками
+    const kubThead = headers.closest('thead');
+    let kubFr = document.getElementById('table-filter-row');
+    if (!kubFr) {
+        kubFr = document.createElement('tr');
+        kubFr.id = 'table-filter-row';
+    }
+    kubThead.insertBefore(kubFr, headers);
+    kubFr.dataset.entity = 'kubyshka';
+    kubFr.innerHTML = ['Дата', 'Тип', 'Контрагент', 'Операция', 'Сумма'].map((n, i) => `
+        <th style="padding:4px;">
+            <input type="text" data-kub-col="${i}" oninput="kubFilter()" placeholder="Фильтр..."
+                   style="width:100%;padding:4px;box-sizing:border-box;font-size:12px;border:1px solid #ccc;border-radius:3px;">
+        </th>`).join('');
+
+    body.innerHTML = '<tr><td colspan="5" style="padding:12px;text-align:center;color:#64748b;">Загрузка...</td></tr>';
     try {
         const { balance, rows } = await kubyshkaRows();
 
-        // одна строка на контрагента и вид операции + дата последней операции
-        const map = new Map();
-        rows.forEach(r => {
-            const kind = K_KIND[r.src] || '—';
-                        const key = kind + '|' + r.counterparty + '|' + r.op_type + (r.src === 7 ? '|' + r.pay_id : '');
-            if (!map.has(key)) map.set(key, { kind, name: r.counterparty, op: r.op_type, sum: 0, last: null, cnt: 0 });
-            const g = map.get(key);
-            g.sum += Number(r.amount);
-            g.cnt += 1;
-            const d = r.op_date ? new Date(r.op_date) : null;
-            if (d && !isNaN(d) && (!g.last || d > g.last)) g.last = d;
-        });
-
-        const groups = [...map.values()]
+              // каждая операция отдельной строкой, новые сверху
+        const groups = rows
+            .map(r => {
+                const d = r.op_date ? new Date(r.op_date) : null;
+                return {
+                    kind: K_KIND[r.src] || '—',
+                    name: r.counterparty,
+                    op: r.op_type,
+                    sum: Number(r.amount),
+                    last: (d && !isNaN(d)) ? d : null,
+                    cnt: 1
+                };
+            })
             .filter(g => Math.abs(g.sum) > 0.005)
-                     .sort((a, b) => (b.last ? b.last.getTime() : 0) - (a.last ? a.last.getTime() : 0)
-                || a.name.localeCompare(b.name, 'ru'));
+            .sort((a, b) => (b.last ? b.last.getTime() : 0) - (a.last ? a.last.getTime() : 0));
 
         if (!groups.length) {
             body.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:#64748b;">Оплат пока не было</td></tr>';
@@ -15152,7 +15171,7 @@ async function loadKubyshkaHistory() {
                 <td>${kEsc(g.op)}</td>
                 <td style="text-align:right;font-weight:600;color:${col(g.sum)};">${sign(g.sum)}</td>
             </tr>`).join('') + `
-            <tr style="background:#f1f5f9;font-weight:700;">
+                        <tr data-kub-total="1" style="background:#f1f5f9;font-weight:700;">
                 <td colspan="4" style="text-align:right;">Кубышка</td>
                 <td style="text-align:right;color:${col(balance)};">${kFmt(balance)}</td>
             </tr>`;
@@ -15161,7 +15180,18 @@ async function loadKubyshkaHistory() {
         body.innerHTML = `<tr><td colspan="5" style="padding:20px;text-align:center;color:#dc2626;">Не удалось загрузить: ${kEsc(err.message)}</td></tr>`;
     }
 }
+function kubFilter() {
+    const filters = [...document.querySelectorAll('#table-filter-row input[data-kub-col]')]
+        .map(i => ({ idx: Number(i.dataset.kubCol), v: i.value.trim().toLowerCase() }))
+        .filter(x => x.v);
 
+    document.querySelectorAll('#table-body tr').forEach(tr => {
+        if (tr.dataset.kubTotal) return; // итоговую строку не прячем
+        const cells = tr.children;
+        const ok = filters.every(x => cells[x.idx] && cells[x.idx].textContent.toLowerCase().includes(x.v));
+        tr.style.display = ok ? '' : 'none';
+    });
+}
 // 3) В loadKubyshka замени подпись под цифрой на:
 //    <div style="font-size:12px;color:#94a3b8;">нажмите, чтобы увидеть из чего сложилась сумма</div>
 function ensureKubyshkaToolbarButtons() {
