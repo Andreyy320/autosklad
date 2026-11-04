@@ -3687,7 +3687,13 @@ router.get('/part_movement_details', async (req, res) => {
                                        COALESCE(NULLIF(r_rel.doc_number, ''), 'РЛ-' || r_rel.id) AS doc_num,
                     'Реализация (продажа)' AS doc_type,
                     CONCAT(COALESCE(s_rel.name, 'Склад'), ' | МОЛ: ', COALESCE(u_rel.name, 'не указан')) AS source_info,
-                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан')) AS dest_info,
+                    CONCAT('Покупатель: ', COALESCE(cust.name_full, 'Не указан'),
+       CASE WHEN cc_rel.id IS NOT NULL
+            THEN CONCAT(' | Авто: ',
+                        COALESCE(NULLIF(TRIM(CONCAT_WS(' ', cc_rel.brand, cc_rel.model)), ''), 'Авто #' || cc_rel.id),
+                        CASE WHEN COALESCE(cc_rel.gos_number, '') <> ''
+                             THEN CONCAT(' (', cc_rel.gos_number, ')') ELSE '' END)
+            ELSE '' END) AS dest_info,
                     (-1 * ri_rel.quantity) AS qty,
                     COALESCE(ri_rel.purchase_price, ri_rel.price, lr_rel.price, 0) AS price,
                     (-1 * ri_rel.quantity * COALESCE(ri_rel.purchase_price, ri_rel.price, lr_rel.price, 0)) AS sum,
@@ -3701,6 +3707,7 @@ router.get('/part_movement_details', async (req, res) => {
                 LEFT JOIN mol mol_rel ON r_rel.mol_id = mol_rel.id
                 LEFT JOIN users u_rel ON mol_rel.user_id = u_rel.id
                 LEFT JOIN customers cust ON r_rel.customer_id = cust.id
+                                LEFT JOIN customer_cars cc_rel ON r_rel.car_id = cc_rel.id
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(ri_p.price_rub, ri_p.price, 0) AS price
                     FROM receipt_items ri_p
