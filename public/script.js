@@ -1991,8 +1991,14 @@ const isPosted = Boolean(item.is_posted);
                     totalSum: 0
                 };
             }
-            monthsMap[sortKey].items.push({ item, date: dateObj });
-            monthsMap[sortKey].totalSum += Number(item.sum || 0);
+          monthsMap[sortKey].items.push({ item, date: dateObj });
+
+    // ДТП показываем в списке, но в «Итого за месяц» не считаем
+    const isDtp = String(item.doc_number || '').startsWith('ДТП')
+           || String(item.document || '').startsWith('ДТП');
+    if (!isDtp) {
+    monthsMap[sortKey].totalSum += Number(item.sum || 0);
+    }
         });
 
         let html = '';
