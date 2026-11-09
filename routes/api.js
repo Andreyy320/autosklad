@@ -10950,20 +10950,74 @@ router.get('/get-return-logs', async (req, res) => {
 router.get('/get-audit-logs', async (req, res) => {
     const client = await pool.connect();
     try {
-             const query = `
-            SELECT 
-                al.*,
-                COALESCE(
-                    CASE WHEN al.user_type = 'employee' THEN e.name ELSE u.name END,
-                    'Система'
-                ) AS user_name
-            FROM audit_logs al
-            LEFT JOIN users u ON al.user_type = 'user' AND al.user_id::text = u.id::text
-            LEFT JOIN employees e ON al.user_type = 'employee' AND al.user_id::text = e.id::text
-                        WHERE COALESCE(al.table_name, '') <> 'repair_works'
-              AND COALESCE(al.entity, '') <> 'repair_works'
-            ORDER BY al.created_at DESC
-            LIMIT 500;
+        const query = `
+            WITH base AS (
+                SELECT
+                    al.*,
+                    al.details::jsonb AS dj,
+                    COALESCE(CASE WHEN al.user_type = 'employee' THEN e.name ELSE u.name END, 'Система') AS user_name
+                FROM audit_logs al
+                LEFT JOIN users u ON al.user_type = 'user' AND al.user_id::text = u.id::text
+                LEFT JOIN employees e ON al.user_type = 'employee' AND al.user_id::text = e.id::text
+                WHERE COALESCE(al.table_name, '') <> 'repair_works'
+                  AND COALESCE(al.entity, '') <> 'repair_works'
+                ORDER BY al.created_at DESC
+                LIMIT 500
+            ),
+            x AS (
+                SELECT b.*,
+                    COALESCE(b.dj->>'car_id', b.dj->'changes'->'car_id'->>'to') AS d_car,
+                    COALESCE(b.dj->>'mol_id', b.dj->'changes'->'mol_id'->>'to') AS d_mol
+                FROM base b
+            )
+            SELECT
+                x.*,
+                                COALESCE(CASE x.table_name
+                    WHEN 'cars' THEN (SELECT c.gos_number FROM cars c WHERE c.id::text = x.record_id::text)
+                    WHEN 'vidy_rabot' THEN (SELECT v.name FROM vidy_rabot v WHERE v.id::text = x.record_id::text)
+                    WHEN 'customer_cars' THEN (
+                        SELECT NULLIF(TRIM(CONCAT_WS(' ',
+                                   NULLIF(TRIM(CONCAT_WS(' ', cc.brand, cc.model)), ''),
+                                   CASE WHEN cc.gos_number <> '' THEN '(' || cc.gos_number || ')' END)), '')
+                        FROM customer_cars cc WHERE cc.id::text = x.record_id::text)
+                    WHEN 'skladi' THEN (SELECT s.name FROM skladi s WHERE s.id::text = x.record_id::text)
+                    WHEN 'postavhik' THEN (SELECT p.name FROM postavhik p WHERE p.id::text = x.record_id::text)
+                    WHEN 'customers' THEN (SELECT COALESCE(c.name_full, c.name_short) FROM customers c WHERE c.id::text = x.record_id::text)
+                    WHEN 'zaphasti' THEN (SELECT z.name FROM zaphasti z WHERE z.id::text = x.record_id::text)
+                    WHEN 'users' THEN (SELECT COALESCE(u2.name, u2.login) FROM users u2 WHERE u2.id::text = x.record_id::text)
+                    WHEN 'repairs' THEN (SELECT r.doc_number FROM repairs r WHERE r.id::text = x.record_id::text)
+                    WHEN 'receipts' THEN (SELECT r.doc_number FROM receipts r WHERE r.id::text = x.record_id::text)
+                    WHEN 'moves' THEN (SELECT m.doc_number FROM moves m WHERE m.id::text = x.record_id::text)
+                    WHEN 'realizations' THEN (SELECT r.doc_number FROM realizations r WHERE r.id::text = x.record_id::text)
+                    WHEN 'returns' THEN (SELECT r.doc_number FROM returns r WHERE r.id::text = x.record_id::text)
+                                END,
+                (SELECT COALESCE(a2.details::jsonb->>'gos_number', a2.details::jsonb->>'doc_number',
+                                 a2.details::jsonb->>'name', a2.details::jsonb->>'name_full',
+                                 a2.details::jsonb->>'name_short')
+                 FROM audit_logs a2
+                 WHERE a2.table_name = x.table_name
+                   AND a2.record_id::text = x.record_id::text
+                   AND COALESCE(a2.details::jsonb->>'gos_number', a2.details::jsonb->>'doc_number',
+                                a2.details::jsonb->>'name', a2.details::jsonb->>'name_full',
+                                a2.details::jsonb->>'name_short') IS NOT NULL
+                 ORDER BY a2.created_at DESC LIMIT 1)
+                ) AS record_label,
+                CASE WHEN x.d_car ~ '^\\d+$' THEN
+                    CASE WHEN x.table_name = 'realizations' THEN (
+                        SELECT NULLIF(TRIM(CONCAT_WS(' ',
+                                   NULLIF(TRIM(CONCAT_WS(' ', cc.brand, cc.model)), ''),
+                                   CASE WHEN cc.gos_number <> '' THEN '(' || cc.gos_number || ')' END)), '')
+                        FROM customer_cars cc WHERE cc.id = x.d_car::int)
+                    ELSE (SELECT c.gos_number FROM cars c WHERE c.id = x.d_car::int)
+                    END
+                END AS car_label,
+                CASE WHEN x.d_mol ~ '^\\d+$' THEN (
+                    SELECT COALESCE(u3.name, u3.login)
+                    FROM mol m3 JOIN users u3 ON u3.id = m3.user_id
+                    WHERE m3.id = x.d_mol::int)
+                END AS mol_label
+            FROM x
+            ORDER BY x.created_at DESC;
         `;
         const result = await client.query(query);
         return res.json(result.rows);

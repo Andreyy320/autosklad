@@ -76,6 +76,75 @@ let currentType = 'Приход';
 let currentEndpoint = '/api/get-receipt-logs';
 let idMaps = {};
 let warehousesMap = {}; // оставляем для остального кода файла, который использует его напрямую
+function anyName(r, prefix) {
+    const direct = r.name || r.fio || r.full_name || r.mol_name || r.title;
+    if (direct) return direct;
+    for (const [k, v] of Object.entries(r)) {
+        if (/(name|fio|fullname|user_name|employee|человек)/i.test(k) && typeof v === 'string' && v.trim()) return v;
+    }
+    for (const [k, v] of Object.entries(r)) {
+        if (k !== 'id' && !/_id$/.test(k) && typeof v === 'string' && v.trim() && !/^\d+$/.test(v)) return v;
+    }
+    return prefix + ' #' + r.id;
+}
+function extractRows(data) {
+    if (Array.isArray(data)) return data;
+    return (data && (data.rows || data.data || data.items)) || [];
+}
+
+
+let auditDocMap = {};
+
+const AUDIT_LABEL_KEYS = ['doc_number', 'document_number', 'gos_number', 'car_number', 'name', 'name_full', 'name_short', 'vin', 'title', 'login'];
+
+const AUDIT_TABLE_MAP = {
+    vidy_rabot: 'vidy_rabot_id', cars: 'car_id', customers: 'customer_id',
+    skladi: 'warehouse_id', users: 'user_id', mol: 'mol_id', brands: 'brand_id',
+    models: 'model_id', bodies: 'body_id', kyzov_type: 'body_id', toplivo: 'toplivo_id',
+    ispolnitel: 'ispolnitel_id', servis: 'servis_id', postavhik: 'supplier_id',
+    repairs: 'repair_id', employees: 'employee_id',
+    proizvoditel_zaphasti: 'proizvoditel_id', ed_izmereniya: 'ed_izmereniya_id',
+    repair_types: 'repair_type_id'
+};
+
+function findDocNumber(log) {
+    let d = log.details;
+    try { if (typeof d === 'string') d = JSON.parse(d); } catch (e) { return null; }
+    if (!d) return null;
+
+    const table = log.table_name || log.entity;
+    if (table === 'customer_cars') {
+        const car = d.car_id && idMaps['car_id'] && idMaps['car_id'][d.car_id];
+        const cust = d.customer_id && idMaps['customer_id'] && idMaps['customer_id'][d.customer_id];
+        const parts = [car, cust].filter(x => x && !/^Авто #/.test(x));
+        if (parts.length) return parts.join(' / ');
+    }
+
+    for (const k of AUDIT_LABEL_KEYS) {
+        if (d[k]) return d[k];
+    }
+    if (d.changes) {
+        for (const k of AUDIT_LABEL_KEYS) {
+            const c = d.changes[k];
+            if (c && (c.to || c.from)) return c.to || c.from;
+        }
+    }
+    return null;
+}
+
+function auditRecordLabel(log) {
+    if (log.record_label) return log.record_label;
+    const table = log.table_name || log.entity;
+    let label = findDocNumber(log) || auditDocMap[table + ':' + log.record_id];
+
+    if (!label) {
+        const mapKey = AUDIT_TABLE_MAP[table];
+        const v = mapKey && idMaps[mapKey] && idMaps[mapKey][log.record_id];
+        if (v && !/^(Авто|Ремонт) #/.test(String(v))) label = v;
+    }
+    return label || log.record_id || '—';
+}
+
 
 const LOGS_PAGER = { page: 1, limit: 100, total: 0 };
 
@@ -153,9 +222,9 @@ const idMapConfigs = [
     { key: 'sklad_id',          url: '/api/skladi',              label: r => r.name },
     { key: 'supplier_id',       url: '/api/postavhik',           label: r => r.name },
     { key: 'customer_id',       url: '/api/customers',           label: r => r.name_full || r.name_short || r.name },
-    { key: 'mol_id',            url: '/api/mol',                 label: r => r.name },
-    { key: 'mol_from_id',       url: '/api/mol',                 label: r => r.name },
-    { key: 'mol_to_id',         url: '/api/mol',                 label: r => r.name },
+   { key: 'mol_id',            url: '/api/mol', label: r => anyName(r, 'МОЛ') },
+{ key: 'mol_from_id',       url: '/api/mol', label: r => anyName(r, 'МОЛ') },
+{ key: 'mol_to_id',         url: '/api/mol', label: r => anyName(r, 'МОЛ') },
     { key: 'user_id',           url: '/api/users',               label: r => r.name || r.login },
     { key: 'car_id',            url: '/api/cars',                label: r => r.gos_number || r.vin || ('Авто #' + r.id) },
     { key: 'brand_id',          url: '/api/brands',              label: r => r.name },
@@ -378,6 +447,11 @@ function translateField(key) {
 }
 
 function formatFieldValue(key, val) {
+    const L = window.__curAuditLog;
+if (L && L.action !== 'UPDATE') {
+    if (key === 'car_id' && L.car_label) return L.car_label;
+    if (key === 'mol_id' && L.mol_label) return L.mol_label;
+}
     if (val === null || val === undefined || val === '') return 'пусто';
     if (typeof val === 'boolean') return val ? 'Да' : 'Нет';
     if (val === 'true' || val === 'false') return val === 'true' ? 'Да' : 'Нет';
@@ -402,7 +476,7 @@ async function loadReferenceMaps() {
     await Promise.all(uniqueUrls.map(async url => {
         try {
             const res = await fetch(url);
-            dataByUrl[url] = res.ok ? await res.json() : [];
+           dataByUrl[url] = res.ok ? extractRows(await res.json()) : [];
         } catch (e) {
             console.error('Не удалось загрузить справочник ' + url, e);
             dataByUrl[url] = [];
@@ -420,7 +494,8 @@ async function loadReferenceMaps() {
     warehousesMap = idMaps['warehouse_id']; // алиас для остального кода файла ниже
 }
 
-    function formatAuditDetails(log) {
+        function formatAuditDetails(log) {
+        window.__curAuditLog = log;
         let details;
         try {
             details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
@@ -433,6 +508,7 @@ async function loadReferenceMaps() {
         if (log.action === 'UPDATE' && details.changes) {
             let html = '<div class="audit-fields">';
             for (const [field, val] of Object.entries(details.changes)) {
+                if (field === 'user_id') continue;
                 html += `<div class="audit-field-row">
                     <span class="audit-field-label">${translateField(field)}:</span>
                     <span class="audit-field-old">${formatFieldValue(field, val.from)}</span>
@@ -447,6 +523,7 @@ async function loadReferenceMaps() {
         if (typeof details === 'object') {
             let html = '<div class="audit-fields">';
             for (const [key, val] of Object.entries(details)) {
+                if (key === 'user_id') continue;
                 if (val !== null && val !== '' && val !== undefined) {
                     html += `<div class="audit-field-row">
                         <span class="audit-field-label">${translateField(key)}:</span>
@@ -512,7 +589,7 @@ async function loadReferenceMaps() {
                     <th>Дата / Время / Действие</th>
                     <th>Пользователь</th>
                     <th>Раздел</th>
-                    <th>ID записи</th>
+                    <th>Документ / запись</th>
                     <th>IP-адрес</th>
                     <th style="width: 40%;">Детали изменений</th>
                 </tr>
@@ -636,7 +713,13 @@ async function loadReferenceMaps() {
             }
 
             const logs = await response.json();
-           
+           auditDocMap = {};
+if (Array.isArray(logs)) {
+    logs.forEach(l => {
+        const n = findDocNumber(l);
+        if (n) auditDocMap[(l.table_name || l.entity) + ':' + l.record_id] = n;
+    });
+}
 
             const totalHeader = parseInt(response.headers.get('X-Total-Count'), 10);
             LOGS_PAGER.total = Number.isFinite(totalHeader) ? totalHeader : logs.length;
@@ -763,7 +846,7 @@ async function loadReferenceMaps() {
                         </td>
                         <td><strong>${log.user_name || 'Система'}</strong></td>
                         <td><span class="table-tag">${translateTable(log.table_name || log.entity)}</span></td>
-                        <td>${log.record_id || '—'}</td>
+                        <td>${log.record_label || auditRecordLabel(log)}</td>
                         <td>${log.ip_address || '—'}</td>
                         <td>${formatAuditDetails(log)}</td>
                     `;
@@ -845,7 +928,7 @@ async function loadReferenceMaps() {
 
 // ===== Визуальные улучшения журнала: липкая шапка, цветная полоска, приглушённые ID/IP =====
 (function () {
-    const MUTED_HEADERS = ['IP-адрес', 'ID записи'];
+    const MUTED_HEADERS = ['IP-адрес'];
     let scheduled = false;
 
     function syncSticky() {
