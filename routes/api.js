@@ -8017,7 +8017,8 @@ router.get('/get-repair-logs', async (req, res) => {
     try {
         const query = `
     SELECT 
-        rl.*,
+                rl.*,
+        COALESCE(rl.document_number, rp.doc_number) AS document_number,
                 COALESCE(w.name, w_rp.name) AS warehouse_name,
 COALESCE(sv.name, cust.name_full, cust.name_short) AS service_name,
         (rl.zaphast_id IS NULL) AS is_work,

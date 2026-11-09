@@ -557,8 +557,9 @@ async function loadReferenceMaps() {
         } else if (type === 'Ремонт') {
             thead.innerHTML = `
                 <tr>
-                    <th>Дата / Время / Действие</th>
+                                        <th>Дата / Время / Действие</th>
                     <th>Пользователь</th>
+                    <th>Документ</th>
                     <th>Склад / Сервис</th>
                     <th>Автомобиль</th>
                     <th>Запчасть / Услуга</th>
@@ -692,7 +693,8 @@ async function loadReferenceMaps() {
         renderTableHead(type);
 
         let colspanCount = 9;
-        if (type === 'Перемещение' || type === 'Ремонт') colspanCount = 9;
+        if (type === 'Перемещение') colspanCount = 9;
+if (type === 'Ремонт') colspanCount = 10;
         if (type === 'Реализация') colspanCount = 10;
         if (type === 'Аудит') colspanCount = 6;
                if (type === 'Оплаты клиентов' || type === 'Оплаты поставщикам' || type === 'Оплаты по перемещениям') colspanCount = 6;
@@ -796,7 +798,8 @@ if (Array.isArray(logs)) {
             ${formattedDate}<br>
             ${actionBadge}
         </td>
-        <td><strong>${log.user_name || 'Система'}</strong></td>
+                <td><strong>${log.user_name || 'Система'}</strong></td>
+        <td>${log.document_number || '—'}</td>
         <td>${whName}</td>
         <td>${carInfo}</td>
         <td>${partCell}</td>
