@@ -12308,7 +12308,7 @@ if (window.currentFromSkladName) queryParams.push(`from_sklad_name=${encodeURICo
 
         fetchUrl = `/api/money_receipts` + (queryParams.length > 0 ? `?${queryParams.join('&')}` : '');
         
-        if (detailContainer) detailContainer.style.display = 'block';
+       if (detailContainer) detailContainer.style.display = 'flex';
 
         if (btnAdd) btnAdd.style.display = 'none';
         if (btnEdit) btnEdit.style.display = 'none';
@@ -12995,7 +12995,7 @@ if (selectedItem.debtor_warehouse_id && selectedItem.sklad_name) payload.from_sk
                 }
                                 
                 const detailContainer = document.getElementById('detail-container');
-                if (detailContainer) detailContainer.style.display = 'block';
+                if (detailContainer) detailContainer.style.display = 'flex';
                  const detailToolbarEl = document.getElementById('detail-toolbar') || document.getElementById('detail-action-buttons');
                 if (detailToolbarEl) detailToolbarEl.style.display = 'none';
                 const activeTab = window.currentMoneyReceiptSubTab || 'money_receipts_detail';
